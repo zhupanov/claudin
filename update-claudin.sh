@@ -51,6 +51,13 @@ if [[ ! -d "$CLAUDIN_DIR/.claude" ]]; then
     exit 1
 fi
 
+# Verify the claudin submodule is inside the repo root
+if [[ "$CLAUDIN_DIR" != "$REPO_ROOT/"* ]]; then
+    echo "ERROR: claudin submodule ($CLAUDIN_DIR) is not inside the repo root ($REPO_ROOT)." >&2
+    echo "  Run this script from the repository that contains claudin as a submodule." >&2
+    exit 1
+fi
+
 # CLAUDIN_REL: relative path from repo root to the claudin submodule
 CLAUDIN_REL="${CLAUDIN_DIR#"$REPO_ROOT"/}"
 
@@ -219,7 +226,7 @@ while IFS= read -r -d '' link; do
     }
 
     # Check if the normalized path is inside the claudin .claude directory
-    if [[ "$normalized" == "$CLAUDIN_DIR/.claude"* || "$normalized" == "$CLAUDIN_DIR/.claude/"* ]]; then
+    if [[ "$normalized" == "$CLAUDIN_DIR/.claude" || "$normalized" == "$CLAUDIN_DIR/.claude/"* ]]; then
         rm "$link"
         echo "  removed dead symlink: $link -> $raw_target"
         dead_count=$((dead_count + 1))

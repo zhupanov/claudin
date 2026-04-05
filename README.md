@@ -42,7 +42,7 @@ git commit -m "Bump claudin submodule"
 
 **Important notes**:
 
-- **`settings.json` is not symlinked.** Your repo must maintain its own `.claude/settings.json` with the permission entries needed by claudin scripts. At minimum, include bash permissions for `$PWD/.claude/scripts/generic/*` and the `block-submodule-edit.sh` hook.
+- **`settings.json` is not symlinked.** Your repo must maintain its own `.claude/settings.json` with the permission entries needed by claudin scripts. The recommended approach is to copy the `permissions.allow` array from claudin's `settings.json` as a baseline. At minimum, include bash permissions for `$PWD/.claude/scripts/generic/*`, `$PWD/.claude/skills/*/scripts/*` (for skill-specific scripts), and the `block-submodule-edit.sh` hook.
 - **Edits to `claudin/` are blocked.** The `block-submodule-edit.sh` hook prevents Claude Code from editing files inside git submodules. This is intentional — changes to claudin should be made via PRs to the claudin repo, then pulled in by updating the submodule.
 - **Conflicts**: If a non-symlink file or directory already exists at a path the script needs to symlink, it exits with an error. Resolve the conflict manually (rename or remove the existing file) and re-run.
 
