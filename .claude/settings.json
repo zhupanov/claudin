@@ -51,7 +51,6 @@
       "Bash(K8S_WORK=:*)",
       "Bash(KUBECONFIG=:*)",
       "Bash(LINE1=:*)",
-      "Bash(LMSERVE_CONFIG=:*)",
       "Bash(LR_TMPDIR=:*)",
       "Bash(MANIFEST_NAME=:*)",
       "Bash(MESSAGE=:*)",

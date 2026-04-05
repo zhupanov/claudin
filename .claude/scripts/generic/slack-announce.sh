@@ -10,11 +10,8 @@
 #
 # Environment:
 #   SLACK_BOT_TOKEN — required, the Slack bot token
-#
-# Optional data file (for @-mentioning the PR author in Slack):
-#   data/email_to_slack_userid_map.json — maps git email to Slack user ID.
-#   Looked up relative to the repo root. If missing, the message is posted
-#   without a user mention.
+#   SLACK_USER_ID   — optional Slack user ID (e.g., U12345678) for @-mentioning
+#                     the PR author. If unset, the message is posted without a mention.
 #
 # Outputs to stdout:
 #   SLACK_TS=<timestamp>     (on success)
@@ -61,15 +58,8 @@ fi
 CLEAN_TOKEN=$(echo -n "$SLACK_BOT_TOKEN" | tr -d '[:space:]')
 
 # --- Resolve git identity ---
-GIT_EMAIL=$(git config user.email 2>/dev/null || echo "")
 GIT_USER_NAME=$(git config user.name 2>/dev/null || echo "")
-SLACK_USER_ID=""
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
-EMAIL_MAP="${REPO_ROOT:+$REPO_ROOT/data/email_to_slack_userid_map.json}"
-if [[ -n "$GIT_EMAIL" ]] && [[ -n "$EMAIL_MAP" ]] && [[ -f "$EMAIL_MAP" ]]; then
-    SLACK_USER_ID=$(jq -r --arg email "$GIT_EMAIL" '.[$email] // empty' \
-        "$EMAIL_MAP" 2>/dev/null || echo "")
-fi
+SLACK_USER_ID="${SLACK_USER_ID:-}"
 
 # --- Fetch PR metadata and derive repo name from PR URL ---
 set +e

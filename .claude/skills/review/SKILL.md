@@ -18,7 +18,7 @@ When changes touch `.claude/settings.json`, verify that the `permissions.allow` 
 
 ### Skill and Script Genericity
 
-When changes touch files under `.claude/scripts/generic/` or `.claude/skills/shared/`, verify the changes do not introduce repo-specific content: no repo-specific paths (e.g., `server/`, `cli/`, `lmserve`), cluster names (e.g., `gcp5`, `amd2`), service-specific environment variable names, or hardcoded project references that would break when the file is used in a different repository.
+When changes touch files under `.claude/scripts/generic/` or `.claude/skills/shared/`, verify the changes do not introduce repo-specific content: no repo-specific paths (e.g., `server/`, `cli/`, `myservice`), cluster names (e.g., `prod-1`, `staging-2`), service-specific environment variable names, or hardcoded project references that would break when the file is used in a different repository.
 
 - **Generic directories**: `.claude/scripts/generic/`, `.claude/skills/shared/` — changes to files here must not introduce repo-specific references.
 - **Repo-specific directories**: `.claude/scripts/repo/`, individual skill directories (e.g., `.claude/skills/brand-new/`, `.claude/skills/optimize/`) — files here are repo-specific by design and exempt from this rule.
