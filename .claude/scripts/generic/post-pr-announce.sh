@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # post-pr-announce.sh — Post a PR announcement to Slack.
 #
-# Replaces the /post-pr skill. Composes: parse-pr-summary.sh ��
+# Replaces the /post-pr skill. Composes: parse-pr-summary.sh →
 # slack-announce.sh with $CLAUDIN_SLACK_CHANNEL_ID.
 #
 # Note: This script does NOT perform bullet condensation (the former skill
