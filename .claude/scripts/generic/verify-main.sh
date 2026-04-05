@@ -87,8 +87,6 @@ else
 
     if [[ -n "$PR_SUFFIX" && "$COMMIT_MESSAGE" == *"$PR_SUFFIX" ]]; then
         VERIFIED="true"
-    else
-        VERIFIED="false"
     fi
 fi
 
