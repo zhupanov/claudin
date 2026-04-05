@@ -132,6 +132,8 @@ Proceed to Step 2.
 
 ### Rebase onto latest main (before implementation)
 
+**This rebase runs unconditionally in both quick and normal mode** — freshness is beneficial regardless of mode. Both the quick-mode "Proceed to Step 2" and normal-mode "proceed to Step 2" instructions above lead here before entering Step 2.
+
 Print: `🔃 Rebasing onto latest main before starting implementation...`
 
 First, check if the branch has already been pushed to origin (e.g., re-running `/implement` on an existing PR branch):
@@ -145,7 +147,7 @@ Otherwise, run:
 $PWD/.claude/scripts/generic/rebase-push.sh --no-push
 ```
 
-If the script exits non-zero, print: `**⚠ Rebase onto main failed (likely conflict). Bailing to cleanup.**` and skip to Step 13.
+If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 13.
 
 If successful, print: `✅ Rebased onto latest main.`
 
@@ -188,7 +190,7 @@ Otherwise, run:
 $PWD/.claude/scripts/generic/rebase-push.sh --no-push
 ```
 
-If the script exits non-zero, print: `**⚠ Rebase onto main failed (likely conflict). Bailing to cleanup.**` and skip to Step 13.
+If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 13.
 
 If successful, print: `✅ Rebased onto latest main.`
 
@@ -267,7 +269,7 @@ Otherwise, run:
 $PWD/.claude/scripts/generic/rebase-push.sh --no-push
 ```
 
-If the script exits non-zero, print: `**⚠ Rebase onto main failed (likely conflict). Bailing to cleanup.**` and skip to Step 13.
+If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 13.
 
 If successful, print: `✅ Rebased onto latest main.`
 
@@ -314,7 +316,7 @@ Otherwise, run:
 $PWD/.claude/scripts/generic/rebase-push.sh --no-push
 ```
 
-If the script exits non-zero, print: `**⚠ Rebase onto main failed (likely conflict). Bailing to cleanup.**` and skip to Step 13.
+If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 13.
 
 If successful, print: `✅ Rebased onto latest main.`
 
@@ -582,4 +584,6 @@ Remove the session temp directory and all files within it:
 $PWD/.claude/scripts/generic/cleanup-tmpdir.sh --dir "$IMPL_TMPDIR"
 ```
 
-Print: `🏁 Step 13 — Implementation complete! PR created but not merged.`
+If a PR was created (Step 9 completed), print: `🏁 Step 13 — Implementation complete! PR created but not merged.`
+
+If the workflow bailed before PR creation (e.g., rebase failure before Step 9), print: `🏁 Step 13 — Implementation bailed before PR creation. See warnings above.`

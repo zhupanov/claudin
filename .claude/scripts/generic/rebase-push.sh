@@ -76,7 +76,16 @@ else
     fi
 
     # --- Fetch latest main ---
-    git fetch origin main --quiet 2>/dev/null || true
+    # In --no-push mode, fetch failure is fatal (the whole point is freshness).
+    # In default mode, fetch failure is tolerated to allow rebasing against cached origin/main.
+    if [[ "$NO_PUSH" == "true" ]]; then
+        if ! git fetch origin main --quiet 2>/dev/null; then
+            echo "REBASE_ERROR=git fetch origin main failed (network/auth issue)" >&2
+            exit 3
+        fi
+    else
+        git fetch origin main --quiet 2>/dev/null || true
+    fi
 
     # --- Attempt rebase ---
     REBASE_OUTPUT=$(git rebase origin/main 2>&1)
