@@ -146,6 +146,8 @@ After handling any non-merge/non-bail action (rebase, evaluate_failure, etc.), *
    Handle exit codes:
    - **Exit 0**: Rebase and push succeeded.
    - **Exit 1**: Rebase had conflicts (rebase is still in progress). Read `CONFLICT_FILES=` from stdout. Enter the **Conflict Resolution Procedure** below.
+   - **Exit 2**: `force-with-lease` push failed. Run the script again once (it fetches + rebases internally). If it fails twice, **bail out** (Step 2d).
+   - **Exit 3**: Rebase failed for non-conflict reasons (rebase already aborted). Read `REBASE_ERROR=` from stderr. **Bail out** (Step 2d).
 
 ### Conflict Resolution Procedure
 
@@ -213,12 +215,14 @@ Also capture `git diff --cached` as supplementary context showing the full stage
 
 Follow `.claude/skills/shared/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$SHAZAM_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
 
+**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$SHAZAM_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
+
 **3e. Voting**: Run the voting protocol from `.claude/skills/shared/voting-protocol.md` with code review voter composition:
 - **Voter 1**: Claude Generic code reviewer subagent (fresh Agent invocation)
 - **Voter 2**: Codex (if available) — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor (if available) — via `run-external-reviewer.sh`
 
-If fewer than 2 voters are available: skip voting, treat the round as passed (no findings to implement), and continue to Phase 4.
+If fewer than 2 voters are available: skip voting, accept all reviewer findings (per `voting-protocol.md` fallback), implement them, and continue to Phase 4.
 
 If voting **accepts findings** (2+ YES votes): re-resolve the affected files incorporating the accepted suggestions, re-stage, and re-run review (3c through 3e). Allow up to **2 total resolution-review rounds**.
 
@@ -234,9 +238,7 @@ Run `$PWD/.claude/scripts/generic/rebase-push.sh --continue` and handle exit cod
 - **Exit 0**: Rebase and push succeeded. Increment `rebase_count` and `iteration`, reset `transient_retries`. Restart the CI wait loop.
 - **Exit 1**: A later commit in the rebase conflicted. Loop back to **Phase 1** for the new conflict (the Conflict Resolution Procedure starts again for the new set of `CONFLICT_FILES`).
 - **Exit 2**: Push `--force-with-lease` failed. Retry `rebase-push.sh --continue` once. If it fails twice, **bail out** (Step 2d — call `git rebase --abort` first if the rebase is still in progress).
-- **Exit 3**: Check the `REBASE_ERROR` output. If it indicates an empty or already-applied commit (e.g., "nothing to commit", "No changes"), run `git rebase --skip` and then `$PWD/.claude/scripts/generic/rebase-push.sh --continue` again (handle the same exit codes). Otherwise, **bail out** (Step 2d).
-   - **Exit 2**: `force-with-lease` push failed. Run the script again once (it fetches + rebases internally). If it fails twice, **bail out**.
-   - **Exit 3**: Rebase failed for non-conflict reasons (rebase already aborted). Read `REBASE_ERROR=` from stderr. **Bail out** (Step 2d).
+- **Exit 3**: Check the `REBASE_ERROR` output. If it indicates an empty or already-applied commit (e.g., "nothing to commit", "No changes"), run `git rebase --skip` (if `git rebase --skip` itself exits non-zero, run `$PWD/.claude/scripts/generic/git-rebase-abort.sh` and **bail out** — Step 2d) and then `$PWD/.claude/scripts/generic/rebase-push.sh --continue` again (handle the same exit codes). Otherwise, **bail out** (Step 2d).
 
 ### 2b — Merge
 
