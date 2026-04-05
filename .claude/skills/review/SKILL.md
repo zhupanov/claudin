@@ -6,7 +6,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 
 # Code Review Skill
 
-Review all changes on the current branch (vs `main`) using four specialized Claude subagent reviewers plus Codex and Cursor reviewers, then implement all accepted suggestions.
+Review all changes on the current branch (vs `main`) using two specialized Claude subagent reviewers plus two Codex and one Cursor reviewer, then implement all accepted suggestions.
 
 ## Domain-Specific Review Rules
 
@@ -51,7 +51,7 @@ Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read 
 
 ## Step 2 — Launch Review Subagents in Parallel
 
-Launch **all reviewers** in a **single message**: Cursor and Codex via `Bash` tool (background), plus four Claude subagents via the `Agent` tool. **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then Codex, then Claude subagents (fastest). Each reviewer receives the full diff text and file list, plus its specialized review instructions. Each must **only report findings** — never edit files.
+Launch **all reviewers** in a **single message**: Cursor and two Codex instances via `Bash` tool (background), plus two Claude subagents via the `Agent` tool. **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then both Codex instances, then Claude subagents (fastest). Each reviewer receives the full diff text and file list, plus its specialized review instructions. Each must **only report findings** — never edit files.
 
 ### Cursor Reviewer (if `cursor_available`)
 
@@ -67,26 +67,39 @@ $PWD/.claude/scripts/generic/run-external-reviewer.sh --tool cursor --output "$R
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-### Codex Reviewer (if `codex_available`)
+### Codex Reviewers (if `codex_available`) — 2 instances
 
-Run Codex **second** in the parallel message. Codex has full repo access and will examine the changes itself.
+Run both Codex instances **second** in the parallel message. Each Codex instance has full repo access and will examine the changes itself.
 
-Invoke Codex via the shared monitored wrapper script:
+Invoke both Codex instances via the shared monitored wrapper script:
+
+**Codex-General** (general code quality and risk/integration):
 
 ```bash
-$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 900 -- \
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-general-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
-    --output-last-message "$REVIEW_TMPDIR/codex-output.txt" \
-    "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Combine 4 review perspectives: (1) General: bugs, logic, quality, tests, backward compat, style. (2) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    --output-last-message "$REVIEW_TMPDIR/codex-general-output.txt" \
+    "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Focus on general code quality and risk/integration: bugs, logic, quality, tests, backward compat, style, breaking changes, deployment risks, regressions, CI constraints. Return numbered findings with file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-### Claude Subagents (4 reviewers)
+**Codex-Deep-Analysis** (deep correctness and architecture):
 
-Launch all four Claude subagents **last** in the same message (they finish fastest).
+```bash
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-deep-output.txt" --timeout 900 -- \
+  codex exec --full-auto -C "$PWD" \
+    --output-last-message "$REVIEW_TMPDIR/codex-deep-output.txt" \
+    "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Focus on deep correctness and architecture: logic errors, off-by-one, nil handling, type mismatches, races, error paths, separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+```
 
-Use the four reviewer archetypes from `.claude/skills/shared/reviewer-templates.md`, filling in the variables for **code review**:
+Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
+
+### Claude Subagents (2 reviewers)
+
+Launch both Claude subagents **last** in the same message (they finish fastest).
+
+Use the two reviewer archetypes from `.claude/skills/shared/reviewer-templates.md`, filling in the variables for **code review**:
 
 - **`{REVIEW_TARGET}`** = `"code changes"`
 - **`{CONTEXT_BLOCK}`**:
@@ -105,11 +118,11 @@ Use the four reviewer archetypes from `.claude/skills/shared/reviewer-templates.
 
 Additionally, append the following competition context to each reviewer's prompt (both Claude subagents and external reviewers):
 
-> **Competition notice**: Your findings will be voted on by a 3-agent panel (Generic code reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
+> **Competition notice**: Your findings will be voted on by a 3-agent panel (General Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
 
 ### Monitoring External Reviewers
 
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$REVIEW_TMPDIR/codex-output.txt` and `$REVIEW_TMPDIR/cursor-output.txt` as the output files.
+Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$REVIEW_TMPDIR/codex-general-output.txt`, `$REVIEW_TMPDIR/codex-deep-output.txt`, and `$REVIEW_TMPDIR/cursor-output.txt` as the output files.
 
 **Critical**: Do NOT read `$REVIEW_TMPDIR/cursor-output.txt` until `$REVIEW_TMPDIR/cursor-output.txt.done` exists. Cursor buffers all stdout — the file is empty (0 bytes) until the process exits. The `.done` sentinel file is written by the wrapper script upon completion and contains the exit code.
 
@@ -119,10 +132,10 @@ This step repeats until reviewers find no more issues. Track the current **round
 
 ### 3a — Collect
 
-**Process Claude findings immediately** — do not wait for external reviewers before starting. After all four Claude subagents return:
+**Process Claude findings immediately** — do not wait for external reviewers before starting. After both Claude subagents return:
 
-1. Collect findings from the four Claude subagents right away. Claude subagents produce **dual-list output** (per `reviewer-templates.md`): "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists from each subagent.
-2. **Then** poll for external reviewer sentinel files (`$REVIEW_TMPDIR/cursor-output.txt.done` and `$REVIEW_TMPDIR/codex-output.txt.done`, only for reviewers that were actually launched) using the polling procedure in `.claude/skills/shared/external-reviewers.md`.
+1. Collect findings from the two Claude subagents right away. Claude subagents produce **dual-list output** (per `reviewer-templates.md`): "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists from each subagent.
+2. **Then** poll for external reviewer sentinel files (`$REVIEW_TMPDIR/cursor-output.txt.done`, `$REVIEW_TMPDIR/codex-general-output.txt.done`, and `$REVIEW_TMPDIR/codex-deep-output.txt.done`, only for reviewers that were actually launched) using the polling procedure in `.claude/skills/shared/external-reviewers.md`.
 3. Once sentinel files exist, read each reviewer's exit code, then read and validate the output per the shared procedure. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
 4. Merge external reviewer in-scope findings into the Claude in-scope findings. Deduplicate in-scope findings and OOS observations separately (see `voting-protocol.md` OOS section). If the same issue appears in both lists from different reviewers, merge under the in-scope finding.
 
@@ -130,7 +143,7 @@ This way Claude findings are processed during the 5-10 minutes external reviewer
 
 ### 3b — Check for Zero Findings
 
-If **all reviewers** (4 Claude subagents + Codex and Cursor if available) report no issues (e.g., "No issues found.", "No architecture concerns found.", "No concerns found.", "NO_ISSUES_FOUND"), the loop is done — skip to **Step 4**.
+If **all reviewers** (2 Claude subagents + 2 Codex instances and Cursor if available) report no issues (e.g., "No issues found.", "No architecture concerns found.", "No concerns found.", "NO_ISSUES_FOUND"), the loop is done — skip to **Step 4**.
 
 ### 3c — Deduplicate
 
@@ -140,7 +153,7 @@ Merge findings from all reviewers into a single deduplicated list, grouped by fi
 
 **In round 1**: Submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `.claude/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section. For code review:
 
-- **Voter 1**: Claude Generic code reviewer subagent — fresh Agent tool invocation with the voting prompt. Instruct: `"You are a very scrupulous senior engineer code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed code changes. Be extremely rigorous — only vote YES for findings that identify genuine bugs, logic errors, security issues, or clearly important improvements. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. Vote NO for trivial style nits, subjective preferences, or speculative concerns."`
+- **Voter 1**: Claude General reviewer subagent — fresh Agent tool invocation with the voting prompt. Instruct: `"You are a very scrupulous senior engineer code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed code changes. Be extremely rigorous — only vote YES for findings that identify genuine bugs, logic errors, security issues, or clearly important improvements. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. Vote NO for trivial style nits, subjective preferences, or speculative concerns."`
 - **Voter 2**: Codex — via `run-external-reviewer.sh` with the ballot. Instruct similarly as a "very scrupulous senior engineer code reviewer."
 - **Voter 3**: Cursor — via `run-external-reviewer.sh` with the ballot. Instruct similarly.
 
@@ -164,7 +177,7 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 Print to the user:
 - `## Review Round {N}` header
-- Bullet list of **accepted** findings (after voting in round 1, or all findings in rounds 2+) with reviewer attribution (Generic / Correctness / Risk-Integration / Architect / Codex / Cursor)
+- Bullet list of **accepted** findings (after voting in round 1, or all findings in rounds 2+) with reviewer attribution (General / Deep-Analysis / Codex-General / Codex-Deep-Analysis / Cursor)
 - If round 1: vote counts per finding and any findings not accepted by vote (rejected or exonerated)
 - Total count of accepted findings for this round
 
@@ -182,7 +195,7 @@ After all fixes are applied, invoke `/relevant-checks` to run validation checks.
 
 Increment the round number. Go back to **Step 1** (gather the updated diff) and **Step 2** (launch reviewers again).
 
-**Round 2+ optimization**: Only launch the **4 Claude subagent reviewers** — skip Codex and Cursor. External reviewers are expensive (5-15 min each) and provide diminishing returns on incremental fix diffs. Claude subagents review the **cumulative diff** (main...HEAD), which includes both the original changes and the fixes just applied.
+**Round 2+ optimization**: Only launch the **2 Claude subagent reviewers** — skip Codex and Cursor. External reviewers are expensive (5-15 min each) and provide diminishing returns on incremental fix diffs. Claude subagents review the **cumulative diff** (main...HEAD), which includes both the original changes and the fixes just applied.
 
 ### 3g — Safety Limit
 
@@ -200,7 +213,7 @@ Then proceed to Step 4.
 
 Print a final summary:
 - Total number of review rounds
-- Findings per round (with per-reviewer breakdown: Generic / Correctness / Risk-Integration / Architect / Codex / Cursor)
+- Findings per round (with per-reviewer breakdown: General / Deep-Analysis / Codex-General / Codex-Deep-Analysis / Cursor)
 - Voting summary (round 1): total findings voted on, accepted (2+ YES), neutral (1 YES), exonerated (0 YES + 1+ EXONERATE), rejected (0 YES + 0 EXONERATE)
 - Reviewer Competition Scoreboard (from round 1 voting)
 - Total fixes applied across all rounds

@@ -20,7 +20,7 @@ FINDING_2: <reviewer attribution> — <finding description>
 ...
 ```
 
-Include the reviewer attribution (e.g., "Generic", "Architect", "Codex") so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it.
+Include the reviewer attribution (e.g., "General", "Deep-Analysis", "Codex-General", "Codex-Deep-Analysis", "Cursor") so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it.
 
 ## Voter Output Format
 
@@ -49,12 +49,12 @@ When voting is skipped due to insufficient voters, print: `**⚠ Voting skipped 
 ## Voter Panel Composition
 
 **For plan review** (`/design` Step 3):
-- **Voter 1**: Claude Architect subagent — launched as a fresh Agent tool invocation with a focused voting prompt (separate from the 4 reviewer subagents)
+- **Voter 1**: Claude Deep Analysis reviewer subagent — launched as a fresh Agent tool invocation with a focused voting prompt (separate from the reviewer subagents)
 - **Voter 2**: Codex — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor — via `run-external-reviewer.sh`
 
 **For code review** (`/review` Step 3):
-- **Voter 1**: Claude Generic code reviewer subagent — launched as a fresh Agent tool invocation
+- **Voter 1**: Claude General reviewer subagent — launched as a fresh Agent tool invocation
 - **Voter 2**: Codex — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor — via `run-external-reviewer.sh`
 
@@ -143,10 +143,11 @@ After voting, print a scoreboard to the session:
 
 | Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|-------|
-| Generic  | 3        | 2        | 1               | 0                             | 0                         | +2    |
-| Architect| 2        | 1        | 0               | 1                             | 0                         | +1    |
-| Codex    | 1        | 0        | 0               | 0                             | 1                         | -1    |
-| ...      |          |          |                 |                               |                           |       |
+| General              | 3        | 2        | 1               | 0                             | 0                         | +2    |
+| Deep-Analysis        | 2        | 1        | 0               | 1                             | 0                         | +1    |
+| Codex-General        | 1        | 0        | 0               | 0                             | 1                         | -1    |
+| Codex-Deep-Analysis  | 1        | 1        | 0               | 0                             | 0                         | +1    |
+| Cursor               | 2        | 1        | 1               | 0                             | 0                         | +1    |
 
 Note: In future iterations, token allocation will be weighted proportionally
 to reviewer scores — higher-scoring reviewers will receive more tokens.
@@ -161,7 +162,7 @@ Reviewers may return a second list of **out-of-scope observations** — pre-exis
 Out-of-scope items are deduplicated separately from in-scope findings and assigned IDs with an `OOS_` prefix (e.g., `OOS_1`, `OOS_2`). They are included on the same ballot as in-scope findings, labeled with `[OUT_OF_SCOPE]`:
 
 ```
-OOS_1: [OUT_OF_SCOPE] Generic — <description of pre-existing issue>
+OOS_1: [OUT_OF_SCOPE] General — <description of pre-existing issue>
 ```
 
 ### OOS Vote Semantics

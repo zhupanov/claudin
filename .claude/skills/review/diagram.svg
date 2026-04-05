@@ -25,7 +25,7 @@
 
   <!-- Step 2: Launch Reviewers (parallel) -->
   <rect x="70" y="180" width="300" height="40" rx="4" fill="#17A2B8" stroke="#17A2B8" stroke-width="3"/>
-  <text x="220" y="200">Reviewers (4 Claude + external)</text>
+  <text x="220" y="200">Reviewers (2 Claude + 2 Codex + Cursor)</text>
   <line x1="220" y1="220" x2="220" y2="250"/>
 
   <!-- Step 3a: Collect & Deduplicate -->

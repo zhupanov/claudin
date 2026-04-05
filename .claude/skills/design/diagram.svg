@@ -40,7 +40,7 @@
 
   <!-- Step 3: Plan Review (parallel) -->
   <rect x="70" y="370" width="280" height="40" rx="4" fill="#17A2B8" stroke="#17A2B8" stroke-width="3"/>
-  <text x="210" y="390">Plan Review (4 Claude + external)</text>
+  <text x="210" y="390">Plan Review (2 Claude + 2 Codex + Cursor)</text>
   <line x1="210" y1="410" x2="210" y2="440"/>
 
   <!-- No-issues path: skip voting, go directly to Architecture Diagram -->

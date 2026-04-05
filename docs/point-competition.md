@@ -31,7 +31,7 @@ The key invariant: **OOS items can never score below 0.** This encourages review
 Out-of-scope items go on the same voting ballot as in-scope findings, labeled with `[OUT_OF_SCOPE]`:
 
 ```text
-OOS_1: [OUT_OF_SCOPE] Generic — <description>
+OOS_1: [OUT_OF_SCOPE] General — <description>
 ```
 
 Voters can promote an OOS item to in-scope by voting YES:
@@ -45,9 +45,11 @@ After voting completes, a scoreboard is printed showing each reviewer's performa
 
 | Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Promoted | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
-| Generic | 3 | 2 | 1 | 0 | 0 | 1 | 0 | +2 |
-| Architect | 2 | 1 | 0 | 1 | 0 | 0 | 0 | +1 |
-| Codex | 1 | 0 | 0 | 0 | 1 | 0 | 0 | -1 |
+| General | 3 | 2 | 1 | 0 | 0 | 1 | 0 | +2 |
+| Deep-Analysis | 2 | 1 | 0 | 1 | 0 | 0 | 0 | +1 |
+| Codex-General | 1 | 0 | 0 | 0 | 1 | 0 | 0 | -1 |
+| Codex-Deep-Analysis | 1 | 1 | 0 | 0 | 0 | 0 | 0 | +1 |
+| Cursor | 2 | 1 | 1 | 0 | 0 | 0 | 0 | +1 |
 
 ## Future Plans
 

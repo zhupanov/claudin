@@ -1,46 +1,23 @@
 # Review Agents
 
-Claudin uses 4 specialized Claude reviewer archetypes that provide different perspectives during plan review and code review. Each archetype has a distinct focus area, ensuring comprehensive coverage across quality dimensions.
+Claudin uses 2 specialized Claude reviewer archetypes that provide different perspectives during plan review and code review. Each archetype has a distinct focus area, ensuring comprehensive coverage across quality dimensions.
 
-## The 4 Archetypes
+## The 2 Archetypes
 
-### Generic Reviewer
+### General Reviewer
 
-**Focus**: Broad code quality coverage — bugs, logic, duplication, test coverage, backward compatibility, and style consistency.
+**Focus**: Broad code quality and risk/integration coverage — bugs, logic, duplication, test coverage, backward compatibility, style consistency, breaking changes, deployment risks, regressions, and CI impact.
 
 **Checklist**:
 
+Code quality:
 - Logical flaws, incorrect conditions, wrong variable usage, broken control flow
 - Code duplication — searches the codebase for existing implementations that overlap
 - Missing or insufficient test coverage
 - Breaking changes to existing callers, CLI commands, API contracts
 - Style consistency with existing patterns and naming conventions
 
-**Model**: Sonnet
-
-### Correctness Reviewer
-
-**Focus**: Deep correctness analysis — everything that could cause the code to produce wrong results.
-
-**Specialized checks**:
-
-- Logic errors (incorrect booleans, inverted checks, wrong operators)
-- Off-by-one errors (loop bounds, slice indices, pagination limits)
-- Null/nil/None handling (missing nil checks, zero-value assumptions)
-- Type mismatches (wrong assertions, implicit conversions)
-- Incorrect return values (swapped returns, missing early returns)
-- Race conditions (shared state without synchronization, goroutine leaks)
-- Exception/error paths (swallowed errors, panic recovery gaps)
-- Math errors (integer overflow, division by zero, floating-point comparison)
-
-**Model**: Sonnet
-
-### Risk/Integration Reviewer
-
-**Focus**: Breaking changes, side effects, and deployment risks — everything that could go wrong in production.
-
-**Specialized checks**:
-
+Risk/integration:
 - Breaking changes to callers, API contracts, downstream consumers
 - Cache invalidation issues
 - Import side effects (init functions, global state, circular dependencies)
@@ -52,18 +29,27 @@ Claudin uses 4 specialized Claude reviewer archetypes that provide different per
 
 **Model**: Sonnet
 
-### Architect Reviewer
+### Deep Analysis Reviewer
 
-**Focus**: Structural integrity — separation of concerns, contract boundaries, invariants, and semantic boundaries.
+**Focus**: Deep correctness analysis combined with architectural rigor — everything that could cause wrong results or violate structural integrity.
 
-**Specialized checks**:
+**Correctness checks**:
+- Logic errors (incorrect booleans, inverted checks, wrong operators)
+- Off-by-one errors (loop bounds, slice indices, pagination limits)
+- Null/nil/None handling (missing nil checks, zero-value assumptions)
+- Type mismatches (wrong assertions, implicit conversions)
+- Incorrect return values (swapped returns, missing early returns)
+- Race conditions (shared state without synchronization, goroutine leaks)
+- Exception/error paths (swallowed errors, panic recovery gaps)
+- Math errors (integer overflow, division by zero, floating-point comparison)
 
+**Architecture checks**:
 - **Separation of Concerns**: Single responsibility per module, business logic not mixed with I/O
 - **Contract Boundaries**: Explicit cross-repo contracts, consistent types across layers, peer field consistency
 - **Invariants**: Edge case validation at boundaries, loud failures over silent defaults, proper ordering of operations
 - **Semantic Boundaries**: Domain logic in the right layer, correct import direction, explicit data shapes at system boundaries
 
-**Model**: Opus
+**Model**: Sonnet
 
 ## Persistent Agents vs. Inline Templates
 
@@ -77,7 +63,7 @@ The persistent agents and inline templates are derived from the same source and 
 
 ## Output Format
 
-All 4 reviewer archetypes produce **dual-list output**:
+Both reviewer archetypes produce **dual-list output**:
 
 1. **In-Scope Findings** — Issues that should be fixed in this PR, with specific file/line references and suggested fixes
 2. **Out-of-Scope Observations** — Pre-existing issues or concerns beyond the PR's scope, surfaced for future attention
@@ -88,7 +74,7 @@ External reviewers (Codex, Cursor) produce single-list output — their entire o
 
 | Skill | Phase | Reviewers Used |
 |---|---|---|
-| `/design` | Plan review | All 4 Claude archetypes + Codex + Cursor (6 total) |
-| `/review` | Code review | All 4 Claude archetypes + Codex + Cursor (6 total) |
-| `/loop-review` | Slice review | All 4 Claude archetypes + Codex + Cursor (6 total) |
-| `/implement` (quick mode) | Simplified review | All 4 Claude archetypes only (no external reviewers) |
+| `/design` | Plan review | Both Claude archetypes + 2 Codex + Cursor (5 total) |
+| `/review` | Code review | Both Claude archetypes + 2 Codex + Cursor (5 total) |
+| `/loop-review` | Slice review | Both Claude archetypes + 2 Codex + Cursor (5 total) |
+| `/implement` (quick mode) | Simplified review | Both Claude archetypes only (no external reviewers) |

@@ -7,7 +7,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSe
 
 # Loop Review
 
-Systematically review the entire codebase by partitioning into slices, reviewing each with specialized code reviewers (4 Claude subagents + Codex + Cursor), implementing improvements via `/shazam`, and tracking deferred suggestions in a checked-in document.
+Systematically review the entire codebase by partitioning into slices, reviewing each with specialized code reviewers (2 Claude subagents + 2 Codex + Cursor), implementing improvements via `/shazam`, and tracking deferred suggestions in a checked-in document.
 
 **This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/shazam`, `/review`, `/implement`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto` when invoking `/shazam`** to suppress interactive question checkpoints in `/design` and `/implement`.
 
@@ -94,11 +94,11 @@ Use Glob to collect relevant source files in the slice (`.go`, `.md`, `.yaml`, `
 
 Write the full file list to `$LR_TMPDIR/slice-N-files.txt` (one path per line) for external reviewers to read.
 
-**Sub-slicing (>50 files):** If the slice has more than 50 files, split the file list into sub-slices of ≤50 files each. For each sub-slice, launch 4 Claude subagents (Step 3c) with only that sub-slice's files as `{FILE_LIST}`. External reviewers always receive the full slice file list (one invocation per slice regardless of sub-slicing). After all sub-slices and external reviewers complete, merge all Claude findings from all sub-slices with external reviewer findings before proceeding to Step 3d.
+**Sub-slicing (>50 files):** If the slice has more than 50 files, split the file list into sub-slices of ≤50 files each. For each sub-slice, launch 2 Claude subagents (Step 3c) with only that sub-slice's files as `{FILE_LIST}`. External reviewers always receive the full slice file list (one invocation per slice regardless of sub-slicing). After all sub-slices and external reviewers complete, merge all Claude findings from all sub-slices with external reviewer findings before proceeding to Step 3d.
 
-### 3c — Launch up to 6 review subagents in parallel
+### 3c — Launch up to 5 review subagents in parallel
 
-Launch ALL available reviewers in a **single message**. **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then Codex, then 4 Claude subagents (fastest). External reviewers are launched once per slice even when sub-slicing. Claude subagents use the current sub-slice's `{FILE_LIST}` if sub-slicing, or the full file list otherwise. Each must **only report findings — never edit files**.
+Launch ALL available reviewers in a **single message**. **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then 2 Codex (second slowest), then 2 Claude subagents (fastest). External reviewers are launched once per slice even when sub-slicing. Claude subagents use the current sub-slice's `{FILE_LIST}` if sub-slicing, or the full file list otherwise. Each must **only report findings — never edit files**.
 
 **Cursor Reviewer (if `cursor_available`):**
 
@@ -112,36 +112,43 @@ $PWD/.claude/scripts/generic/run-external-reviewer.sh --tool cursor --output "$L
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-**Codex Reviewer (if `codex_available`):**
+**Codex-General Reviewer (if `codex_available`):**
 
-Run Codex **second** in the parallel message:
+Run Codex-General **second** in the parallel message:
 
 ```bash
-$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-output-slice-N.txt" --timeout 900 -- \
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-general-output-slice-N.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
-    --output-last-message "$LR_TMPDIR/codex-output-slice-N.txt" \
-    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Combine 4 review perspectives: (1) Quality: bugs, logic errors, dead code, duplication, missing error handling. (2) Correctness: off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: broken contracts, thread safety, deployment risks, CI gaps. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    --output-last-message "$LR_TMPDIR/codex-general-output-slice-N.txt" \
+    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Focus on: quality, bugs, risk, integration, CI. Return numbered findings with file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-**Claude Subagents (4 reviewers, launched last — they finish fastest):**
+**Codex-Deep-Analysis Reviewer (if `codex_available`):**
 
-**Reviewer A — Quality & Bugs:**
-> Review EXISTING code (not a diff) in this project. Files: {FILE_LIST}. Read each file. Look for: (1) Bugs — logic errors, incorrect conditions, broken control flow. (2) Dead code, unnecessary complexity, simplification opportunities. (3) Duplication — Grep the codebase for overlapping implementations. (4) Missing or incorrect error handling. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
+Run Codex-Deep-Analysis **third** in the parallel message:
 
-**Reviewer B — Correctness:**
-> Review EXISTING code for correctness. Files: {FILE_LIST}. Read each file. Focus on: off-by-one errors, nil/zero-value handling, race conditions, incorrect return values, type mismatches, math errors, error path gaps. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
+```bash
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-deep-output-slice-N.txt" --timeout 900 -- \
+  codex exec --full-auto -C "$PWD" \
+    --output-last-message "$LR_TMPDIR/codex-deep-output-slice-N.txt" \
+    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Focus on: correctness, architecture, invariants, contracts. Return numbered findings with file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+```
 
-**Reviewer C — Risk & Integration:**
-> Review EXISTING code for risk/integration concerns. Files: {FILE_LIST}. Read each file. Focus on: broken CLI/server contracts, thread safety, deployment risks, CI coverage gaps, module interaction issues, import direction violations. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
+Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-**Reviewer D — Architecture:**
-> Review EXISTING code for architectural concerns. Files: {FILE_LIST}. Read each file. Focus on: single responsibility violations, implicit contracts between components, unchecked invariants, layer boundary violations, semantic boundary issues. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
+**Claude Subagents (2 reviewers, launched last — they finish fastest):**
+
+**Reviewer A — General:**
+> Review EXISTING code for this project. Files: {FILE_LIST}. Read each file. Look for: (1) Bugs — logic errors, incorrect conditions, broken control flow. (2) Dead code, unnecessary complexity, duplication. (3) Missing or incorrect error handling. (4) Breaking changes, backward compatibility issues. (5) Thread safety, deployment risks, CI coverage gaps, module interaction issues. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
+
+**Reviewer B — Deep Analysis:**
+> Review EXISTING code for correctness and architecture. Files: {FILE_LIST}. Read each file. Focus on: off-by-one errors, nil/zero-value handling, race conditions, incorrect return values, type mismatches, math errors, error path gaps. Also check: single responsibility violations, implicit contracts between components, unchecked invariants, layer boundary violations, semantic boundary issues. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
 
 **Monitoring External Reviewers:**
 
-If either external reviewer was launched, follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$LR_TMPDIR/codex-output-slice-N.txt` and `$LR_TMPDIR/cursor-output-slice-N.txt` as the output files. Poll for sentinel files: `$LR_TMPDIR/cursor-output-slice-N.txt.done` and `$LR_TMPDIR/codex-output-slice-N.txt.done`. Only monitor reviewers that were actually launched.
+If any external reviewer was launched, follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$LR_TMPDIR/codex-general-output-slice-N.txt`, `$LR_TMPDIR/codex-deep-output-slice-N.txt`, and `$LR_TMPDIR/cursor-output-slice-N.txt` as the output files. Poll for sentinel files: `$LR_TMPDIR/cursor-output-slice-N.txt.done`, `$LR_TMPDIR/codex-general-output-slice-N.txt.done`, and `$LR_TMPDIR/codex-deep-output-slice-N.txt.done`. Only monitor reviewers that were actually launched.
 
 **Critical**: Do NOT read Cursor's output file until `$LR_TMPDIR/cursor-output-slice-N.txt.done` exists. Cursor buffers all stdout — the file is empty (0 bytes) until the process exits. The `.done` sentinel file is the reliable completion signal.
 
@@ -149,13 +156,13 @@ If validation fails (empty output after retry, timeout, or non-zero exit), appen
 
 ### 3d — Collect, negotiate, deduplicate, and classify findings
 
-**After ALL reviewers return** (4 Claude subagents AND any launched external reviewers), proceed:
+**After ALL reviewers return** (2 Claude subagents AND any launched external reviewers), proceed:
 
 **1. Collect** all findings from Claude subagents and validated external reviewer output.
 
 **2. Negotiate** with external reviewers (if they produced findings):
 
-Follow the **Negotiation Protocol** in `.claude/skills/shared/external-reviewers.md`, using `$LR_TMPDIR` as the tmpdir, with `max_rounds=1`. Accept findings unless factually incorrect or contradicting CLAUDE.md.
+Follow the **Negotiation Protocol** in `.claude/skills/shared/external-reviewers.md`, using `$LR_TMPDIR` as the tmpdir, with `max_rounds=1`. With 2 Codex instances (Codex-General and Codex-Deep-Analysis), negotiate with each separately using distinct prompt/output file paths (e.g., `codex-general-negotiation-prompt.txt` / `codex-general-negotiation-output.txt` and `codex-deep-negotiation-prompt.txt` / `codex-deep-negotiation-output.txt`). Accept findings unless factually incorrect or contradicting CLAUDE.md.
 
 Note: "accepted" in the negotiation sense means the finding is valid — it may still be classified as DEFER below.
 
