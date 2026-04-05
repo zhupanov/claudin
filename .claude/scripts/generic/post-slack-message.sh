@@ -45,15 +45,15 @@ if [[ -z "$CHANNEL_ID" || -z "$TEXT" || -z "$TOKEN" ]]; then
   exit 1
 fi
 
-# Construct JSON payload
-PAYLOAD="{\"channel\": \"$CHANNEL_ID\", \"text\": \"$TEXT\""
-if [[ -n "$USERNAME" ]]; then
-  PAYLOAD="$PAYLOAD, \"username\": \"$USERNAME\""
-fi
-if [[ -n "$SLACK_TIMESTAMP" ]]; then
-  PAYLOAD="$PAYLOAD, \"thread_ts\": \"$SLACK_TIMESTAMP\""
-fi
-PAYLOAD="$PAYLOAD}"
+# Construct JSON payload safely using jq
+PAYLOAD=$(jq -n \
+  --arg channel "$CHANNEL_ID" \
+  --arg text "$TEXT" \
+  --arg username "$USERNAME" \
+  --arg thread_ts "$SLACK_TIMESTAMP" \
+  '{channel: $channel, text: $text}
+   + (if $username != "" then {username: $username} else {} end)
+   + (if $thread_ts != "" then {thread_ts: $thread_ts} else {} end)')
 
 # Send message to Slack
 response=$(curl -s -X POST https://slack.com/api/chat.postMessage \

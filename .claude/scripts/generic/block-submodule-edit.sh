@@ -22,6 +22,9 @@ block() {
 INPUT=$(cat) || block "submodule edit guard: failed to read stdin, blocking as precaution"
 
 # --- Extract file_path from JSON ---
+if ! command -v jq >/dev/null 2>&1; then
+  block "submodule edit guard: jq is required but not installed; install jq and retry"
+fi
 FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) \
   || block "submodule edit guard: failed to parse tool input, blocking as precaution"
 

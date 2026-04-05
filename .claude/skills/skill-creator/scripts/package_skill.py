@@ -2,18 +2,23 @@
 """
 Skill Packager - Creates a distributable .skill file of a skill folder
 
-Usage:
-    python utils/package_skill.py <path/to/skill-folder> [output-directory]
+Usage (from the skill-creator directory):
+    python -m scripts.package_skill <path/to/skill-folder> [output-directory]
 
 Example:
-    python utils/package_skill.py skills/public/my-skill
-    python utils/package_skill.py skills/public/my-skill ./dist
+    python -m scripts.package_skill skills/public/my-skill
+    python -m scripts.package_skill skills/public/my-skill ./dist
 """
 
 import fnmatch
 import sys
 import zipfile
 from pathlib import Path
+
+# Ensure the skill-creator root is importable regardless of how we're invoked
+_SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR.parent))
 
 from scripts.quick_validate import validate_skill
 

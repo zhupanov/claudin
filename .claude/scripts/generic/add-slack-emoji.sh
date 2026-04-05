@@ -46,11 +46,18 @@ fi
 EMOJI_NAME="${EMOJI#:}"
 EMOJI_NAME="${EMOJI_NAME%:}"
 
+# Construct JSON payload safely using jq
+PAYLOAD=$(jq -n \
+  --arg channel "$CHANNEL_ID" \
+  --arg name "$EMOJI_NAME" \
+  --arg timestamp "$SLACK_TIMESTAMP" \
+  '{channel: $channel, name: $name, timestamp: $timestamp}')
+
 # Add emoji using reactions.add
 response=$(curl -s -X POST https://slack.com/api/reactions.add \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json; charset=utf-8" \
-  -d "{\"channel\": \"$CHANNEL_ID\", \"name\": \"$EMOJI_NAME\", \"timestamp\": \"$SLACK_TIMESTAMP\"}")
+  -d "$PAYLOAD")
 
 if echo "$response" | grep -q '"ok":true'; then
   echo "$EMOJI_NAME"
