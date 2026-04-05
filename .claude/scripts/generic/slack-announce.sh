@@ -2,14 +2,19 @@
 # slack-announce.sh — Post a Slack announcement for a PR.
 #
 # Resolves git identity, constructs a Slack message from PR metadata,
-# posts via dev-tools/scripts/post-slack-message.sh, and saves the
-# Slack timestamp to $TMPDIR/slack-ts.txt.
+# posts via post-slack-message.sh, and saves the Slack timestamp to
+# $TMPDIR/slack-ts.txt.
 #
 # Usage:
-#   slack-announce.sh --pr NUMBER --tmpdir DIR --channel NAME [--dev-tools-dir PATH]
+#   slack-announce.sh --pr NUMBER --tmpdir DIR --channel-id CHANNEL_ID
 #
 # Environment:
 #   SLACK_BOT_TOKEN — required, the Slack bot token
+#
+# Optional data file (for @-mentioning the PR author in Slack):
+#   data/email_to_slack_userid_map.json — maps git email to Slack user ID.
+#   Looked up relative to the repo root. If missing, the message is posted
+#   without a user mention.
 #
 # Outputs to stdout:
 #   SLACK_TS=<timestamp>     (on success)
@@ -24,33 +29,26 @@
 
 set -euo pipefail
 
-usage() { echo "Usage: slack-announce.sh --pr NUMBER --tmpdir DIR --channel NAME [--dev-tools-dir PATH]" >&2; }
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+usage() { echo "Usage: slack-announce.sh --pr NUMBER --tmpdir DIR --channel-id CHANNEL_ID" >&2; }
 
 PR_NUMBER=""
 TMPDIR_PATH=""
-CHANNEL=""
-DEV_TOOLS_DIR="dev-tools"
-DEV_TOOLS_DIR_EXPLICIT=false
+CHANNEL_ID=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --pr) PR_NUMBER="${2:?--pr requires a value}"; shift 2 ;;
         --tmpdir) TMPDIR_PATH="${2:?--tmpdir requires a value}"; shift 2 ;;
-        --channel) CHANNEL="${2:?--channel requires a value}"; shift 2 ;;
-        --dev-tools-dir) DEV_TOOLS_DIR="${2:?--dev-tools-dir requires a value}"; DEV_TOOLS_DIR_EXPLICIT=true; shift 2 ;;
+        --channel-id) CHANNEL_ID="${2:?--channel-id requires a value}"; shift 2 ;;
         --help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 3 ;;
     esac
 done
 
-# Auto-detect dev-tools directory when running from within the dev-tools repo itself
-# (where there is no dev-tools/ subdirectory). Only applies when --dev-tools-dir was not explicit.
-if [[ "$DEV_TOOLS_DIR_EXPLICIT" == "false" ]] && [[ ! -f "$DEV_TOOLS_DIR/scripts/post-slack-message.sh" ]] && [[ -f "scripts/post-slack-message.sh" ]]; then
-    DEV_TOOLS_DIR="."
-fi
-
-if [[ -z "$PR_NUMBER" ]] || [[ -z "$TMPDIR_PATH" ]] || [[ -z "$CHANNEL" ]]; then
+if [[ -z "$PR_NUMBER" ]] || [[ -z "$TMPDIR_PATH" ]] || [[ -z "$CHANNEL_ID" ]]; then
     echo "SLACK_TS="
-    echo "SLACK_ERROR=--pr, --tmpdir, and --channel are required"
+    echo "SLACK_ERROR=--pr, --tmpdir, and --channel-id are required"
     usage; exit 3
 fi
 
@@ -66,9 +64,11 @@ CLEAN_TOKEN=$(echo -n "$SLACK_BOT_TOKEN" | tr -d '[:space:]')
 GIT_EMAIL=$(git config user.email 2>/dev/null || echo "")
 GIT_USER_NAME=$(git config user.name 2>/dev/null || echo "")
 SLACK_USER_ID=""
-if [[ -n "$GIT_EMAIL" ]] && [[ -f "$DEV_TOOLS_DIR/data/email_to_slack_userid_map.json" ]]; then
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+EMAIL_MAP="${REPO_ROOT:+$REPO_ROOT/data/email_to_slack_userid_map.json}"
+if [[ -n "$GIT_EMAIL" ]] && [[ -n "$EMAIL_MAP" ]] && [[ -f "$EMAIL_MAP" ]]; then
     SLACK_USER_ID=$(jq -r --arg email "$GIT_EMAIL" '.[$email] // empty' \
-        "$DEV_TOOLS_DIR/data/email_to_slack_userid_map.json" 2>/dev/null || echo "")
+        "$EMAIL_MAP" 2>/dev/null || echo "")
 fi
 
 # --- Fetch PR metadata and derive repo name from PR URL ---
@@ -142,8 +142,8 @@ MESSAGE="${MESSAGE//$'\n'/\\n}"
 
 # --- Post to Slack ---
 set +e
-SLACK_TS=$(bash "$DEV_TOOLS_DIR/scripts/post-slack-message.sh" \
-    --channel "$CHANNEL" \
+SLACK_TS=$(bash "$SCRIPT_DIR/post-slack-message.sh" \
+    --channel-id "$CHANNEL_ID" \
     --text "$MESSAGE" \
     --username "$GIT_USER_NAME" \
     --token "$CLEAN_TOKEN" 2>/dev/null)

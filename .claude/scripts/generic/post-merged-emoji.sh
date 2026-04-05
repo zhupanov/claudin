@@ -38,12 +38,12 @@ fi
 
 # --- Read Slack channel ---
 CHANNEL_OUTPUT=$("$SCRIPT_DIR/read-slack-channel.sh")
-SLACK_CHANNEL=$(echo "$CHANNEL_OUTPUT" | grep '^SLACK_CHANNEL=' | cut -d= -f2-)
+SLACK_CHANNEL_ID=$(echo "$CHANNEL_OUTPUT" | grep '^SLACK_CHANNEL_ID=' | cut -d= -f2-)
 
-if [[ -z "$SLACK_CHANNEL" ]]; then
-    echo "WARNING: repo-config.json missing or slackChannel not set. Skipping :merged: emoji." >&2
+if [[ -z "$SLACK_CHANNEL_ID" ]]; then
+    echo "WARNING: repo-config.json missing or slackChannelId not set. Skipping :merged: emoji." >&2
     exit 1
 fi
 
 # --- Add emoji ---
-"$SCRIPT_DIR/add-merged-emoji.sh" --slack-ts "$SLACK_TS" --channel "$SLACK_CHANNEL"
+"$SCRIPT_DIR/add-merged-emoji.sh" --slack-ts "$SLACK_TS" --channel-id "$SLACK_CHANNEL_ID"

@@ -76,16 +76,16 @@ fi
 
 # --- Read Slack channel ---
 CHANNEL_OUTPUT=$("$SCRIPT_DIR/read-slack-channel.sh")
-SLACK_CHANNEL=$(echo "$CHANNEL_OUTPUT" | grep '^SLACK_CHANNEL=' | cut -d= -f2-)
+SLACK_CHANNEL_ID=$(echo "$CHANNEL_OUTPUT" | grep '^SLACK_CHANNEL_ID=' | cut -d= -f2-)
 
-if [[ -z "$SLACK_CHANNEL" ]]; then
-    echo "WARNING: repo-config.json missing or slackChannel not set. Slack announcement skipped." >&2
+if [[ -z "$SLACK_CHANNEL_ID" ]]; then
+    echo "WARNING: repo-config.json missing or slackChannelId not set. Slack announcement skipped." >&2
     "$SCRIPT_DIR/cleanup-tmpdir.sh" --dir "$POST_PR_TMPDIR" 2>/dev/null || true
     exit 3
 fi
 
 # --- Post to Slack ---
-ANNOUNCE_OUTPUT=$("$SCRIPT_DIR/slack-announce.sh" --pr "$PR" --tmpdir "$POST_PR_TMPDIR" --channel "$SLACK_CHANNEL" 2>&1)
+ANNOUNCE_OUTPUT=$("$SCRIPT_DIR/slack-announce.sh" --pr "$PR" --tmpdir "$POST_PR_TMPDIR" --channel-id "$SLACK_CHANNEL_ID" 2>&1)
 ANNOUNCE_EXIT=$?
 
 SLACK_TS=$(echo "$ANNOUNCE_OUTPUT" | grep '^SLACK_TS=' | cut -d= -f2-)

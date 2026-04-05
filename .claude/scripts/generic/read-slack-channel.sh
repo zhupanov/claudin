@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# read-slack-channel.sh — Read the Slack channel from repo-config.json.
+# read-slack-channel.sh — Read the Slack channel ID from repo-config.json.
 #
 # Usage:
 #   read-slack-channel.sh [--config <path>]
@@ -8,10 +8,10 @@
 #   --config <path>  Path to repo-config.json (default: .claude/repo-config.json relative to CWD)
 #
 # Output (stdout, KEY=VALUE):
-#   SLACK_CHANNEL=<value>   The channel name, or empty if file/key missing
+#   SLACK_CHANNEL_ID=<value>   The channel ID, or empty if file/key missing
 #
 # Exit codes:
-#   0 — success (SLACK_CHANNEL may be empty if file/key missing)
+#   0 — success (SLACK_CHANNEL_ID may be empty if file/key missing)
 #   1 — config file exists but cannot be parsed (broken JSON or jq failure)
 
 set -euo pipefail
@@ -26,13 +26,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "SLACK_CHANNEL="
+  echo "SLACK_CHANNEL_ID="
   exit 0
 fi
 
-if ! CHANNEL=$(jq -r '.slackChannel // empty' "$CONFIG" 2>/dev/null); then
+if ! CHANNEL_ID=$(jq -r '.slackChannelId // empty' "$CONFIG" 2>/dev/null); then
   echo "ERROR=Failed to parse $CONFIG" >&2
   exit 1
 fi
 
-echo "SLACK_CHANNEL=$CHANNEL"
+echo "SLACK_CHANNEL_ID=$CHANNEL_ID"
