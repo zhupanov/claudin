@@ -34,7 +34,7 @@
 
   <!-- Step 3c: Launch Reviewers -->
   <rect x="80" y="270" width="300" height="36" rx="4" fill="#17A2B8" stroke="#17A2B8" stroke-width="3"/>
-  <text x="230" y="288">Reviewers (4 Claude + external)</text>
+  <text x="230" y="288">Reviewers (2 Claude + 2 Codex + Cursor)</text>
   <line x1="230" y1="306" x2="230" y2="326"/>
 
   <!-- Step 3d: Classify Findings -->

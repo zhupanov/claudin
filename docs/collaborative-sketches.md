@@ -20,7 +20,7 @@ The sketch phase always uses exactly 5 agents. Three are Claude subagents with f
 
 ### Important Distinction
 
-The 5 sketch agents are **completely separate** from the 6 plan-review agents that evaluate the plan later in `/design` Step 3. The sketch agents explore the design space; the plan reviewers validate the resulting plan. They have different roles, different prompts, and serve different purposes.
+The 5 sketch agents are **completely separate** from the 5 plan-review agents that evaluate the plan later in `/design` Step 3. The sketch agents explore the design space; the plan reviewers validate the resulting plan. They have different roles, different prompts, and serve different purposes.
 
 ## Claude Replacement Roles
 
@@ -88,4 +88,4 @@ flowchart TD
    - Notes which ideas from each sketch are incorporated
    - Highlights Architecture/Standards concerns and Pragmatism/Safety warnings
 
-4. **Full plan** — The synthesis informs the complete implementation plan, which is then submitted to 6 reviewers for validation.
+4. **Full plan** — The synthesis informs the complete implementation plan, which is then submitted to 5 reviewers for validation.

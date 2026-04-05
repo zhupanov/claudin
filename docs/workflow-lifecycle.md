@@ -39,7 +39,7 @@ flowchart TD
         QUESTIONS --> SKETCHES[5-agent collaborative sketches]
         SKETCHES --> SYNTHESIS[Approach synthesis]
         SYNTHESIS --> PLAN[Write implementation plan]
-        PLAN --> PLAN_REVIEW[Plan review: 6 reviewers]
+        PLAN --> PLAN_REVIEW[Plan review: 5 reviewers]
         PLAN_REVIEW --> VOTE1[Voting panel adjudicates findings]
         VOTE1 --> REVISE[Revise plan if needed]
     end
@@ -49,7 +49,7 @@ flowchart TD
     subgraph IMPL_PHASE["Implementation Phase (/implement)"]
         CODE[Implement feature] --> VALIDATE1[Validation checks]
         VALIDATE1 --> COMMIT1[First commit]
-        COMMIT1 --> CODE_REVIEW[Code review: 6 reviewers]
+        COMMIT1 --> CODE_REVIEW[Code review: 5 reviewers]
         CODE_REVIEW --> VOTE2[Voting panel adjudicates findings]
         VOTE2 --> FIX[Implement accepted fixes]
         FIX --> VALIDATE2[Validation checks]
@@ -90,7 +90,7 @@ Flags modify behavior across the skill hierarchy:
 
 | Flag | Available on | Effect |
 |---|---|---|
-| `--quick` | `/shazam`, `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 4 Claude subagents only (no external reviewers, no voting panel). |
+| `--quick` | `/shazam`, `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 2 Claude subagents only (no external reviewers, no voting panel). |
 | `--auto` | `/shazam`, `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
 | `--no-merge` | `/shazam` | Creates PR but skips CI monitoring, merge, :merged: emoji, and local branch cleanup. |
 

@@ -29,8 +29,8 @@ When all tools are available, the panel has 3 voters. The **Claude voter role di
 
 | Skill | Voter 1 (Claude) | Voter 2 | Voter 3 |
 |---|---|---|---|
-| `/design` (plan review) | Architect subagent | Codex | Cursor |
-| `/review` (code review) | Generic code reviewer subagent | Codex | Cursor |
+| `/design` (plan review) | Deep Analysis reviewer subagent | Codex | Cursor |
+| `/review` (code review) | General reviewer subagent | Codex | Cursor |
 
 All voters vote on all findings — there is no self-voting exclusion. Voters evaluate each finding on its merits regardless of who proposed it.
 
@@ -63,7 +63,7 @@ FINDING_3: EXONERATE — <one-line rationale>
 
 ```mermaid
 flowchart TD
-    REVIEW[6 reviewers submit findings] --> DEDUP[Deduplicate findings]
+    REVIEW[5 reviewers submit findings] --> DEDUP[Deduplicate findings]
     DEDUP --> BALLOT[Format ballot with IDs]
     BALLOT --> LAUNCH[Launch 3 voters in parallel]
     LAUNCH --> COLLECT[Collect votes]

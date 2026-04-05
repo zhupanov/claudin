@@ -13,7 +13,7 @@ The feature to implement is described by `$ARGUMENTS`.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token.
 
-- `--quick`: Set a mental flag `quick_mode=true`. Forward this flag to `/implement` in Step 1. When `quick_mode=true`, `/implement` skips `/design` (produces an inline plan) and simplifies code review to one round with 4 Claude subagents only (no external reviewers, no voting panel). All other steps (CI, merge, Slack, cleanup) run normally.
+- `--quick`: Set a mental flag `quick_mode=true`. Forward this flag to `/implement` in Step 1. When `quick_mode=true`, `/implement` skips `/design` (produces an inline plan) and simplifies code review to one round with 2 Claude subagents only (no external reviewers, no voting panel). All other steps (CI, merge, Slack, cleanup) run normally.
 - `--auto`: Set a mental flag `auto_mode=true`. Forward this flag to `/implement` in Step 1. When `auto_mode=true`, `/implement` and `/design` suppress interactive clarifying questions and run non-interactively. The default (no `--auto`) enables interactive questions in `/design` (before sketches and after plan review) and `/implement` (before implementation). In Step 2, when merge conflicts require user input for uncertain resolutions, `auto_mode=true` suppresses `AskUserQuestion` and uses best-effort resolution instead (bailing if confidence is too low).
 - `--no-merge`: Set a mental flag `no_merge=true`. When `no_merge=true`, Steps 2–5 are skipped (CI monitoring, :merged: emoji, local cleanup, and main verification). Steps 6–7 (report, cleanup) still run.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill and will be forwarded to `session-setup.sh` via `--caller-env` and to child skills. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
@@ -208,7 +208,7 @@ For each file in `CONFLICT_FILES`:
 
 Also capture `git diff --cached` as supplementary context showing the full staged state.
 
-**3d. Launch reviewers**: Launch 4 Claude subagent reviewers + Codex + Cursor (if available) using the reviewer archetypes from `.claude/skills/shared/reviewer-templates.md` with:
+**3d. Launch reviewers**: Launch 2 Claude subagent reviewers + Codex + Cursor (if available) using the reviewer archetypes from `.claude/skills/shared/reviewer-templates.md` with:
 - `{REVIEW_TARGET}` = `"merge conflict resolution"`
 - `{CONTEXT_BLOCK}` = the per-file conflict context blocks from 3c + supplementary `git diff --cached`
 - `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is with the resolution"` + `"Suggested correction"`
@@ -218,7 +218,7 @@ Follow `.claude/skills/shared/external-reviewers.md` for launch order (Cursor fi
 **3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$SHAZAM_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
 
 **3e. Voting**: Run the voting protocol from `.claude/skills/shared/voting-protocol.md` with code review voter composition:
-- **Voter 1**: Claude Generic code reviewer subagent (fresh Agent invocation)
+- **Voter 1**: Claude General Reviewer subagent (fresh Agent invocation)
 - **Voter 2**: Codex (if available) — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor (if available) — via `run-external-reviewer.sh`
 
@@ -348,7 +348,7 @@ Parse the output for `VERIFIED`, `COMMIT_HASH`, and `COMMIT_MESSAGE`. Print the 
 
 ## Step 6 — Final Report
 
-**If `quick_mode=true`**: Print: `📊 Step 6 — Quick mode: /design was skipped, code review was simplified (4 Claude subagents, 1 round, no voting).`
+**If `quick_mode=true`**: Print: `📊 Step 6 — Quick mode: /design was skipped, code review was simplified (2 Claude subagents, 1 round, no voting).`
 
 **If `quick_mode=false`**: Print a summary noting that:
 - Plan review findings were reported by the `/design` phase (visible in conversation above)

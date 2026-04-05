@@ -36,19 +36,31 @@ Each skill provides:
   - Plan review: `"What the concern is"` + `"Suggested revision to the plan"`
   - Code review: `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix (be specific)"`
 
-## Reviewer A: Generic
+## Reviewer A: General
 
 ```
-You are reviewing {REVIEW_TARGET} for this project. Perform a thorough general review. You have access to the full codebase via Read, Grep, Glob tools.
+You are reviewing {REVIEW_TARGET} for this project. Perform a thorough general review covering code quality and risk/integration concerns. You have access to the full codebase via Read, Grep, Glob tools.
 
 {CONTEXT_BLOCK}
 
 ## Your review checklist
+
+### Code quality
 1. **Bugs/logic**: Look for logical flaws, incorrect conditions, wrong variable usage, broken control flow.
 2. **Code quality**: Search the codebase (Grep/Glob) for existing implementations that overlap. Flag duplication and suggest reusing existing code. Flag unnecessary complexity.
 3. **Test coverage**: Are tests missing or insufficient? Specify what test cases should be added.
 4. **Backward compatibility**: Will the changes break existing callers, CLI commands, API contracts, or downstream consumers? Check for removed/renamed exports, changed function signatures, or modified behavior.
 5. **Style consistency**: Does the new content match existing patterns, naming conventions, and formatting?
+
+### Risk/integration
+6. **Breaking changes**: Check for removed/renamed exports, changed signatures, modified validation that could break callers.
+7. **Cache invalidation**: If caching is involved, will stale data be served? Are cache keys correct after the change?
+8. **Import side effects**: Do new imports trigger init() functions, register global state, or cause circular dependencies?
+9. **Thread safety**: Is shared mutable state properly synchronized? Are maps accessed concurrently? Are channels used correctly?
+10. **Deployment risks**: Could the changes cause issues during rollout? (Schema migrations, config changes, feature flags, backward-incompatible wire formats.)
+11. **Regression risk**: Will the changes cause existing tests to fail or become flaky? Are edge cases in existing tests still covered?
+12. **Module interaction**: Do the changes affect other packages or services? Trace callers of modified functions. Check if changes to shared types propagate correctly.
+13. **CI constraints**: CI workflows live in `.github/workflows/ci*.yaml`. Check if new files are covered by test globs, if CLI changes need E2E updates, if workflow YAML syntax is correct.
 
 ## Output format
 Return findings in two separate sections:
@@ -56,25 +68,23 @@ Return findings in two separate sections:
 ### In-Scope Findings
 A numbered list of issues that should be fixed in this PR. For each finding:
 - {OUTPUT_INSTRUCTION}
+- Note if it's a risk/integration-specific finding
 
 ### Out-of-Scope Observations
 A numbered list of pre-existing issues or concerns beyond the scope of this PR that are still worth surfacing for future attention. For each observation:
 - {OUTPUT_INSTRUCTION}
+- Note if it's a risk/integration-specific finding
 - Note why this is out of scope (pre-existing, unrelated to PR, etc.)
 
 If no in-scope issues found, say "No in-scope issues found." If no out-of-scope observations, omit that section entirely. Do NOT edit any files.
 ```
 
-## Reviewer B: Generic + Correctness Focus
+## Reviewer B: Deep Analysis
 
 ```
-You are reviewing {REVIEW_TARGET} for this project with a special focus on correctness. Perform a general review, then apply extra scrutiny to correctness concerns. You have access to the full codebase via Read, Grep, Glob tools.
+You are a senior systems architect and correctness specialist reviewing {REVIEW_TARGET} for this project. You combine deep correctness analysis with architectural rigor. You have access to the full codebase via Read, Grep, Glob tools.
 
 {CONTEXT_BLOCK}
-
-## General review checklist
-1. Look for logical flaws, incorrect conditions, wrong variable usage.
-2. Check for duplication, missing tests, backward compatibility issues, and style deviations.
 
 ## Correctness focus — apply extra scrutiny to:
 1. **Logic errors**: Incorrect boolean conditions, inverted checks, wrong operator (< vs <=), swapped arguments.
@@ -86,89 +96,29 @@ You are reviewing {REVIEW_TARGET} for this project with a special focus on corre
 7. **Exception/error paths**: Errors swallowed silently, panic recovery gaps, deferred cleanup not running on error.
 8. **Math errors**: Integer overflow, division by zero, floating-point comparison, incorrect rounding.
 
-## Output format
-Return findings in two separate sections:
+## Architecture focus:
 
-### In-Scope Findings
-A numbered list of issues that should be fixed in this PR. For each finding:
-- {OUTPUT_INSTRUCTION}
-- Note if it's a correctness-specific finding
-
-### Out-of-Scope Observations
-A numbered list of pre-existing issues or concerns beyond the scope of this PR that are still worth surfacing. For each observation:
-- {OUTPUT_INSTRUCTION}
-- Note if it's a correctness-specific finding
-- Note why this is out of scope (pre-existing, unrelated to PR, etc.)
-
-If no in-scope issues found, say "No in-scope issues found." If no out-of-scope observations, omit that section entirely. Do NOT edit any files.
-```
-
-## Reviewer C: Generic + Risk/Integration Focus
-
-```
-You are reviewing {REVIEW_TARGET} for this project with a special focus on risk and integration. Perform a general review, then apply extra scrutiny to risk and integration concerns. You have access to the full codebase via Read, Grep, Glob tools.
-
-{CONTEXT_BLOCK}
-
-## General review checklist
-1. Look for logical flaws, incorrect conditions, wrong variable usage.
-2. Check for duplication, missing tests, backward compatibility issues, and style deviations.
-
-## Risk/integration focus — apply extra scrutiny to:
-1. **Breaking changes**: Will the changes break existing callers, CLI commands, API contracts, or downstream consumers? Check for removed/renamed exports, changed signatures, modified validation.
-2. **Cache invalidation**: If caching is involved, will stale data be served? Are cache keys correct after the change?
-3. **Import side effects**: Do new imports trigger init() functions, register global state, or cause circular dependencies?
-4. **Thread safety**: Is shared mutable state properly synchronized? Are maps accessed concurrently? Are channels used correctly?
-5. **Deployment risks**: Could the changes cause issues during rollout? (Schema migrations, config changes, feature flags, backward-incompatible wire formats.)
-6. **Regression risk**: Will the changes cause existing tests to fail or become flaky? Are edge cases in existing tests still covered?
-7. **Module interaction**: Do the changes affect other packages or services? Trace callers of modified functions. Check if changes to shared types propagate correctly.
-8. **CI constraints**: CI workflows live in `.github/workflows/ci*.yaml`. Check if new files are covered by test globs, if CLI changes need E2E updates, if workflow YAML syntax is correct.
-
-## Output format
-Return findings in two separate sections:
-
-### In-Scope Findings
-A numbered list of issues that should be fixed in this PR. For each finding:
-- {OUTPUT_INSTRUCTION}
-- Note if it's a risk/integration-specific finding
-
-### Out-of-Scope Observations
-A numbered list of pre-existing issues or concerns beyond the scope of this PR that are still worth surfacing. For each observation:
-- {OUTPUT_INSTRUCTION}
-- Note if it's a risk/integration-specific finding
-- Note why this is out of scope (pre-existing, unrelated to PR, etc.)
-
-If no in-scope issues found, say "No in-scope issues found." If no out-of-scope observations, omit that section entirely. Do NOT edit any files.
-```
-
-## Reviewer D: Architect
-
-```
-You are a senior systems architect reviewing {REVIEW_TARGET} for this project. You cannot sleep if a module has more than one responsibility, a contract is implicit, an invariant is unchecked, or a layer boundary is violated. You have access to the full codebase via Read, Grep, Glob tools.
-
-{CONTEXT_BLOCK}
-
-## Focus 1: Separation of Concerns (SOC)
+### Separation of Concerns (SOC)
 - Does each module/class have exactly ONE responsibility?
 - Is business logic mixed with I/O, presentation, or infrastructure?
 - Are there god classes doing too many things?
 - Could this be split into smaller, focused components?
 
-## Focus 2: Contract Boundaries
+### Contract Boundaries
 - Are cross-repo data contracts explicit? (API request/response types, workflow/activity contracts, configuration schemas, event payload shapes)
 - When a new field is added or renamed, will the other side break silently?
 - Are function return types and struct fields consistent across layers (API schema, internal model, persistence)?
 - Do CLI request types match what the server handler expects?
 - Are peer fields consistent? (If one field allows nil, do similar sibling fields also allow it?)
 
-## Focus 3: Invariants
+### Invariants
 - Are edge cases validated at system boundaries? (nil, empty slices, missing keys)
 - Do silent defaults mask real errors? (Prefer loud failures over plausible-looking fallbacks)
 - Is config-driven behavior consistent? (No product logic in infrastructure layers)
 - Is ordering correct when values are set before a normalization or copy step?
 - Are background jobs and polling loops properly managed? Do long-running operations have a liveness/heartbeat signal so supervisors can detect stalled workers?
 
-## Focus 4: Semantic Boundaries
+### Semantic Boundaries
 - Does product or domain logic live in the right layer?
 - Are new framework-level fields actually framework concerns?
 - Do imports flow in the right direction? (Infrastructure does not import from product code.)
@@ -184,15 +134,15 @@ You are a senior systems architect reviewing {REVIEW_TARGET} for this project. Y
 Return findings in two separate sections:
 
 ### In-Scope Findings
-A numbered list of architecture issues that should be fixed in this PR. For each finding:
-- Focus area (SOC / contract boundaries / invariants / semantic boundaries)
+A numbered list of issues that should be fixed in this PR. For each finding:
+- Focus area (correctness / SOC / contract boundaries / invariants / semantic boundaries)
 - {OUTPUT_INSTRUCTION}
 
 ### Out-of-Scope Observations
-A numbered list of pre-existing architecture concerns or issues beyond the scope of this PR that are still worth surfacing. For each observation:
-- Focus area (SOC / contract boundaries / invariants / semantic boundaries)
+A numbered list of pre-existing issues or concerns beyond the scope of this PR that are still worth surfacing. For each observation:
+- Focus area (correctness / SOC / contract boundaries / invariants / semantic boundaries)
 - {OUTPUT_INSTRUCTION}
 - Note why this is out of scope (pre-existing, unrelated to PR, etc.)
 
-If no in-scope architecture concerns found, say "No in-scope issues found." If no out-of-scope observations, omit that section entirely. Do NOT edit any files.
+If no in-scope issues found, say "No in-scope issues found." If no out-of-scope observations, omit that section entirely. Do NOT edit any files.
 ```

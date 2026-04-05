@@ -20,18 +20,20 @@ flowchart TD
     SKILL --> A2[Agent 2]
     SKILL --> A3[Agent 3]
     SKILL --> A4[Agent 4]
+    SKILL --> A5[Agent 5]
     A1 --> COLLECT[Collect results]
     A2 --> COLLECT
     A3 --> COLLECT
     A4 --> COLLECT
+    A5 --> COLLECT
     COLLECT --> SYNTHESIZE[Synthesize / deduplicate]
 ```
 
 This pattern is used for:
 
 - **[Collaborative sketches](collaborative-sketches.md)** — 5 agents propose architectural approaches in parallel
-- **Plan review** — 6 reviewers examine the implementation plan simultaneously
-- **Code review** — 6 reviewers examine the diff simultaneously
+- **Plan review** — 5 reviewers examine the implementation plan simultaneously
+- **Code review** — 5 reviewers examine the diff simultaneously
 - **[Voting](voting-process.md)** — 3 voters evaluate findings in parallel
 
 ### Sequential Composition
@@ -44,7 +46,7 @@ Claudin uses several categories of agents:
 
 ### Review Agents
 
-The 4 persistent [reviewer archetypes](review-agents.md) (Generic, Correctness, Risk/Integration, Architect) launched during plan and code review. These are defined in `.claude/agents/*.md` with specific model assignments and tool access.
+The 2 persistent [reviewer archetypes](review-agents.md) (General, Deep Analysis) launched during plan and code review. These are defined in `.claude/agents/*.md` with specific model assignments and tool access.
 
 ### Sketch Agents
 
@@ -56,7 +58,7 @@ The 3 voters in the [voting process](voting-process.md) (one Claude subagent + C
 
 ### Research Agents
 
-The 5 research agents in `/research` (3 Claude subagents + Codex + Cursor) that investigate a question from different angles, followed by 6 validation reviewers. All are ephemeral.
+The 5 research agents in `/research` (3 Claude subagents + Codex + Cursor) that investigate a question from different angles, followed by 5 validation reviewers. All are ephemeral.
 
 ## Context Isolation
 

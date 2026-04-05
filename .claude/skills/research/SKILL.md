@@ -1,13 +1,13 @@
 ---
 name: research
-description: Collaborative read-only research using 5 research agents (3 Claude + Cursor + Codex) then 6 validation reviewers (4 Claude + Cursor + Codex). Produces findings summary, risk assessment, difficulty estimates, and feasibility verdict without modifying the repo.
+description: Collaborative read-only research using 5 research agents (3 Claude + Cursor + Codex) then 5 validation reviewers (2 Claude + 2 Codex + Cursor). Produces findings summary, risk assessment, difficulty estimates, and feasibility verdict without modifying the repo.
 argument-hint: "<research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
 
 # Research Skill
 
-Collaborative read-only research task using 5 research agents (3 Claude subagents + Codex + Cursor) and 6 validation reviewers (4 Claude subagents + Codex + Cursor). Produces a structured research report without modifying the repository.
+Collaborative read-only research task using 5 research agents (3 Claude subagents + Codex + Cursor) and 5 validation reviewers (2 Claude subagents + 2 Codex + Cursor). Produces a structured research report without modifying the repository.
 
 The research question is described by `$ARGUMENTS`.
 
@@ -152,9 +152,9 @@ Print: `✅ Step 1 — Research synthesis complete (5 agents).`
 
 ## Step 2 — Findings Validation
 
-**IMPORTANT: Findings validation MUST ALWAYS run with all available reviewers (4 Claude subagents + Codex and Cursor if available). Never skip or abbreviate this step regardless of how straightforward the findings appear. Reviewers validate against the actual codebase state, catching inaccuracies or omissions that the research phase may have missed.**
+**IMPORTANT: Findings validation MUST ALWAYS run with all available reviewers (2 Claude subagents + 2 Codex instances and Cursor if available). Never skip or abbreviate this step regardless of how straightforward the findings appear. Reviewers validate against the actual codebase state, catching inaccuracies or omissions that the research phase may have missed.**
 
-Launch **all reviewers in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then Codex, then Claude subagents (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
+Launch **all reviewers in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then both Codex instances, then Claude subagents (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
 
 ### External Reviewer Setup (if `codex_available` or `cursor_available`)
 
@@ -172,24 +172,37 @@ $PWD/.claude/scripts/generic/run-external-reviewer.sh --tool cursor --output "$R
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-### Codex Reviewer (if `codex_available`)
+### Codex-General Reviewer (if `codex_available`)
 
-Run Codex **second** in the parallel message:
+Run Codex-General **second** in the parallel message:
 
 ```bash
-$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-validation-output.txt" --timeout 900 -- \
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-general-validation-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
-    --output-last-message "$RESEARCH_TMPDIR/codex-validation-output.txt" \
-    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Combine 4 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Correctness: Are specific code references correct? Are there factual errors about the codebase? (3) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? (4) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    --output-last-message "$RESEARCH_TMPDIR/codex-general-validation-output.txt" \
+    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-### Claude Subagents (4 reviewers)
+### Codex-Deep-Analysis Reviewer (if `codex_available`)
 
-Launch all four Claude subagents **last** in the same message (they finish fastest).
+Run Codex-Deep-Analysis **third** in the parallel message:
 
-Use the four reviewer archetypes from `.claude/skills/shared/reviewer-templates.md`, filling in the variables for **research validation**:
+```bash
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" --timeout 900 -- \
+  codex exec --full-auto -C "$PWD" \
+    --output-last-message "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" \
+    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) Correctness: Are specific code references correct? Are there factual errors about the codebase? (2) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+```
+
+Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
+
+### Claude Subagents (2 reviewers)
+
+Launch both Claude subagents **last** in the same message (they finish fastest).
+
+Use the two reviewer archetypes from `.claude/skills/shared/reviewer-templates.md`, filling in the variables for **research validation**:
 
 - **`{REVIEW_TARGET}`** = `"research findings"`
 - **`{CONTEXT_BLOCK}`**:
@@ -206,20 +219,20 @@ Use the four reviewer archetypes from `.claude/skills/shared/reviewer-templates.
 
 ### Monitoring External Reviewers
 
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$RESEARCH_TMPDIR/codex-validation-output.txt` and `$RESEARCH_TMPDIR/cursor-validation-output.txt` as the output files.
+Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$RESEARCH_TMPDIR/codex-general-validation-output.txt`, `$RESEARCH_TMPDIR/codex-deep-validation-output.txt`, and `$RESEARCH_TMPDIR/cursor-validation-output.txt` as the output files.
 
 ### After all reviewers return
 
 **Process Claude findings immediately** — do not wait for external reviewers before starting:
 
-1. Collect and deduplicate findings from the four Claude subagents right away.
+1. Collect and deduplicate findings from the two Claude subagents right away.
 
 ### 2.4 — Wait and Validate External Reviewers
 
 After processing Claude findings, wait for external reviewer sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched:
 
 ```bash
-$PWD/.claude/scripts/generic/wait-for-reviewers.sh --timeout 960 "$RESEARCH_TMPDIR/cursor-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-validation-output.txt.done"
+$PWD/.claude/scripts/generic/wait-for-reviewers.sh --timeout 960 "$RESEARCH_TMPDIR/cursor-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-general-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-deep-validation-output.txt.done"
 ```
 
 Use `timeout: 960000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.

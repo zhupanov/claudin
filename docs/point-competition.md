@@ -45,8 +45,8 @@ After voting completes, a scoreboard is printed showing each reviewer's performa
 
 | Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Promoted | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
-| Generic | 3 | 2 | 1 | 0 | 0 | 1 | 0 | +2 |
-| Architect | 2 | 1 | 0 | 1 | 0 | 0 | 0 | +1 |
+| General | 3 | 2 | 1 | 0 | 0 | 1 | 0 | +2 |
+| Deep-Analysis | 2 | 1 | 0 | 1 | 0 | 0 | 0 | +1 |
 | Codex | 1 | 0 | 0 | 0 | 1 | 0 | 0 | -1 |
 
 ## Future Plans

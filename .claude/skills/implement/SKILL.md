@@ -13,7 +13,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, save the remainder as `FEATURE_DESCRIPTION` — use this (not raw `$ARGUMENTS`) whenever the human-readable feature description is needed (e.g., PR body, design invocation, commit messages).
 
-- `--quick`: Set a mental flag `quick_mode=true`. When `quick_mode=true`: Step 1 skips `/design` (main agent creates branch and inline plan directly), Step 5 skips `/review` (main agent runs a simplified one-round review with 4 Claude subagents only — no external reviewers, no voting panel), and Step 7a skips the Code Flow Diagram.
+- `--quick`: Set a mental flag `quick_mode=true`. When `quick_mode=true`: Step 1 skips `/design` (main agent creates branch and inline plan directly), Step 5 skips `/review` (main agent runs a simplified one-round review with 2 Claude subagents only — no external reviewers, no voting panel), and Step 7a skips the Code Flow Diagram.
 - `--auto`: Set a mental flag `auto_mode=true`. When `auto_mode=true`: (a) forward `--auto` to `/design` invocation in Step 1, suppressing `/design`'s interactive question checkpoints; (b) suppress `/implement`'s own opportunistic questions in Step 2. When `--quick` is also set and `/design` is skipped, `--auto` still suppresses `/implement`'s Step 2 questions. The default (no `--auto`) enables interactive questions.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/shazam`) and will be forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
 - `--no-merge` (compatibility): Strip it and print: `**Note: The --no-merge flag has moved to /shazam. /implement creates a PR, monitors CI, and posts a Slack announcement but does not merge. Use /shazam <description> for the full workflow including merge.**` Then proceed with the remainder as the feature description.
@@ -164,20 +164,20 @@ Skip `/review`. Instead, run a simplified one-round review:
    $PWD/.claude/scripts/generic/gather-branch-context.sh --output-dir "$IMPL_TMPDIR"
    ```
    Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log.
-2. Launch **4 Claude subagent reviewers** (generic, correctness, risk/integration, architect) using the same reviewer archetypes from `.claude/skills/shared/reviewer-templates.md` with these variable bindings: `{REVIEW_TARGET}` = `"code changes"`, `{CONTEXT_BLOCK}` = the commit log + file list + full diff, `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. **No Codex, no Cursor, no external reviewers. No competition notice** (there is no voting panel in quick mode).
-3. Collect findings from all 4 subagents. Deduplicate.
+2. Launch **2 Claude subagent reviewers** (general, deep-analysis) using the same reviewer archetypes from `.claude/skills/shared/reviewer-templates.md` with these variable bindings: `{REVIEW_TARGET}` = `"code changes"`, `{CONTEXT_BLOCK}` = the commit log + file list + full diff, `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. **No Codex, no Cursor, no external reviewers. No competition notice** (there is no voting panel in quick mode).
+3. Collect findings from all 2 subagents. Deduplicate.
 4. **Main agent decides**: Evaluate each finding and unilaterally accept or reject it. No voting panel. Accept findings that identify genuine bugs, logic errors, or important improvements. Reject trivial style nits or speculative concerns.
 5. Implement accepted fixes. Run `/relevant-checks` if files changed.
 6. **One round only** — no re-review loop.
 7. For rejected findings, write them to `$IMPL_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 12 and PR body sections work unchanged.
 
-Print: `🔍 Step 5 — Quick mode: simplified review (4 Claude subagents, 1 round, no voting).`
+Print: `🔍 Step 5 — Quick mode: simplified review (2 Claude subagents, 1 round, no voting).`
 
 ### Normal mode (`quick_mode=false`)
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip this step regardless of the nature of the changes — whether code, skills, documentation, data files, or configuration. All changes require full review.**
 
-Invoke the `/review` skill. This launches 4 parallel Claude subagent reviewers (generic, correctness, risk/integration, architect) plus Codex and Cursor reviewers (if available), implements their suggestions recursively until clean.
+Invoke the `/review` skill. This launches 2 parallel Claude subagent reviewers (general, deep-analysis) plus two Codex and Cursor reviewers (if available), implements their suggestions recursively until clean.
 
 ### Track Rejected Code Review Findings
 
@@ -368,7 +368,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 - **Final Design**: Use the inline implementation plan produced in Step 1 (not from `/design`).
 - **Rejected Plan Review Suggestions**: Write "Quick mode — no plan review was conducted."
 - **Plan Review Voting Tally**: Write "Quick mode — no plan review voting."
-- **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings from 4 Claude subagents."
+- **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings from 2 Claude subagents."
 - **Implementation Deviations**: Compare implementation to the inline plan (same as normal mode).
 - **Out-of-Scope Observations**: Write "Quick mode — no out-of-scope observations collected."
 - **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)". Code review findings should reflect the quick review results.

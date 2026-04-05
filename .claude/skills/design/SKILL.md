@@ -1,13 +1,13 @@
 ---
 name: design
-description: Design an implementation plan with collaborative multi-reviewer review. 5 agents independently propose approaches before the full plan, then 6 reviewers validate the plan.
+description: Design an implementation plan with collaborative multi-reviewer review. 5 agents independently propose approaches before the full plan, then 5 reviewers validate the plan.
 argument-hint: "[--auto] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
 
 # Design Skill
 
-Design an implementation plan for a feature and review it with multiple specialized reviewers (4 Claude subagents + Codex + Cursor).
+Design an implementation plan for a feature and review it with multiple specialized reviewers (2 Claude subagents + 2 Codex instances + Cursor).
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token.
 
@@ -213,13 +213,13 @@ Print the plan to the user under a `## Implementation Plan` header so reviewers 
 
 ## Step 3 — Plan Review
 
-**IMPORTANT: Plan review MUST ALWAYS run with all available reviewers (4 Claude subagents + Codex and Cursor if available). Never skip or abbreviate this step regardless of how straightforward the plan appears — even when all sketch agents agreed, the plan is short, or the change seems trivial. Reviewers validate against the actual codebase state, catching issues that sketch-phase reasoning alone cannot detect.**
+**IMPORTANT: Plan review MUST ALWAYS run with all available reviewers (2 Claude subagents + 2 Codex instances and Cursor if available). Never skip or abbreviate this step regardless of how straightforward the plan appears — even when all sketch agents agreed, the plan is short, or the change seems trivial. Reviewers validate against the actual codebase state, catching issues that sketch-phase reasoning alone cannot detect.**
 
-Launch **all reviewers in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then Codex, then Claude subagents (fastest). Each reviewer receives the plan text and the feature description. Each must **only report findings** — never edit files.
+Launch **all reviewers in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest reviewers first: Cursor (slowest), then both Codex instances, then Claude subagents (fastest). Each reviewer receives the plan text and the feature description. Each must **only report findings** — never edit files.
 
 ### External Reviewer Setup (if `codex_available` or `cursor_available`)
 
-Before launching external reviewers, write the implementation plan to `$DESIGN_TMPDIR/plan.txt` so both Codex and Cursor can read it.
+Before launching external reviewers, write the implementation plan to `$DESIGN_TMPDIR/plan.txt` so both Codex instances and Cursor can read it.
 
 ### Cursor Reviewer (if `cursor_available`)
 
@@ -235,26 +235,37 @@ $PWD/.claude/scripts/generic/run-external-reviewer.sh --tool cursor --output "$D
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-### Codex Reviewer (if `codex_available`)
+### Codex Reviewers (if `codex_available`) — 2 instances
 
-Run Codex **second** in the parallel message. Codex has full repo access and will examine the codebase itself.
+Run both Codex instances **second** in the parallel message (after Cursor). Each Codex instance has full repo access and will examine the codebase itself, but focuses on different perspectives.
 
-Invoke Codex via the shared monitored wrapper script:
+**Codex-General** — focuses on general code quality and risk/integration perspectives:
 
 ```bash
-$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-plan-output.txt" --timeout 900 -- \
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-general-plan-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
-    --output-last-message "$DESIGN_TMPDIR/codex-plan-output.txt" \
-    "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Combine 4 perspectives: (1) General: logical flaws, code reuse, test coverage, backward compat, pattern consistency. (2) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    --output-last-message "$DESIGN_TMPDIR/codex-general-plan-output.txt" \
+    "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Focus on general code quality and risk/integration perspectives: (1) General: logical flaws, code reuse, test coverage, backward compat, pattern consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
-### Claude Subagents (4 reviewers)
+**Codex-Deep-Analysis** — focuses on correctness and architecture perspectives:
 
-Launch all four Claude subagents **last** in the same message (they finish fastest).
+```bash
+$PWD/.claude/scripts/generic/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-deep-plan-output.txt" --timeout 900 -- \
+  codex exec --full-auto -C "$PWD" \
+    --output-last-message "$DESIGN_TMPDIR/codex-deep-plan-output.txt" \
+    "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Focus on correctness and architecture perspectives: (1) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (2) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+```
 
-Use the four reviewer archetypes from `.claude/skills/shared/reviewer-templates.md`, filling in the variables for **plan review**:
+Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
+
+### Claude Subagents (2 reviewers)
+
+Launch both Claude subagents **last** in the same message (they finish fastest).
+
+Use the two reviewer archetypes from `.claude/skills/shared/reviewer-templates.md`, filling in the variables for **plan review**:
 
 - **`{REVIEW_TARGET}`** = `"an implementation plan"`
 - **`{CONTEXT_BLOCK}`**:
@@ -269,18 +280,18 @@ Use the four reviewer archetypes from `.claude/skills/shared/reviewer-templates.
 
 Additionally, append the following competition context to each reviewer's prompt (both Claude subagents and external reviewers):
 
-> **Competition notice**: Your findings will be voted on by a 3-agent panel (Architect, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
+> **Competition notice**: Your findings will be voted on by a 3-agent panel (Deep Analysis Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
 
 ### Monitoring External Reviewers
 
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$DESIGN_TMPDIR/codex-plan-output.txt` and `$DESIGN_TMPDIR/cursor-plan-output.txt` as the output files.
+Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/external-reviewers.md`, using `$DESIGN_TMPDIR/codex-general-plan-output.txt`, `$DESIGN_TMPDIR/codex-deep-plan-output.txt`, and `$DESIGN_TMPDIR/cursor-plan-output.txt` as the output files.
 
 ### After all reviewers return
 
 **Process Claude findings immediately** — do not wait for external reviewers before starting:
 
-1. Collect findings from the four Claude subagents right away. Claude subagents produce **dual-list output** (per `reviewer-templates.md`): "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists from each subagent.
-2. **Then** poll for external reviewer sentinel files (only for reviewers that were actually launched: `$DESIGN_TMPDIR/cursor-plan-output.txt.done` and/or `$DESIGN_TMPDIR/codex-plan-output.txt.done`). Read each reviewer's exit code from its sentinel file, then validate its output per the shared procedure. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
+1. Collect findings from the two Claude subagents right away. Claude subagents produce **dual-list output** (per `reviewer-templates.md`): "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists from each subagent.
+2. **Then** poll for external reviewer sentinel files (only for reviewers that were actually launched: `$DESIGN_TMPDIR/cursor-plan-output.txt.done`, `$DESIGN_TMPDIR/codex-general-plan-output.txt.done`, and/or `$DESIGN_TMPDIR/codex-deep-plan-output.txt.done`). Read each reviewer's exit code from its sentinel file, then validate its output per the shared procedure. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
 3. Merge external reviewer in-scope findings into the Claude in-scope findings.
 4. Deduplicate in-scope findings separately. Assign each a stable sequential ID (`FINDING_1`, `FINDING_2`, etc.) and note which reviewer(s) proposed each.
 5. Deduplicate out-of-scope observations separately. Assign each an `OOS_` prefixed ID (`OOS_1`, `OOS_2`, etc.). If the same issue appears in both in-scope and OOS from different reviewers, merge under the in-scope finding (in-scope takes precedence).
@@ -291,7 +302,7 @@ If **all reviewers** report no in-scope issues and no out-of-scope observations,
 
 After deduplication, submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `.claude/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section — voters can promote OOS items to in-scope by voting YES. For plan review:
 
-- **Voter 1**: Claude Architect subagent — fresh Agent tool invocation with the voting prompt. Instruct: `"You are a senior architect on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR."`
+- **Voter 1**: Claude Deep Analysis reviewer subagent — fresh Agent tool invocation with the voting prompt. Instruct: `"You are a senior architect and correctness specialist on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR."`
 - **Voter 2**: Codex — via `run-external-reviewer.sh` with the ballot
 - **Voter 3**: Cursor — via `run-external-reviewer.sh` with the ballot
 
