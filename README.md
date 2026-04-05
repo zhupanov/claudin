@@ -175,6 +175,8 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 
 Claudin uses three environment variables for Slack integration. All are optional — when not set, Slack-related features are skipped with warnings and all other workflow steps continue normally.
 
+> **Note:** Both `CLAUDIN_SLACK_BOT_TOKEN` and `CLAUDIN_SLACK_CHANNEL_ID` must be set for Slack features to function. If either is missing, all Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent.
+
 ### `CLAUDIN_SLACK_BOT_TOKEN`
 
 A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack API calls.
@@ -185,7 +187,7 @@ A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack AP
 - The token's presence is checked during session setup and its availability is propagated to child skills
 
 **When not set:**
-- Slack announcement steps are skipped with a warning (e.g., `⚠ CLAUDIN_SLACK_BOT_TOKEN is not set. Slack announcement (Step 11) will be skipped.`)
+- All Slack operations are skipped with a warning at session setup (e.g., `⚠ Slack is not fully configured (CLAUDIN_SLACK_BOT_TOKEN not set). Slack announcement (Step 11) will be skipped.`)
 - The `:merged:` emoji step in `/shazam` is skipped
 - All other workflow steps (design, implementation, code review, CI monitoring, merge) proceed normally
 
@@ -198,9 +200,9 @@ The Slack channel ID (e.g., `C0123456789`) where PR announcements and emoji reac
 - The `:merged:` emoji reaction targets announcements in this channel
 
 **When not set:**
-- Slack announcements are skipped even if `CLAUDIN_SLACK_BOT_TOKEN` is set (the bot token alone is not sufficient — a target channel is required)
+- All Slack operations are skipped with a warning at session setup (e.g., `⚠ Slack is not fully configured (CLAUDIN_SLACK_CHANNEL_ID not set).`)
 - The `:merged:` emoji step in `/shazam` is also skipped
-- Warnings are printed by the respective scripts (e.g., `WARNING: CLAUDIN_SLACK_CHANNEL_ID is not set.`)
+- All other workflow steps proceed normally
 
 ### `CLAUDIN_SLACK_USER_ID`
 

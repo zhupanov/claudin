@@ -2,7 +2,7 @@
 # session-setup.sh — Shared session setup for /design, /implement, /shazam skills.
 #
 # Consolidates the common Step 0 operations: preflight, temp dir creation,
-# Slack token check, and repo name derivation.
+# Slack configuration check, and repo name derivation.
 #
 # Usage:
 #   session-setup.sh --prefix <name> [--skip-branch-check] [--skip-slack-check] \
@@ -11,17 +11,18 @@
 # Flags:
 #   --prefix <name>       (required) Temp dir prefix for mktemp (e.g., claude-shazam)
 #   --skip-branch-check   Forwarded to preflight.sh (skip on-main/clean-tree assertions)
-#   --skip-slack-check    Skip CLAUDIN_SLACK_BOT_TOKEN check entirely
+#   --skip-slack-check    Skip CLAUDIN_SLACK_BOT_TOKEN and CLAUDIN_SLACK_CHANNEL_ID check entirely
 #   --skip-repo-check     Skip repo name derivation entirely
 #   --caller-env <path>   Path to KEY=value file with already-discovered values.
-#                          Recognized keys: SLACK_TOKEN_OK, REPO, REPO_UNAVAILABLE.
+#                          Recognized keys: SLACK_OK, SLACK_MISSING, REPO, REPO_UNAVAILABLE.
 #                          If a key is present and non-empty, the script skips re-deriving it.
 #                          SESSION_TMPDIR is never inherited — a fresh tmpdir is always created.
 #                          If the file does not exist or is empty, full discovery happens.
 #
 # Output (KEY=value lines on stdout):
 #   SESSION_TMPDIR=<path>       Always output (fresh per invocation)
-#   SLACK_TOKEN_OK=true|false   Output unless --skip-slack-check
+#   SLACK_OK=true|false         Output unless --skip-slack-check
+#   SLACK_MISSING=<csv>         Output when SLACK_OK=false (comma-separated missing var names)
 #   REPO=<owner/repo>           Output unless --skip-repo-check
 #   REPO_UNAVAILABLE=true|false Output unless --skip-repo-check
 #
@@ -69,7 +70,8 @@ fi
 
 # --- Read caller-env file (if provided and exists) ---
 # Parse line-by-line; do NOT source. Only recognized keys with non-empty values are used.
-CALLER_SLACK_TOKEN_OK=""
+CALLER_SLACK_OK=""
+CALLER_SLACK_MISSING=""
 CALLER_REPO=""
 CALLER_REPO_UNAVAILABLE=""
 
@@ -78,7 +80,8 @@ if [[ -n "$CALLER_ENV" && -f "$CALLER_ENV" ]]; then
         # Skip empty lines and lines not matching KEY=value pattern
         [[ -z "$key" || "$key" =~ ^# ]] && continue
         case "$key" in
-            SLACK_TOKEN_OK)    CALLER_SLACK_TOKEN_OK="$value" ;;
+            SLACK_OK)          CALLER_SLACK_OK="$value" ;;
+            SLACK_MISSING)     CALLER_SLACK_MISSING="$value" ;;
             REPO)              CALLER_REPO="$value" ;;
             REPO_UNAVAILABLE)  CALLER_REPO_UNAVAILABLE="$value" ;;
             *)                 ;; # Ignore unknown keys
@@ -105,17 +108,33 @@ fi
 SESSION_TMPDIR=$(mktemp -d "/tmp/${PREFIX}-XXXXXX")
 echo "SESSION_TMPDIR=$SESSION_TMPDIR"
 
-# --- 3. Check CLAUDIN_SLACK_BOT_TOKEN ---
+# --- 3. Check Slack configuration (CLAUDIN_SLACK_BOT_TOKEN + CLAUDIN_SLACK_CHANNEL_ID) ---
 if [[ "$SKIP_SLACK_CHECK" == "false" ]]; then
-    if [[ -n "$CALLER_SLACK_TOKEN_OK" ]]; then
-        # Reuse caller's value
-        echo "SLACK_TOKEN_OK=$CALLER_SLACK_TOKEN_OK"
+    if [[ -n "$CALLER_SLACK_OK" ]]; then
+        # Reuse caller's values
+        echo "SLACK_OK=$CALLER_SLACK_OK"
+        if [[ -n "$CALLER_SLACK_MISSING" ]]; then
+            echo "SLACK_MISSING=$CALLER_SLACK_MISSING"
+        fi
     else
-        # Derive fresh
-        if [[ -n "${CLAUDIN_SLACK_BOT_TOKEN:-}" ]]; then
-            echo "SLACK_TOKEN_OK=true"
+        # Derive fresh: both vars must be set for Slack to be available
+        SLACK_MISSING_VARS=""
+        if [[ -z "${CLAUDIN_SLACK_BOT_TOKEN:-}" ]]; then
+            SLACK_MISSING_VARS="CLAUDIN_SLACK_BOT_TOKEN"
+        fi
+        if [[ -z "${CLAUDIN_SLACK_CHANNEL_ID:-}" ]]; then
+            if [[ -n "$SLACK_MISSING_VARS" ]]; then
+                SLACK_MISSING_VARS="$SLACK_MISSING_VARS,CLAUDIN_SLACK_CHANNEL_ID"
+            else
+                SLACK_MISSING_VARS="CLAUDIN_SLACK_CHANNEL_ID"
+            fi
+        fi
+
+        if [[ -z "$SLACK_MISSING_VARS" ]]; then
+            echo "SLACK_OK=true"
         else
-            echo "SLACK_TOKEN_OK=false"
+            echo "SLACK_OK=false"
+            echo "SLACK_MISSING=$SLACK_MISSING_VARS"
         fi
     fi
 fi

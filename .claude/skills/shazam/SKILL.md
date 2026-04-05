@@ -50,9 +50,9 @@ Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-emp
 
 If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
 
-Parse the output for `SESSION_TMPDIR`, `SLACK_TOKEN_OK`, `REPO`, `REPO_UNAVAILABLE`. Set:
+Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`. Set:
 - `SHAZAM_TMPDIR` = `SESSION_TMPDIR`
-- If `SLACK_TOKEN_OK=false`, print: `**⚠ CLAUDIN_SLACK_BOT_TOKEN is not set. :merged: emoji (Step 3) will be skipped.**` Set a mental flag `slack_available=false`.
+- If `SLACK_OK=false`, print: `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). :merged: emoji (Step 3) will be skipped.**` Set a mental flag `slack_available=false`.
 - If `REPO_UNAVAILABLE=true`, print `**❌ Could not determine repository name. Cannot proceed with CI/merge steps.**` Set a mental flag `repo_unavailable=true`.
 
 ### Write Session Env for Child Skills
@@ -61,7 +61,7 @@ Write the discovered values to `$SHAZAM_TMPDIR/session-env.sh` so they can be fo
 
 ```bash
 $PWD/.claude/scripts/generic/write-session-env.sh --output "$SHAZAM_TMPDIR/session-env.sh" \
-  --slack-token-ok <value> --repo <value> --repo-unavailable <value>
+  --slack-ok <value> --slack-missing <value> --repo <value> --repo-unavailable <value>
 ```
 
 This file will be passed to `/implement` via `--session-env` in Step 1.
@@ -295,7 +295,7 @@ When bailing out:
 
 **If `no_merge=true`**: Skip this step.
 
-**If `slack_available=false`**: Print `⏭️ Step 3 — Skipped (CLAUDIN_SLACK_BOT_TOKEN not set).` and proceed to Step 4.
+**If `slack_available=false`**: Print `⏭️ Step 3 — Skipped (Slack not configured).` and proceed to Step 4.
 
 **Only if the PR was successfully merged in Step 2b or force-merged externally** (not bailed in 2d).
 
