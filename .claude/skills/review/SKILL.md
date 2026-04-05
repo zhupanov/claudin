@@ -22,7 +22,6 @@ When changes touch files under `.claude/scripts/generic/` or `.claude/skills/sha
 
 - **Generic directories**: `.claude/scripts/generic/`, `.claude/skills/shared/` — changes to files here must not introduce repo-specific references.
 - **Repo-specific directories**: `.claude/scripts/repo/`, individual skill directories (e.g., `.claude/skills/brand-new/`, `.claude/skills/optimize/`) — files here are repo-specific by design and exempt from this rule.
-- **dev-tools exception**: The `dev-tools` submodule is where generic Claude config lives and is used by other repos via symlinks. Skills and scripts originating from `dev-tools` must remain generic.
 
 ## Step 0 — Session Setup
 

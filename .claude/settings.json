@@ -112,7 +112,6 @@
       "Bash(cursor:*)",
       "Bash(cut:*)",
       "Bash(date:*)",
-      "Bash(dev-tools/python/.venv/bin/ruff:*)",
       "Bash(diff:*)",
       "Bash(dirname:*)",
       "Bash(do:*)",

@@ -247,7 +247,7 @@ $PWD/.claude/scripts/generic/check-bump-version.sh --mode pre
 
 Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 
-**If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit. Use /skill-creator or see the dev-tools README for guidance.**` and skip to Step 9.
+**If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit. Use /skill-creator for guidance.**` and skip to Step 9.
 
 **If `HAS_BUMP=true`**:
 
