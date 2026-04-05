@@ -3,7 +3,12 @@
 #
 # Checks git log -1 --oneline and compares the commit message against
 # the expected squash-merge title (typically "<PR title> (#<PR number>)").
-# Uses fixed-string matching to avoid regex issues with special characters.
+#
+# Matching strategy (handles both normal and --admin merges):
+#   1. Prefix match: commit message starts with the expected title (normal squash merge)
+#   2. Suffix match: commit message ends with "(#N)" from the expected title
+#      (--admin merge uses the first commit message instead of PR title, but
+#      GitHub still appends the PR number suffix)
 #
 # Usage:
 #   verify-main.sh --expected-title TEXT
@@ -67,13 +72,22 @@ fi
 COMMIT_HASH="${LOG_OUTPUT%% *}"
 COMMIT_MESSAGE="${LOG_OUTPUT#* }"
 
-# --- Compare using prefix matching ---
-# Check if the commit message starts with the expected title
-# Uses bash pattern matching to avoid regex issues with special characters
+# --- Compare using prefix match, then PR number suffix fallback ---
+# Strategy 1: prefix match (normal squash merge — PR title is the commit message)
 if [[ "$COMMIT_MESSAGE" == "$EXPECTED_TITLE"* ]]; then
     VERIFIED="true"
 else
-    VERIFIED="false"
+    # Strategy 2: suffix match on PR number (--admin merge — commit message differs
+    # but GitHub still appends "(#N)")
+    # Extract the "(#N)" suffix from the expected title
+    PR_SUFFIX=""
+    if [[ "$EXPECTED_TITLE" =~ \(#[0-9]+\)$ ]]; then
+        PR_SUFFIX="${BASH_REMATCH[0]}"
+    fi
+
+    if [[ -n "$PR_SUFFIX" && "$COMMIT_MESSAGE" == *"$PR_SUFFIX" ]]; then
+        VERIFIED="true"
+    fi
 fi
 
 exit 0
