@@ -2,7 +2,7 @@
 # post-pr-announce.sh — Post a PR announcement to Slack.
 #
 # Replaces the /post-pr skill. Composes: parse-pr-summary.sh →
-# read-slack-channel.sh → slack-announce.sh with temp directory lifecycle.
+# slack-announce.sh with $CLAUDIN_SLACK_CHANNEL_ID.
 #
 # Note: This script does NOT perform bullet condensation (the former skill
 # condensed > 3 bullets using LLM reasoning). In practice, /implement always
@@ -22,7 +22,7 @@
 #
 # Exit codes:
 #   0 — announcement posted successfully
-#   1 — SLACK_BOT_TOKEN not set
+#   1 — CLAUDIN_SLACK_BOT_TOKEN not set
 #   2 — could not resolve PR metadata
 #   3 — Slack announcement failed
 #   4 — usage/argument error
@@ -75,11 +75,10 @@ if [[ "${BULLET_COUNT:-0}" -gt 3 ]]; then
 fi
 
 # --- Read Slack channel ---
-CHANNEL_OUTPUT=$("$SCRIPT_DIR/read-slack-channel.sh")
-SLACK_CHANNEL_ID=$(echo "$CHANNEL_OUTPUT" | grep '^SLACK_CHANNEL_ID=' | cut -d= -f2-)
+SLACK_CHANNEL_ID="${CLAUDIN_SLACK_CHANNEL_ID:-}"
 
 if [[ -z "$SLACK_CHANNEL_ID" ]]; then
-    echo "WARNING: repo-config.json missing or slackChannelId not set. Slack announcement skipped." >&2
+    echo "WARNING: CLAUDIN_SLACK_CHANNEL_ID is not set. Slack announcement skipped." >&2
     "$SCRIPT_DIR/cleanup-tmpdir.sh" --dir "$POST_PR_TMPDIR" 2>/dev/null || true
     exit 0
 fi

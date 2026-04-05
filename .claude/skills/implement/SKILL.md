@@ -58,7 +58,7 @@ If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and ab
 
 Parse the output for `SESSION_TMPDIR`, `SLACK_TOKEN_OK`, `REPO`, `REPO_UNAVAILABLE`. Set:
 - `IMPL_TMPDIR` = `SESSION_TMPDIR`
-- If `SLACK_TOKEN_OK=false`, print: `**⚠ SLACK_BOT_TOKEN is not set. Slack announcement (Step 11) will be skipped.**` Set a mental flag `slack_available=false`.
+- If `SLACK_TOKEN_OK=false`, print: `**⚠ CLAUDIN_SLACK_BOT_TOKEN is not set. Slack announcement (Step 11) will be skipped.**` Set a mental flag `slack_available=false`.
 - If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository name. CI monitoring (Step 10) will be skipped.**` Set a mental flag `repo_unavailable=true`.
 
 ### Write Session Env for Child Skills
@@ -443,7 +443,7 @@ After handling any non-terminal action (rebase, evaluate_failure), **re-invoke `
 
 ## Step 11 — Post Slack Announcement
 
-**If `slack_available=false`**: Print `⏭️ Step 11 — Skipped (SLACK_BOT_TOKEN not set).` Print `SLACK_TS=` and proceed to the post-execution PR body refresh below.
+**If `slack_available=false`**: Print `⏭️ Step 11 — Skipped (CLAUDIN_SLACK_BOT_TOKEN not set).` Print `SLACK_TS=` and proceed to the post-execution PR body refresh below.
 
 **If `PR_STATUS=existing`**: Print `⏭️ Step 11 — Skipped (PR already existed, avoiding duplicate Slack post). Run post-pr-announce.sh --pr <PR-NUMBER> manually to post the announcement.` Print `SLACK_TS=` and proceed to the post-execution PR body refresh below.
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # post-merged-emoji.sh — Add :merged: emoji to a Slack PR announcement.
 #
-# Replaces the /post-merged skill. Reads the Slack channel from
-# repo-config.json and calls add-merged-emoji.sh.
+# Replaces the /post-merged skill. Reads $CLAUDIN_SLACK_CHANNEL_ID
+# and calls add-merged-emoji.sh.
 #
 # Usage:
 #   post-merged-emoji.sh --slack-ts <timestamp>
@@ -37,11 +37,10 @@ if [[ -z "$SLACK_TS" ]]; then
 fi
 
 # --- Read Slack channel ---
-CHANNEL_OUTPUT=$("$SCRIPT_DIR/read-slack-channel.sh")
-SLACK_CHANNEL_ID=$(echo "$CHANNEL_OUTPUT" | grep '^SLACK_CHANNEL_ID=' | cut -d= -f2-)
+SLACK_CHANNEL_ID="${CLAUDIN_SLACK_CHANNEL_ID:-}"
 
 if [[ -z "$SLACK_CHANNEL_ID" ]]; then
-    echo "WARNING: repo-config.json missing or slackChannelId not set. Skipping :merged: emoji." >&2
+    echo "WARNING: CLAUDIN_SLACK_CHANNEL_ID is not set. Skipping :merged: emoji." >&2
     exit 1
 fi
 

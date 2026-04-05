@@ -10,11 +10,11 @@
 #   add-merged-emoji.sh --slack-ts TIMESTAMP --channel-id CHANNEL_ID
 #
 # Environment:
-#   SLACK_BOT_TOKEN — required
+#   CLAUDIN_SLACK_BOT_TOKEN — required
 #
 # Exit codes:
 #   0 — emoji added successfully
-#   1 — SLACK_BOT_TOKEN not set
+#   1 — CLAUDIN_SLACK_BOT_TOKEN not set
 #   2 — missing arguments
 #   3 — add-slack-emoji.sh failed
 
@@ -40,12 +40,12 @@ if [[ -z "$SLACK_TS" ]] || [[ -z "$CHANNEL_ID" ]]; then
     usage; exit 2
 fi
 
-if [[ -z "${SLACK_BOT_TOKEN:-}" ]]; then
-    echo "⚠ SLACK_BOT_TOKEN not set. Skipping :merged: emoji."
+if [[ -z "${CLAUDIN_SLACK_BOT_TOKEN:-}" ]]; then
+    echo "⚠ CLAUDIN_SLACK_BOT_TOKEN not set. Skipping :merged: emoji."
     exit 1
 fi
 
-CLEAN_TOKEN=$(echo -n "$SLACK_BOT_TOKEN" | tr -d '[:space:]')
+CLEAN_TOKEN=$(echo -n "$CLAUDIN_SLACK_BOT_TOKEN" | tr -d '[:space:]')
 
 bash "$SCRIPT_DIR/add-slack-emoji.sh" \
     --channel-id "$CHANNEL_ID" \

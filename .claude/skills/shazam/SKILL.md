@@ -52,7 +52,7 @@ If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and ab
 
 Parse the output for `SESSION_TMPDIR`, `SLACK_TOKEN_OK`, `REPO`, `REPO_UNAVAILABLE`. Set:
 - `SHAZAM_TMPDIR` = `SESSION_TMPDIR`
-- If `SLACK_TOKEN_OK=false`, print: `**⚠ SLACK_BOT_TOKEN is not set. :merged: emoji (Step 3) will be skipped.**` Set a mental flag `slack_available=false`.
+- If `SLACK_TOKEN_OK=false`, print: `**⚠ CLAUDIN_SLACK_BOT_TOKEN is not set. :merged: emoji (Step 3) will be skipped.**` Set a mental flag `slack_available=false`.
 - If `REPO_UNAVAILABLE=true`, print `**❌ Could not determine repository name. Cannot proceed with CI/merge steps.**` Set a mental flag `repo_unavailable=true`.
 
 ### Write Session Env for Child Skills
@@ -204,7 +204,7 @@ When bailing out:
 
 **If `no_merge=true`**: Skip this step.
 
-**If `slack_available=false`**: Print `⏭️ Step 3 — Skipped (SLACK_BOT_TOKEN not set).` and proceed to Step 4.
+**If `slack_available=false`**: Print `⏭️ Step 3 — Skipped (CLAUDIN_SLACK_BOT_TOKEN not set).` and proceed to Step 4.
 
 **Only if the PR was successfully merged in Step 2b or force-merged externally** (not bailed in 2d).
 

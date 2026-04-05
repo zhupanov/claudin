@@ -9,7 +9,7 @@
 #   slack-announce.sh --pr NUMBER --tmpdir DIR --channel-id CHANNEL_ID
 #
 # Environment:
-#   SLACK_BOT_TOKEN — required, the Slack bot token
+#   CLAUDIN_SLACK_BOT_TOKEN — required, the Slack bot token
 #   SLACK_USER_ID   — optional Slack user ID (e.g., U12345678) for @-mentioning
 #                     the PR author. If unset, the message is posted without a mention.
 #
@@ -20,7 +20,7 @@
 #
 # Exit codes:
 #   0 — message posted successfully
-#   1 — SLACK_BOT_TOKEN not set
+#   1 — CLAUDIN_SLACK_BOT_TOKEN not set
 #   2 — failed to resolve PR metadata
 #   3 — failed to post message
 
@@ -50,12 +50,12 @@ if [[ -z "$PR_NUMBER" ]] || [[ -z "$TMPDIR_PATH" ]] || [[ -z "$CHANNEL_ID" ]]; t
 fi
 
 # --- Check token ---
-if [[ -z "${SLACK_BOT_TOKEN:-}" ]]; then
+if [[ -z "${CLAUDIN_SLACK_BOT_TOKEN:-}" ]]; then
     echo "SLACK_TS="
-    echo "SLACK_ERROR=SLACK_BOT_TOKEN not set"
+    echo "SLACK_ERROR=CLAUDIN_SLACK_BOT_TOKEN not set"
     exit 1
 fi
-CLEAN_TOKEN=$(echo -n "$SLACK_BOT_TOKEN" | tr -d '[:space:]')
+CLEAN_TOKEN=$(echo -n "$CLAUDIN_SLACK_BOT_TOKEN" | tr -d '[:space:]')
 
 # --- Resolve git identity ---
 GIT_USER_NAME=$(git config user.name 2>/dev/null || echo "")

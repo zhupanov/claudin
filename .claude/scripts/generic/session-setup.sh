@@ -11,7 +11,7 @@
 # Flags:
 #   --prefix <name>       (required) Temp dir prefix for mktemp (e.g., claude-shazam)
 #   --skip-branch-check   Forwarded to preflight.sh (skip on-main/clean-tree assertions)
-#   --skip-slack-check    Skip SLACK_BOT_TOKEN check entirely
+#   --skip-slack-check    Skip CLAUDIN_SLACK_BOT_TOKEN check entirely
 #   --skip-repo-check     Skip repo name derivation entirely
 #   --caller-env <path>   Path to KEY=value file with already-discovered values.
 #                          Recognized keys: SLACK_TOKEN_OK, REPO, REPO_UNAVAILABLE.
@@ -105,14 +105,14 @@ fi
 SESSION_TMPDIR=$(mktemp -d "/tmp/${PREFIX}-XXXXXX")
 echo "SESSION_TMPDIR=$SESSION_TMPDIR"
 
-# --- 3. Check SLACK_BOT_TOKEN ---
+# --- 3. Check CLAUDIN_SLACK_BOT_TOKEN ---
 if [[ "$SKIP_SLACK_CHECK" == "false" ]]; then
     if [[ -n "$CALLER_SLACK_TOKEN_OK" ]]; then
         # Reuse caller's value
         echo "SLACK_TOKEN_OK=$CALLER_SLACK_TOKEN_OK"
     else
         # Derive fresh
-        if [[ -n "${SLACK_BOT_TOKEN:-}" ]]; then
+        if [[ -n "${CLAUDIN_SLACK_BOT_TOKEN:-}" ]]; then
             echo "SLACK_TOKEN_OK=true"
         else
             echo "SLACK_TOKEN_OK=false"
