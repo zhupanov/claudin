@@ -39,7 +39,7 @@ Internal agent definitions used by skills like `/design`, `/review`, and `/loop-
 
 ## Environment Variables
 
-Claudin uses two environment variables for Slack integration. Both are optional — when not set, Slack-related features are skipped with warnings and all other workflow steps continue normally.
+Claudin uses three environment variables for Slack integration. All are optional — when not set, Slack-related features are skipped with warnings and all other workflow steps continue normally.
 
 ### `CLAUDIN_SLACK_BOT_TOKEN`
 
@@ -67,6 +67,16 @@ The Slack channel ID (e.g., `C0123456789`) where PR announcements and emoji reac
 - Slack announcements are skipped even if `CLAUDIN_SLACK_BOT_TOKEN` is set (the bot token alone is not sufficient — a target channel is required)
 - The `:merged:` emoji step in `/shazam` is also skipped
 - Warnings are printed by the respective scripts (e.g., `WARNING: CLAUDIN_SLACK_CHANNEL_ID is not set.`)
+
+### `CLAUDIN_SLACK_USER_ID`
+
+A Slack user ID (e.g., `U0123456789`) used to @-mention the PR author in Slack announcements.
+
+**When set:**
+- Slack announcements include an @-mention of this user, notifying them directly in the channel
+
+**When not set:**
+- Slack announcements are still posted, but without an @-mention — the message appears without a user notification
 
 ## Detailed Documentation
 

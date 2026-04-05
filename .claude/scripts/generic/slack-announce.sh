@@ -10,7 +10,7 @@
 #
 # Environment:
 #   CLAUDIN_SLACK_BOT_TOKEN — required, the Slack bot token
-#   SLACK_USER_ID   — optional Slack user ID (e.g., U12345678) for @-mentioning
+#   CLAUDIN_SLACK_USER_ID   — optional Slack user ID (e.g., U12345678) for @-mentioning
 #                     the PR author. If unset, the message is posted without a mention.
 #
 # Outputs to stdout:
@@ -59,7 +59,7 @@ CLEAN_TOKEN=$(echo -n "$CLAUDIN_SLACK_BOT_TOKEN" | tr -d '[:space:]')
 
 # --- Resolve git identity ---
 GIT_USER_NAME=$(git config user.name 2>/dev/null || echo "")
-SLACK_USER_ID="${SLACK_USER_ID:-}"
+CLAUDIN_SLACK_USER_ID="${CLAUDIN_SLACK_USER_ID:-}"
 
 # --- Fetch PR metadata and derive repo name from PR URL ---
 set +e
@@ -100,8 +100,8 @@ BULLET=$'\xe2\x80\xa2'   # U+2022 •
 SAFE_TITLE="${PR_TITLE//\"/${LDQUOTE}}"
 
 # Line 1: mention + PR link
-if [[ -n "$SLACK_USER_ID" ]]; then
-    LINE1="<@${SLACK_USER_ID}>: FYI \`${REPO_NAME}\` <${PR_URL}|#${PR_NUMBER}> ${LDQUOTE}${SAFE_TITLE}${LDQUOTE}"
+if [[ -n "$CLAUDIN_SLACK_USER_ID" ]]; then
+    LINE1="<@${CLAUDIN_SLACK_USER_ID}>: FYI \`${REPO_NAME}\` <${PR_URL}|#${PR_NUMBER}> ${LDQUOTE}${SAFE_TITLE}${LDQUOTE}"
 else
     LINE1="FYI \`${REPO_NAME}\` <${PR_URL}|#${PR_NUMBER}> ${LDQUOTE}${SAFE_TITLE}${LDQUOTE}"
 fi

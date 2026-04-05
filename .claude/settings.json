@@ -82,7 +82,7 @@
       "Bash(SECONDS=:*)",
       "Bash(SHAZAM_TMPDIR=:*)",
       "Bash(SLACK_TS=:*)",
-      "Bash(SLACK_USER_ID=:*)",
+      "Bash(CLAUDIN_SLACK_USER_ID=:*)",
       "Bash(STATUS=:*)",
       "Bash(SUMMARY_BULLETS=:*)",
       "Bash(TIMEOUT_SECONDS=:*)",
