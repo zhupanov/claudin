@@ -1,6 +1,6 @@
 # Workflow Lifecycle
 
-How skills compose to form the end-to-end development workflow in Claudin2.
+How skills compose to form the end-to-end development workflow in Claudin.
 
 ## Skill Orchestration Hierarchy
 

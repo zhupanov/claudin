@@ -1,6 +1,6 @@
 # Agent System
 
-How Claudin2 skills orchestrate parallel subagents to achieve collaborative multi-perspective workflows.
+How Claudin skills orchestrate parallel subagents to achieve collaborative multi-perspective workflows.
 
 ## What Are Agents?
 
@@ -40,7 +40,7 @@ Skills invoke other skills in sequence, each building on the previous result. Fo
 
 ## Agent Types
 
-Claudin2 uses several categories of agents:
+Claudin uses several categories of agents:
 
 ### Review Agents
 

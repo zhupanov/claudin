@@ -1,6 +1,6 @@
 # External Reviewers
 
-Codex and Cursor participate alongside Claude subagents as both reviewers and voters in the Claudin2 workflow. This document covers the shared integration procedures.
+Codex and Cursor participate alongside Claude subagents as both reviewers and voters in the Claudin workflow. This document covers the shared integration procedures.
 
 ## Availability Checks
 
