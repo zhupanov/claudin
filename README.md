@@ -124,7 +124,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/shazam`](.claude/skills/shazam/SKILL.md) | `[--quick] [--auto] [--no-merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, Slack announce, CI+rebase+merge, and cleanup. `--quick` skips `/design` and uses simplified code review (4 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--no-merge` skips CI monitoring, merge, :merged: emoji, and local branch cleanup (final report and temp cleanup still run). [(Diagram).](.claude/skills/shazam/diagram.svg) |
 | [`/loop-review`](.claude/skills/loop-review/SKILL.md) | `[partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents (4 Claude + Codex + Cursor, if available), implementing improvements via `/shazam`, and logging deferred suggestions. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](.claude/skills/loop-review/diagram.svg) |
 | [`/skill-creator`](.claude/skills/skill-creator/SKILL.md) | *(conversational)* | Create new skills, modify and improve existing skills, and measure skill performance via eval-based testing. No specific arguments — works conversationally based on your request. [(Diagram).](.claude/skills/skill-creator/diagram.svg) |
-| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run repo-specific validation checks based on modified files. Invoked automatically by `/implement` and `/review` after code changes. |
+| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint, ruff) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. |
 
 ## Review Agents
 
@@ -136,6 +136,40 @@ Internal agent definitions used by skills like `/design`, `/review`, and `/loop-
 | [`correctness-reviewer`](.claude/agents/correctness-reviewer.md) | Correctness-focused code reviewer specializing in logic errors, off-by-one bugs, nil handling, type mismatches, race conditions, and error path analysis. |
 | [`risk-reviewer`](.claude/agents/risk-reviewer.md) | Risk and integration reviewer specializing in breaking changes, side effects, thread safety, deployment risks, regressions, and CI impact analysis. |
 | [`architect-reviewer`](.claude/agents/architect-reviewer.md) | Senior systems architect reviewer focused on separation of concerns, contract boundaries, invariants, and semantic boundary violations. |
+
+## Linting
+
+Claudin uses [pre-commit](https://pre-commit.com/) as the single source of truth for linter configuration. All linter definitions, versions, and file filters live in `.pre-commit-config.yaml`.
+
+### Linters
+
+| Linter | File Types | Description |
+|--------|-----------|-------------|
+| [shellcheck](https://www.shellcheck.net/) | `.sh` | Shell script analysis |
+| [markdownlint](https://github.com/igorshubovych/markdownlint-cli) | `.md` | Markdown style enforcement (config: `.markdownlint.json`) |
+| [jq](https://jqlang.github.io/jq/) | `.json` | JSON syntax validation |
+| [actionlint](https://github.com/rhysd/actionlint) | `.yml`, `.yaml` | GitHub Actions workflow validation |
+| [ruff](https://docs.astral.sh/ruff/) | `.py` | Python linting |
+
+### Usage
+
+There are three ways to run linters, all backed by the same `.pre-commit-config.yaml`:
+
+- **CI** — Runs `make lint` (repo-wide) on every pull request.
+- **`/relevant-checks`** — Runs `pre-commit run --files <changed-files>` scoped to branch changes. Invoked automatically by `/implement` and `/review`.
+- **Local git hook** — Run `make setup` (or `pre-commit install`) to enable pre-commit hooks that lint staged files on every commit.
+
+### Makefile Targets
+
+| Target | Description |
+|--------|-------------|
+| `make lint` | Run all linters repo-wide |
+| `make shellcheck` | Run shellcheck only |
+| `make markdownlint` | Run markdownlint only |
+| `make jsonlint` | Run JSON validation only |
+| `make actionlint` | Run actionlint only |
+| `make ruff` | Run ruff only |
+| `make setup` | Install pre-commit git hooks |
 
 ## Environment Variables
 

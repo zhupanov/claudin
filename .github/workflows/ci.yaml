@@ -15,19 +15,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: shellcheck all .sh files
-        run: find . -path './.git' -prune -o -path '*/.venv' -prune -o -name '*.sh' -print0 | xargs -0 -n1 -t shellcheck
-      - name: Install markdownlint-cli
-        run: npm install -g markdownlint-cli
-      - name: Lint all .md files
-        run: find . -path './.git' -prune -o -path '*/node_modules' -prune -o -name '*.md' -print0 | xargs -0 markdownlint --config .markdownlint.json
-      - name: Validate all .json files
-        run: find . -path './.git' -prune -o -path '*/node_modules' -prune -o -name '*.json' -print0 | xargs -0 -I{} sh -c 'echo "  {}"; jq . "{}" > /dev/null'
-      - name: Install actionlint
-        run: bash <(curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) && sudo mv actionlint /usr/local/bin/
-      - name: actionlint
-        run: find .github/workflows -maxdepth 1 \( -name '*.yml' -o -name '*.yaml' \) -print0 | xargs -0 -r actionlint
-      - name: Install ruff
-        run: pip install ruff
-      - name: ruff check all .py files
-        run: ruff check .
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pre-commit
+        run: pip install pre-commit==4.2.0
+      - name: Run all linters
+        run: make lint

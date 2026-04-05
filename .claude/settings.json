@@ -153,6 +153,7 @@
       "Bash(ping:*)",
       "Bash(pip3:*)",
       "Bash(pip:*)",
+      "Bash(pre-commit:*)",
       "Bash(pkill:*)",
       "Bash(printf:*)",
       "Bash(ps:*)",

@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 # Run validation checks relevant to modified files on the current branch.
+# Delegates to pre-commit for file-type routing and linting.
 # This script is private to the /relevant-checks skill.
 set -uo pipefail
+
+# ---------------------------------------------------------------------------
+# Pre-flight: ensure pre-commit is installed
+# ---------------------------------------------------------------------------
+command -v pre-commit >/dev/null 2>&1 || {
+    echo "ERROR: pre-commit not found. Run: pip install pre-commit (or: make setup)"
+    exit 1
+}
 
 REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "ERROR: not inside a git repository"; exit 1; }
 cd "$REPO_ROOT" || exit 1
@@ -38,54 +47,26 @@ if [ -z "$MODIFIED_FILES" ]; then
     exit 0
 fi
 
-# Detect file types
-HAS_SH=false
-HAS_PY=false
-
-while IFS= read -r file; do
-    case "$file" in
-        *.sh) HAS_SH=true ;;
-        *.py) HAS_PY=true ;;
-    esac
+# ---------------------------------------------------------------------------
+# Build file array, filtering to files that exist on disk (deleted files from
+# branch diff would cause pre-commit to fail with file-not-found errors).
+# Uses a portable while-read loop instead of mapfile for macOS Bash 3.2 compat.
+# ---------------------------------------------------------------------------
+files=()
+while IFS= read -r f; do
+    if [ -f "$f" ]; then
+        files+=("$f")
+    fi
 done <<< "$MODIFIED_FILES"
 
-if [ "$HAS_SH" = false ] && [ "$HAS_PY" = false ]; then
-    echo "No .sh or .py files modified — no checks to run."
+if [ ${#files[@]} -eq 0 ]; then
+    echo "No existing modified files to check (all changes are deletions)."
     exit 0
 fi
 
-FAILED=0
-
-# Shell checks
-if [ "$HAS_SH" = true ]; then
-    echo "=== Running shellcheck ==="
-    if make shellcheck; then
-        echo "✅ shellcheck passed"
-    else
-        echo "❌ shellcheck failed"
-        FAILED=1
-    fi
-fi
-
-# Python checks (lint → test → format, each target run individually for diagnostics)
-if [ "$HAS_PY" = true ]; then
-    echo "=== Running Python checks ==="
-    for target in lint test ruff-format validate-dataclasses validate-no-logging-exception-calls; do
-        if make -C python "$target"; then
-            echo "✅ python $target passed"
-        else
-            echo "❌ python $target failed"
-            FAILED=1
-        fi
-    done
-fi
-
-# Summary
-echo ""
-if [ "$FAILED" -eq 0 ]; then
-    echo "✅ All relevant checks passed"
-else
-    echo "❌ Some checks failed — see output above for details"
-fi
-
-exit "$FAILED"
+# ---------------------------------------------------------------------------
+# Run pre-commit on changed files. Pre-commit handles file-type routing via
+# the types/files fields in .pre-commit-config.yaml — no manual gating needed.
+# ---------------------------------------------------------------------------
+echo "=== Running pre-commit on ${#files[@]} changed file(s) ==="
+pre-commit run --files "${files[@]}"

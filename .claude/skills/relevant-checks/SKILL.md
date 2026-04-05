@@ -6,11 +6,19 @@ allowed-tools: Bash
 
 # Relevant Checks
 
-Run validation checks relevant to the files modified on the current branch. This is a repo-specific skill — each repository defines its own `/relevant-checks` with checks appropriate for that repo.
+Run validation checks scoped to files modified on the current branch. This is a repo-specific skill — each repository defines its own `/relevant-checks` with checks appropriate for that repo.
 
 ## How it works
 
-File-type detection is used for **gating** (deciding whether to run a check category), not scoping. When a check category is triggered, it runs repo-wide — not just on the modified files.
+Changed files are collected from the branch diff, staged changes, unstaged changes, and untracked files. The union is passed to `pre-commit run --files`, which routes each file to the appropriate linter hooks based on file type. Deleted files are filtered out automatically.
+
+The following linters are configured in `.pre-commit-config.yaml`:
+
+- **Shell scripts (`.sh`)**: shellcheck
+- **Markdown files (`.md`)**: markdownlint (using `.markdownlint.json` config)
+- **JSON files (`.json`)**: jq validation
+- **GitHub Actions workflows (`.yml`, `.yaml`)**: actionlint
+- **Python files (`.py`)**: ruff
 
 ## Usage
 
@@ -20,12 +28,7 @@ Run the private check script:
 $PWD/.claude/skills/relevant-checks/scripts/run-checks.sh
 ```
 
-The script automatically detects which file types were modified on the current branch and runs only the applicable checks:
-
-- **Shell scripts (`.sh`)**: Runs `make shellcheck` at the repo root
-- **Python files (`.py`)**: Runs `make -C python lint test ruff-format validate-dataclasses validate-no-logging-exception-calls` in the python directory (where `lint` expands to `ruff pylint pyright vulture`). Each target runs individually so all failures are visible at once.
-
-If no recognized file types are modified, the script prints a message and exits successfully.
+The script automatically detects which files were modified on the current branch, filters to existing files, and runs `pre-commit run --files` on them. Pre-commit handles file-type routing internally — only hooks whose file patterns match the changed files will execute.
 
 ## Retry semantics
 
@@ -34,4 +37,4 @@ If the script exits non-zero, one or more checks failed. The caller should:
 2. Fix the issue
 3. Re-invoke `/relevant-checks` to confirm the fix
 
-The script runs all applicable checks even if earlier ones fail, so you can see all failures at once.
+Pre-commit runs all applicable hooks even if earlier ones fail, so you can see all failures at once.
