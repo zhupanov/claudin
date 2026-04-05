@@ -1,6 +1,6 @@
 # Review Agents
 
-Claudin2 uses 4 specialized Claude reviewer archetypes that provide different perspectives during plan review and code review. Each archetype has a distinct focus area, ensuring comprehensive coverage across quality dimensions.
+Claudin uses 4 specialized Claude reviewer archetypes that provide different perspectives during plan review and code review. Each archetype has a distinct focus area, ensuring comprehensive coverage across quality dimensions.
 
 ## The 4 Archetypes
 

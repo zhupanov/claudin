@@ -1,6 +1,6 @@
-# Claudin2
+# Claudin
 
-Claudin2 is a Claude Code workflow automation framework that orchestrates multi-agent design, code review, and implementation through collaborative AI-driven processes.
+Claudin is a Claude Code workflow automation framework that orchestrates multi-agent design, code review, and implementation through collaborative AI-driven processes.
 
 ## Features
 
@@ -39,7 +39,33 @@ Internal agent definitions used by skills like `/design`, `/review`, and `/loop-
 
 ## Environment Variables
 
-*Coming soon.*
+Claudin uses two environment variables for Slack integration. Both are optional — when not set, Slack-related features are skipped with warnings and all other workflow steps continue normally.
+
+### `CLAUDIN_SLACK_BOT_TOKEN`
+
+A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack API calls.
+
+**When set:**
+- `/implement` and `/shazam` post PR announcements to Slack after creating a PR
+- `/shazam` adds a `:merged:` emoji reaction to the Slack announcement after the PR is merged
+- The token is validated during session setup and its availability is propagated to child skills
+
+**When not set:**
+- Slack announcement steps are skipped with a warning (e.g., `⚠ CLAUDIN_SLACK_BOT_TOKEN is not set. Slack announcement will be skipped.`)
+- The `:merged:` emoji step in `/shazam` is skipped
+- All other workflow steps (design, implementation, code review, CI monitoring, merge) proceed normally
+
+### `CLAUDIN_SLACK_CHANNEL_ID`
+
+The Slack channel ID (e.g., `C0123456789`) where PR announcements and emoji reactions are posted.
+
+**When set:**
+- PR announcements are posted to this channel
+- The `:merged:` emoji reaction targets announcements in this channel
+
+**When not set:**
+- Slack announcements are skipped even if `CLAUDIN_SLACK_BOT_TOKEN` is set (the bot token alone is not sufficient — a target channel is required)
+- A warning is printed: `WARNING: CLAUDIN_SLACK_CHANNEL_ID is not set. Slack announcement skipped.`
 
 ## Detailed Documentation
 
