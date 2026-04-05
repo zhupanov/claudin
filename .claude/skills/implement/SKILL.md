@@ -427,7 +427,7 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
    - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ Step 10 — PR was merged externally.` and proceed to Step 11.
 
-   - **`ACTION=rebase`**: Main advanced. Run `$PWD/.claude/scripts/generic/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `$PWD/.claude/scripts/generic/git-rebase-abort.sh`, print warning, and proceed to Step 11 (bail). On exit 2: retry once, then bail. On exit 3: bail.
+   - **`ACTION=rebase`**: Main advanced. Run `$PWD/.claude/scripts/generic/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `$PWD/.claude/scripts/generic/git-rebase-abort.sh`, print warning, and proceed to Step 11 (bail). On exit 2: retry once, then bail. On exit 3: bail. **Note**: `/implement` deliberately bails on all rebase conflicts because it does not merge — intelligent conflict resolution with reviewer panel validation is `/shazam`'s responsibility in Step 2. When invoked via `/shazam`, conflicts encountered after `/implement` exits will be handled by `/shazam`'s enhanced conflict resolution procedure.
 
    - **`ACTION=rebase_then_evaluate`**: Run rebase first (same as above), then fall through to evaluate the CI failure.
 

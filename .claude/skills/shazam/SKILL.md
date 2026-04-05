@@ -14,7 +14,7 @@ The feature to implement is described by `$ARGUMENTS`.
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token.
 
 - `--quick`: Set a mental flag `quick_mode=true`. Forward this flag to `/implement` in Step 1. When `quick_mode=true`, `/implement` skips `/design` (produces an inline plan) and simplifies code review to one round with 4 Claude subagents only (no external reviewers, no voting panel). All other steps (CI, merge, Slack, cleanup) run normally.
-- `--auto`: Set a mental flag `auto_mode=true`. Forward this flag to `/implement` in Step 1. When `auto_mode=true`, `/implement` and `/design` suppress interactive clarifying questions and run non-interactively. The default (no `--auto`) enables interactive questions in `/design` (before sketches and after plan review) and `/implement` (before implementation). Other than forwarding to `/implement`, `/shazam` does not behave differently with `--auto`.
+- `--auto`: Set a mental flag `auto_mode=true`. Forward this flag to `/implement` in Step 1. When `auto_mode=true`, `/implement` and `/design` suppress interactive clarifying questions and run non-interactively. The default (no `--auto`) enables interactive questions in `/design` (before sketches and after plan review) and `/implement` (before implementation). In Step 2, when merge conflicts require user input for uncertain resolutions, `auto_mode=true` suppresses `AskUserQuestion` and uses best-effort resolution instead (bailing if confidence is too low).
 - `--no-merge`: Set a mental flag `no_merge=true`. When `no_merge=true`, Steps 2–5 are skipped (CI monitoring, :merged: emoji, local cleanup, and main verification). Steps 6–7 (report, cleanup) still run.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill and will be forwarded to `session-setup.sh` via `--caller-env` and to child skills. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
 
@@ -145,9 +145,100 @@ After handling any non-merge/non-bail action (rebase, evaluate_failure, etc.), *
    ```
    Handle exit codes:
    - **Exit 0**: Rebase and push succeeded.
-   - **Exit 1**: Rebase had conflicts (rebase is still in progress). Read `CONFLICT_FILES=` from stdout. If all conflicted files are trivial (`version.go`, `go.sum`, auto-generated), resolve them manually, stage the resolved files with `git add`, then run `$PWD/.claude/scripts/generic/rebase-push.sh --continue` to continue the rebase and push. Handle the same exit codes (0/1/2/3) from the `--continue` invocation. Restart the loop on success. If any non-trivial files are conflicted, run `git rebase --abort` and **bail out** (Step 2d).
-   - **Exit 2**: `force-with-lease` push failed. Run the script again once (it fetches + rebases internally). If it fails twice, **bail out**.
+   - **Exit 1**: Rebase had conflicts (rebase is still in progress). Read `CONFLICT_FILES=` from stdout. Enter the **Conflict Resolution Procedure** below.
+   - **Exit 2**: `force-with-lease` push failed. Run the script again once (it fetches + rebases internally). If it fails twice, **bail out** (Step 2d).
    - **Exit 3**: Rebase failed for non-conflict reasons (rebase already aborted). Read `REBASE_ERROR=` from stderr. **Bail out** (Step 2d).
+
+### Conflict Resolution Procedure
+
+When `rebase-push.sh` exits with code 1, the rebase is paused with conflicts. This procedure resolves them intelligently, with user escalation when uncertain and a full reviewer panel to validate the resolution.
+
+**Bail invariant**: Any bail from any phase below must call `$PWD/.claude/scripts/generic/git-rebase-abort.sh` before proceeding to Step 2d, since the rebase is in progress throughout all phases.
+
+#### Phase 1 — Conflict Classification and Resolution
+
+For each file in `CONFLICT_FILES`:
+
+1. Run `git ls-files -u` to determine the conflict type per file (check which index stages 1/2/3 exist).
+2. **Unsupported conflict types** — If any stage is missing (modify/delete, rename/delete conflicts) or the file is binary (check via `file --mime-type` or absence of text markers), classify as **uncertain**. Do not attempt auto-resolution.
+3. **Trivial files** — If the file is `version.go`, `go.sum`, or auto-generated, classify as **trivial** and auto-resolve immediately. Stage with `git add`.
+4. **Text conflicts with both sides available** — Read both sides using explicit labels:
+   - `git show :2:<file>` → **upstream (main)** version. If this command fails, classify as uncertain.
+   - `git show :3:<file>` → **feature branch commit** version. If this command fails, classify as uncertain.
+   - Also read the conflict markers in the working tree file for context.
+5. **Classify confidence**:
+   - **Trivial**: `version.go`, `go.sum`, auto-generated files.
+   - **High-confidence**: Changes are in non-overlapping regions (both sides added content in different locations), or the conflict markers show only whitespace, import-order, or formatting differences. Both sides' intent is clear and composable.
+   - **Uncertain**: Overlapping semantic changes to the same function/block, any file where correctness cannot be verified without domain knowledge, any file where `:2:` or `:3:` reads failed, any non-text/binary conflict.
+6. Auto-resolve trivial and high-confidence files. Stage resolved files with `git add`.
+7. **IMPORTANT**: Always use "upstream (main)" and "feature branch commit" labels when describing the two sides of a conflict — never use "ours"/"theirs" which have inverted semantics during rebase and will cause confusion.
+
+#### Phase 2 — User Escalation (for uncertain conflicts)
+
+**If there are no uncertain conflicts**, skip to Phase 3.
+
+- **If `auto_mode=false`**: Call `AskUserQuestion` with the upstream (main) version, the feature branch commit version, and a proposed resolution for each uncertain file, batched into a single call. Use explicit "upstream (main)" and "feature branch commit" labels. Incorporate the user's answer, write the resolved file, and stage with `git add`. If the user indicates the conflict cannot be resolved or asks to abort, run `git rebase --abort` and **bail out** (Step 2d).
+- **If `auto_mode=true`**: Attempt best-effort resolution for uncertain conflicts. If confidence is too low for any file (e.g., modify/delete conflict, conflicting business logic with no composable path, one side deleted code the other modified), run `git rebase --abort` and **bail out** (Step 2d).
+
+#### Phase 3 — Reviewer Panel on Conflict Resolution
+
+**If ALL conflicts were trivial** (no high-confidence or uncertain conflicts): Skip Phase 3 entirely. Proceed to Phase 4.
+
+**Otherwise**, run a full reviewer panel to validate the non-trivial conflict resolutions:
+
+**3a. Create temp directory**: Create `$SHAZAM_TMPDIR/conflict-review/` for reviewer artifacts. If it already exists (from a prior conflict resolution in this rebase loop), remove it and recreate.
+
+**3b. Check external reviewer availability**: Run `$PWD/.claude/scripts/generic/check-reviewers.sh` to set `codex_available` and `cursor_available` flags. Follow the Binary Check procedure in `.claude/skills/shared/external-reviewers.md`.
+
+**3c. Prepare review context**: For each non-trivial conflicted file, prepare a per-file conflict context block:
+```
+### <file-path>
+**Conflict type**: <text overlap / import reorder / etc.>
+**Upstream (main) version** (relevant section):
+<content from git show :2:<file>, focused on the conflicting region>
+
+**Feature branch commit version** (relevant section):
+<content from git show :3:<file>, focused on the conflicting region>
+
+**Proposed resolution**:
+<the resolved content that was staged>
+
+**Intent**: <one-line description of what each side was trying to do>
+```
+
+Also capture `git diff --cached` as supplementary context showing the full staged state.
+
+**3d. Launch reviewers**: Launch 4 Claude subagent reviewers + Codex + Cursor (if available) using the reviewer archetypes from `.claude/skills/shared/reviewer-templates.md` with:
+- `{REVIEW_TARGET}` = `"merge conflict resolution"`
+- `{CONTEXT_BLOCK}` = the per-file conflict context blocks from 3c + supplementary `git diff --cached`
+- `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is with the resolution"` + `"Suggested correction"`
+
+Follow `.claude/skills/shared/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$SHAZAM_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
+
+**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$SHAZAM_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
+
+**3e. Voting**: Run the voting protocol from `.claude/skills/shared/voting-protocol.md` with code review voter composition:
+- **Voter 1**: Claude Generic code reviewer subagent (fresh Agent invocation)
+- **Voter 2**: Codex (if available) — via `run-external-reviewer.sh`
+- **Voter 3**: Cursor (if available) — via `run-external-reviewer.sh`
+
+If fewer than 2 voters are available: skip voting, accept all reviewer findings (per `voting-protocol.md` fallback), implement them, and continue to Phase 4.
+
+If voting **accepts findings** (2+ YES votes): re-resolve the affected files incorporating the accepted suggestions, re-stage, and re-run review (3c through 3e). Allow up to **2 total resolution-review rounds**.
+
+After 2 rounds with unresolved findings still being raised: run `git rebase --abort` and **bail out** (Step 2d).
+
+If the reviewer panel finds no issues or all findings are addressed: proceed to Phase 4.
+
+**3f. Cleanup**: Remove `$SHAZAM_TMPDIR/conflict-review/` after Phase 3 completes (on both success and bail paths, before proceeding).
+
+#### Phase 4 — Continue Rebase
+
+Run `$PWD/.claude/scripts/generic/rebase-push.sh --continue` and handle exit codes:
+- **Exit 0**: Rebase and push succeeded. Increment `rebase_count` and `iteration`, reset `transient_retries`. Restart the CI wait loop.
+- **Exit 1**: A later commit in the rebase conflicted. Loop back to **Phase 1** for the new conflict (the Conflict Resolution Procedure starts again for the new set of `CONFLICT_FILES`).
+- **Exit 2**: Push `--force-with-lease` failed. Retry `rebase-push.sh --continue` once. If it fails twice, **bail out** (Step 2d — call `git rebase --abort` first if the rebase is still in progress).
+- **Exit 3**: Check the `REBASE_ERROR` output. If it indicates an empty or already-applied commit (e.g., "nothing to commit", "No changes"), run `git rebase --skip` (if `git rebase --skip` itself exits non-zero, run `$PWD/.claude/scripts/generic/git-rebase-abort.sh` and **bail out** — Step 2d) and then `$PWD/.claude/scripts/generic/rebase-push.sh --continue` again (handle the same exit codes). Otherwise, **bail out** (Step 2d).
 
 ### 2b — Merge
 
