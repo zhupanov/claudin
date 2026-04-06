@@ -82,10 +82,36 @@ echo "--- Skill directories (directory-level symlinks) ---"
 for skill_dir in "$TEST_REPO_DIR"/claudin/.claude/skills/*/; do
     skill_name="$(basename "$skill_dir")"
     [[ "$skill_name" == "shared" ]] && continue
+    [[ "$skill_name" == "relevant-checks" ]] && continue
     if [[ -f "$skill_dir/SKILL.md" ]]; then
         check_symlink ".claude/skills/$skill_name" "skill dir: $skill_name"
     fi
 done
+
+# relevant-checks should NOT be symlinked (repo-specific skill)
+echo "--- relevant-checks ---"
+check_not_exists ".claude/skills/relevant-checks" "relevant-checks should not be symlinked"
+
+# Verify setup-claudin.sh does not conflict with a pre-existing relevant-checks directory
+echo "--- relevant-checks conflict test ---"
+mkdir -p ".claude/skills/relevant-checks"
+echo "# Client-specific checks" > ".claude/skills/relevant-checks/SKILL.md"
+# Re-run — should succeed without error despite the pre-existing directory
+./claudin/setup-claudin.sh > /dev/null 2>&1
+rc=$?
+if [[ $rc -eq 0 ]]; then
+    echo "  PASS: setup-claudin.sh succeeds with pre-existing relevant-checks"
+else
+    echo "  FAIL: setup-claudin.sh exited $rc with pre-existing relevant-checks"
+    FAILURES=$((FAILURES + 1))
+fi
+# Verify the client's relevant-checks was not replaced
+if [[ ! -L ".claude/skills/relevant-checks" && -f ".claude/skills/relevant-checks/SKILL.md" ]]; then
+    echo "  PASS: client's relevant-checks preserved (not a symlink)"
+else
+    echo "  FAIL: client's relevant-checks was replaced or symlinked"
+    FAILURES=$((FAILURES + 1))
+fi
 
 # Scripts under scripts/generic/claudin/ should be file-level symlinks
 echo "--- Scripts (file-level symlinks under scripts/generic/claudin/) ---"

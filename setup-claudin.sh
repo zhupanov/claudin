@@ -168,6 +168,11 @@ while IFS= read -r -d '' entry; do
 
         # Only process first-level entries under skills/
         if [[ "$local_under_skills" == "$first_component" ]]; then
+            # Skip relevant-checks — repo-specific skill, client must maintain their own
+            if [[ "$first_component" == "relevant-checks" ]]; then
+                echo "  skipped: .claude/skills/relevant-checks (repo-specific, maintain your own)"
+                continue
+            fi
             if [[ -d "$entry" && -f "$entry/SKILL.md" ]]; then
                 # Skill directory — directory-level symlink
                 create_link "$link_path" "$target_path" "skill dir"
