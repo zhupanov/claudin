@@ -1,6 +1,6 @@
 # Claudin → Larch Migration Plan
 
-The repository was renamed from `claudin` to `larch` via the GitHub UI. This document tracks the internal rename of all `claudin` references to `larch`, which is being done in two PRs to avoid disrupting in-flight skill sessions that depend on the current `claudin/` script paths.
+The repository was renamed from `claudin` to `larch` via the GitHub UI. This document tracks the internal rename of all `claudin` references to `larch`, which is being done in three PRs (PR #1, PR #2a, PR #2b) to avoid disrupting in-flight skill sessions that depend on the current `claudin/` script paths.
 
 ## PR #1 — Additive copy (this PR)
 
@@ -26,7 +26,7 @@ All three rules are applied as literal `sed` substitutions (not regex). The orde
 
 ### Dual-namespace behavior of `setup-larch.sh` during PR #1
 
-During the PR #1 → PR #2 transition window, both `.claude/scripts/generic/claudin/` and `.claude/scripts/generic/larch/` subtrees coexist inside the (renamed) larch submodule. Because `setup-larch.sh` is a literal `sed`-substituted copy of `setup-claudin.sh`, it walks the entire submodule's `.claude/` tree (via the same `find` loop its parent uses) and creates symlinks for files in **both** subtrees.
+During the PR #1 → PR #2a transition window, both `.claude/scripts/generic/claudin/` and `.claude/scripts/generic/larch/` subtrees coexist inside the (renamed) larch submodule. Because `setup-larch.sh` is a literal `sed`-substituted copy of `setup-claudin.sh`, it walks the entire submodule's `.claude/` tree (via the same `find` loop its parent uses) and creates symlinks for files in **both** subtrees.
 
 This means a client repo running `setup-larch.sh` during the PR #1 window will end up with symlinks at **both** `.claude/scripts/generic/claudin/*` and `.claude/scripts/generic/larch/*`, both resolving into the (renamed) larch submodule. Similarly for the two shared-doc trees under `.claude/skills/shared/`.
 
@@ -35,8 +35,8 @@ This dual-namespace behavior is **intentional** and **benign**:
 - New larch-pathed callers also work because the larch symlinks and their target files also exist.
 - It is the safest possible behavior for the dual-tree window: nothing that used to work stops working, and the new namespace is fully populated.
 
-**This dual-namespace behavior resolves naturally in PR #2** when the claudin subtree is deleted from the submodule:
-- `setup-larch.sh` in PR #2 sees only the larch tree and only creates larch symlinks.
+**This dual-namespace behavior resolves naturally in PR #2b** when the claudin subtree is deleted from the submodule:
+- `setup-larch.sh` after PR #2b sees only the larch tree and only creates larch symlinks.
 - Any orphan claudin symlinks in the client repo (carried over from PR #1) will be removed by Phase 2 (dead-symlink cleanup) of `setup-larch.sh` because their resolved targets — for example `larch/.claude/scripts/generic/claudin/foo.sh` — will then point at deleted files, and Phase 2 specifically removes symlinks whose resolved targets live inside the larch submodule and no longer exist.
 
 ### Behavioral callout: `CLAUDIN_*` environment variables become `LARCH_*` in the copies
@@ -49,7 +49,7 @@ The case-preserving substitution rewrites `CLAUDIN_*` environment variable names
 
 During the PR #1 window the new larch scripts are dead code (not invoked by any SKILL.md or hook — the in-flight skills still call the claudin paths), so this rename has **no runtime effect in PR #1**.
 
-Once PR #2 cuts over (SKILL.md files, agents, settings.json hooks, and docs are all re-pointed to the larch paths, and the claudin originals are deleted), operators running these scripts **must** set the `LARCH_*` environment variables in their shell/CI environment. If an operator's existing environment has `CLAUDIN_SLACK_BOT_TOKEN` set but not `LARCH_SLACK_BOT_TOKEN`, the new larch scripts will treat the Slack token as missing and skip Slack posting with a warning. Document this clearly in the PR #2 release notes.
+Once PR #2a cuts over (SKILL.md files, agents, settings.json hooks, and docs are all re-pointed to the larch paths) and PR #2b deletes the claudin originals, operators running these scripts **must** set the `LARCH_*` environment variables in their shell/CI environment. If an operator's existing environment has `CLAUDIN_SLACK_BOT_TOKEN` set but not `LARCH_SLACK_BOT_TOKEN`, the new larch scripts will treat the Slack token as missing and skip Slack posting with a warning. Document this clearly in the PR #2a and PR #2b release notes.
 
 ## PR #2a — Cutover only (this PR)
 
@@ -94,8 +94,8 @@ The in-flight `/shazam` and `/implement` skill sessions running at the moment th
 
 Initially PR #2 was planned as a single cutover+deletion PR, but during plan review (by the 5-reviewer voting panel) a critical hazard was surfaced: **the running /shazam session has SKILL.md files already loaded in its context window with claudin-path references for ALL later steps** (version bump, CI monitor, Slack, cleanup, merge loop). Rewriting the SKILL.md files on disk in the same session does NOT retarget the already-running agent — it continues to invoke claudin paths from its in-memory instructions. Deleting the claudin script tree in the same live session that depends on those scripts would cause every subsequent `.claude/scripts/generic/claudin/*` invocation to fail with ENOENT after the deletion commit lands.
 
-PR #2 was therefore split into two:
+PR #2 was therefore split into PR #2a and PR #2b:
 
 - **PR #2a** (this PR) — Cutover only: rewrite all references to point at larch paths, but leave the claudin script tree intact on disk. The running /shazam session's in-memory SKILL.md still references claudin paths, but those claudin scripts still exist, so everything works. The final `grep -ri claudin` zero-match verification is deferred.
 
-- **PR #2b** (follow-up, separate session) — Cleanup: delete the claudin script tree, remove the claudin Bash permission entries from settings.json, and verify the final grep. PR #2b must be run in a **fresh /shazam or /implement session** — one that loads the rewritten (larch-referencing) SKILL.md files from the outset, so all its tool invocations use larch paths and the claudin scripts can be safely deleted.
+- **PR #2b** (follow-up, separate session) — Cleanup: delete the claudin script tree (`.claude/scripts/generic/claudin/` and `.claude/skills/shared/claudin/`) along with the legacy entry-point scripts (`setup-claudin.sh` and `tests/test-setup-claudin.sh`), remove the claudin Bash permission entries from settings.json, and verify the final grep. (See the PR #2b checklist above for the full item list.) PR #2b must be run in a **fresh /shazam or /implement session** — one that loads the rewritten (larch-referencing) SKILL.md files from the outset, so all its tool invocations use larch paths and the claudin scripts can be safely deleted.
