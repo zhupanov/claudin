@@ -184,11 +184,21 @@ mkdir -p .claude/scripts/generic/legacy-ns .claude/skills/shared/legacy-ns
 ln -s "../../../../larch/.claude/scripts/generic/legacy-ns/nonexistent-post-migration.sh" ".claude/scripts/generic/legacy-ns/stale-migration.sh"
 ln -s "../../../../larch/.claude/skills/shared/legacy-ns/nonexistent-post-migration.md" ".claude/skills/shared/legacy-ns/stale-migration.md"
 
+# --- Phase 2 migration scenario: stale renamed-skill symlink ---
+# Simulate a client repo that was upgraded across a skill rename. Before the
+# rename, .claude/skills/shazam was a valid directory-level symlink pointing
+# into larch. After the larch source rename (shazam → implement-and-merge),
+# the old symlink is dead. Phase 2 must remove it, while Phase 1 creates the
+# new .claude/skills/implement-and-merge symlink.
+ln -s "../../larch/.claude/skills/shazam" ".claude/skills/shazam"
+
 # Re-run setup-larch.sh — Phase 2 should remove all stale symlinks
 ./larch/setup-larch.sh
 check_not_exists ".claude/scripts/generic/stale-old.sh" "stale symlink should be removed by Phase 2"
 check_not_exists ".claude/scripts/generic/legacy-ns/stale-migration.sh" "stale legacy-ns-namespace script symlink should be removed by Phase 2"
 check_not_exists ".claude/skills/shared/legacy-ns/stale-migration.md" "stale legacy-ns-namespace shared-doc symlink should be removed by Phase 2"
+check_not_exists ".claude/skills/shazam" "stale renamed-skill symlink (shazam) should be removed by Phase 2"
+check_symlink ".claude/skills/implement-and-merge" "renamed skill (implement-and-merge) should still be linked"
 
 # --- Summary ---
 echo ""

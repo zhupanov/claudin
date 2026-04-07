@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement a feature from design through PR creation, CI monitoring, and Slack announcement, with code review and version bump. Monitors CI and fixes failures so the PR is green. Does not merge — use /shazam for the full end-to-end workflow including merge.
+description: Implement a feature from design through PR creation, CI monitoring, and Slack announcement, with code review and version bump. Monitors CI and fixes failures so the PR is green. Does not merge — use /implement-and-merge for the full end-to-end workflow including merge.
 argument-hint: "[--quick] [--auto] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
@@ -15,8 +15,8 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 - `--quick`: Set a mental flag `quick_mode=true`. When `quick_mode=true`: Step 1 skips `/design` (main agent creates branch and inline plan directly), Step 5 skips `/review` (main agent runs a simplified one-round review with 2 Claude subagents only — no external reviewers, no voting panel), and Step 7a skips the Code Flow Diagram.
 - `--auto`: Set a mental flag `auto_mode=true`. When `auto_mode=true`: (a) forward `--auto` to `/design` invocation in Step 1, suppressing `/design`'s interactive question checkpoints; (b) suppress `/implement`'s own opportunistic questions in Step 2. When `--quick` is also set and `/design` is skipped, `--auto` still suppresses `/implement`'s Step 2 questions. The default (no `--auto`) enables interactive questions.
-- `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/shazam`) and will be forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
-- `--no-merge` (compatibility): Strip it and print: `**Note: The --no-merge flag has moved to /shazam. /implement creates a PR, monitors CI, and posts a Slack announcement but does not merge. Use /shazam <description> for the full workflow including merge.**` Then proceed with the remainder as the feature description.
+- `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement-and-merge`) and will be forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
+- `--no-merge` (compatibility): Strip it and print: `**Note: The --no-merge flag has moved to /implement-and-merge. /implement creates a PR, monitors CI, and posts a Slack announcement but does not merge. Use /implement-and-merge <description> for the full workflow including merge.**` Then proceed with the remainder as the feature description.
 
 ## Progress Reporting
 
@@ -289,7 +289,7 @@ Print the diagram under a `## Code Flow Diagram` header with a mermaid code fenc
 
 ### Rebase onto latest main (before version bump)
 
-This rebase runs as a final safety net before the version bump and PR creation, even if a previous rebase just ran. It ensures the branch is as fresh as possible before the version bump becomes the last commit. Exception: if the branch is already on origin (e.g., re-run of `/implement` on an existing PR branch), the `--skip-if-pushed` flag causes this rebase to be skipped — freshness of already-pushed branches is `/shazam`'s responsibility during its CI+rebase+merge loop.
+This rebase runs as a final safety net before the version bump and PR creation, even if a previous rebase just ran. It ensures the branch is as fresh as possible before the version bump becomes the last commit. Exception: if the branch is already on origin (e.g., re-run of `/implement` on an existing PR branch), the `--skip-if-pushed` flag causes this rebase to be skipped — freshness of already-pushed branches is `/implement-and-merge`'s responsibility during its CI+rebase+merge loop.
 
 Print: `🔃 Rebasing onto latest main before version bump...`
 
@@ -457,7 +457,7 @@ Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The scr
 $PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPL_TMPDIR/pr-body.md"
 ```
 
-Print the PR URL when done. Then print the PR number, URL, and title in a machine-parseable format (consumed by `/shazam` Step 1 — keep in sync):
+Print the PR URL when done. Then print the PR number, URL, and title in a machine-parseable format (consumed by `/implement-and-merge` Step 1 — keep in sync):
 
 ```
 PR_NUMBER=<N>
@@ -469,7 +469,7 @@ PR_TITLE=<title>
 
 **If `repo_unavailable=true`**: Print `⏭️ Step 10 — Skipped (repository name could not be determined).` and proceed to Step 11.
 
-Monitor CI and fix failures so the PR is green when `/implement` exits. This step does **NOT merge** — merging remains `/shazam`'s responsibility.
+Monitor CI and fix failures so the PR is green when `/implement` exits. This step does **NOT merge** — merging remains `/implement-and-merge`'s responsibility.
 
 Track these counters (all start at 0):
 - `iteration` — passed to `ci-wait.sh`, returned as `ITERATION`
@@ -494,7 +494,7 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
    - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ Step 10 — PR was merged externally.` and proceed to Step 11.
 
-   - **`ACTION=rebase`**: Main advanced. Run `$PWD/.claude/scripts/generic/larch/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `$PWD/.claude/scripts/generic/larch/git-rebase-abort.sh`, print warning, and proceed to Step 11 (bail). On exit 2: retry once, then bail. On exit 3: bail. **Note**: `/implement` deliberately bails on all rebase conflicts because it does not merge — intelligent conflict resolution with reviewer panel validation is `/shazam`'s responsibility in Step 2. When invoked via `/shazam`, conflicts encountered after `/implement` exits will be handled by `/shazam`'s enhanced conflict resolution procedure.
+   - **`ACTION=rebase`**: Main advanced. Run `$PWD/.claude/scripts/generic/larch/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `$PWD/.claude/scripts/generic/larch/git-rebase-abort.sh`, print warning, and proceed to Step 11 (bail). On exit 2: retry once, then bail. On exit 3: bail. **Note**: `/implement` deliberately bails on all rebase conflicts because it does not merge — intelligent conflict resolution with reviewer panel validation is `/implement-and-merge`'s responsibility in Step 2. When invoked via `/implement-and-merge`, conflicts encountered after `/implement` exits will be handled by `/implement-and-merge`'s enhanced conflict resolution procedure.
 
    - **`ACTION=rebase_then_evaluate`**: Run rebase first (same as above), then fall through to evaluate the CI failure.
 
@@ -526,7 +526,7 @@ Parse the output for `SLACK_TS=<value>` (emitted by `post-pr-announce.sh` — ke
 
 **If the script exits non-zero or `SLACK_TS` is empty**: Print `**⚠ Slack announcement failed. Continuing.**` Set `SLACK_TS` to empty. Log the failure to `$IMPL_TMPDIR/execution-issues.md` under the `Tool Failures` category.
 
-Print the Slack timestamp in a machine-parseable format (consumed by `/shazam` Step 1 — keep in sync). Always output this line, even when empty:
+Print the Slack timestamp in a machine-parseable format (consumed by `/implement-and-merge` Step 1 — keep in sync). Always output this line, even when empty:
 
 ```
 SLACK_TS=<value>

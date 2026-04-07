@@ -1,11 +1,11 @@
 ---
-name: shazam
+name: implement-and-merge
 description: Full end-to-end feature workflow — design, implement, PR, Slack announce, CI+rebase+merge, and cleanup.
 argument-hint: "[--quick] [--auto] [--no-merge] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
-# Shazam Skill
+# Implement-and-Merge Skill
 
 Full end-to-end feature implementation: design, plan review, code, validate, commit, code review, validate, commit, version bump, PR, Slack announce (via /implement), CI+rebase+merge, cleanup.
 
@@ -43,7 +43,7 @@ Suggested emoji palette (use consistently):
 Run the shared session setup script. If `SESSION_ENV_PATH` is non-empty (passed via `--session-env`), include `--caller-env` to reuse already-discovered values:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/session-setup.sh --prefix claude-shazam [--caller-env "$SESSION_ENV_PATH"]
+$PWD/.claude/scripts/generic/larch/session-setup.sh --prefix claude-implement-and-merge [--caller-env "$SESSION_ENV_PATH"]
 ```
 
 Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-empty.
@@ -51,16 +51,16 @@ Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-emp
 If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
 
 Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`. Set:
-- `SHAZAM_TMPDIR` = `SESSION_TMPDIR`
+- `IMPLEMENT_AND_MERGE_TMPDIR` = `SESSION_TMPDIR`
 - If `SLACK_OK=false`, print: `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). :merged: emoji (Step 3) will be skipped.**` Set a mental flag `slack_available=false`.
 - If `REPO_UNAVAILABLE=true`, print `**❌ Could not determine repository name. Cannot proceed with CI/merge steps.**` Set a mental flag `repo_unavailable=true`.
 
 ### Write Session Env for Child Skills
 
-Write the discovered values to `$SHAZAM_TMPDIR/session-env.sh` so they can be forwarded to `/implement`:
+Write the discovered values to `$IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh` so they can be forwarded to `/implement`:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/write-session-env.sh --output "$SHAZAM_TMPDIR/session-env.sh" \
+$PWD/.claude/scripts/generic/larch/write-session-env.sh --output "$IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh" \
   --slack-ok <value> --slack-missing <value> --repo <value> --repo-unavailable <value>
 ```
 
@@ -70,7 +70,7 @@ This file will be passed to `/implement` via `--session-env` in Step 1.
 
 **CRITICAL: You MUST invoke `/implement` using the Skill tool for the initial implementation, version bump, PR creation, and Slack announcement. Do NOT bypass `/implement` by directly editing files, staging commits, or opening PRs yourself. In normal mode, all quality gates (design, plan review, code review) are mandatory. In `--quick` mode, `/design` is skipped and code review is simplified — but `/implement` must still be invoked.**
 
-Invoke the `/implement` skill with `--session-env $SHAZAM_TMPDIR/session-env.sh` prepended to the feature description. **If `quick_mode=true`, also prepend `--quick`** so `/implement` runs in quick mode. **If `auto_mode=true`, also prepend `--auto`** so `/implement` and `/design` suppress interactive questions. This will:
+Invoke the `/implement` skill with `--session-env $IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh` prepended to the feature description. **If `quick_mode=true`, also prepend `--quick`** so `/implement` runs in quick mode. **If `auto_mode=true`, also prepend `--auto`** so `/implement` and `/design` suppress interactive questions. This will:
 - Create a branch and design the plan (via `/design` in normal mode, or inline in `--quick` mode)
 - Implement the feature, validate, commit
 - **Rebase onto latest main** at multiple checkpoints (before implementation, after each commit, before version bump) to minimize merge conflicts when this step enters the CI+rebase+merge loop
@@ -187,7 +187,7 @@ For each file in `CONFLICT_FILES`:
 
 **Otherwise**, run a full reviewer panel to validate the non-trivial conflict resolutions:
 
-**3a. Create temp directory**: Create `$SHAZAM_TMPDIR/conflict-review/` for reviewer artifacts. If it already exists (from a prior conflict resolution in this rebase loop), remove it and recreate.
+**3a. Create temp directory**: Create `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/` for reviewer artifacts. If it already exists (from a prior conflict resolution in this rebase loop), remove it and recreate.
 
 **3b. Check external reviewer availability**: Run `$PWD/.claude/scripts/generic/larch/check-reviewers.sh` to set `codex_available` and `cursor_available` flags. Follow the Binary Check procedure in `.claude/skills/shared/larch/external-reviewers.md`.
 
@@ -214,9 +214,9 @@ Also capture `git diff --cached` as supplementary context showing the full stage
 - `{CONTEXT_BLOCK}` = the per-file conflict context blocks from 3c + supplementary `git diff --cached`
 - `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is with the resolution"` + `"Suggested correction"`
 
-Follow `.claude/skills/shared/larch/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$SHAZAM_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
+Follow `.claude/skills/shared/larch/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
 
-**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$SHAZAM_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
+**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
 
 **3e. Voting**: Run the voting protocol from `.claude/skills/shared/larch/voting-protocol.md` with code review voter composition:
 - **Voter 1**: Claude General Reviewer subagent (fresh Agent invocation)
@@ -231,7 +231,7 @@ After 2 rounds with unresolved findings still being raised: run `git rebase --ab
 
 If the reviewer panel finds no issues or all findings are addressed: proceed to Phase 4.
 
-**3f. Cleanup**: Remove `$SHAZAM_TMPDIR/conflict-review/` after Phase 3 completes (on both success and bail paths, before proceeding).
+**3f. Cleanup**: Remove `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/` after Phase 3 completes (on both success and bail paths, before proceeding).
 
 #### Phase 4 — Continue Rebase
 
@@ -362,7 +362,7 @@ If both phases reported all suggestions implemented, print: `📊 Step 6 — All
 Remove the session temp directory and all files within it:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$SHAZAM_TMPDIR"
+$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_AND_MERGE_TMPDIR"
 ```
 
 **Repeat any external reviewer warnings** from earlier in the workflow (from `/design` or `/review` phases) so they are visible at the end. **If `quick_mode=true`**, there are no external reviewer warnings to repeat (no external reviewers were used). For example:
@@ -371,4 +371,4 @@ $PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$SHAZAM_TMPDIR"
 
 If `no_merge=true`, remind: `**Note: --no-merge was set. PR was created but not merged. Merge manually when ready.**`
 
-Print: `🏁 Step 7 — Shazam complete!`
+Print: `🏁 Step 7 — Implement-and-merge complete!`

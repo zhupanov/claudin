@@ -8,13 +8,13 @@ Skills are not invoked in a flat sequence. They form a hierarchical call graph w
 
 ```mermaid
 graph TD
-    SHAZAM["/shazam"] -->|invokes| IMPLEMENT["/implement"]
+    IMPL_MERGE["/implement-and-merge"] -->|invokes| IMPLEMENT["/implement"]
     IMPLEMENT -->|invokes| DESIGN["/design"]
     IMPLEMENT -->|invokes| REVIEW["/review"]
     IMPLEMENT -->|invokes| CHECKS["/relevant-checks"]
-    LOOP["/loop-review"] -->|invokes| SHAZAM
+    LOOP["/loop-review"] -->|invokes| IMPL_MERGE
 
-    style SHAZAM fill:#2d5a27,color:#fff
+    style IMPL_MERGE fill:#2d5a27,color:#fff
     style LOOP fill:#2d5a27,color:#fff
     style IMPLEMENT fill:#1a4a6e,color:#fff
     style DESIGN fill:#4a3a6e,color:#fff
@@ -22,13 +22,13 @@ graph TD
     style CHECKS fill:#555,color:#fff
 ```
 
-- **`/shazam`** is the top-level orchestrator. It invokes `/implement` for the full workflow (design, code, review, PR, CI, Slack), then handles CI monitoring, rebasing, merging, and cleanup.
+- **`/implement-and-merge`** is the top-level orchestrator. It invokes `/implement` for the full workflow (design, code, review, PR, CI, Slack), then handles CI monitoring, rebasing, merging, and cleanup.
 - **`/implement`** invokes `/design` for planning, `/review` for code review, and `/relevant-checks` for validation. It creates the PR and monitors CI, but does not merge.
-- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/shazam` to implement accepted improvements — accumulating up to 3 slices per `/shazam` invocation before flushing.
+- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/implement-and-merge` to implement accepted improvements — accumulating up to 3 slices per `/implement-and-merge` invocation before flushing.
 
 ## End-to-End Flow
 
-The full lifecycle when running `/shazam <feature description>`:
+The full lifecycle when running `/implement-and-merge <feature description>`:
 
 ```mermaid
 flowchart TD
@@ -62,7 +62,7 @@ flowchart TD
 
     IMPL_PHASE --> MERGE_PHASE
 
-    subgraph MERGE_PHASE["Merge Phase (/shazam)"]
+    subgraph MERGE_PHASE["Merge Phase (/implement-and-merge)"]
         CI_WAIT[Wait for CI to pass] --> REBASE{Main advanced?}
         REBASE -->|Yes| DO_REBASE[Rebase + push]
         DO_REBASE --> CI_WAIT
@@ -77,7 +77,7 @@ flowchart TD
 
 ## Standalone Usage
 
-Not every task requires the full `/shazam` pipeline. Skills can be used independently:
+Not every task requires the full `/implement-and-merge` pipeline. Skills can be used independently:
 
 - **`/design <feature>`** — Plan a feature without implementing it. Creates a branch, runs collaborative sketches, writes and reviews the plan.
 - **`/implement <feature>`** — Implement and create a PR without merging. If a reviewed design plan is visible in the current session context, it skips `/design`.
@@ -90,9 +90,9 @@ Flags modify behavior across the skill hierarchy:
 
 | Flag | Available on | Effect |
 |---|---|---|
-| `--quick` | `/shazam`, `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 2 Claude subagents only (no external reviewers, no voting panel). |
-| `--auto` | `/shazam`, `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
-| `--no-merge` | `/shazam` | Creates PR but skips CI monitoring, merge, :merged: emoji, and local branch cleanup. |
+| `--quick` | `/implement-and-merge`, `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 2 Claude subagents only (no external reviewers, no voting panel). |
+| `--auto` | `/implement-and-merge`, `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
+| `--no-merge` | `/implement-and-merge` | Creates PR but skips CI monitoring, merge, :merged: emoji, and local branch cleanup. |
 
 ## Conditional Steps
 
