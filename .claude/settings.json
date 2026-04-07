@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash($PWD/.claude/scripts/generic/claudin/*)",
       "Bash($PWD/.claude/scripts/generic/larch/*)",
       "Bash($PWD/.claude/skills/*)",
       "Bash($PWD/.claude/skills/implement/scripts/*)",
@@ -29,7 +28,6 @@
       "Bash(CHECKS_JSON=:*)",
       "Bash(CHECKS_TEXT=:*)",
       "Bash(CI_STATUS=:*)",
-      "Bash(CLAUDIN_SLACK_USER_ID=:*)",
       "Bash(CLEAN_TOKEN=:*)",
       "Bash(CONFLICT_FILES=:*)",
       "Bash(CURSOR_PID=:*)",

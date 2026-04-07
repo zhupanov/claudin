@@ -79,14 +79,14 @@ Goal: Switch all internal references from `claudin` paths to `larch` paths, but 
 
 Goal: Remove the claudin-named originals. After this PR, `grep -ri claudin .` (excluding `.git/` and this migration doc) must return zero matches.
 
-- [TODO] Remove `Bash($PWD/.claude/scripts/generic/claudin/*)` permission entry from `.claude/settings.json`
-- [TODO] Remove `Bash(CLAUDIN_SLACK_USER_ID=:*)` from `.claude/settings.json` (verified vestigial in PR #2a — only used as bare assignment inside `slack-announce.sh`, never as inline env-var-prefix form)
-- [TODO] Delete `.claude/scripts/generic/claudin/` (directory and all 38 scripts)
-- [TODO] Delete `.claude/skills/shared/claudin/` (directory and all 3 docs)
-- [TODO] Delete `setup-claudin.sh`
-- [TODO] Delete `tests/test-setup-claudin.sh`
-- [TODO] Run `grep -ri claudin .` (excluding `.git/` and this migration doc) and verify zero matches
-- [TODO] Mark this section DONE and merge PR #2b
+- [DONE] Remove `Bash($PWD/.claude/scripts/generic/claudin/*)` permission entry from `.claude/settings.json`
+- [DONE] Remove `Bash(CLAUDIN_SLACK_USER_ID=:*)` from `.claude/settings.json` (verified vestigial in PR #2a — only used as bare assignment inside `slack-announce.sh`, never as inline env-var-prefix form)
+- [DONE] Delete `.claude/scripts/generic/claudin/` (directory and all 38 scripts)
+- [DONE] Delete `.claude/skills/shared/claudin/` (directory and all 3 docs)
+- [DONE] Delete `setup-claudin.sh`
+- [DONE] Delete `tests/test-setup-claudin.sh`
+- [DONE] Run `grep -ri claudin .` (excluding `.git/` and this migration doc) and verify zero matches
+- [DONE] Mark this section DONE and merge PR #2b
 
 ## Why three PRs (PR #1, PR #2a, PR #2b)?
 
