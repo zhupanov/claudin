@@ -1,12 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash($PWD/.claude/scripts/generic/larch/*)",
       "Bash($PWD/.claude/skills/*)",
-      "Bash($PWD/.claude/skills/implement/scripts/*)",
-      "Bash($PWD/.claude/skills/loop-review/scripts/*)",
+      "Bash($PWD/.claude/skills/bump-version/scripts/*)",
       "Bash($PWD/.claude/skills/relevant-checks/scripts/*)",
-      "Bash($PWD/scripts/larch/*)",
+      "Bash($PWD/scripts/*)",
       "Bash($PWD/skills/implement/scripts/*)",
       "Bash($PWD/skills/loop-review/scripts/*)",
       "Bash(./:*)",
@@ -181,6 +179,7 @@
       "Grep",
       "Read(///**)",
       "Read(//Applications/Cursor.app/Contents/Resources/app/bin/**)",
+      "Skill(bump-version)",
       "Skill(design)",
       "Skill(implement)",
       "Skill(loop-review)",
@@ -215,7 +214,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PWD/.claude/scripts/generic/larch/block-submodule-edit.sh"
+            "command": "$PWD/scripts/block-submodule-edit.sh"
           }
         ]
       },
@@ -224,7 +223,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PWD/.claude/scripts/generic/larch/block-submodule-edit.sh"
+            "command": "$PWD/scripts/block-submodule-edit.sh"
           }
         ]
       }
@@ -235,7 +234,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PWD/.claude/scripts/generic/larch/auto-goimports.sh"
+            "command": "$PWD/scripts/auto-goimports.sh"
           }
         ]
       },
@@ -244,7 +243,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PWD/.claude/scripts/generic/larch/auto-goimports.sh"
+            "command": "$PWD/scripts/auto-goimports.sh"
           }
         ]
       }

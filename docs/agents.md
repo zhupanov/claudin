@@ -46,7 +46,7 @@ Larch uses several categories of agents:
 
 ### Review Agents
 
-The 2 persistent [reviewer archetypes](review-agents.md) (General, Deep Analysis) launched during plan and code review. These are defined in `.claude/agents/*.md` with specific model assignments and tool access.
+The 2 persistent [reviewer archetypes](review-agents.md) (General, Deep Analysis) launched during plan and code review. These are defined in `agents/*.md` (discovered via `${CLAUDE_PLUGIN_ROOT}`) with specific model assignments and tool access.
 
 ### Sketch Agents
 

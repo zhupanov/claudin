@@ -18,7 +18,7 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 Ensure you are on the `main` branch with a clean working tree and the latest code:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/preflight.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/preflight.sh
 ```
 
 If it exits non-zero, print the `PREFLIGHT_ERROR` from stdout and abort.
@@ -28,7 +28,7 @@ If it exits non-zero, print the `PREFLIGHT_ERROR` from stdout and abort.
 Create a session-scoped temp directory:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-session-tmpdir.sh --prefix claude-loop-review
+${CLAUDE_PLUGIN_ROOT}/scripts/create-session-tmpdir.sh --prefix claude-loop-review
 ```
 
 Parse the output for `SESSION_TMPDIR`. Set `LR_TMPDIR` = `SESSION_TMPDIR`. Initialize tracking files:
@@ -105,7 +105,7 @@ Launch ALL available reviewers in a **single message**. **Spawn order matters fo
 Run Cursor **first** in the parallel message (it takes the longest):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$LR_TMPDIR/cursor-output-slice-N.txt" --timeout 900 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$LR_TMPDIR/cursor-output-slice-N.txt" --timeout 900 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Combine 4 review perspectives: (1) Quality: bugs, logic errors, dead code, duplication, missing error handling. (2) Correctness: off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: broken contracts, thread safety, deployment risks, CI gaps. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -117,7 +117,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 Run Codex-General **second** in the parallel message:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-general-output-slice-N.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-general-output-slice-N.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$LR_TMPDIR/codex-general-output-slice-N.txt" \
     "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Focus on: quality, bugs, risk, integration, CI. Return numbered findings with file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -130,7 +130,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 Run Codex-Deep-Analysis **third** in the parallel message:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-deep-output-slice-N.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-deep-output-slice-N.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$LR_TMPDIR/codex-deep-output-slice-N.txt" \
     "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Focus on: correctness, architecture, invariants, contracts. Return numbered findings with file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -259,12 +259,12 @@ If there are uncommitted deferred items in `$LR_TMPDIR/deferred-accumulated.md` 
 
 1. Create a branch: `git checkout -b $USER_PREFIX/loop-review-deferred`
 2. Update `LOOP_REVIEW_DEFERRED.md` with the accumulated deferred items
-3. Commit: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-commit.sh -m "Update LOOP_REVIEW_DEFERRED.md with deferred review suggestions" LOOP_REVIEW_DEFERRED.md`
-4. Create PR via `${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-pr.sh`
-5. Post to Slack: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/post-pr-announce.sh --pr <PR_NUMBER>` — parse `SLACK_TS` from output
+3. Commit: `${CLAUDE_PLUGIN_ROOT}/scripts/git-commit.sh -m "Update LOOP_REVIEW_DEFERRED.md with deferred review suggestions" LOOP_REVIEW_DEFERRED.md`
+4. Create PR via `${CLAUDE_PLUGIN_ROOT}/scripts/create-pr.sh`
+5. Post to Slack: `${CLAUDE_PLUGIN_ROOT}/scripts/post-pr-announce.sh --pr <PR_NUMBER>` — parse `SLACK_TS` from output
 6. Monitor CI and merge (same loop as the `/implement` CI + Rebase + Merge Loop section)
-7. Add :merged: emoji: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"`
-8. Cleanup: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/local-cleanup.sh --branch $USER_PREFIX/loop-review-deferred`
+7. Add :merged: emoji: `${CLAUDE_PLUGIN_ROOT}/scripts/post-merged-emoji.sh --slack-ts "$SLACK_TS"`
+8. Cleanup: `${CLAUDE_PLUGIN_ROOT}/scripts/local-cleanup.sh --branch $USER_PREFIX/loop-review-deferred`
 
 If no remaining items, skip this step.
 
@@ -292,5 +292,5 @@ Deferred suggestions: see LOOP_REVIEW_DEFERRED.md
 ## Step 6 — Cleanup
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/cleanup-tmpdir.sh --dir "$LR_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$LR_TMPDIR"
 ```

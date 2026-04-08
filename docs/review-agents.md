@@ -55,9 +55,9 @@ Risk/integration:
 
 There are two related but distinct mechanisms for invoking these archetypes:
 
-**Persistent agent definitions** (`.claude/agents/*.md`) — Standalone agent files with frontmatter specifying name, description, model, and allowed tools. These can be referenced by the Agent tool by name.
+**Persistent agent definitions** (`agents/*.md`) — Standalone agent files with frontmatter specifying name, description, model, and allowed tools. These can be referenced by the Agent tool by name.
 
-**Inline reviewer templates** (`.claude/skills/shared/larch/reviewer-templates.md`) — Parameterized prompt templates that skills fill in with context-specific variables. Skills use these templates to spawn fresh Agent tool invocations with the full review prompt.
+**Inline reviewer templates** (`skills/shared/larch/reviewer-templates.md`) — Parameterized prompt templates that skills fill in with context-specific variables. Skills use these templates to spawn fresh Agent tool invocations with the full review prompt.
 
 The persistent agents and inline templates are derived from the same source and kept in sync.
 
