@@ -119,6 +119,25 @@ $PWD/.claude/scripts/generic/larch/create-branch.sh --check
 
 Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PREFIX`.
 
+### Ensure local main is fresh before branch creation
+
+**This block runs only when `IS_MAIN=true`** (we are on `main` and about to branch off). Skip it for `IS_USER_BRANCH=true` (we are not creating a branch from main — the feature branch rebase at the end of Step 1 handles freshness) and for the non-main/non-user-branch warning path (we are on some other branch, and `create-branch.sh --branch` will fetch and create the new branch directly from `origin/main`).
+
+Print: `🔃 Ensuring local main is up to date before branching...`
+
+Run:
+```bash
+$PWD/.claude/scripts/generic/larch/rebase-push.sh --no-push
+```
+
+`--skip-if-pushed` is intentionally **not** used here: `main` is always on origin, so that flag would always short-circuit. The new `SKIPPED_ALREADY_FRESH=true` optimization makes this call cheap (fetch + ancestor check) when local `main` is already at `origin/main`.
+
+If the script exits non-zero, print: `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**` and skip to Step 18.
+
+If successful:
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Local main already at latest — no update needed.`
+- Otherwise, print: `✅ Local main fast-forwarded to latest origin/main.`
+
 ### Quick mode (`quick_mode=true`)
 
 Skip `/design` entirely. Handle branch creation directly, then produce an inline implementation plan.
@@ -164,6 +183,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 
 If successful:
 - If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
+- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 2 — Implement the Feature
@@ -203,6 +223,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 
 If successful:
 - If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
+- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 5 — Code Review
@@ -278,6 +299,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 
 If successful:
 - If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
+- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 7a — Code Flow Diagram
@@ -321,6 +343,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 
 If successful:
 - If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
+- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 8 — Version Bump

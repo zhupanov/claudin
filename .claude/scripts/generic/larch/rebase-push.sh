@@ -29,7 +29,8 @@
 #
 # Exit codes:
 #   0 — rebase (and push, unless --no-push) succeeded, OR skipped because
-#       --skip-if-pushed detected the branch already on origin
+#       --skip-if-pushed detected the branch already on origin, OR skipped
+#       because HEAD already contains origin/main (nothing to rebase)
 #   1 — rebase failed with conflicts
 #       Default mode: rebase left in progress (CONFLICT_FILES= on stdout)
 #       --no-push mode: rebase aborted, branch restored to pre-rebase state
@@ -43,6 +44,9 @@
 #
 # Stdout on exit 0 when --skip-if-pushed skipped the rebase:
 #   SKIPPED_ALREADY_PUSHED=true
+#
+# Stdout on exit 0 when HEAD already contains origin/main (after fetch):
+#   SKIPPED_ALREADY_FRESH=true
 #
 # Stdout on exit 1 (default mode only):
 #   CONFLICT_FILES=<comma-separated list of conflicted files>
@@ -125,6 +129,18 @@ else
         fi
     else
         git fetch origin main --quiet 2>/dev/null || true
+    fi
+
+    # --- Early exit: skip rebase if HEAD already contains origin/main ---
+    # If origin/main is an ancestor of HEAD, HEAD already has every commit
+    # from main, so `git rebase origin/main` would be a no-op. Exit 0 with a
+    # SKIPPED_ALREADY_FRESH=true marker so callers can log it distinctly.
+    # In default (push) mode, skipping the rebase also skips the force-push:
+    # since HEAD did not change, there is nothing new to push, and the caller
+    # will re-check status on the next loop iteration.
+    if git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+        echo "SKIPPED_ALREADY_FRESH=true"
+        exit 0
     fi
 
     # --- Attempt rebase ---
