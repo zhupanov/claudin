@@ -105,7 +105,7 @@ The `/relevant-checks` skill is **repo-specific** — its `SKILL.md` contains bu
 - **Multi-agent design planning** — 5 agents independently propose architectural approaches before a full implementation plan is written, preventing anchoring bias
 - **Voting-based review resolution** — A 3-agent voting panel (YES/NO/EXONERATE) adjudicates review findings for both plan review and code review
 - **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
-- **End-to-end automation** — From feature design through PR creation and Slack announcement in a single command. With `--merge`, also runs CI monitoring, merge, and local cleanup
+- **End-to-end automation** — From feature design through PR creation, initial CI wait, and Slack announcement in a single command. With `--merge`, also runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification
 - **External reviewer integration** — Codex and Cursor participate alongside Claude subagents as both reviewers and voters
 - **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and implement improvements automatically
 

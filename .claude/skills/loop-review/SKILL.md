@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSe
 
 Systematically review the entire codebase by partitioning into slices, reviewing each with specialized code reviewers (2 Claude subagents + 2 Codex + Cursor), implementing improvements via `/implement`, and tracking deferred suggestions in a checked-in document.
 
-**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto` when invoking `/implement`** to suppress interactive question checkpoints in `/design`.
+**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto --merge` when invoking `/implement`** — `--auto` suppresses interactive question checkpoints in `/design`, and `--merge` opts into the CI+rebase+merge loop that loop-review's batched flow depends on (without `--merge`, `/implement` stops after PR creation and would break loop-review's merge-and-return-to-main expectation).
 
 ## Step 0 — Session Setup
 
