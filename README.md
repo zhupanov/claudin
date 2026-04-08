@@ -2,103 +2,52 @@
 
 Larch is a Claude Code workflow automation framework that orchestrates multi-agent design, code review, and implementation through collaborative AI-driven processes.
 
-## Getting Started
+## Installation
 
-There are two ways to integrate larch into your repository:
+Larch is distributed as a [Claude Code plugin](https://code.claude.com/docs/en/plugin-marketplaces). Installation is a two-step process: register the marketplace that hosts larch, then install the plugin from that marketplace.
 
-- **Flow A (Git Submodule)** — recommended for teams that want automatic upstream updates
-- **Flow B (Copy Skills)** — for teams that want to vendor a subset of skills and own them
+Slack integration is optional. See [Environment Variables](#environment-variables) below — skills degrade gracefully when Slack is not configured.
 
-Both flows require environment variables for Slack integration (see [Environment Variables](#environment-variables) below). If you don't use Slack, you can skip them — skills degrade gracefully when Slack is not configured.
-
-### Flow A — Git Submodule
-
-Add larch as a submodule and use `setup-larch.sh` to create symlinks from your `.claude/` directory into the submodule:
+### Install from GitHub
 
 ```bash
-# 1. Add the submodule
-git submodule add <larch-repo-url> larch
-git commit -m "Add larch submodule"
-
-# 2. Create symlinks from .claude/ into larch/.claude/
-./larch/setup-larch.sh
-
-# 3. Commit the symlinks and any new directories
-git add .claude
-git commit -m "Set up larch symlinks"
+claude plugin marketplace add zhupanov/larch
+claude plugin install larch@larch-local
 ```
 
-**Updating to the latest version**: Every time you bump the larch submodule to a newer version, re-run the update script to sync symlinks (create new ones, remove stale ones):
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, and `/loop-review` slash commands become available in every Claude Code session.
+
+To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
+
+### Install for local development (contributors)
+
+If you are hacking on larch itself and want Claude Code to load the plugin directly from your working checkout (so `${CLAUDE_PLUGIN_ROOT}` resolves to the repo you are editing), launch Claude Code with `--plugin-dir`:
 
 ```bash
-git submodule update --remote larch
-git add larch
-./larch/setup-larch.sh
-git add .claude
-git commit -m "Bump larch submodule"
+git clone https://github.com/zhupanov/larch.git
+cd larch
+claude --plugin-dir .
 ```
 
-**Note on `settings.json` after a larch upgrade**: Because `settings*.json` files are not symlinked (see "Important notes" below), bumping the submodule does NOT update your repo's `.claude/settings.json` permission entries. When a larch upgrade renames a skill, helper script path, or environment-variable allow-list entry, you must update your local `settings.json` by hand. After bumping, diff your `.claude/settings.json` against `larch/.claude/settings.json` and apply any needed permission entry renames or additions; otherwise upgraded skills can fail at runtime with permission errors even though their symlinks resolve correctly.
+Alternatively, add the working checkout as a local marketplace and install from it:
 
-**How it works**: `setup-larch.sh` creates symlinks from your `.claude/` directory tree into `larch/.claude/`. Skill directories (those containing `SKILL.md`) get directory-level symlinks, while individual files (scripts, agents, shared docs) get file-level symlinks. Your repo can have its own additional skills, scripts, and agents alongside the symlinked ones.
-
-**Important notes**:
-
-- **`settings*.json` files are not symlinked.** Your repo must maintain its own `.claude/settings.json` (and any `settings.local.json`) with the permission entries needed by larch scripts. The recommended approach is to copy the `permissions.allow` array from larch's `settings.json` as a baseline. At minimum, include bash permissions for `$PWD/.claude/scripts/generic/larch/*`, `$PWD/.claude/skills/*/scripts/*` (for skill-specific scripts), and the `block-submodule-edit.sh` hook.
-- **`/relevant-checks` is not symlinked.** This skill is repo-specific — each repository defines its own validation checks (linters, test commands, etc.). Larch ships a `/relevant-checks` as a reference implementation, but `setup-larch.sh` will never overwrite or symlink it. Create your own `.claude/skills/relevant-checks/` with checks appropriate for your repo.
-- **Edits to `larch/` are blocked.** The `block-submodule-edit.sh` hook prevents Claude Code from editing files inside git submodules. This is intentional — changes to larch should be made via PRs to the larch repo, then pulled in by updating the submodule.
-- **Conflicts**: If a non-symlink file or directory already exists at a path the script needs to symlink, it exits with an error. Resolve the conflict manually (rename or remove the existing file) and re-run.
-
-### Flow B — Copy Selected Skills
-
-Copy the skills you need along with their shared dependencies into your repo's `.claude/` directory. Understanding the directory structure is essential to avoid missing dependencies.
-
-#### Directory structure
-
-```
-.claude/
-├── settings.json              # Permission and hook configuration (write your own)
-├── agents/                    # Reviewer agent definitions (.md files)
-│   ├── general-reviewer.md
-│   └── deep-analysis-reviewer.md
-├── scripts/
-│   └── generic/
-│       └── larch/             # ~37 reusable shell scripts invoked by skills
-│           ├── session-setup.sh
-│           ├── create-pr.sh
-│           ├── ci-wait.sh
-│           └── ...
-└── skills/
-    ├── shared/
-    │   └── larch/             # Shared .md files referenced by multiple skills
-    │       ├── voting-protocol.md
-    │       ├── reviewer-templates.md
-    │       └── external-reviewers.md
-    ├── design/                # Each skill directory contains SKILL.md
-    │   ├── SKILL.md           #   and may include scripts/, agents/,
-    │   └── diagram.svg        #   references/, assets/, diagrams
-    └── ...
+```bash
+cd larch
+claude plugin marketplace add .
+claude plugin install larch@larch-local
 ```
 
-#### What to copy
+### What the plugin provides
 
-When copying a skill, you must also copy its shared dependencies:
+| Component | Description |
+|---|---|
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review` |
+| Agents | `general-reviewer`, `deep-analysis-reviewer` |
+| PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 
-1. **The skill directory** — e.g., `.claude/skills/design/` (the entire directory including any nested `scripts/`, `agents/`, etc.)
-2. **`.claude/skills/shared/larch/`** — shared markdown files referenced by all review-related skills. **Always copy this.**
-3. **`.claude/scripts/generic/larch/`** — shell scripts that skills invoke for git operations, CI, Slack, etc. **Always copy this.**
-4. **`.claude/agents/`** — reviewer agent definitions used by `/design`, `/review`, and `/loop-review`. Copy if using any review-related skill.
+### `/relevant-checks` is repo-specific (not part of the plugin)
 
-#### Transitive skill dependencies
-
-Skills invoke other skills. If you copy `/implement`, you also need `/design`, `/review`, and `/relevant-checks`. The dependency chain:
-
-- `/implement` → `/design`, `/review`, `/relevant-checks`
-- `/loop-review` → `/implement` (full chain above)
-
-#### Note on `/relevant-checks`
-
-The `/relevant-checks` skill is **repo-specific** — its `SKILL.md` contains build and lint commands tailored to a specific repository. When copying it, treat it as a **template that must be rewritten** for your repo's build system. It will not work as-is.
+The `/relevant-checks` skill is **intentionally not shipped by the larch plugin**. Each consuming repo must provide its own `/relevant-checks` as a project-level skill at `.claude/skills/relevant-checks/` with build and lint commands tailored to that repo. Larch's own copy lives at `.claude/skills/relevant-checks/` in this repo as a reference implementation. The `/implement` and `/review` workflows invoke `/relevant-checks` after each commit, so your repo must define one for those workflows to run cleanly.
 
 ## Features
 
@@ -115,12 +64,12 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 
 | Command | Arguments | Description |
 |---|---|---|
-| [`/design`](.claude/skills/design/SKILL.md) | `[--auto] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 agents (3 Claude + Cursor + Codex) independently propose architectural approaches, then 5 reviewers (2 Claude + 2 Codex + Cursor) validate the plan. `--auto` suppresses all interactive question checkpoints. [(Diagram).](.claude/skills/design/diagram.svg) |
-| [`/research`](.claude/skills/research/SKILL.md) | `<research question or topic>` | Collaborative read-only research using 5 research agents (3 Claude + Cursor + Codex) then 5 validation reviewers (2 Claude + 2 Codex + Cursor). Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo. [(Diagram).](.claude/skills/research/diagram.svg) |
-| [`/review`](.claude/skills/review/SKILL.md) | *(none)* | Code review current branch changes with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](.claude/skills/review/diagram.svg) |
-| [`/implement`](.claude/skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (2 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). [(Diagram).](.claude/skills/implement/diagram.svg) |
-| [`/loop-review`](.claude/skills/loop-review/SKILL.md) | `[partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing improvements via `/implement`, and logging deferred suggestions. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](.claude/skills/loop-review/diagram.svg) |
-| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. |
+| [`/design`](skills/design/SKILL.md) | `[--auto] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 agents (3 Claude + Cursor + Codex) independently propose architectural approaches, then 5 reviewers (2 Claude + 2 Codex + Cursor) validate the plan. `--auto` suppresses all interactive question checkpoints. [(Diagram).](skills/design/diagram.svg) |
+| [`/research`](skills/research/SKILL.md) | `<research question or topic>` | Collaborative read-only research using 5 research agents (3 Claude + Cursor + Codex) then 5 validation reviewers (2 Claude + 2 Codex + Cursor). Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo. [(Diagram).](skills/research/diagram.svg) |
+| [`/review`](skills/review/SKILL.md) | *(none)* | Code review current branch changes with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
+| [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (2 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). [(Diagram).](skills/implement/diagram.svg) |
+| [`/loop-review`](skills/loop-review/SKILL.md) | `[partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing improvements via `/implement`, and logging deferred suggestions. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](skills/loop-review/diagram.svg) |
+| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Repo-private; not shipped by the plugin.** |
 
 ## Review Agents
 
@@ -128,8 +77,8 @@ Internal agent definitions used by skills like `/design`, `/review`, and `/loop-
 
 | Agent | Description |
 |---|---|
-| [`general-reviewer`](.claude/agents/general-reviewer.md) | General-purpose code reviewer covering bugs, logic, quality, tests, backward compatibility, style consistency, breaking changes, deployment risks, regressions, and CI impact. |
-| [`deep-analysis-reviewer`](.claude/agents/deep-analysis-reviewer.md) | Deep analysis reviewer combining correctness (logic errors, off-by-one bugs, nil handling, type mismatches, race conditions) with architectural rigor (separation of concerns, contract boundaries, invariants, semantic boundaries). |
+| [`general-reviewer`](agents/general-reviewer.md) | General-purpose code reviewer covering bugs, logic, quality, tests, backward compatibility, style consistency, breaking changes, deployment risks, regressions, and CI impact. |
+| [`deep-analysis-reviewer`](agents/deep-analysis-reviewer.md) | Deep analysis reviewer combining correctness (logic errors, off-by-one bugs, nil handling, type mismatches, race conditions) with architectural rigor (separation of concerns, contract boundaries, invariants, semantic boundaries). |
 
 ## Linting
 

@@ -1,0 +1,19 @@
+{
+  "name": "larch",
+  "version": "1.0.0",
+  "description": "Multi-agent workflow automation for Claude Code: design, code review, implementation, and PR automation with collaborative reviewers (Claude subagents + Codex + Cursor).",
+  "author": {
+    "name": "Sergey Zhupanov"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/zhupanov/larch",
+  "homepage": "https://github.com/zhupanov/larch",
+  "keywords": [
+    "workflow",
+    "automation",
+    "code-review",
+    "ci",
+    "pull-request",
+    "multi-agent"
+  ]
+}

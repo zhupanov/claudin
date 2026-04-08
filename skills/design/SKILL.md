@@ -44,7 +44,7 @@ Suggested emoji palette (use consistently):
 Run the shared session setup script. Since `/design` does not need Slack or repo checks, pass `--skip-slack-check` and `--skip-repo-check`. If `SESSION_ENV_PATH` is non-empty (passed via `--session-env`), include `--caller-env`:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/session-setup.sh --prefix claude-design --skip-branch-check --skip-slack-check --skip-repo-check [--caller-env "$SESSION_ENV_PATH"]
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/session-setup.sh --prefix claude-design --skip-branch-check --skip-slack-check --skip-repo-check [--caller-env "$SESSION_ENV_PATH"]
 ```
 
 Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-empty. This is behavior-preserving: `/design` today has no Slack or repo steps, and the skip flags ensure the script skips them.
@@ -55,7 +55,7 @@ Parse the output for `SESSION_TMPDIR`. Set `DESIGN_TMPDIR` = `SESSION_TMPDIR`. S
 
 ### 0b — Quick External Reviewer Check
 
-Read and follow the **Binary Check** section in `.claude/skills/shared/larch/external-reviewers.md`.
+Read and follow the **Binary Check** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`.
 
 ## Step 1 — Create Branch
 
@@ -64,7 +64,7 @@ Read and follow the **Binary Check** section in `.claude/skills/shared/larch/ext
 Run the `create-branch.sh` script in check mode to get the current branch state:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/create-branch.sh --check
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-branch.sh --check
 ```
 
 Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PREFIX`.
@@ -74,7 +74,7 @@ Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PR
 **Decision logic** (using the script output):
 - If `IS_MAIN=true`: Derive a short kebab-case branch name from the feature description (e.g., "add user auth" → `<USER_PREFIX>/add-user-auth`). Keep it under 50 characters. Then create it:
   ```bash
-  $PWD/.claude/scripts/generic/larch/create-branch.sh --branch <USER_PREFIX>/<branch-name>
+  ${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-branch.sh --branch <USER_PREFIX>/<branch-name>
   ```
 
 - If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch as above. Otherwise, skip branch creation. Print: `🔀 Step 1 — Using existing branch: <branch-name>`
@@ -131,7 +131,7 @@ Print `🤝 Step 2a — Running collaborative sketch phase.` and proceed to 2a.2
 **Cursor sketch** (if `cursor_available`):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-output.txt" --timeout 600 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-output.txt" --timeout 600 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "You are looking at a codebase and need to propose a high-level implementation approach for this feature: <FEATURE_DESCRIPTION>. Explore the codebase to understand the relevant architecture, then write 2-3 paragraphs covering: (1) Key architectural decisions and the approach you would take, (2) Which files/modules to modify and why, (3) Main tradeoffs you would consider. Do NOT modify files."
 ```
@@ -145,7 +145,7 @@ Prompt: `"You are an Innovation/Exploration architect. Propose a high-level impl
 **Codex sketch** (if `codex_available`):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-output.txt" --timeout 600 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-output.txt" --timeout 600 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$DESIGN_TMPDIR/codex-sketch-output.txt" \
     "You are looking at a codebase and need to propose a high-level implementation approach for this feature: <FEATURE_DESCRIPTION>. Explore the codebase to understand the relevant architecture, then write 2-3 paragraphs covering: (1) Key architectural decisions and the approach you would take, (2) Which files/modules to modify and why, (3) Main tradeoffs you would consider. Do NOT modify files."
@@ -172,14 +172,14 @@ Prompt: `"You are a Pragmatism/Safety engineer. Propose a high-level implementat
 Wait for external sketch sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched (not Claude replacements — those return via Agent tool):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/wait-for-reviewers.sh --timeout 660 "$DESIGN_TMPDIR/cursor-sketch-output.txt.done" "$DESIGN_TMPDIR/codex-sketch-output.txt.done"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/wait-for-reviewers.sh --timeout 660 "$DESIGN_TMPDIR/cursor-sketch-output.txt.done" "$DESIGN_TMPDIR/codex-sketch-output.txt.done"
 ```
 
 Use `timeout: 660000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include sentinel paths for external reviewers that were actually launched — omit any path whose reviewer was replaced by a Claude subagent.
 
 Note: This is a separate `wait-for-reviewers.sh` call from the one in Step 3. Both are permitted because they operate on completely distinct sentinel file sets (`*-sketch-output.txt.done` vs `*-plan-output.txt.done`).
 
-**Validate sketch outputs**: Follow the **Validating External Reviewer Output** section in `.claude/skills/shared/larch/external-reviewers.md`, using `$DESIGN_TMPDIR/cursor-sketch-output.txt` and `$DESIGN_TMPDIR/codex-sketch-output.txt` as the output files. For sketches, a valid output is non-empty and contains substantive architectural content (at least a paragraph). If a sketch is empty despite exit code 0, retry once with a `-retry` suffix per the shared procedure.
+**Validate sketch outputs**: Follow the **Validating External Reviewer Output** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`, using `$DESIGN_TMPDIR/cursor-sketch-output.txt` and `$DESIGN_TMPDIR/codex-sketch-output.txt` as the output files. For sketches, a valid output is non-empty and contains substantive architectural content (at least a paragraph). If a sketch is empty despite exit code 0, retry once with a `-retry` suffix per the shared procedure.
 
 ### 2a.4 — Synthesis
 
@@ -228,7 +228,7 @@ Run Cursor **first** in the parallel message (it takes the longest). Cursor has 
 Invoke Cursor via the shared monitored wrapper script (with `--capture-stdout` since Cursor writes results to stdout):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-output.txt" --timeout 900 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-output.txt" --timeout 900 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Combine 4 perspectives: (1) General: logical flaws, code reuse, test coverage, backward compat, pattern consistency. (2) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -242,7 +242,7 @@ Run both Codex instances **second** in the parallel message (after Cursor). Each
 **Codex-General** — focuses on general code quality and risk/integration perspectives:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-general-plan-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-general-plan-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$DESIGN_TMPDIR/codex-general-plan-output.txt" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Focus on general code quality and risk/integration perspectives: (1) General: logical flaws, code reuse, test coverage, backward compat, pattern consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -253,7 +253,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 **Codex-Deep-Analysis** — focuses on correctness and architecture perspectives:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-deep-plan-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-deep-plan-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$DESIGN_TMPDIR/codex-deep-plan-output.txt" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Focus on correctness and architecture perspectives: (1) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (2) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -265,7 +265,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
 Launch both Claude subagents **last** in the same message (they finish fastest).
 
-Use the two reviewer archetypes from `.claude/skills/shared/larch/reviewer-templates.md`, filling in the variables for **plan review**:
+Use the two reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/reviewer-templates.md`, filling in the variables for **plan review**:
 
 - **`{REVIEW_TARGET}`** = `"an implementation plan"`
 - **`{CONTEXT_BLOCK}`**:
@@ -284,7 +284,7 @@ Additionally, append the following competition context to each reviewer's prompt
 
 ### Monitoring External Reviewers
 
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/larch/external-reviewers.md`, using `$DESIGN_TMPDIR/codex-general-plan-output.txt`, `$DESIGN_TMPDIR/codex-deep-plan-output.txt`, and `$DESIGN_TMPDIR/cursor-plan-output.txt` as the output files.
+Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`, using `$DESIGN_TMPDIR/codex-general-plan-output.txt`, `$DESIGN_TMPDIR/codex-deep-plan-output.txt`, and `$DESIGN_TMPDIR/cursor-plan-output.txt` as the output files.
 
 ### After all reviewers return
 
@@ -300,7 +300,7 @@ If **all reviewers** report no in-scope issues and no out-of-scope observations,
 
 ### Voting Panel (replaces negotiation)
 
-After deduplication, submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `.claude/skills/shared/larch/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section — voters can promote OOS items to in-scope by voting YES. For plan review:
+After deduplication, submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section — voters can promote OOS items to in-scope by voting YES. For plan review:
 
 - **Voter 1**: Claude Deep Analysis reviewer subagent — fresh Agent tool invocation with the voting prompt. Instruct: `"You are a senior architect and correctness specialist on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR."`
 - **Voter 2**: Codex — via `run-external-reviewer.sh` with the ballot
@@ -392,7 +392,7 @@ Print any rejected plan review findings:
 Remove the session temp directory and all files within it:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
 ```
 
 **Repeat any external reviewer warnings** from earlier steps (Step 0b binary checks, Step 2a sketch-phase failures/timeouts, Step 3 runtime failures, or Step 3b diagram generation failure) so they are visible at the end of the workflow. For example:

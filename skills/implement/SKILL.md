@@ -57,7 +57,7 @@ Suggested emoji palette (use consistently):
 Run the shared session setup script. If `SESSION_ENV_PATH` is non-empty (passed via `--session-env`), include `--caller-env` to reuse already-discovered values:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/session-setup.sh --prefix claude-implement --skip-branch-check [--caller-env "$SESSION_ENV_PATH"]
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/session-setup.sh --prefix claude-implement --skip-branch-check [--caller-env "$SESSION_ENV_PATH"]
 ```
 
 `--skip-branch-check` is required so that the inlined Step 1 user-branch decision logic (`IS_USER_BRANCH=true` paths) is reachable. Without it, `preflight.sh` would refuse to run unless the user is on a clean `main` branch, making Step 1's branch-resume paths dead code.
@@ -76,7 +76,7 @@ Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REP
 Write the discovered values to `$IMPLEMENT_TMPDIR/session-env.sh` so they can be forwarded to `/design`:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/write-session-env.sh --output "$IMPLEMENT_TMPDIR/session-env.sh" \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/write-session-env.sh --output "$IMPLEMENT_TMPDIR/session-env.sh" \
   --slack-ok <value> --slack-missing <value> --repo <value> --repo-unavailable <value>
 ```
 
@@ -114,7 +114,7 @@ Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issu
 First, determine the user's branch prefix by running the branch check script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/create-branch.sh --check
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-branch.sh --check
 ```
 
 Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PREFIX`.
@@ -127,7 +127,7 @@ Print: `🔃 Ensuring local main is up to date before branching...`
 
 Run:
 ```bash
-$PWD/.claude/scripts/generic/larch/rebase-push.sh --no-push
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --no-push
 ```
 
 `--skip-if-pushed` is intentionally **not** used here: `main` is always on origin, so that flag would always short-circuit. The `SKIPPED_ALREADY_FRESH=true` optimization makes this call cheap (fetch + ancestor check) when local `main` is already at `origin/main`.
@@ -143,7 +143,7 @@ If successful:
 Skip `/design` entirely. Handle branch creation directly, then produce an inline implementation plan.
 
 **Branch handling** (same logic as `/design` Step 1, replicated here since `/design` is skipped):
-- If `IS_MAIN=true`: Derive a short kebab-case branch name from the feature description. Create it via `$PWD/.claude/scripts/generic/larch/create-branch.sh --branch <USER_PREFIX>/<branch-name>`.
+- If `IS_MAIN=true`: Derive a short kebab-case branch name from the feature description. Create it via `${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-branch.sh --branch <USER_PREFIX>/<branch-name>`.
 - If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch. Otherwise, use the existing branch.
 - Otherwise (non-main, non-user branch): Print a warning: `**⚠ Currently on branch '<branch-name>' which doesn't match the expected '<USER_PREFIX>/*' pattern. Creating a new branch from main.**` and create a new branch.
 
@@ -176,7 +176,7 @@ Print: `🔃 Rebasing onto latest main before starting implementation...`
 
 Run:
 ```bash
-$PWD/.claude/scripts/generic/larch/rebase-push.sh --no-push --skip-if-pushed
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --no-push --skip-if-pushed
 ```
 
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
@@ -205,7 +205,7 @@ Invoke `/relevant-checks` to run validation checks relevant to the modified file
 Stage and commit all changed files using the wrapper script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/git-commit.sh -m "<descriptive commit message>" <specific-files>
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-commit.sh -m "<descriptive commit message>" <specific-files>
 ```
 
 The commit message should describe WHAT was implemented and WHY, not HOW.
@@ -216,7 +216,7 @@ Print: `🔃 Rebasing onto latest main after implementation commit...`
 
 Run:
 ```bash
-$PWD/.claude/scripts/generic/larch/rebase-push.sh --no-push --skip-if-pushed
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --no-push --skip-if-pushed
 ```
 
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
@@ -234,10 +234,10 @@ Skip `/review`. Instead, run a simplified one-round review:
 
 1. Gather the diff using the context script:
    ```bash
-   $PWD/.claude/scripts/generic/larch/gather-branch-context.sh --output-dir "$IMPLEMENT_TMPDIR"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/gather-branch-context.sh --output-dir "$IMPLEMENT_TMPDIR"
    ```
    Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log.
-2. Launch **2 Claude subagent reviewers** (general, deep-analysis) using the same reviewer archetypes from `.claude/skills/shared/larch/reviewer-templates.md` with these variable bindings: `{REVIEW_TARGET}` = `"code changes"`, `{CONTEXT_BLOCK}` = the commit log + file list + full diff, `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. **No Codex, no Cursor, no external reviewers. No competition notice** (there is no voting panel in quick mode).
+2. Launch **2 Claude subagent reviewers** (general, deep-analysis) using the same reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/reviewer-templates.md` with these variable bindings: `{REVIEW_TARGET}` = `"code changes"`, `{CONTEXT_BLOCK}` = the commit log + file list + full diff, `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. **No Codex, no Cursor, no external reviewers. No competition notice** (there is no voting panel in quick mode).
 3. Collect findings from all 2 subagents. Deduplicate.
 4. **Main agent decides**: Evaluate each finding and unilaterally accept or reject it. No voting panel. Accept findings that identify genuine bugs, logic errors, or important improvements. Reject trivial style nits or speculative concerns.
 5. Implement accepted fixes. Run `/relevant-checks` if files changed.
@@ -267,7 +267,7 @@ After the code review completes (whether `/review` in normal mode or the simplif
 **Conditional**: Check if the code review step (Step 5) actually modified any files (applies in both normal and quick mode):
 
 ```bash
-$PWD/.claude/skills/implement/scripts/check-review-changes.sh
+${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh
 ```
 
 Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ Step 6 — Skipping second validation — review made no changes.` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
@@ -279,7 +279,7 @@ If files **did change**, invoke `/relevant-checks` to ensure review fixes didn't
 If any files changed during review/checks (Steps 5–6), stage and commit them:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/git-commit.sh -m "Address code review feedback" <specific-files>
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-commit.sh -m "Address code review feedback" <specific-files>
 ```
 
 If no files changed (review found no issues), skip this commit.
@@ -292,7 +292,7 @@ Print: `🔃 Rebasing onto latest main after review fixes commit...`
 
 Run:
 ```bash
-$PWD/.claude/scripts/generic/larch/rebase-push.sh --no-push --skip-if-pushed
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --no-push --skip-if-pushed
 ```
 
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
@@ -336,7 +336,7 @@ Print: `🔃 Rebasing onto latest main before version bump...`
 
 Run:
 ```bash
-$PWD/.claude/scripts/generic/larch/rebase-push.sh --no-push --skip-if-pushed
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --no-push --skip-if-pushed
 ```
 
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
@@ -351,7 +351,7 @@ If successful:
 Check if the repo has a `/bump-version` skill and capture commit count:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/check-bump-version.sh --mode pre
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/check-bump-version.sh --mode pre
 ```
 
 Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
@@ -363,7 +363,7 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 1. Invoke `/bump-version` via the Skill tool.
 2. Verify a new commit was created:
    ```bash
-   $PWD/.claude/scripts/generic/larch/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
    ```
    Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. If `VERIFIED=false`, print: `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`
 
@@ -487,7 +487,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 Run the `create-pr.sh` script with a concise title (under 70 chars):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/create-pr.sh --title "<title>" --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-pr.sh --title "<title>" --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
 ```
 
 Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The script handles pushing the branch, detecting existing PRs, and creating new ones with `--assignee @me`. `PR_STATUS` is `created` for new PRs or `existing` for already-open PRs. Save `PR_STATUS` — it is used in Step 11 to decide whether to post to Slack.
@@ -496,7 +496,7 @@ Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The scr
 
 **If `PR_STATUS=existing`**: The PR body was not updated by `create-pr.sh`. Update it now:
 ```bash
-$PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
 ```
 
 Print the PR URL when done. Save `PR_NUMBER`, `PR_URL`, and `PR_TITLE` for use in Steps 10–15.
@@ -516,7 +516,7 @@ Track these counters (all start at 0):
 **Wait for CI** using the `ci-wait.sh` script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/ci-wait.sh --pr <PR-NUMBER> --repo $REPO \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/ci-wait.sh --pr <PR-NUMBER> --repo $REPO \
   --rebase-count "$rebase_count" --fix-attempts "$fix_attempts" --iteration "$iteration"
 ```
 
@@ -530,13 +530,13 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
    - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ Step 10 — PR was merged externally.` and proceed to Step 11. (Step 12 will detect `already_merged` again and skip the merge loop.)
 
-   - **`ACTION=rebase`**: Main advanced. Run `$PWD/.claude/scripts/generic/larch/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `$PWD/.claude/scripts/generic/larch/git-rebase-abort.sh`, print warning, and proceed to Step 11 (the merge loop in Step 12 will encounter the same conflict and apply the full Conflict Resolution Procedure with reviewer panel validation). On exit 2: retry once, then proceed to Step 11. On exit 3: proceed to Step 11.
+   - **`ACTION=rebase`**: Main advanced. Run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-rebase-abort.sh`, print warning, and proceed to Step 11 (the merge loop in Step 12 will encounter the same conflict and apply the full Conflict Resolution Procedure with reviewer panel validation). On exit 2: retry once, then proceed to Step 11. On exit 3: proceed to Step 11.
 
    - **`ACTION=rebase_then_evaluate`**: Run rebase first (same as above), then fall through to evaluate the CI failure.
 
    - **`ACTION=evaluate_failure`**: Use `FAILED_RUN_ID` to evaluate:
-     1. **Transient failure** (runner provisioning, Docker pull rate limit, "hosted runner lost communication", etc.): If `transient_retries < 2`, run `$PWD/.claude/scripts/generic/larch/sleep-seconds.sh 60`, then run `$PWD/.claude/scripts/generic/larch/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Parse output for `RERUN_SUBMITTED` and `ERROR`. If `RERUN_SUBMITTED=false`, print the `ERROR` and treat as a real CI failure (fall through to diagnosis). Otherwise increment `transient_retries`, re-invoke `ci-wait.sh`. If `transient_retries >= 2`, treat as real failure.
-     2. **Real CI failure**: Run `$PWD/.claude/scripts/generic/larch/gh-run-logs.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Diagnose the issue, fix it, run `/relevant-checks`, stage and commit using `$PWD/.claude/scripts/generic/larch/git-commit.sh -m "Fix CI failure" <fixed-files>`, push. Increment `fix_attempts`. Re-invoke `ci-wait.sh`.
+     1. **Transient failure** (runner provisioning, Docker pull rate limit, "hosted runner lost communication", etc.): If `transient_retries < 2`, run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/sleep-seconds.sh 60`, then run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Parse output for `RERUN_SUBMITTED` and `ERROR`. If `RERUN_SUBMITTED=false`, print the `ERROR` and treat as a real CI failure (fall through to diagnosis). Otherwise increment `transient_retries`, re-invoke `ci-wait.sh`. If `transient_retries >= 2`, treat as real failure.
+     2. **Real CI failure**: Run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/gh-run-logs.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Diagnose the issue, fix it, run `/relevant-checks`, stage and commit using `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-commit.sh -m "Fix CI failure" <fixed-files>`, push. Increment `fix_attempts`. Re-invoke `ci-wait.sh`.
 
    - **`ACTION=bail`**: Print `BAIL_REASON`. Print `**⚠ Step 10 — CI monitoring bailed. PR may have failing CI.**` and proceed to Step 11.
 
@@ -555,7 +555,7 @@ After handling any non-terminal action (rebase, evaluate_failure), **re-invoke `
 Post the PR to Slack using the shared script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/post-pr-announce.sh --pr <PR-NUMBER>
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/post-pr-announce.sh --pr <PR-NUMBER>
 ```
 
 Parse the output for `SLACK_TS=<value>` (emitted by `post-pr-announce.sh` — keep in sync).
@@ -572,14 +572,14 @@ If `$IMPLEMENT_TMPDIR/execution-issues.md` exists and is non-empty, update the P
 
 1. Fetch the current live PR body using the read script (do NOT re-read `$IMPLEMENT_TMPDIR/pr-body.md` — the live body may differ from the local copy):
    ```bash
-   $PWD/.claude/scripts/generic/larch/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_TMPDIR/live-body.md"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_TMPDIR/live-body.md"
    ```
    Read `$IMPLEMENT_TMPDIR/live-body.md` to get the current body text.
 2. Replace the entire inner content of the `<details><summary>Execution Issues</summary>...</details>` block with the full current contents of `$IMPLEMENT_TMPDIR/execution-issues.md`, preserving the blank lines after the opening tag and before the closing `</details>` (required for GitHub Markdown rendering). If the `<details><summary>Execution Issues</summary>` block is not found in the fetched body, print `**⚠ Execution Issues block not found in live PR body. Skipping refresh.**` and skip the update.
 3. Write the result to `$IMPLEMENT_TMPDIR/pr-body.md`
 4. Update the PR:
    ```bash
-   $PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
    ```
 
 If `execution-issues.md` does not exist or is empty, skip this refresh.
@@ -603,7 +603,7 @@ Track these counters (all start at 0):
 **Wait for CI** using the `ci-wait.sh` script, which polls `ci-status.sh` + `ci-decide.sh` internally and prints compact dot-based progress to stderr:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/ci-wait.sh --pr <PR-NUMBER> --repo $REPO \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/ci-wait.sh --pr <PR-NUMBER> --repo $REPO \
   --rebase-count "$rebase_count" --fix-attempts "$fix_attempts" --iteration "$iteration"
 ```
 
@@ -629,7 +629,7 @@ After handling any non-merge/non-bail action (rebase, evaluate_failure, etc.), *
 
 4. **When rebase is needed** (ACTION=rebase or rebase_then_evaluate), use the `rebase-push.sh` script:
    ```bash
-   $PWD/.claude/scripts/generic/larch/rebase-push.sh
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh
    ```
    Handle exit codes:
    - **Exit 0**: Rebase and push succeeded.
@@ -641,7 +641,7 @@ After handling any non-merge/non-bail action (rebase, evaluate_failure, etc.), *
 
 When `rebase-push.sh` exits with code 1, the rebase is paused with conflicts. This procedure resolves them intelligently, with user escalation when uncertain and a full reviewer panel to validate the resolution.
 
-**Bail invariant**: Any bail from any phase below must call `$PWD/.claude/scripts/generic/larch/git-rebase-abort.sh` before proceeding to Step 12d, since the rebase is in progress throughout all phases.
+**Bail invariant**: Any bail from any phase below must call `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-rebase-abort.sh` before proceeding to Step 12d, since the rebase is in progress throughout all phases.
 
 #### Phase 1 — Conflict Classification and Resolution
 
@@ -676,7 +676,7 @@ For each file in `CONFLICT_FILES`:
 
 **3a. Create temp directory**: Create `$IMPLEMENT_TMPDIR/conflict-review/` for reviewer artifacts. If it already exists (from a prior conflict resolution in this rebase loop), remove it and recreate.
 
-**3b. Check external reviewer availability**: Run `$PWD/.claude/scripts/generic/larch/check-reviewers.sh` to set `codex_available` and `cursor_available` flags. Follow the Binary Check procedure in `.claude/skills/shared/larch/external-reviewers.md`.
+**3b. Check external reviewer availability**: Run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/check-reviewers.sh` to set `codex_available` and `cursor_available` flags. Follow the Binary Check procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`.
 
 **3c. Prepare review context**: For each non-trivial conflicted file, prepare a per-file conflict context block:
 ```
@@ -696,16 +696,16 @@ For each file in `CONFLICT_FILES`:
 
 Also capture `git diff --cached` as supplementary context showing the full staged state.
 
-**3d. Launch reviewers**: Launch 2 Claude subagent reviewers + Codex + Cursor (if available) using the reviewer archetypes from `.claude/skills/shared/larch/reviewer-templates.md` with:
+**3d. Launch reviewers**: Launch 2 Claude subagent reviewers + Codex + Cursor (if available) using the reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/reviewer-templates.md` with:
 - `{REVIEW_TARGET}` = `"merge conflict resolution"`
 - `{CONTEXT_BLOCK}` = the per-file conflict context blocks from 3c + supplementary `git diff --cached`
 - `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is with the resolution"` + `"Suggested correction"`
 
-Follow `.claude/skills/shared/larch/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
+Follow `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
 
 **3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
 
-**3e. Voting**: Run the voting protocol from `.claude/skills/shared/larch/voting-protocol.md` with code review voter composition:
+**3e. Voting**: Run the voting protocol from `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/voting-protocol.md` with code review voter composition:
 - **Voter 1**: Claude General Reviewer subagent (fresh Agent invocation)
 - **Voter 2**: Codex (if available) — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor (if available) — via `run-external-reviewer.sh`
@@ -722,18 +722,18 @@ If the reviewer panel finds no issues or all findings are addressed: proceed to 
 
 #### Phase 4 — Continue Rebase
 
-Run `$PWD/.claude/scripts/generic/larch/rebase-push.sh --continue` and handle exit codes:
+Run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --continue` and handle exit codes:
 - **Exit 0**: Rebase and push succeeded. Increment `rebase_count` and `iteration`, reset `transient_retries`. Restart the CI wait loop.
 - **Exit 1**: A later commit in the rebase conflicted. Loop back to **Phase 1** for the new conflict (the Conflict Resolution Procedure starts again for the new set of `CONFLICT_FILES`).
 - **Exit 2**: Push `--force-with-lease` failed. Retry `rebase-push.sh --continue` once. If it fails twice, **bail out** (Step 12d — call `git rebase --abort` first if the rebase is still in progress).
-- **Exit 3**: Check the `REBASE_ERROR` output. If it indicates an empty or already-applied commit (e.g., "nothing to commit", "No changes"), run `git rebase --skip` (if `git rebase --skip` itself exits non-zero, run `$PWD/.claude/scripts/generic/larch/git-rebase-abort.sh` and **bail out** — Step 12d) and then `$PWD/.claude/scripts/generic/larch/rebase-push.sh --continue` again (handle the same exit codes). Otherwise, **bail out** (Step 12d).
+- **Exit 3**: Check the `REBASE_ERROR` output. If it indicates an empty or already-applied commit (e.g., "nothing to commit", "No changes"), run `git rebase --skip` (if `git rebase --skip` itself exits non-zero, run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-rebase-abort.sh` and **bail out** — Step 12d) and then `${CLAUDE_PLUGIN_ROOT}/scripts/larch/rebase-push.sh --continue` again (handle the same exit codes). Otherwise, **bail out** (Step 12d).
 
 ### 12b — Merge
 
 When CI passes and the branch is up-to-date with main, use the `merge-pr.sh` script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/merge-pr.sh --pr <PR-NUMBER> --repo $REPO
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/merge-pr.sh --pr <PR-NUMBER> --repo $REPO
 ```
 
 Parse the output for `MERGE_RESULT` and `ERROR`. Handle each result:
@@ -751,18 +751,18 @@ Save the expected commit title for verification in Step 15: `<PR_TITLE> (#<PR_NU
 
 ### 12c — Evaluate CI Failure
 
-Use `FAILED_RUN_ID` from the `ci-status.sh` output. If `FAILED_RUN_ID` is empty, use `$PWD/.claude/scripts/generic/larch/gh-pr-checks.sh --pr <PR-NUMBER> --repo $REPO` to identify the failed check and its run URL manually.
+Use `FAILED_RUN_ID` from the `ci-status.sh` output. If `FAILED_RUN_ID` is empty, use `${CLAUDE_PLUGIN_ROOT}/scripts/larch/gh-pr-checks.sh --pr <PR-NUMBER> --repo $REPO` to identify the failed check and its run URL manually.
 
 1. **Transient/infrastructure failure** (GitHub API timeout, runner provisioning failure, flaky network, `RUNNER_TEMP` errors, Docker pull rate limit, "The hosted runner lost communication", etc.):
    ```bash
-   $PWD/.claude/scripts/generic/larch/sleep-seconds.sh 60
-   $PWD/.claude/scripts/generic/larch/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/sleep-seconds.sh 60
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO
    ```
    Parse the output for `RERUN_SUBMITTED` and `ERROR`. If `RERUN_SUBMITTED=false`, print the `ERROR` and treat as a real CI failure (fall through to diagnosis). Allow up to **2 consecutive transient retries** before treating as a real failure. The counter resets after a successful rebase, code fix, or a CI run that fails for a different (non-transient) reason. Go back to **12a**.
 
 2. **Real CI failure** — Diagnose and fix:
    ```bash
-   $PWD/.claude/scripts/generic/larch/gh-run-logs.sh --run-id <FAILED_RUN_ID> --repo $REPO
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/gh-run-logs.sh --run-id <FAILED_RUN_ID> --repo $REPO
    ```
    Analyze the logs. Fix the issue, run `/relevant-checks`, commit, push. Go back to **12a**.
 
@@ -774,7 +774,7 @@ Use `FAILED_RUN_ID` from the `ci-status.sh` output. If `FAILED_RUN_ID` is empty,
 - The fix would require **reverting the core feature** to pass CI.
 
 When bailing out:
-1. If a rebase is in progress (exit 1 from `rebase-push.sh`), run `$PWD/.claude/scripts/generic/larch/git-rebase-abort.sh` first.
+1. If a rebase is in progress (exit 1 from `rebase-push.sh`), run `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-rebase-abort.sh` first.
 2. Clearly explain what failed, what you attempted, and suggest manual steps.
 
 **Do NOT skip Steps 14, 16, 17, and 18** when bailing — still clean up and print the review report. **Skip Steps 13 and 15** since the PR was not merged.
@@ -792,7 +792,7 @@ When bailing out:
 Add the :merged: emoji using the shared script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"
 ```
 
 **If the script exits non-zero**, print `**⚠ Failed to add :merged: emoji to Slack post. Continuing.**` and proceed to Step 14. **Do not abort.**
@@ -806,7 +806,7 @@ $PWD/.claude/scripts/generic/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"
 Switch back to main, pull the merged changes, and delete the development branch:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/local-cleanup.sh --branch "$BRANCH_NAME"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/local-cleanup.sh --branch "$BRANCH_NAME"
 ```
 
 Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `🧹 Step 14 — Switched to main, deleted local branch $BRANCH_NAME`. If `CLEANUP_SUCCESS=false`, print: `**⚠ Step 14 — Cleanup partially failed. Current branch: <CURRENT_BRANCH>, branch deleted: <BRANCH_DELETED>.**`
@@ -828,7 +828,7 @@ Print: `⚠️ Step 14 — Skipped cleanup (PR not merged). You are still on bra
 Confirm the last commit on main is the expected squash-merged commit using the `verify-main.sh` script:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/verify-main.sh --expected-title "<PR_TITLE> (#<PR_NUMBER>)"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/verify-main.sh --expected-title "<PR_TITLE> (#<PR_NUMBER>)"
 ```
 
 Parse the output for `VERIFIED`, `COMMIT_HASH`, and `COMMIT_MESSAGE`. Print the result:
@@ -859,7 +859,7 @@ If both phases reported all suggestions implemented, print: `📊 Step 17 — Al
 Remove the session temp directory and all files within it:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 ```
 
 **Repeat any external reviewer warnings** from earlier in the workflow (from `/design` or `/review` phases) so they are visible at the end. **If `quick_mode=true`**, there are no external reviewer warnings to repeat (no external reviewers were used). For example:

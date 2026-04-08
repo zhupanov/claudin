@@ -18,7 +18,7 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 Ensure you are on the `main` branch with a clean working tree and the latest code:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/preflight.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/preflight.sh
 ```
 
 If it exits non-zero, print the `PREFLIGHT_ERROR` from stdout and abort.
@@ -28,18 +28,18 @@ If it exits non-zero, print the `PREFLIGHT_ERROR` from stdout and abort.
 Create a session-scoped temp directory:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/create-session-tmpdir.sh --prefix claude-loop-review
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-session-tmpdir.sh --prefix claude-loop-review
 ```
 
 Parse the output for `SESSION_TMPDIR`. Set `LR_TMPDIR` = `SESSION_TMPDIR`. Initialize tracking files:
 
 ```bash
-$PWD/.claude/skills/loop-review/scripts/init-session-files.sh --dir "$LR_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/init-session-files.sh --dir "$LR_TMPDIR"
 ```
 
 ### 0c — Quick External Reviewer Check
 
-Read and follow the **Binary Check** section in `.claude/skills/shared/larch/external-reviewers.md`.
+Read and follow the **Binary Check** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`.
 
 Set `codex_available` and `cursor_available` flags for the entire session. If either is unavailable, append the warning to `$LR_TMPDIR/warnings.md`.
 
@@ -105,7 +105,7 @@ Launch ALL available reviewers in a **single message**. **Spawn order matters fo
 Run Cursor **first** in the parallel message (it takes the longest):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool cursor --output "$LR_TMPDIR/cursor-output-slice-N.txt" --timeout 900 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$LR_TMPDIR/cursor-output-slice-N.txt" --timeout 900 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Combine 4 review perspectives: (1) Quality: bugs, logic errors, dead code, duplication, missing error handling. (2) Correctness: off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: broken contracts, thread safety, deployment risks, CI gaps. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -117,7 +117,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 Run Codex-General **second** in the parallel message:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-general-output-slice-N.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-general-output-slice-N.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$LR_TMPDIR/codex-general-output-slice-N.txt" \
     "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Focus on: quality, bugs, risk, integration, CI. Return numbered findings with file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -130,7 +130,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 Run Codex-Deep-Analysis **third** in the parallel message:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-deep-output-slice-N.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-deep-output-slice-N.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$LR_TMPDIR/codex-deep-output-slice-N.txt" \
     "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Focus on: correctness, architecture, invariants, contracts. Return numbered findings with file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -148,7 +148,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
 **Monitoring External Reviewers:**
 
-If any external reviewer was launched, follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/larch/external-reviewers.md`, using `$LR_TMPDIR/codex-general-output-slice-N.txt`, `$LR_TMPDIR/codex-deep-output-slice-N.txt`, and `$LR_TMPDIR/cursor-output-slice-N.txt` as the output files. Poll for sentinel files: `$LR_TMPDIR/cursor-output-slice-N.txt.done`, `$LR_TMPDIR/codex-general-output-slice-N.txt.done`, and `$LR_TMPDIR/codex-deep-output-slice-N.txt.done`. Only monitor reviewers that were actually launched.
+If any external reviewer was launched, follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`, using `$LR_TMPDIR/codex-general-output-slice-N.txt`, `$LR_TMPDIR/codex-deep-output-slice-N.txt`, and `$LR_TMPDIR/cursor-output-slice-N.txt` as the output files. Poll for sentinel files: `$LR_TMPDIR/cursor-output-slice-N.txt.done`, `$LR_TMPDIR/codex-general-output-slice-N.txt.done`, and `$LR_TMPDIR/codex-deep-output-slice-N.txt.done`. Only monitor reviewers that were actually launched.
 
 **Critical**: Do NOT read Cursor's output file until `$LR_TMPDIR/cursor-output-slice-N.txt.done` exists. Cursor buffers all stdout — the file is empty (0 bytes) until the process exits. The `.done` sentinel file is the reliable completion signal.
 
@@ -162,7 +162,7 @@ If validation fails (empty output after retry, timeout, or non-zero exit), appen
 
 **2. Negotiate** with external reviewers (if they produced findings):
 
-Follow the **Negotiation Protocol** in `.claude/skills/shared/larch/external-reviewers.md`, using `$LR_TMPDIR` as the tmpdir, with `max_rounds=1`. With 2 Codex instances (Codex-General and Codex-Deep-Analysis), negotiate with each separately using distinct prompt/output file paths (e.g., `codex-general-negotiation-prompt.txt` / `codex-general-negotiation-output.txt` and `codex-deep-negotiation-prompt.txt` / `codex-deep-negotiation-output.txt`). Accept findings unless factually incorrect or contradicting CLAUDE.md.
+Follow the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`, using `$LR_TMPDIR` as the tmpdir, with `max_rounds=1`. With 2 Codex instances (Codex-General and Codex-Deep-Analysis), negotiate with each separately using distinct prompt/output file paths (e.g., `codex-general-negotiation-prompt.txt` / `codex-general-negotiation-output.txt` and `codex-deep-negotiation-prompt.txt` / `codex-deep-negotiation-output.txt`). Accept findings unless factually incorrect or contradicting CLAUDE.md.
 
 Note: "accepted" in the negotiation sense means the finding is valid — it may still be classified as DEFER below.
 
@@ -259,12 +259,12 @@ If there are uncommitted deferred items in `$LR_TMPDIR/deferred-accumulated.md` 
 
 1. Create a branch: `git checkout -b $USER_PREFIX/loop-review-deferred`
 2. Update `LOOP_REVIEW_DEFERRED.md` with the accumulated deferred items
-3. Commit: `$PWD/.claude/scripts/generic/larch/git-commit.sh -m "Update LOOP_REVIEW_DEFERRED.md with deferred review suggestions" LOOP_REVIEW_DEFERRED.md`
-4. Create PR via `$PWD/.claude/scripts/generic/larch/create-pr.sh`
-5. Post to Slack: `$PWD/.claude/scripts/generic/larch/post-pr-announce.sh --pr <PR_NUMBER>` — parse `SLACK_TS` from output
+3. Commit: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-commit.sh -m "Update LOOP_REVIEW_DEFERRED.md with deferred review suggestions" LOOP_REVIEW_DEFERRED.md`
+4. Create PR via `${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-pr.sh`
+5. Post to Slack: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/post-pr-announce.sh --pr <PR_NUMBER>` — parse `SLACK_TS` from output
 6. Monitor CI and merge (same loop as the `/implement` CI + Rebase + Merge Loop section)
-7. Add :merged: emoji: `$PWD/.claude/scripts/generic/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"`
-8. Cleanup: `$PWD/.claude/scripts/generic/larch/local-cleanup.sh --branch $USER_PREFIX/loop-review-deferred`
+7. Add :merged: emoji: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"`
+8. Cleanup: `${CLAUDE_PLUGIN_ROOT}/scripts/larch/local-cleanup.sh --branch $USER_PREFIX/loop-review-deferred`
 
 If no remaining items, skip this step.
 
@@ -292,5 +292,5 @@ Deferred suggestions: see LOOP_REVIEW_DEFERRED.md
 ## Step 6 — Cleanup
 
 ```bash
-$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$LR_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/cleanup-tmpdir.sh --dir "$LR_TMPDIR"
 ```

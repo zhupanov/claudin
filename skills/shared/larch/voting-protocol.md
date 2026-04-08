@@ -91,7 +91,7 @@ Launch all 3 voters **in parallel** (in a single message). Spawn order: Cursor f
 **Cursor voter** (if `cursor_available`):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool cursor --output "<tmpdir>/cursor-vote-output.txt" --timeout 600 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "<tmpdir>/cursor-vote-output.txt" --timeout 600 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "<voter prompt with ballot>"
 ```
@@ -101,7 +101,7 @@ Use `run_in_background: true` and `timeout: 660000`.
 **Codex voter** (if `codex_available`):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "<tmpdir>/codex-vote-output.txt" --timeout 600 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "<tmpdir>/codex-vote-output.txt" --timeout 600 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "<tmpdir>/codex-vote-output.txt" \
     "<voter prompt with ballot>"
@@ -114,7 +114,7 @@ Use `run_in_background: true` and `timeout: 660000`.
 Wait for external voter sentinels using `wait-for-reviewers.sh` (use the same tmpdir as the review phase — do not create a new temp directory for voting). Only include sentinel paths for voters that were actually launched:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/wait-for-reviewers.sh --timeout 660 \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/wait-for-reviewers.sh --timeout 660 \
   "<tmpdir>/cursor-vote-output.txt.done" \
   "<tmpdir>/codex-vote-output.txt.done"
 ```

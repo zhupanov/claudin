@@ -1,0 +1,13 @@
+{
+  "name": "larch-local",
+  "owner": {
+    "name": "Sergey Zhupanov"
+  },
+  "plugins": [
+    {
+      "name": "larch",
+      "source": "./",
+      "description": "Multi-agent workflow automation for Claude Code"
+    }
+  ]
+}

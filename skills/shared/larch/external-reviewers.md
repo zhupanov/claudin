@@ -7,7 +7,7 @@ Shared mechanical procedures for running Codex and Cursor as external reviewers.
 Run the shared `check-reviewers.sh` script to check for Codex and Cursor binaries:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/check-reviewers.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/check-reviewers.sh
 ```
 
 Parse the output for `CODEX_AVAILABLE` and `CURSOR_AVAILABLE`.
@@ -25,7 +25,7 @@ After launching Codex and/or Cursor as background tasks, **poll for `.done` sent
 1. Continue working on other tasks (e.g., processing Claude subagent results) while external reviewers run in the background.
 2. After all other tasks are done, invoke the wait script with the sentinel file paths for all launched reviewers:
    ```bash
-   $PWD/.claude/scripts/generic/larch/wait-for-reviewers.sh "<cursor-output-file>.done" "<codex-output-file>.done"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/larch/wait-for-reviewers.sh "<cursor-output-file>.done" "<codex-output-file>.done"
    ```
    Only include paths for reviewers that were actually launched. For this `wait-for-reviewers.sh` Bash tool call, use `timeout: 960000` (960 seconds = 960 000 ms) and **do NOT** set `run_in_background: true` — this call must block until all sentinels are found. The script polls every 5 seconds, prints compact dot-based progress to stderr, and outputs machine-parseable `DONE <name>: exit=<code>` or `TIMEOUT <name>` lines to stdout. It always exits 0. **Important**: Invoke the wait script exactly ONCE with ALL sentinel file paths in a SINGLE Bash tool call. Do NOT make multiple Bash calls or write ad-hoc polling loops. If you launched the reviewer with a custom timeout via `run-external-reviewer.sh`, pass the matching value plus 60 seconds grace with `--timeout <seconds>` (seconds) and set the Bash tool `timeout` to the same value in milliseconds.
 3. **Do NOT read output files until the corresponding `.done` sentinel file exists.** Reading early will see an empty file (especially for Cursor, whose stdout is fully buffered). Parse the script's stdout `DONE`/`TIMEOUT` lines to determine which reviewers completed.
@@ -58,11 +58,11 @@ Negotiate with each external reviewer (Codex, Cursor) for up to **`max_rounds` r
 2. For findings you disagree with, write a response to a negotiation prompt file explaining your reasoning. Use the Write tool if available; if the skill does not allow Write (e.g., `/research`), write the prompt file via the `run-negotiation-round.sh` script's `--prompt-file` argument (the caller must create the file through whatever means the skill permits). The prompt should include the original finding, your counter-argument, and ask the reviewer to either maintain its position with additional justification or withdraw the finding.
    - **Codex**: Write to `<skill-tmpdir>/codex-negotiation-prompt.txt`, then:
      ```bash
-     $PWD/.claude/scripts/generic/larch/run-negotiation-round.sh --tool codex --prompt-file "<skill-tmpdir>/codex-negotiation-prompt.txt" --output "<skill-tmpdir>/codex-negotiation-output.txt" --workspace "$PWD"
+     ${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-negotiation-round.sh --tool codex --prompt-file "<skill-tmpdir>/codex-negotiation-prompt.txt" --output "<skill-tmpdir>/codex-negotiation-output.txt" --workspace "$PWD"
      ```
    - **Cursor**: Write to `<skill-tmpdir>/cursor-negotiation-prompt.txt`, then:
      ```bash
-     $PWD/.claude/scripts/generic/larch/run-negotiation-round.sh --tool cursor --prompt-file "<skill-tmpdir>/cursor-negotiation-prompt.txt" --output "<skill-tmpdir>/cursor-negotiation-output.txt" --workspace "$PWD"
+     ${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-negotiation-round.sh --tool cursor --prompt-file "<skill-tmpdir>/cursor-negotiation-prompt.txt" --output "<skill-tmpdir>/cursor-negotiation-output.txt" --workspace "$PWD"
      ```
    Use `timeout: 300000` on both Bash tool calls.
 3. Repeat up to 3 rounds total. After round 3 (or earlier if all disagreements are resolved), **Claude makes the final call** on any remaining disputes.

@@ -36,21 +36,21 @@ Suggested emoji palette (use consistently):
 Create a session-scoped temporary directory:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/create-session-tmpdir.sh --prefix claude-research
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-session-tmpdir.sh --prefix claude-research
 ```
 
 Parse the output for `SESSION_TMPDIR`. Set `RESEARCH_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
 
 ### 0b — Quick External Reviewer Check
 
-Read and follow the **Binary Check** section in `.claude/skills/shared/larch/external-reviewers.md`.
+Read and follow the **Binary Check** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`.
 
 ### 0c — Record Research Context
 
 Record the current branch and commit for inclusion in the final report:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/git-branch-info.sh
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/git-branch-info.sh
 ```
 
 Parse the output for `HEAD_SHA` and `CURRENT_BRANCH`. If `CURRENT_BRANCH` is empty (detached HEAD), use `"(detached HEAD)"` in the report.
@@ -85,7 +85,7 @@ Print `🔬 Step 1 — Running collaborative research phase.` and proceed to 1.2
 **Cursor research** (if `cursor_available`):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-output.txt" --timeout 900 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-output.txt" --timeout 900 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Explore the codebase to understand the relevant architecture and code. Write 2-3 paragraphs covering: (1) Your key findings and observations relevant to the research question, (2) Which files/modules/areas are most relevant and why, (3) Any risks, constraints, or feasibility concerns you identify. Do NOT modify files."
 ```
@@ -99,7 +99,7 @@ Prompt: `"You are an Alternative Perspectives researcher. Investigate this resea
 **Codex research** (if `codex_available`):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$RESEARCH_TMPDIR/codex-research-output.txt" \
     "You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Explore the codebase to understand the relevant architecture and code. Write 2-3 paragraphs covering: (1) Your key findings and observations relevant to the research question, (2) Which files/modules/areas are most relevant and why, (3) Any risks, constraints, or feasibility concerns you identify. Do NOT modify files."
@@ -126,12 +126,12 @@ Prompt: `"You are a Risk/Feasibility researcher. Investigate this research quest
 Wait for external research sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched (not Claude replacements — those return via Agent tool):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/wait-for-reviewers.sh --timeout 960 "$RESEARCH_TMPDIR/cursor-research-output.txt.done" "$RESEARCH_TMPDIR/codex-research-output.txt.done"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/wait-for-reviewers.sh --timeout 960 "$RESEARCH_TMPDIR/cursor-research-output.txt.done" "$RESEARCH_TMPDIR/codex-research-output.txt.done"
 ```
 
 Use `timeout: 960000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include sentinel paths for external reviewers that were actually launched.
 
-**Validate research outputs**: For research outputs, the validation criteria differ from the standard review validation in `.claude/skills/shared/larch/external-reviewers.md`: instead of checking for numbered findings or `NO_ISSUES_FOUND`, check that the output is non-empty and contains at least one paragraph of substantive prose. Use `$RESEARCH_TMPDIR/cursor-research-output.txt` and `$RESEARCH_TMPDIR/codex-research-output.txt` as the output files. If an output is empty despite exit code 0, retry once with a `-retry` suffix per the shared procedure in `external-reviewers.md`.
+**Validate research outputs**: For research outputs, the validation criteria differ from the standard review validation in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`: instead of checking for numbered findings or `NO_ISSUES_FOUND`, check that the output is non-empty and contains at least one paragraph of substantive prose. Use `$RESEARCH_TMPDIR/cursor-research-output.txt` and `$RESEARCH_TMPDIR/codex-research-output.txt` as the output files. If an output is empty despite exit code 0, retry once with a `-retry` suffix per the shared procedure in `external-reviewers.md`.
 
 ### 1.4 — Synthesis
 
@@ -165,7 +165,7 @@ The research report is already written to `$RESEARCH_TMPDIR/research-report.txt`
 Run Cursor **first** in the parallel message (it takes the longest):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-validation-output.txt" --timeout 900 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-validation-output.txt" --timeout 900 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Combine 4 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Correctness: Are specific code references correct? Are there factual errors about the codebase? (3) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? (4) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -177,7 +177,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 Run Codex-General **second** in the parallel message:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-general-validation-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-general-validation-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$RESEARCH_TMPDIR/codex-general-validation-output.txt" \
     "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -190,7 +190,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 Run Codex-Deep-Analysis **third** in the parallel message:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" \
     "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) Correctness: Are specific code references correct? Are there factual errors about the codebase? (2) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -202,7 +202,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 
 Launch both Claude subagents **last** in the same message (they finish fastest).
 
-Use the two reviewer archetypes from `.claude/skills/shared/larch/reviewer-templates.md`, filling in the variables for **research validation**:
+Use the two reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/reviewer-templates.md`, filling in the variables for **research validation**:
 
 - **`{REVIEW_TARGET}`** = `"research findings"`
 - **`{CONTEXT_BLOCK}`**:
@@ -219,7 +219,7 @@ Use the two reviewer archetypes from `.claude/skills/shared/larch/reviewer-templ
 
 ### Monitoring External Reviewers
 
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `.claude/skills/shared/larch/external-reviewers.md`, using `$RESEARCH_TMPDIR/codex-general-validation-output.txt`, `$RESEARCH_TMPDIR/codex-deep-validation-output.txt`, and `$RESEARCH_TMPDIR/cursor-validation-output.txt` as the output files.
+Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`, using `$RESEARCH_TMPDIR/codex-general-validation-output.txt`, `$RESEARCH_TMPDIR/codex-deep-validation-output.txt`, and `$RESEARCH_TMPDIR/cursor-validation-output.txt` as the output files.
 
 ### After all reviewers return
 
@@ -232,17 +232,17 @@ Follow the **Monitoring External Reviewers** and **Validating External Reviewer 
 After processing Claude findings, wait for external reviewer sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/wait-for-reviewers.sh --timeout 960 "$RESEARCH_TMPDIR/cursor-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-general-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-deep-validation-output.txt.done"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/wait-for-reviewers.sh --timeout 960 "$RESEARCH_TMPDIR/cursor-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-general-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-deep-validation-output.txt.done"
 ```
 
 Use `timeout: 960000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
-2. Read each reviewer's exit code from its sentinel file, then validate its output per the shared procedure in `.claude/skills/shared/larch/external-reviewers.md`.
+2. Read each reviewer's exit code from its sentinel file, then validate its output per the shared procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`.
 3. Merge external reviewer findings into the already-processed Claude findings.
 
 ### Codex and Cursor Negotiation (in parallel)
 
-If any external reviewers produced findings, negotiate with each independently. With 2 Codex instances (Codex-General and Codex-Deep-Analysis), negotiate with each separately using distinct prompt/output file paths (e.g., `codex-general-negotiation-prompt.txt` / `codex-general-negotiation-output.txt` and `codex-deep-negotiation-prompt.txt` / `codex-deep-negotiation-output.txt`). Run all negotiations **in parallel** when multiple external reviewers produced findings. Use the **Negotiation Protocol** in `.claude/skills/shared/larch/external-reviewers.md`, using `$RESEARCH_TMPDIR` as the tmpdir. Merge accepted/rejected outcomes after all complete.
+If any external reviewers produced findings, negotiate with each independently. With 2 Codex instances (Codex-General and Codex-Deep-Analysis), negotiate with each separately using distinct prompt/output file paths (e.g., `codex-general-negotiation-prompt.txt` / `codex-general-negotiation-output.txt` and `codex-deep-negotiation-prompt.txt` / `codex-deep-negotiation-output.txt`). Run all negotiations **in parallel** when multiple external reviewers produced findings. Use the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/larch/external-reviewers.md`, using `$RESEARCH_TMPDIR` as the tmpdir. Merge accepted/rejected outcomes after all complete.
 
 ### Finalize Validation
 
@@ -293,7 +293,7 @@ Print: `📊 Step 3 — Research report complete.`
 Remove the session temp directory and all files within it:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$RESEARCH_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/larch/cleanup-tmpdir.sh --dir "$RESEARCH_TMPDIR"
 ```
 
 **Repeat any external reviewer warnings** from earlier steps (Step 0b binary checks, Step 1 research-phase failures/timeouts, or Step 2 validation failures) so they are visible at the end of the workflow. For example:
