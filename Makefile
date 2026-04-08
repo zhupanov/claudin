@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint ruff setup
+.PHONY: lint shellcheck markdownlint jsonlint actionlint setup
 
 lint:
 	pre-commit run --all-files
@@ -17,9 +17,6 @@ jsonlint:
 
 actionlint:
 	pre-commit run actionlint --all-files
-
-ruff:
-	pre-commit run ruff --all-files
 
 setup:
 	pre-commit install

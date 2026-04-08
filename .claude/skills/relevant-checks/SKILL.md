@@ -18,7 +18,6 @@ The following linters are configured in `.pre-commit-config.yaml`:
 - **Markdown files (`.md`)**: markdownlint (using `.markdownlint.json` config)
 - **JSON files (`.json`)**: jq validation
 - **GitHub Actions workflows (`.yml`, `.yaml`)**: actionlint
-- **Python files (`.py`)**: ruff
 
 ## Usage
 

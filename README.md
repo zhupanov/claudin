@@ -105,7 +105,7 @@ The `/relevant-checks` skill is **repo-specific** — its `SKILL.md` contains bu
 - **Multi-agent design planning** — 5 agents independently propose architectural approaches before a full implementation plan is written, preventing anchoring bias
 - **Voting-based review resolution** — A 3-agent voting panel (YES/NO/EXONERATE) adjudicates review findings for both plan review and code review
 - **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
-- **End-to-end automation** — From feature design through PR creation, CI monitoring, merge, and Slack announcement in a single command
+- **End-to-end automation** — From feature design through PR creation and Slack announcement in a single command. With `--merge`, also runs CI monitoring, merge, and local cleanup
 - **External reviewer integration** — Codex and Cursor participate alongside Claude subagents as both reviewers and voters
 - **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and implement improvements automatically
 
@@ -118,10 +118,9 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/design`](.claude/skills/design/SKILL.md) | `[--auto] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 agents (3 Claude + Cursor + Codex) independently propose architectural approaches, then 5 reviewers (2 Claude + 2 Codex + Cursor) validate the plan. `--auto` suppresses all interactive question checkpoints. [(Diagram).](.claude/skills/design/diagram.svg) |
 | [`/research`](.claude/skills/research/SKILL.md) | `<research question or topic>` | Collaborative read-only research using 5 research agents (3 Claude + Cursor + Codex) then 5 validation reviewers (2 Claude + 2 Codex + Cursor). Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo. [(Diagram).](.claude/skills/research/diagram.svg) |
 | [`/review`](.claude/skills/review/SKILL.md) | *(none)* | Code review current branch changes with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](.claude/skills/review/diagram.svg) |
-| [`/implement`](.claude/skills/implement/SKILL.md) | `[--quick] [--auto] [--no-merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, Slack announce, CI+rebase+merge, and cleanup. `--quick` skips `/design` and uses simplified code review (2 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--no-merge` skips the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run). [(Diagram).](.claude/skills/implement/diagram.svg) |
+| [`/implement`](.claude/skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (2 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). [(Diagram).](.claude/skills/implement/diagram.svg) |
 | [`/loop-review`](.claude/skills/loop-review/SKILL.md) | `[partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing improvements via `/implement`, and logging deferred suggestions. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](.claude/skills/loop-review/diagram.svg) |
-| [`/skill-creator`](.claude/skills/skill-creator/SKILL.md) | *(conversational)* | Create new skills, modify and improve existing skills, and measure skill performance via eval-based testing. No specific arguments — works conversationally based on your request. [(Diagram).](.claude/skills/skill-creator/diagram.svg) |
-| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint, ruff) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. |
+| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. |
 
 ## Review Agents
 
@@ -144,7 +143,6 @@ Larch uses [pre-commit](https://pre-commit.com/) as the single source of truth f
 | [markdownlint](https://github.com/igorshubovych/markdownlint-cli) | `.md` | Markdown style enforcement (config: `.markdownlint.json`) |
 | [jq](https://jqlang.github.io/jq/) | `.json` | JSON syntax validation |
 | [actionlint](https://github.com/rhysd/actionlint) | `.yml`, `.yaml` | GitHub Actions workflow validation |
-| [ruff](https://docs.astral.sh/ruff/) | `.py` | Python linting |
 
 ### Usage
 
@@ -163,7 +161,6 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 | `make markdownlint` | Run markdownlint only |
 | `make jsonlint` | Run JSON validation only |
 | `make actionlint` | Run actionlint only |
-| `make ruff` | Run ruff only |
 | `make setup` | Install pre-commit git hooks |
 
 ## Environment Variables

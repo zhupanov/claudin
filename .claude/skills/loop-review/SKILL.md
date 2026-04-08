@@ -218,10 +218,10 @@ Track accumulated IMPLEMENT findings in `$LR_TMPDIR/impl-accumulated.md`. After 
 
 **When flushing — invoke /implement:**
 
-Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement` via the Skill tool. **Always prepend `--auto`** to suppress interactive questions:
+Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement` via the Skill tool. **Always prepend `--auto --merge`** — `--auto` suppresses interactive questions, `--merge` opts into the CI+rebase+merge loop (since `/implement`'s default is now to stop after PR creation):
 
 ```
---auto Implement code review findings from loop-review (slices: <slice names>):
+--auto --merge Implement code review findings from loop-review (slices: <slice names>):
 
 ## Changes to implement
 

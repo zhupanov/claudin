@@ -25,17 +25,17 @@
   <text x="390" y="130" fill="#E8833A" font-size="10" text-anchor="start">--quick?</text>
   <line x1="230" y1="150" x2="230" y2="180"/>
 
-  <!-- Decision: no-merge flag? -->
+  <!-- Decision: merge flag? -->
   <polygon points="230,180 320,215 230,250 140,215" fill="#F0AD4E"/>
-  <text x="230" y="213" font-size="12">--no-merge</text>
+  <text x="230" y="213" font-size="12">--merge</text>
   <text x="230" y="227" font-size="12">flag?</text>
 
-  <!-- Yes arrow - skip to report -->
-  <text x="335" y="210" class="label">yes</text>
+  <!-- No arrow - skip to report -->
+  <text x="335" y="210" class="label">no</text>
   <polyline points="320,215 400,215 400,650 320,650" stroke="#333" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 
-  <!-- No arrow -->
-  <text x="215" y="265" class="label">no</text>
+  <!-- Yes arrow -->
+  <text x="215" y="265" class="label">yes</text>
   <line x1="230" y1="250" x2="230" y2="280"/>
 
   <!-- Step 2: CI + Rebase + Merge Loop -->
