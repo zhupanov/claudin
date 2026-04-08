@@ -19,6 +19,8 @@ The following linters are configured in `.pre-commit-config.yaml`:
 - **JSON files (`.json`)**: jq validation
 - **GitHub Actions workflows (`.yml`, `.yaml`)**: actionlint
 
+After pre-commit linting succeeds, `run-checks.sh` additionally invokes `scripts/validate-plugin-structure.sh` to catch structural regressions (SKILL.md frontmatter, script references, executability, dead scripts, manifest shape, etc.) on the full repository. This is the same validator that CI's `plugin-structure` job runs, so developers can catch structural breakage locally before pushing. If pre-commit fails, the validator is skipped — only run when basic linting passes.
+
 ## Usage
 
 Run the private check script:

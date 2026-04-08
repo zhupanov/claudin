@@ -70,3 +70,19 @@ fi
 # ---------------------------------------------------------------------------
 echo "=== Running pre-commit on ${#files[@]} changed file(s) ==="
 pre-commit run --files "${files[@]}"
+PRE_COMMIT_EXIT=$?
+
+if [ "$PRE_COMMIT_EXIT" -ne 0 ]; then
+    exit "$PRE_COMMIT_EXIT"
+fi
+
+# ---------------------------------------------------------------------------
+# Pre-commit succeeded — run plugin structure validation on the full repo.
+# This catches structural regressions (frontmatter, references, dead scripts,
+# etc.) that pre-commit's file-type linters cannot detect. Mirrors the same
+# validator invoked by CI's plugin-structure job, so developers can catch
+# regressions locally before pushing.
+# ---------------------------------------------------------------------------
+echo ""
+echo "=== Running plugin structure validation ==="
+bash "$REPO_ROOT/scripts/validate-plugin-structure.sh"

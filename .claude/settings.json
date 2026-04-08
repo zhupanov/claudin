@@ -101,6 +101,7 @@
       "Bash(export:*)",
       "Bash(false:*)",
       "Bash(fi:*)",
+      "Bash(file:*)",
       "Bash(find:*)",
       "Bash(for:*)",
       "Bash(gcloud artifacts:*)",
