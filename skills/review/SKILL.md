@@ -18,9 +18,9 @@ When changes touch `.claude/settings.json`, verify that the `permissions.allow` 
 
 ### Skill and Script Genericity
 
-When changes touch files under `scripts/larch/` or `skills/shared/larch/`, verify the changes do not introduce repo-specific content: no repo-specific paths (e.g., `server/`, `cli/`, `myservice`), cluster names (e.g., `prod-1`, `staging-2`), service-specific environment variable names, or hardcoded project references that would break when the file is used in a different repository.
+When changes touch files under `scripts/` or `skills/shared/larch/`, verify the changes do not introduce repo-specific content: no repo-specific paths (e.g., `server/`, `cli/`, `myservice`), cluster names (e.g., `prod-1`, `staging-2`), service-specific environment variable names, or hardcoded project references that would break when the file is used in a different repository.
 
-- **Generic directories**: `scripts/larch/`, `skills/shared/larch/` — changes to files here must not introduce repo-specific references.
+- **Generic directories**: `scripts/`, `skills/shared/larch/` — changes to files here must not introduce repo-specific references.
 - **Repo-specific directories**: individual skill-specific script directories (e.g., `skills/implement/scripts/`, `skills/loop-review/scripts/`), and the private `.claude/skills/relevant-checks/` skill — files here are repo-specific by design and exempt from this rule.
 
 ## Step 0 — Session Setup
@@ -30,7 +30,7 @@ When changes touch files under `scripts/larch/` or `skills/shared/larch/`, verif
 Create a session-scoped temporary directory to avoid collisions with parallel sessions:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/create-session-tmpdir.sh --prefix claude-review
+${CLAUDE_PLUGIN_ROOT}/scripts/create-session-tmpdir.sh --prefix claude-review
 ```
 
 Parse the output for `SESSION_TMPDIR`. Set `REVIEW_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
@@ -44,7 +44,7 @@ Read and follow the **Binary Check** section in `${CLAUDE_PLUGIN_ROOT}/skills/sh
 Run the gather script to collect the diff and context:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/gather-branch-context.sh --output-dir "$REVIEW_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/gather-branch-context.sh --output-dir "$REVIEW_TMPDIR"
 ```
 
 Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log — you will pass these to each subagent.
@@ -60,7 +60,7 @@ Run Cursor **first** in the parallel message (it takes the longest). Cursor has 
 Invoke Cursor via the shared monitored wrapper script (with `--capture-stdout` since Cursor writes results to stdout):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-output.txt" --timeout 900 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-output.txt" --timeout 900 --capture-stdout -- \
   cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
     "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Combine 4 review perspectives: (1) General: bugs, logic, quality, tests, backward compat, style. (2) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -76,7 +76,7 @@ Invoke both Codex instances via the shared monitored wrapper script:
 **Codex-General** (general code quality and risk/integration):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-general-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-general-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$REVIEW_TMPDIR/codex-general-output.txt" \
     "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Focus on general code quality and risk/integration: bugs, logic, quality, tests, backward compat, style, breaking changes, deployment risks, regressions, CI constraints. Return numbered findings with file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -87,7 +87,7 @@ Use `run_in_background: true` and `timeout: 960000` on the Bash tool call.
 **Codex-Deep-Analysis** (deep correctness and architecture):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-deep-output.txt" --timeout 900 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-deep-output.txt" --timeout 900 -- \
   codex exec --full-auto -C "$PWD" \
     --output-last-message "$REVIEW_TMPDIR/codex-deep-output.txt" \
     "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Focus on deep correctness and architecture: logic errors, off-by-one, nil handling, type mismatches, races, error paths, separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
@@ -225,5 +225,5 @@ Print a final summary:
 Remove the session temp directory and all files within it:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/larch/cleanup-tmpdir.sh --dir "$REVIEW_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$REVIEW_TMPDIR"
 ```
