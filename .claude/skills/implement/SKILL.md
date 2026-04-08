@@ -1,21 +1,22 @@
 ---
 name: implement
-description: Full end-to-end feature workflow — design, implement, code review, version bump, PR, Slack announce, CI+rebase+merge, and cleanup. Pass --no-merge to skip the CI+rebase+merge loop and create the PR without merging.
-argument-hint: "[--quick] [--auto] [--no-merge] [--session-env <path>] <feature description>"
+description: Full end-to-end feature workflow — design, implement, code review, version bump, PR, Slack announce, and cleanup. Pass --merge to additionally run the CI+rebase+merge loop and delete the local branch after merging.
+argument-hint: "[--quick] [--auto] [--merge] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
 # Implement Skill
 
-Full end-to-end feature implementation: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, Slack announce, CI+rebase+merge, :merged: emoji, local cleanup, verify main, cleanup.
+Full end-to-end feature implementation: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, Slack announce, and cleanup. With `--merge`: also runs the CI+rebase+merge loop, adds the :merged: emoji, deletes the local branch, and verifies main.
 
 The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, save the remainder as `FEATURE_DESCRIPTION` — use this (not raw `$ARGUMENTS`) whenever the human-readable feature description is needed (e.g., PR body, design invocation, commit messages).
 
-- `--quick`: Set a mental flag `quick_mode=true`. When `quick_mode=true`: Step 1 skips `/design` (this skill creates the branch and an inline plan directly), Step 5 skips `/review` (a simplified one-round review with 2 Claude subagents only — no external reviewers, no voting panel), and Step 7a skips the Code Flow Diagram. All other steps (CI, merge, Slack, cleanup) run normally.
+- `--quick`: Set a mental flag `quick_mode=true`. When `quick_mode=true`: Step 1 skips `/design` (this skill creates the branch and an inline plan directly), Step 5 skips `/review` (a simplified one-round review with 2 Claude subagents only — no external reviewers, no voting panel), and Step 7a skips the Code Flow Diagram. All other steps (CI wait, Slack, cleanup) run normally. The `--merge` opt-in is independent of `--quick`.
 - `--auto`: Set a mental flag `auto_mode=true`. When `auto_mode=true`: (a) forward `--auto` to `/design` invocation in Step 1, suppressing `/design`'s interactive question checkpoints; (b) suppress this skill's own opportunistic questions in Step 2; (c) in Step 12, when merge conflicts require user input for uncertain resolutions, suppress `AskUserQuestion` and use best-effort resolution instead (bailing if confidence is too low). When `--quick` is also set and `/design` is skipped, `--auto` still suppresses Step 2 questions. The default (no `--auto`) enables interactive questions.
-- `--no-merge`: Set a mental flag `no_merge=true`. When `no_merge=true`, Steps 12–15 are skipped (CI+rebase+merge loop, :merged: emoji, local cleanup, and main verification). Steps 16–18 (rejected findings report, final report, cleanup) still run.
+- `--merge`: Set a mental flag `merge=true`. When `merge=true`, Steps 12–15 run (CI+rebase+merge loop, :merged: emoji, local cleanup, and main verification). When `merge=false` (default), these steps are skipped — the PR is created and the workflow stops after the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup.
+- `--no-merge`: **Deprecated** — recognized for backward compatibility but treated as a no-op (the new default already skips merge steps). When this flag is encountered, print: `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill and will be forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
 
 ## Progress Reporting
@@ -332,7 +333,7 @@ $PWD/.claude/scripts/generic/larch/check-bump-version.sh --mode pre
 
 Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 
-**If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit. Use /skill-creator for guidance.**` and skip to Step 9.
+**If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 9.
 
 **If `HAS_BUMP=true`**:
 
@@ -562,7 +563,7 @@ If `execution-issues.md` does not exist or is empty, skip this refresh.
 
 ## Step 12 — CI + Rebase + Merge Loop
 
-**If `no_merge=true`**: Print `⏭️ Step 12 — Skipped (--no-merge flag set). PR created but not merged.` and skip to Step 16.
+**If `merge=false`**: Print `⏭️ Step 12 — Skipped (--merge flag not set). PR created but not merged.` and skip to Step 16.
 
 **If `repo_unavailable=true`**: Print `⏭️ Step 12 — Skipped (repository name could not be determined).` and skip to Step 16.
 
@@ -757,7 +758,7 @@ When bailing out:
 
 ## Step 13 — Add :merged: Emoji to Slack Post
 
-**If `no_merge=true`**: Skip this step.
+**If `merge=false`**: Skip this step.
 
 **If `slack_available=false`**: Print `⏭️ Step 13 — Skipped (Slack not configured).` and proceed to Step 14.
 
@@ -775,7 +776,7 @@ $PWD/.claude/scripts/generic/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"
 
 ## Step 14 — Local Cleanup
 
-**If `no_merge=true`**: Print `⏩ Step 14 — Skipped (--no-merge). You are still on branch $BRANCH_NAME.` and skip to Step 16.
+**If `merge=false`**: Print `⏩ Step 14 — Skipped (--merge not set). You are still on branch $BRANCH_NAME.` and skip to Step 16.
 
 **If the PR was successfully merged (Step 12b or force-merged externally)**:
 
@@ -797,7 +798,7 @@ Print: `⚠️ Step 14 — Skipped cleanup (PR not merged). You are still on bra
 
 ## Step 15 — Verify Main
 
-**If `no_merge=true`**: Skip this step.
+**If `merge=false`**: Skip this step.
 
 **Only if the PR was successfully merged (Step 12b or force-merged externally)** (skip if bailed out).
 
@@ -842,6 +843,6 @@ $PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 - `**⚠ Codex not available: <reason>**`
 - `**⚠ Cursor review failed: <reason>**`
 
-If `no_merge=true`, remind: `**Note: --no-merge was set. PR was created but not merged. Merge manually when ready.**`
+If `merge=false`, remind: `**Note: --merge was not set. PR was created but not merged. Merge manually when ready.**`
 
 Print: `🏁 Step 18 — Implement complete!`

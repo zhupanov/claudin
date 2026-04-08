@@ -20,7 +20,7 @@ graph TD
     style CHECKS fill:#555,color:#fff
 ```
 
-- **`/implement`** is the top-level orchestrator. It runs the full design → code → review → PR → CI → merge → cleanup workflow.
+- **`/implement`** is the top-level orchestrator. It runs the full design → code → review → PR workflow by default. With the `--merge` flag, it also runs the CI+rebase+merge loop and local cleanup after PR creation.
 - **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/implement` to implement accepted improvements — accumulating up to 3 slices per `/implement` invocation before flushing.
 
 ## End-to-End Flow
@@ -57,9 +57,11 @@ flowchart TD
         CI_MONITOR --> SLACK[Slack announcement]
     end
 
-    IMPL_PHASE --> MERGE_PHASE
+    IMPL_PHASE --> MERGE_FLAG{--merge<br/>flag set?}
+    MERGE_FLAG -->|No| DONE([Complete])
+    MERGE_FLAG -->|Yes| MERGE_PHASE
 
-    subgraph MERGE_PHASE["Merge Phase (/implement)"]
+    subgraph MERGE_PHASE["Merge Phase (/implement --merge)"]
         CI_WAIT[Wait for CI to pass] --> REBASE{Main advanced?}
         REBASE -->|Yes| DO_REBASE[Rebase + push]
         DO_REBASE --> CI_WAIT
@@ -69,7 +71,7 @@ flowchart TD
         CLEANUP --> VERIFY[Verify main]
     end
 
-    MERGE_PHASE --> DONE([Complete])
+    MERGE_PHASE --> DONE
 ```
 
 ## Standalone Usage
@@ -88,7 +90,7 @@ Flags modify behavior across the skill hierarchy:
 |---|---|---|
 | `--quick` | `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 2 Claude subagents only (no external reviewers, no voting panel). |
 | `--auto` | `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
-| `--no-merge` | `/implement` | Creates PR but skips the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification. The initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run. |
+| `--merge` | `/implement` | Runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification after PR creation. Without `--merge`, `/implement` creates the PR and stops (the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run). |
 
 ## Conditional Steps
 

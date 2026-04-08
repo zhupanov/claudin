@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSe
 
 Systematically review the entire codebase by partitioning into slices, reviewing each with specialized code reviewers (2 Claude subagents + 2 Codex + Cursor), implementing improvements via `/implement`, and tracking deferred suggestions in a checked-in document.
 
-**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto` when invoking `/implement`** to suppress interactive question checkpoints in `/design`.
+**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto --merge` when invoking `/implement`** — `--auto` suppresses interactive question checkpoints in `/design`, and `--merge` opts into the CI+rebase+merge loop that loop-review's batched flow depends on (without `--merge`, `/implement` stops after PR creation and would break loop-review's merge-and-return-to-main expectation).
 
 ## Step 0 — Session Setup
 
@@ -218,10 +218,10 @@ Track accumulated IMPLEMENT findings in `$LR_TMPDIR/impl-accumulated.md`. After 
 
 **When flushing — invoke /implement:**
 
-Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement` via the Skill tool. **Always prepend `--auto`** to suppress interactive questions:
+Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement` via the Skill tool. **Always prepend `--auto --merge`** — `--auto` suppresses interactive questions, `--merge` opts into the CI+rebase+merge loop (since `/implement`'s default is now to stop after PR creation):
 
 ```
---auto Implement code review findings from loop-review (slices: <slice names>):
+--auto --merge Implement code review findings from loop-review (slices: <slice names>):
 
 ## Changes to implement
 
