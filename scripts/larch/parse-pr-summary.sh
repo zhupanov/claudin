@@ -1,1 +1,0 @@
-../parse-pr-summary.sh

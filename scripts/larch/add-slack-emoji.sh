@@ -1,1 +1,0 @@
-../add-slack-emoji.sh

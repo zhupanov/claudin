@@ -1,1 +1,0 @@
-../gather-branch-context.sh

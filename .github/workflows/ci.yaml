@@ -81,13 +81,4 @@ jobs:
           # block-submodule-edit.sh must exist and be executable
           test -x scripts/block-submodule-edit.sh || fail "scripts/block-submodule-edit.sh missing or not executable"
 
-          # Compatibility shims that preserve in-flight path resolution (to be removed in a follow-up PR)
-          # scripts/larch is a real directory of per-file symlinks pointing into ../scripts/
-          test -d scripts/larch || fail "scripts/larch compatibility directory is missing"
-          test -L scripts/larch/session-setup.sh || fail "scripts/larch/ per-file symlinks are missing or not installed"
-          test -e scripts/larch/session-setup.sh || fail "scripts/larch/session-setup.sh symlink is broken"
-          # .claude/scripts/generic/larch is a single symlink pointing at ../../../scripts
-          test -L .claude/scripts/generic/larch || fail ".claude/scripts/generic/larch compatibility symlink is missing"
-          test -e .claude/scripts/generic/larch || fail ".claude/scripts/generic/larch compatibility symlink is broken"
-
           echo "Plugin structure OK: $name v$version (${#agents[@]} agents, $skill_count skills)"

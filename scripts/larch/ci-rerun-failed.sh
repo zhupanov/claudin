@@ -1,1 +1,0 @@
-../ci-rerun-failed.sh
