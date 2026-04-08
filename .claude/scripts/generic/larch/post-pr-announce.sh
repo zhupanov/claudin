@@ -5,7 +5,7 @@
 # slack-announce.sh with $LARCH_SLACK_CHANNEL_ID.
 #
 # Note: This script does NOT perform bullet condensation (the former skill
-# condensed > 3 bullets using LLM reasoning). In practice, /implement-and-merge
+# condensed > 3 bullets using LLM reasoning). In practice, /implement
 # always creates PR bodies with ≤ 3 bullets, so condensation never fired. If
 # a PR has > 3 bullets, a warning is emitted but the announcement proceeds
 # with all bullets.

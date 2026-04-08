@@ -12,7 +12,7 @@ Design an implementation plan for a feature and review it with multiple speciali
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token.
 
 - `--auto`: Set a mental flag `auto_mode=true`. When `auto_mode=true`, all interactive question checkpoints (Steps 1c and 3a) are skipped — the skill runs fully autonomously without user interaction. When `--quick` is set in the caller and `/design` is skipped entirely, `--auto` has no effect.
-- `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement-and-merge`) and will be forwarded to `session-setup.sh` via `--caller-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
+- `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) and will be forwarded to `session-setup.sh` via `--caller-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
 
 The feature to design is described by the remainder of `$ARGUMENTS` after flags are stripped.
 
@@ -365,7 +365,7 @@ Generate a mermaid Architecture Diagram that represents the high-level system/co
 
 Choose the most appropriate mermaid diagram type for the feature (e.g., `graph TD`, `flowchart`, `C4Context`, `classDiagram`, etc.). The diagram type is flexible — pick whatever best communicates the architecture.
 
-Print the diagram under a `## Architecture Diagram` header with a mermaid code fence, so it is visible in conversation context for `/implement-and-merge` to extract later when building the PR body:
+Print the diagram under a `## Architecture Diagram` header with a mermaid code fence, so it is visible in conversation context for `/implement` to extract later when building the PR body:
 
 ```
 ## Architecture Diagram
@@ -402,4 +402,4 @@ $PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
 - `**⚠ Codex sketch timed out / produced empty output**`
 - `**⚠ Step 3b — Architecture diagram generation failed. Proceeding without diagram.**`
 
-Print: `🏁 Step 5 — Design complete! The implementation plan is ready. Run /implement-and-merge to proceed with implementation.`
+Print: `🏁 Step 5 — Design complete! The implementation plan is ready. Run /implement to proceed with implementation.`

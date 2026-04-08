@@ -193,7 +193,7 @@ The scoreboard includes additional columns for OOS items:
 
 ### OOS Reporting
 
-Non-promoted OOS items are **not** written to `rejected-findings.md`. They are collected separately and reported in a dedicated `<details><summary>Out-of-Scope Observations</summary>` section in the PR body. This section is populated by `/implement-and-merge` Step 9a from conversation context.
+Non-promoted OOS items are **not** written to `rejected-findings.md`. They are collected separately and reported in a dedicated `<details><summary>Out-of-Scope Observations</summary>` section in the PR body. This section is populated by `/implement` Step 9a from conversation context.
 
 External reviewers (Codex, Cursor) use single-list prompts and do not produce OOS items — their entire output is treated as in-scope findings. Only Claude subagent reviewers (which use the dual-list templates from `reviewer-templates.md`) produce OOS items.
 

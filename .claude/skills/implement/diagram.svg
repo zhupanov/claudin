@@ -11,7 +11,7 @@
   </defs>
 
   <!-- Title -->
-  <text x="230" y="20" fill="#333" font-size="16" font-weight="bold">/implement-and-merge</text>
+  <text x="230" y="20" fill="#333" font-size="16" font-weight="bold">/implement</text>
 
   <!-- Step 0: Session Setup -->
   <rect x="140" y="40" width="180" height="40" rx="4" fill="#6C757D"/>

@@ -1,11 +1,11 @@
 ---
-name: implement-and-merge
-description: Full end-to-end feature workflow — design, implement, code review, version bump, PR, Slack announce, CI+rebase+merge, and cleanup.
+name: implement
+description: Full end-to-end feature workflow — design, implement, code review, version bump, PR, Slack announce, CI+rebase+merge, and cleanup. Pass --no-merge to skip the CI+rebase+merge loop and create the PR without merging.
 argument-hint: "[--quick] [--auto] [--no-merge] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
-# Implement-and-Merge Skill
+# Implement Skill
 
 Full end-to-end feature implementation: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, Slack announce, CI+rebase+merge, :merged: emoji, local cleanup, verify main, cleanup.
 
@@ -56,7 +56,7 @@ Suggested emoji palette (use consistently):
 Run the shared session setup script. If `SESSION_ENV_PATH` is non-empty (passed via `--session-env`), include `--caller-env` to reuse already-discovered values:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/session-setup.sh --prefix claude-implement-and-merge --skip-branch-check [--caller-env "$SESSION_ENV_PATH"]
+$PWD/.claude/scripts/generic/larch/session-setup.sh --prefix claude-implement --skip-branch-check [--caller-env "$SESSION_ENV_PATH"]
 ```
 
 `--skip-branch-check` is required so that the inlined Step 1 user-branch decision logic (`IS_USER_BRANCH=true` paths) is reachable. Without it, `preflight.sh` would refuse to run unless the user is on a clean `main` branch, making Step 1's branch-resume paths dead code.
@@ -66,16 +66,16 @@ Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-emp
 If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
 
 Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`. Set:
-- `IMPLEMENT_AND_MERGE_TMPDIR` = `SESSION_TMPDIR`
+- `IMPLEMENT_TMPDIR` = `SESSION_TMPDIR`
 - If `SLACK_OK=false`, print: `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.**` Set a mental flag `slack_available=false`.
 - If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository name. CI monitoring (Steps 10, 12) and merge (Step 12b) will be skipped.**` Set a mental flag `repo_unavailable=true`.
 
 ### Write Session Env for Child Skills
 
-Write the discovered values to `$IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh` so they can be forwarded to `/design`:
+Write the discovered values to `$IMPLEMENT_TMPDIR/session-env.sh` so they can be forwarded to `/design`:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/write-session-env.sh --output "$IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh" \
+$PWD/.claude/scripts/generic/larch/write-session-env.sh --output "$IMPLEMENT_TMPDIR/session-env.sh" \
   --slack-ok <value> --slack-missing <value> --repo <value> --repo-unavailable <value>
 ```
 
@@ -83,7 +83,7 @@ This file will be passed to `/design` via `--session-env` in Step 1.
 
 ## Execution Issues Tracking
 
-Throughout execution, log noteworthy issues to `$IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md`. This file captures problems worth investigating later but that do not block the current task. **Any step** may append to this file when an issue is encountered.
+Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issues.md`. This file captures problems worth investigating later but that do not block the current task. **Any step** may append to this file when an issue is encountered.
 
 **When to log** (non-exhaustive):
 - Pre-existing code issues discovered but not fixed (outside current task scope)
@@ -135,8 +135,8 @@ Proceed to Step 2.
 
 **Decision logic**:
 - If `IS_USER_BRANCH=true` **AND** a reviewed implementation plan is visible in the conversation context above: The plan was created by a prior `/design` invocation in this session. Proceed to Step 2.
-- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with `--session-env $IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh` prepended to the feature description to create a plan on the current branch. **If `auto_mode=true`, also prepend `--auto`** so `/design` suppresses interactive questions. After `/design` completes, proceed to Step 2.
-- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with `--session-env $IMPLEMENT_AND_MERGE_TMPDIR/session-env.sh` prepended to the feature description to create a branch and design the plan. **If `auto_mode=true`, also prepend `--auto`** so `/design` suppresses interactive questions. After `/design` completes, proceed to Step 2.
+- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` prepended to the feature description to create a plan on the current branch. **If `auto_mode=true`, also prepend `--auto`** so `/design` suppresses interactive questions. After `/design` completes, proceed to Step 2.
+- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` prepended to the feature description to create a branch and design the plan. **If `auto_mode=true`, also prepend `--auto`** so `/design` suppresses interactive questions. After `/design` completes, proceed to Step 2.
 
 ### Capture branch name (`BRANCH_NAME`)
 
@@ -212,7 +212,7 @@ Skip `/review`. Instead, run a simplified one-round review:
 
 1. Gather the diff using the context script:
    ```bash
-   $PWD/.claude/scripts/generic/larch/gather-branch-context.sh --output-dir "$IMPLEMENT_AND_MERGE_TMPDIR"
+   $PWD/.claude/scripts/generic/larch/gather-branch-context.sh --output-dir "$IMPLEMENT_TMPDIR"
    ```
    Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log.
 2. Launch **2 Claude subagent reviewers** (general, deep-analysis) using the same reviewer archetypes from `.claude/skills/shared/larch/reviewer-templates.md` with these variable bindings: `{REVIEW_TARGET}` = `"code changes"`, `{CONTEXT_BLOCK}` = the commit log + file list + full diff, `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. **No Codex, no Cursor, no external reviewers. No competition notice** (there is no voting panel in quick mode).
@@ -220,7 +220,7 @@ Skip `/review`. Instead, run a simplified one-round review:
 4. **Main agent decides**: Evaluate each finding and unilaterally accept or reject it. No voting panel. Accept findings that identify genuine bugs, logic errors, or important improvements. Reject trivial style nits or speculative concerns.
 5. Implement accepted fixes. Run `/relevant-checks` if files changed.
 6. **One round only** — no re-review loop.
-7. For rejected findings, write them to `$IMPLEMENT_AND_MERGE_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 16 and PR body sections work unchanged.
+7. For rejected findings, write them to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 16 and PR body sections work unchanged.
 
 Print: `🔍 Step 5 — Quick mode: simplified review (2 Claude subagents, 1 round, no voting).`
 
@@ -232,7 +232,7 @@ Invoke the `/review` skill. This launches 2 parallel Claude subagent reviewers (
 
 ### Track Rejected Code Review Findings
 
-After the code review completes (whether `/review` in normal mode or the simplified review in quick mode), examine the final output. For any **in-scope** findings that were not accepted (not enough YES votes in normal mode — whether rejected or exonerated — or rejected by the main agent in quick mode), append each to `$IMPLEMENT_AND_MERGE_TMPDIR/rejected-findings.md` using this format. **Do not include non-promoted OOS items** — those are reported separately in the "Out-of-Scope Observations" PR body section:
+After the code review completes (whether `/review` in normal mode or the simplified review in quick mode), examine the final output. For any **in-scope** findings that were not accepted (not enough YES votes in normal mode — whether rejected or exonerated — or rejected by the main agent in quick mode), append each to `$IMPLEMENT_TMPDIR/rejected-findings.md` using this format. **Do not include non-promoted OOS items** — those are reported separately in the "Out-of-Scope Observations" PR body section:
 
 ```markdown
 ### [Code Review] <Reviewer Name>
@@ -245,7 +245,7 @@ After the code review completes (whether `/review` in normal mode or the simplif
 **Conditional**: Check if the code review step (Step 5) actually modified any files (applies in both normal and quick mode):
 
 ```bash
-$PWD/.claude/skills/implement-and-merge/scripts/check-review-changes.sh
+$PWD/.claude/skills/implement/scripts/check-review-changes.sh
 ```
 
 Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ Step 6 — Skipping second validation — review made no changes.` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
@@ -303,7 +303,7 @@ Print the diagram under a `## Code Flow Diagram` header with a mermaid code fenc
 
 **If diagram generation succeeds**, print: `✅ Step 7a — Code flow diagram generated.`
 
-**If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ Step 7a — Code flow diagram generation failed. Proceeding without diagram.**` Log this warning to `$IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md` under the `Warnings` category.
+**If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ Step 7a — Code flow diagram generation failed. Proceeding without diagram.**` Log this warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category.
 
 ### Rebase onto latest main (before version bump)
 
@@ -349,7 +349,7 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 
 ### 9a — Prepare PR body
 
-Write the PR body to a temp file at `$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md`. The PR body is the single source of truth for all report content — there are no separate report files.
+Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body is the single source of truth for all report content — there are no separate report files.
 
 ```markdown
 ## Summary
@@ -399,7 +399,7 @@ Write the PR body to a temp file at `$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md`. Th
 
 <details><summary>Rejected Code Review Suggestions</summary>
 
-<content from $IMPLEMENT_AND_MERGE_TMPDIR/rejected-findings.md if it exists and is non-empty, otherwise "All code review suggestions were implemented.">
+<content from $IMPLEMENT_TMPDIR/rejected-findings.md if it exists and is non-empty, otherwise "All code review suggestions were implemented.">
 
 </details>
 
@@ -423,7 +423,7 @@ Write the PR body to a temp file at `$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md`. Th
 
 <details><summary>Execution Issues</summary>
 
-<content from $IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md if it exists and is non-empty, otherwise "No execution issues encountered.">
+<content from $IMPLEMENT_TMPDIR/execution-issues.md if it exists and is non-empty, otherwise "No execution issues encountered.">
 
 </details>
 
@@ -463,7 +463,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 Run the `create-pr.sh` script with a concise title (under 70 chars):
 
 ```bash
-$PWD/.claude/scripts/generic/larch/create-pr.sh --title "<title>" --body-file "$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md"
+$PWD/.claude/scripts/generic/larch/create-pr.sh --title "<title>" --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
 ```
 
 Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The script handles pushing the branch, detecting existing PRs, and creating new ones with `--assignee @me`. `PR_STATUS` is `created` for new PRs or `existing` for already-open PRs. Save `PR_STATUS` — it is used in Step 11 to decide whether to post to Slack.
@@ -472,7 +472,7 @@ Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The scr
 
 **If `PR_STATUS=existing`**: The PR body was not updated by `create-pr.sh`. Update it now:
 ```bash
-$PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md"
+$PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
 ```
 
 Print the PR URL when done. Save `PR_NUMBER`, `PR_URL`, and `PR_TITLE` for use in Steps 10–15.
@@ -516,7 +516,7 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
    - **`ACTION=bail`**: Print `BAIL_REASON`. Print `**⚠ Step 10 — CI monitoring bailed. PR may have failing CI.**` and proceed to Step 11.
 
-**Execution issues**: Log any CI failures, transient retries, or bail events to `$IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md` under the `CI Issues` category.
+**Execution issues**: Log any CI failures, transient retries, or bail events to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `CI Issues` category.
 
 After handling any non-terminal action (rebase, evaluate_failure), **re-invoke `ci-wait.sh`** with updated counter values.
 
@@ -536,7 +536,7 @@ $PWD/.claude/scripts/generic/larch/post-pr-announce.sh --pr <PR-NUMBER>
 
 Parse the output for `SLACK_TS=<value>` (emitted by `post-pr-announce.sh` — keep in sync).
 
-**If the script exits non-zero or `SLACK_TS` is empty**: Print `**⚠ Slack announcement failed. Continuing.**` Set `SLACK_TS` to empty. Log the failure to `$IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md` under the `Tool Failures` category.
+**If the script exits non-zero or `SLACK_TS` is empty**: Print `**⚠ Slack announcement failed. Continuing.**` Set `SLACK_TS` to empty. Log the failure to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Tool Failures` category.
 
 Save `SLACK_TS` for use in Step 13 (the :merged: emoji step).
 
@@ -544,18 +544,18 @@ Save `SLACK_TS` for use in Step 13 (the :merged: emoji step).
 
 **This refresh runs unconditionally after all Step 11 branches converge — including when Slack was skipped (`slack_available=false`) or when `PR_STATUS=existing`. All Step 11 early-exit paths must reach this section before proceeding to Step 12.**
 
-If `$IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md` exists and is non-empty, update the PR body to reflect the final execution issues (which may include issues logged during Steps 10–11, after the initial PR body was written):
+If `$IMPLEMENT_TMPDIR/execution-issues.md` exists and is non-empty, update the PR body to reflect the final execution issues (which may include issues logged during Steps 10–11, after the initial PR body was written):
 
-1. Fetch the current live PR body using the read script (do NOT re-read `$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md` — the live body may differ from the local copy):
+1. Fetch the current live PR body using the read script (do NOT re-read `$IMPLEMENT_TMPDIR/pr-body.md` — the live body may differ from the local copy):
    ```bash
-   $PWD/.claude/scripts/generic/larch/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_AND_MERGE_TMPDIR/live-body.md"
+   $PWD/.claude/scripts/generic/larch/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_TMPDIR/live-body.md"
    ```
-   Read `$IMPLEMENT_AND_MERGE_TMPDIR/live-body.md` to get the current body text.
-2. Replace the entire inner content of the `<details><summary>Execution Issues</summary>...</details>` block with the full current contents of `$IMPLEMENT_AND_MERGE_TMPDIR/execution-issues.md`, preserving the blank lines after the opening tag and before the closing `</details>` (required for GitHub Markdown rendering). If the `<details><summary>Execution Issues</summary>` block is not found in the fetched body, print `**⚠ Execution Issues block not found in live PR body. Skipping refresh.**` and skip the update.
-3. Write the result to `$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md`
+   Read `$IMPLEMENT_TMPDIR/live-body.md` to get the current body text.
+2. Replace the entire inner content of the `<details><summary>Execution Issues</summary>...</details>` block with the full current contents of `$IMPLEMENT_TMPDIR/execution-issues.md`, preserving the blank lines after the opening tag and before the closing `</details>` (required for GitHub Markdown rendering). If the `<details><summary>Execution Issues</summary>` block is not found in the fetched body, print `**⚠ Execution Issues block not found in live PR body. Skipping refresh.**` and skip the update.
+3. Write the result to `$IMPLEMENT_TMPDIR/pr-body.md`
 4. Update the PR:
    ```bash
-   $PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_AND_MERGE_TMPDIR/pr-body.md"
+   $PWD/.claude/scripts/generic/larch/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
    ```
 
 If `execution-issues.md` does not exist or is empty, skip this refresh.
@@ -650,7 +650,7 @@ For each file in `CONFLICT_FILES`:
 
 **Otherwise**, run a full reviewer panel to validate the non-trivial conflict resolutions:
 
-**3a. Create temp directory**: Create `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/` for reviewer artifacts. If it already exists (from a prior conflict resolution in this rebase loop), remove it and recreate.
+**3a. Create temp directory**: Create `$IMPLEMENT_TMPDIR/conflict-review/` for reviewer artifacts. If it already exists (from a prior conflict resolution in this rebase loop), remove it and recreate.
 
 **3b. Check external reviewer availability**: Run `$PWD/.claude/scripts/generic/larch/check-reviewers.sh` to set `codex_available` and `cursor_available` flags. Follow the Binary Check procedure in `.claude/skills/shared/larch/external-reviewers.md`.
 
@@ -677,9 +677,9 @@ Also capture `git diff --cached` as supplementary context showing the full stage
 - `{CONTEXT_BLOCK}` = the per-file conflict context blocks from 3c + supplementary `git diff --cached`
 - `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is with the resolution"` + `"Suggested correction"`
 
-Follow `.claude/skills/shared/larch/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
+Follow `.claude/skills/shared/larch/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
 
-**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
+**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
 
 **3e. Voting**: Run the voting protocol from `.claude/skills/shared/larch/voting-protocol.md` with code review voter composition:
 - **Voter 1**: Claude General Reviewer subagent (fresh Agent invocation)
@@ -694,7 +694,7 @@ After 2 rounds with unresolved findings still being raised: run `git rebase --ab
 
 If the reviewer panel finds no issues or all findings are addressed: proceed to Phase 4.
 
-**3f. Cleanup**: Remove `$IMPLEMENT_AND_MERGE_TMPDIR/conflict-review/` after Phase 3 completes (on both success and bail paths, before proceeding).
+**3f. Cleanup**: Remove `$IMPLEMENT_TMPDIR/conflict-review/` after Phase 3 completes (on both success and bail paths, before proceeding).
 
 #### Phase 4 — Continue Rebase
 
@@ -816,7 +816,7 @@ Parse the output for `VERIFIED`, `COMMIT_HASH`, and `COMMIT_MESSAGE`. Print the 
 
 Print a report of all code review suggestions that were **not** implemented.
 
-1. Check if `$IMPLEMENT_AND_MERGE_TMPDIR/rejected-findings.md` exists and is non-empty.
+1. Check if `$IMPLEMENT_TMPDIR/rejected-findings.md` exists and is non-empty.
 2. If it has content, print it under a `## Unimplemented Code Review Suggestions` header, formatted clearly with the reviewer name, the suggestion, and the reason for each.
 3. If the file doesn't exist or is empty, print: `📊 Step 16 — All code review suggestions were implemented.`
 
@@ -835,7 +835,7 @@ If both phases reported all suggestions implemented, print: `📊 Step 17 — Al
 Remove the session temp directory and all files within it:
 
 ```bash
-$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_AND_MERGE_TMPDIR"
+$PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 ```
 
 **Repeat any external reviewer warnings** from earlier in the workflow (from `/design` or `/review` phases) so they are visible at the end. **If `quick_mode=true`**, there are no external reviewer warnings to repeat (no external reviewers were used). For example:

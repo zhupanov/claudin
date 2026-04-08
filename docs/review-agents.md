@@ -77,4 +77,4 @@ External reviewers (Codex, Cursor) produce single-list output — their entire o
 | `/design` | Plan review | Both Claude archetypes + 2 Codex + Cursor (5 total) |
 | `/review` | Code review | Both Claude archetypes + 2 Codex + Cursor (5 total) |
 | `/loop-review` | Slice review | Both Claude archetypes + 2 Codex + Cursor (5 total) |
-| `/implement-and-merge` (quick mode) | Simplified review | Both Claude archetypes only (no external reviewers) |
+| `/implement` (quick mode) | Simplified review | Both Claude archetypes only (no external reviewers) |

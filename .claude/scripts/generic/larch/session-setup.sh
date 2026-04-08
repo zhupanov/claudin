@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# session-setup.sh — Shared session setup for /design and /implement-and-merge skills.
+# session-setup.sh — Shared session setup for /design and /implement skills.
 #
 # Consolidates the common Step 0 operations: preflight, temp dir creation,
 # Slack configuration check, and repo name derivation.
@@ -9,7 +9,7 @@
 #     [--skip-repo-check] [--caller-env <path>]
 #
 # Flags:
-#   --prefix <name>       (required) Temp dir prefix for mktemp (e.g., claude-implement-and-merge)
+#   --prefix <name>       (required) Temp dir prefix for mktemp (e.g., claude-implement)
 #   --skip-branch-check   Forwarded to preflight.sh (skip on-main/clean-tree assertions)
 #   --skip-slack-check    Skip LARCH_SLACK_BOT_TOKEN and LARCH_SLACK_CHANNEL_ID check entirely
 #   --skip-repo-check     Skip repo name derivation entirely

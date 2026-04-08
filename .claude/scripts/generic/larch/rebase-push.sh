@@ -13,14 +13,14 @@
 #                      of `git rebase origin/main`. Caller must resolve conflicts
 #                      and stage files before invoking with --continue.
 #   --no-push        — Skip the push step after a successful rebase. Used by
-#                      /implement-and-merge for local-only freshness rebases
+#                      /implement for local-only freshness rebases
 #                      where the branch has not yet been pushed. In this mode,
 #                      conflicts are aborted immediately (exit 1) instead of
 #                      left in progress.
 #   --skip-if-pushed — Only valid with --no-push. Before fetching, check whether
 #                      the current branch already exists on origin. If it does,
 #                      print `SKIPPED_ALREADY_PUSHED=true` to stdout and exit 0
-#                      without fetching or rebasing. This lets /implement-and-merge
+#                      without fetching or rebasing. This lets /implement
 #                      collapse its per-checkpoint "is branch pushed? if so skip,
 #                      else rebase" dance into a single script invocation. If the
 #                      ls-remote check fails (network/auth), the script falls

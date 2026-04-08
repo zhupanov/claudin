@@ -1,15 +1,15 @@
 ---
 name: loop-review
-description: Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents, implementing improvements via /implement-and-merge, and logging deferred suggestions. Use when the user wants a comprehensive quality sweep, systematic code review, or iterative improvement pass across the whole codebase.
+description: Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents, implementing improvements via /implement, and logging deferred suggestions. Use when the user wants a comprehensive quality sweep, systematic code review, or iterative improvement pass across the whole codebase.
 argument-hint: "[partition criteria]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
 # Loop Review
 
-Systematically review the entire codebase by partitioning into slices, reviewing each with specialized code reviewers (2 Claude subagents + 2 Codex + Cursor), implementing improvements via `/implement-and-merge`, and tracking deferred suggestions in a checked-in document.
+Systematically review the entire codebase by partitioning into slices, reviewing each with specialized code reviewers (2 Claude subagents + 2 Codex + Cursor), implementing improvements via `/implement`, and tracking deferred suggestions in a checked-in document.
 
-**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement-and-merge`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto` when invoking `/implement-and-merge`** to suppress interactive question checkpoints in `/design`.
+**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto` when invoking `/implement`** to suppress interactive question checkpoints in `/design`.
 
 ## Step 0 — Session Setup
 
@@ -66,7 +66,7 @@ Print the partition plan with file counts per slice.
 
 ## Step 2 — Initialize Deferred Suggestions Document
 
-If `LOOP_REVIEW_DEFERRED.md` does not exist at the repo root, create it locally (do NOT commit yet — it will be committed as part of the first `/implement-and-merge` PR):
+If `LOOP_REVIEW_DEFERRED.md` does not exist at the repo root, create it locally (do NOT commit yet — it will be committed as part of the first `/implement` PR):
 
 ```markdown
 # Loop Review — Deferred Suggestions
@@ -76,7 +76,7 @@ Review suggestions that were identified but deferred, with explanations for each
 
 ## Step 3 — Slice Review Loop
 
-Process slices with **batched implementation**. Review slices sequentially, but accumulate IMPLEMENT findings across up to 3 slices before invoking `/implement-and-merge`. This reduces the number of CI/merge cycles from N to roughly N/3.
+Process slices with **batched implementation**. Review slices sequentially, but accumulate IMPLEMENT findings across up to 3 slices before invoking `/implement`. This reduces the number of CI/merge cycles from N to roughly N/3.
 
 For each slice (using `N` as the 1-based slice index):
 
@@ -211,14 +211,14 @@ Track accumulated IMPLEMENT findings in `$LR_TMPDIR/impl-accumulated.md`. After 
 1. Append this slice's IMPLEMENT findings to `$LR_TMPDIR/impl-accumulated.md` (with slice name header).
 2. Append this slice's DEFER findings to `$LR_TMPDIR/deferred-accumulated.md`.
 
-**Flush condition**: Invoke `/implement-and-merge` when **any** of these are true:
+**Flush condition**: Invoke `/implement` when **any** of these are true:
 - 3 slices worth of IMPLEMENT findings have accumulated
 - This is the last slice
 - Accumulated IMPLEMENT findings touch more than 10 distinct files (risk of conflicts grows)
 
-**When flushing — invoke /implement-and-merge:**
+**When flushing — invoke /implement:**
 
-Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement-and-merge` via the Skill tool. **Always prepend `--auto`** to suppress interactive questions:
+Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement` via the Skill tool. **Always prepend `--auto`** to suppress interactive questions:
 
 ```
 --auto Implement code review findings from loop-review (slices: <slice names>):
@@ -235,12 +235,12 @@ Append the following deferred items:
 <accumulated deferred items>
 ```
 
-**After /implement-and-merge completes and merges:**
+**After /implement completes and merges:**
 - Clear `$LR_TMPDIR/impl-accumulated.md` and `$LR_TMPDIR/deferred-accumulated.md` (items now committed)
 - Increment PR count, update implemented/deferred counters
 - Verify you're on `main` with latest: `git checkout main && git pull origin main`
 
-**After /implement-and-merge fails or bails:**
+**After /implement fails or bails:**
 - Keep accumulated items for next flush
 - Log the failure but continue to next slice
 - Ensure you're back on main: `git checkout main`
@@ -253,16 +253,16 @@ Move to next slice. Go back to 3a.
 
 ## Step 4 — Final Deferred Commit
 
-If there are uncommitted deferred items in `$LR_TMPDIR/deferred-accumulated.md` (because no /implement-and-merge ran for those slices, or the last /implement-and-merge failed):
+If there are uncommitted deferred items in `$LR_TMPDIR/deferred-accumulated.md` (because no /implement ran for those slices, or the last /implement failed):
 
-**Lightweight path** (deferred-only updates don't need full /implement-and-merge):
+**Lightweight path** (deferred-only updates don't need full /implement):
 
 1. Create a branch: `git checkout -b $USER_PREFIX/loop-review-deferred`
 2. Update `LOOP_REVIEW_DEFERRED.md` with the accumulated deferred items
 3. Commit: `$PWD/.claude/scripts/generic/larch/git-commit.sh -m "Update LOOP_REVIEW_DEFERRED.md with deferred review suggestions" LOOP_REVIEW_DEFERRED.md`
 4. Create PR via `$PWD/.claude/scripts/generic/larch/create-pr.sh`
 5. Post to Slack: `$PWD/.claude/scripts/generic/larch/post-pr-announce.sh --pr <PR_NUMBER>` — parse `SLACK_TS` from output
-6. Monitor CI and merge (same loop as the `/implement-and-merge` CI + Rebase + Merge Loop section)
+6. Monitor CI and merge (same loop as the `/implement` CI + Rebase + Merge Loop section)
 7. Add :merged: emoji: `$PWD/.claude/scripts/generic/larch/post-merged-emoji.sh --slack-ts "$SLACK_TS"`
 8. Cleanup: `$PWD/.claude/scripts/generic/larch/local-cleanup.sh --branch $USER_PREFIX/loop-review-deferred`
 

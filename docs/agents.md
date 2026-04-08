@@ -38,7 +38,7 @@ This pattern is used for:
 
 ### Sequential Composition
 
-Skills invoke other skills in sequence, each building on the previous result. For example, `/implement-and-merge` invokes `/design` first, then implements the resulting plan, then invokes `/review` on the implementation.
+Skills invoke other skills in sequence, each building on the previous result. For example, `/implement` invokes `/design` first, then implements the resulting plan, then invokes `/review` on the implementation.
 
 ## Agent Types
 

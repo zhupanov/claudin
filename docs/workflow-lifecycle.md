@@ -8,24 +8,24 @@ Skills are not invoked in a flat sequence. They form a hierarchical call graph w
 
 ```mermaid
 graph TD
-    IMPL_MERGE["/implement-and-merge"] -->|invokes| DESIGN["/design"]
-    IMPL_MERGE -->|invokes| REVIEW["/review"]
-    IMPL_MERGE -->|invokes| CHECKS["/relevant-checks"]
-    LOOP["/loop-review"] -->|invokes| IMPL_MERGE
+    IMPLEMENT["/implement"] -->|invokes| DESIGN["/design"]
+    IMPLEMENT -->|invokes| REVIEW["/review"]
+    IMPLEMENT -->|invokes| CHECKS["/relevant-checks"]
+    LOOP["/loop-review"] -->|invokes| IMPLEMENT
 
-    style IMPL_MERGE fill:#2d5a27,color:#fff
+    style IMPLEMENT fill:#2d5a27,color:#fff
     style LOOP fill:#2d5a27,color:#fff
     style DESIGN fill:#4a3a6e,color:#fff
     style REVIEW fill:#4a3a6e,color:#fff
     style CHECKS fill:#555,color:#fff
 ```
 
-- **`/implement-and-merge`** is the top-level orchestrator. It runs the full design → code → review → PR → CI → merge → cleanup workflow.
-- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/implement-and-merge` to implement accepted improvements — accumulating up to 3 slices per `/implement-and-merge` invocation before flushing.
+- **`/implement`** is the top-level orchestrator. It runs the full design → code → review → PR → CI → merge → cleanup workflow.
+- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/implement` to implement accepted improvements — accumulating up to 3 slices per `/implement` invocation before flushing.
 
 ## End-to-End Flow
 
-The full lifecycle when running `/implement-and-merge <feature description>`:
+The full lifecycle when running `/implement <feature description>`:
 
 ```mermaid
 flowchart TD
@@ -59,7 +59,7 @@ flowchart TD
 
     IMPL_PHASE --> MERGE_PHASE
 
-    subgraph MERGE_PHASE["Merge Phase (/implement-and-merge)"]
+    subgraph MERGE_PHASE["Merge Phase (/implement)"]
         CI_WAIT[Wait for CI to pass] --> REBASE{Main advanced?}
         REBASE -->|Yes| DO_REBASE[Rebase + push]
         DO_REBASE --> CI_WAIT
@@ -74,7 +74,7 @@ flowchart TD
 
 ## Standalone Usage
 
-Not every task requires the full `/implement-and-merge` pipeline. Skills can be used independently:
+Not every task requires the full `/implement` pipeline. Skills can be used independently:
 
 - **`/design <feature>`** — Plan a feature without implementing it. Creates a branch, runs collaborative sketches, writes and reviews the plan.
 - **`/review`** — Review the current branch's changes. Launches reviewers, runs voting on findings, implements accepted fixes, and re-runs validation checks in a recursive loop.
@@ -86,9 +86,9 @@ Flags modify behavior across the skill hierarchy:
 
 | Flag | Available on | Effect |
 |---|---|---|
-| `--quick` | `/implement-and-merge` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 2 Claude subagents only (no external reviewers, no voting panel). |
-| `--auto` | `/implement-and-merge`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
-| `--no-merge` | `/implement-and-merge` | Creates PR but skips the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification. The initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run. |
+| `--quick` | `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 2 Claude subagents only (no external reviewers, no voting panel). |
+| `--auto` | `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
+| `--no-merge` | `/implement` | Creates PR but skips the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification. The initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run. |
 
 ## Conditional Steps
 

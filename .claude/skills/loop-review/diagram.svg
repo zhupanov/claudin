@@ -65,7 +65,7 @@
   <!-- Decision: Flush batch? -->
   <polygon points="230,501 340,531 230,561 120,531" fill="#F0AD4E"/>
   <text x="230" y="529" font-size="12">Flush via</text>
-  <text x="230" y="543" font-size="10">/implement-and-merge?</text>
+  <text x="230" y="543" font-size="10">/implement?</text>
 
   <!-- Yes arrow -->
   <text x="215" y="550" class="label">yes</text>
@@ -76,9 +76,9 @@
 
   <line x1="230" y1="561" x2="230" y2="600"/>
 
-  <!-- /implement-and-merge invocation -->
+  <!-- /implement invocation -->
   <rect x="90" y="600" width="280" height="36" rx="4" fill="#7B68EE"/>
-  <text x="230" y="618" font-size="11">Flush Batch (/implement-and-merge)</text>
+  <text x="230" y="618" font-size="11">Flush Batch (/implement)</text>
 
   <!-- Loop back to next slice after flush -->
   <polyline points="370,618 395,618 395,288 370,288" fill="none" marker-end="url(#arrow)"/>
