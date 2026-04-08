@@ -844,4 +844,4 @@ $PWD/.claude/scripts/generic/larch/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 
 If `no_merge=true`, remind: `**Note: --no-merge was set. PR was created but not merged. Merge manually when ready.**`
 
-Print: `🏁 Step 18 — Implement-and-merge complete!`
+Print: `🏁 Step 18 — Implement complete!`

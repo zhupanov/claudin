@@ -38,6 +38,8 @@ git add .claude
 git commit -m "Bump larch submodule"
 ```
 
+**Note on `settings.json` after a larch upgrade**: Because `settings*.json` files are not symlinked (see "Important notes" below), bumping the submodule does NOT update your repo's `.claude/settings.json` permission entries. When a larch upgrade renames a skill, helper script path, or environment-variable allow-list entry, you must update your local `settings.json` by hand. After bumping, diff your `.claude/settings.json` against `larch/.claude/settings.json` and apply any needed permission entry renames or additions; otherwise upgraded skills can fail at runtime with permission errors even though their symlinks resolve correctly.
+
 **How it works**: `setup-larch.sh` creates symlinks from your `.claude/` directory tree into `larch/.claude/`. Skill directories (those containing `SKILL.md`) get directory-level symlinks, while individual files (scripts, agents, shared docs) get file-level symlinks. Your repo can have its own additional skills, scripts, and agents alongside the symlinked ones.
 
 **Important notes**:
