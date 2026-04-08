@@ -1,1 +1,0 @@
-../write-session-env.sh

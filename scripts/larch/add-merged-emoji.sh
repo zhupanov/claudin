@@ -1,1 +1,0 @@
-../add-merged-emoji.sh

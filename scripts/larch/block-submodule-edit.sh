@@ -1,1 +1,0 @@
-../block-submodule-edit.sh

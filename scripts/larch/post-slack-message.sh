@@ -1,1 +1,0 @@
-../post-slack-message.sh
