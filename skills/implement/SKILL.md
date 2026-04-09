@@ -41,6 +41,7 @@ Suggested emoji palette (use consistently):
 | 7 | 💾 | Second commit |
 | 7a | 🗺️ | Code flow diagram |
 | 8 | 🏷️ | Version bump |
+| 8a | 📝 | CHANGELOG update |
 | 9 | 🚀 | Create PR |
 | 10 | 🔄 | CI monitor (initial wait for green) |
 | 11 | 📋 | Slack announcement |
@@ -367,7 +368,40 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
    ```
    Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. If `VERIFIED=false`, print: `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`
 
-**Important**: At PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 9 after `/bump-version` returns — no commits may occur between Step 8 and Step 9. Note: after PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the shared **Rebase + Re-bump Sub-procedure** — see before Step 10). The branch history between PR creation and merge may therefore temporarily contain zero or multiple bump commits; the invariant that matters is "the terminal bump commit on HEAD must be based on latest `origin/main` at merge time", enforced strictly by Step 12 and best-effort by Step 10.
+**Important**: At PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 8a after `/bump-version` returns. No additional commits may occur between Step 8a and Step 9. Note: after PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the shared **Rebase + Re-bump Sub-procedure** — see before Step 10). The branch history between PR creation and merge may therefore temporarily contain zero or multiple bump commits; the invariant that matters is "the terminal bump commit on HEAD must be based on latest `origin/main` at merge time", enforced strictly by Step 12 and best-effort by Step 10.
+
+## Step 8a — CHANGELOG Update
+
+**Conditional**: Check if `CHANGELOG.md` exists in the project root using the Read tool. If the file does not exist (Read returns an error), print `⏩ Step 8a — No CHANGELOG.md found, skipping.` and proceed to Step 9.
+
+**If `CHANGELOG.md` exists**:
+
+1. Read the current `CHANGELOG.md`.
+2. Read the `NEW_VERSION` from the `/bump-version` output (saved in Step 8). If Step 8 was skipped (`HAS_BUMP=false`), skip this step.
+3. Compose a brief changelog entry using the Summary bullets from the implementation (the same 1-3 bullet points used in Step 9a's PR body `## Summary` section). Use today's date. Format:
+
+   ```markdown
+   ## [X.Y.Z] - YYYY-MM-DD
+
+   ### Changed
+
+   - <bullet point 1>
+   - <bullet point 2>
+   ```
+
+   Use the appropriate Keep a Changelog category header (`Added`, `Changed`, `Fixed`, `Removed`) based on the nature of the changes. Multiple categories are fine if the PR spans them.
+
+4. Insert the new section immediately after the file's header block (after the `and this project adheres to [Semantic Versioning]` line, before the first existing `## [` section). If there is an `## [Unreleased]` section, insert after it.
+5. Stage `CHANGELOG.md` and amend the bump commit:
+
+   ```bash
+   git add CHANGELOG.md
+   git commit --amend --no-edit
+   ```
+
+   This keeps the bump commit as the single HEAD commit containing both the version bump and the changelog update.
+
+Print: `📝 Step 8a — CHANGELOG.md updated for v<NEW_VERSION>.`
 
 ## Step 9 — Create PR
 

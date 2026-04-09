@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-04-09
+
+### Changed
+
+- Added `actions/cache@v4` for pre-commit tool cache in CI, reducing lint job time from ~44s to ~2s on cache hits.
+- Flattened `skills/shared/larch/` to `skills/shared/` and updated all path references across 14 files.
+
+## [1.1.1] - 2026-04-09
+
+### Changed
+
+- Increased external reviewer timeouts from 15 to 30 minutes (review/plan review) and 10 to 20 minutes (sketch/voting).
+- Added Claude subagent fallbacks for all skills when Cursor/Codex are unavailable, ensuring total reviewer count (5) and voter count (3) remain constant.
+
+## [1.1.0] - 2026-04-09
+
+### Added
+
+- `/alias` skill for creating project-level alias shortcuts that forward to existing larch skills with preset flags. Generates `.claude/skills/<name>/SKILL.md` and commits.
+
+## [1.0.6] - 2026-04-09
+
+### Changed
+
+- Switched `.claude/settings.json` to `bypassPermissions` mode for local development.
+- Fixed CLAUDE.md shipped-vs-runtime classification for supplementary files.
+
+## [1.0.5] - 2026-04-09
+
+### Added
+
+- `CLAUDE.md` with editing-agent invariants, repository layout documentation, golden rules for edits, and canonical source references.
+
+## [1.0.4] - 2026-04-09
+
+### Changed
+
+- `/implement` now re-runs `/bump-version` after every rebase in Steps 10 and 12 (the Rebase + Re-bump Sub-procedure), ensuring the merged version reflects `origin/main` at merge time rather than at PR-creation time.
+
+## [1.0.3] - 2026-04-09
+
+### Added
+
+- Plugin structure validator (`scripts/validate-plugin-structure.sh`) with 11 validators covering manifests, frontmatter, path hygiene, script references, executability, and dead-script detection.
+- Extended `/relevant-checks` to run the plugin structure validator after pre-commit passes.
+
 ## [1.0.2] - 2026-04-08
 
 ### Removed
