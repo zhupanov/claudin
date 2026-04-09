@@ -14,7 +14,7 @@ The plugin source (`"./"` in `marketplace.json`) ships the **entire repository**
 
 **Plugin surface (referenced at runtime by skills, hooks, and scripts):**
 
-- `skills/` — public skills (`/design`, `/implement`, `/review`, `/research`, `/loop-review`)
+- `skills/` — public skills (`/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/alias`)
 - `agents/` — reviewer archetype definitions
 - `hooks/hooks.json` — `PreToolUse` hook registrations
 - `scripts/` — invoked from shipped skills and hooks as `${CLAUDE_PLUGIN_ROOT}/scripts/…`
@@ -91,6 +91,7 @@ Use the bare form (matches `README.md`; see each `SKILL.md` for full argument de
 - `/research <topic>` — read-only research; 5 researchers + 5 validators, no repo modifications
 - `/loop-review [partition]` — systematic repo-wide review, partitioned into slices
 - `/relevant-checks` — pre-commit linters + plugin-structure validator, scoped to changed files
+- `/alias <name> <skill> [flags...]` — create a project-level alias skill in `.claude/skills/` that forwards to a larch skill with preset flags
 - `/bump-version` — classify and apply the semver bump (invoked by `/implement` Step 8 and after each rebase in Steps 10/12)
 
 Full lifecycle: `docs/workflow-lifecycle.md`.

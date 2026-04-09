@@ -41,7 +41,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/alias` |
 | Agents | `general-reviewer`, `deep-analysis-reviewer` |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 
@@ -69,6 +69,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/review`](skills/review/SKILL.md) | *(none)* | Code review current branch changes with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
 | [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (2 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). [(Diagram).](skills/implement/diagram.svg) |
 | [`/loop-review`](skills/loop-review/SKILL.md) | `[partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing improvements via `/implement`, and logging deferred suggestions. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](skills/loop-review/diagram.svg) |
+| [`/alias`](skills/alias/SKILL.md) | `<alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Writes `.claude/skills/<name>/SKILL.md` and commits. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
 | [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
 
 ## Review Agents
