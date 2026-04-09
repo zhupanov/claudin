@@ -367,7 +367,7 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
    ```
    Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. If `VERIFIED=false`, print: `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`
 
-**Important**: There must be exactly ONE version bump per PR, and it must be the LAST commit before creating the PR. Proceed immediately to Step 9 after `/bump-version` returns — no commits may occur between.
+**Important**: At PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 9 after `/bump-version` returns — no commits may occur between Step 8 and Step 9. Note: after PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the shared **Rebase + Re-bump Sub-procedure** — see before Step 10). The branch history between PR creation and merge may therefore temporarily contain zero or multiple bump commits; the invariant that matters is "the terminal bump commit on HEAD must be based on latest `origin/main` at merge time", enforced strictly by Step 12 and best-effort by Step 10.
 
 ## Step 9 — Create PR
 
@@ -508,11 +508,133 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file 
 
 Print the PR URL when done. Save `PR_NUMBER`, `PR_URL`, and `PR_TITLE` for use in Steps 10–15.
 
+## Rebase + Re-bump Sub-procedure (shared by Steps 10 and 12)
+
+After the initial version bump in Step 8, every subsequent rebase of the feature branch onto latest `origin/main` must be followed by a fresh `/bump-version` run so the merged state reflects the version in latest main **at merge time**, not at PR-creation time. This sub-procedure consolidates the drop/rebase/fast-forward/bump/push/refresh sequence so that Steps 10 and 12 can invoke it from multiple places without duplication.
+
+### Inputs
+- `rebase_already_done` — if `true`, steps 1–2 are skipped (the rebase has already happened and been pushed by the caller, e.g., Step 12 Phase 4's `rebase-push.sh --continue`). If `false`, the sub-procedure performs the rebase itself.
+- `caller_kind` — one of: `step12_rebase`, `step12_rebase_then_evaluate`, `step12_phase4`, `step10_rebase`, `step10_rebase_then_evaluate`. Determines:
+  1. **Post-return control flow** (re-invoke `ci-wait.sh`, fall through to 12c, fall through to Step 10's evaluate_failure handler, etc.)
+  2. **Failure semantics** — grouped into two caller families:
+     - **step12 family** (`step12_rebase`, `step12_rebase_then_evaluate`, `step12_phase4`): any hard failure below bails to **Step 12d**. Step 12 is the last-chance enforcement point for the version bump freshness invariant, so it must not silently proceed to merge.
+     - **step10 family** (`step10_rebase`, `step10_rebase_then_evaluate`): any hard failure below logs a warning and **breaks out of Step 10's loop to Step 11**, matching Step 10's existing "never block the pipeline" philosophy. Step 12 will re-run this sub-procedure under strict semantics before merging, so Step 10 failures degrade gracefully.
+  3. **Conflict fallback path** — `step12_*` falls back to a full `rebase-push.sh` + the Conflict Resolution Procedure (Phase 1–4) when `--no-push` exit 1 happens; `step10_*` logs a warning and breaks out of Step 10 to Step 11 (Step 10 has no Phase 1–4).
+
+### Happy path (`rebase_already_done=false`)
+
+1. **Drop existing bump commit**:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/drop-bump-commit.sh
+   ```
+   Parse `DROPPED`. If `DROPPED=false`, log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`: `Step <N> — drop-bump-commit.sh reported DROPPED=false before rebase; HEAD was not a bump commit (CI fix commit may have landed on top, worktree was dirty, or the commit touched files other than .claude-plugin/plugin.json). Re-bump will still run but branch history may temporarily contain two bump commits and the rebase may encounter a plugin.json conflict routed through Phase 1–3.` Continue to step 2. (The guard in `drop-bump-commit.sh` is defense-in-depth — the sub-procedure does not treat `DROPPED=false` as a hard failure.)
+
+2. **Rebase without pushing**:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
+   ```
+   - **Exit 0** (rebase clean, branch is local-only fresh — may include `SKIPPED_ALREADY_FRESH=true`): proceed to step 3.
+   - **Exit 1** (conflict; `--no-push` has already called `git rebase --abort`, so no rebase is in progress — the two invocations are independent, any fallback call restarts a fresh fetch + rebase):
+     - **step12 family**: **fall back to full `${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh`** (without `--no-push`). Enumerate all four exit codes of the fallback call:
+       - **Fallback exit 0**: rebase succeeded cleanly AND the branch was force-pushed by the fallback call. Proceed to step 3. Note: `rebase_already_done` is NOT set here — that flag only gates sub-procedure steps 1–2 at entry, and by this point those steps have already executed. Step 5's push will land the new bump commit on top of the fallback's push (the intended double-push for the conflict-fallback path, necessarily two pushes because the fallback call couldn't avoid pushing).
+       - **Fallback exit 1**: conflict; rebase is in progress. Enter the **Conflict Resolution Procedure** (Phase 1–4, defined in Step 12 below). **Phase 4's `rebase-push.sh --continue` exit-0 handler (at the end of Step 12's Conflict Resolution Procedure) itself dispatches the sub-procedure with `rebase_already_done=true, caller_kind=step12_phase4`** — i.e., the post-conflict re-bump is owned entirely by Phase 4. **Control transfer is terminal**: the moment Phase 1 is entered, the current (fallback) sub-procedure invocation is conceptually suspended and its remaining steps 3–7 are NOT executed. All further action for this rebase (Phase 2, Phase 3, Phase 4, and the sub-procedure dispatched by Phase 4's exit-0 handler) runs under Phase 4's ownership. When Phase 4 completes (success or bail), it returns control directly to Step 12's outer loop via its own caller-return path — it does NOT return back into the current invocation. Do NOT continue executing steps 3–7 of the current invocation, regardless of whether Phase 4 succeeds or bails.
+       - **Fallback exit 2**: `force-with-lease` push failure after a successful rebase. The rebase is complete locally but the branch has NOT been pushed. Do NOT skip steps 3–4: proceed to step 3 (fast-forward local main), then step 4 (re-bump), then step 5 (which will try to push the re-bumped branch and apply its own fetch + compare + retry + bail recovery on any subsequent push failure). Setting `rebase_already_done` is NOT appropriate here because step 5 still needs to push. This is the only way to guarantee the freshness invariant is enforced — skipping straight to step 5's recovery would push a rebased-but-unbumped branch, silently violating the invariant.
+       - **Fallback exit 3**: non-conflict rebase failure; rebase already aborted. Read `REBASE_ERROR` and bail to 12d.
+     - **step10 family**: print `**⚠ Step 10 — Rebase conflict detected; deferring to Step 12 for conflict resolution. Proceeding to Step 11 without re-bump.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. **Break out of Step 10's loop and proceed to Step 11.**
+   - **Exit 3** (non-conflict rebase failure in `--no-push` mode; rebase already aborted):
+     - **step12 family**: read `REBASE_ERROR` and bail to 12d.
+     - **step10 family**: print `**⚠ Step 10 — Rebase failed (non-conflict): $REBASE_ERROR. Proceeding to Step 11.**` Log to `CI Issues`. Break to Step 11.
+
+3. **Fast-forward local `main` to `origin/main`**:
+   `rebase-push.sh` refreshes `origin/main` via `git fetch`, but local `main` is not automatically updated. `classify-bump.sh` prefers local `main` for its `merge-base` computation, so without this step `BASE` could point to an older commit than the one the branch was just rebased onto, causing the classifier's diff to include commits that belong to main (not the feature).
+   ```bash
+   if git rev-parse --verify main >/dev/null 2>&1; then
+     git branch -f main origin/main
+   fi
+   ```
+   This is safe because Step 10 and Step 12's rebase loops always run on a feature branch, never on `main`. If the local `main` ref does not exist, silently skip — `classify-bump.sh` has an `origin/main` fallback.
+
+4. **Re-bump**:
+   Follow the same sequence as Step 8, with caller-family-specific error handling:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
+   ```
+   Parse `HAS_BUMP` and `COMMITS_BEFORE`.
+   - **If `HAS_BUMP=false`**:
+     - **step12 family**: **HARD FAILURE**. Print `**⚠ Step 12 — /bump-version skill not found at .claude/skills/bump-version/SKILL.md; cannot re-bump after rebase. Merged PR would reflect a stale version. Bailing to 12d.**` Bail to 12d.
+     - **step10 family**: Print `**⚠ Step 10 — /bump-version skill not found; skipping re-bump. Proceeding to Step 11 with whatever version is currently on the branch.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
+   - **If `HAS_BUMP=true`**: Invoke `/bump-version` via the Skill tool. If the skill invocation itself fails (returns an error, or bails internally):
+     - **step12 family**: hard failure — bail to 12d.
+     - **step10 family**: log warning and break out of Step 10 to Step 11.
+     After the skill returns successfully, run the post-verification:
+     ```bash
+     ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
+     ```
+     Parse `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. Use the commit-count delta (not the skill's prose output) to detect the outcome — this is the reliable structured signal:
+
+     - **`VERIFIED=true`** (a new commit was created — the common case): proceed to step 5.
+
+     - **`VERIFIED=false` AND `COMMITS_AFTER == COMMITS_BEFORE`** (zero new commits — `/bump-version` ran a `BUMP_TYPE=NONE` no-op path, because `classify-bump.sh` detected HEAD is already a bump commit). This normally happens when `drop-bump-commit.sh` reported `DROPPED=false` (e.g., Guard 4 refused the drop because the bump commit touched files beyond `.claude-plugin/plugin.json`) and the stale bump commit survived the rebase unchanged. **Note**: this condition is also reached in the degenerate case where `count_commits()` in `check-bump-version.sh` returned `0` for both pre and post calls because neither local `main` nor `origin/main` exists — in that case, a `WARN: ... neither local 'main' nor 'origin/main' exists` line will have been printed to stderr. Before acting on the bail, check the stderr output of the most recent `check-bump-version.sh` calls for that WARN to determine the true root cause. Caller-family handling:
+       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ Step 12 — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE, or neither local 'main' nor 'origin/main' exists — inspect stderr WARN from check-bump-version.sh to distinguish). Either way, cannot verify bump freshness against current origin/main. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues` (including the relevant stderr excerpt if the WARN was seen). Rationale: Step 12 is the last-chance enforcement point for the version bump freshness invariant. Either a stale bump commit classified against an older base or a missing base ref means we cannot guarantee the merged version is correct; we must fail loudly rather than silently merge a potentially-wrong version.
+       - **step10 family**: log warning `**⚠ Step 10 — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE or missing main ref — inspect stderr WARN). Proceeding to Step 11 with the existing branch state. Step 12 will re-attempt under strict semantics.**` to `Warnings`, then proceed directly to step 5 (the rebased history still needs to be force-pushed). Step 10 can afford to be permissive here because Step 12 re-runs the sub-procedure under strict semantics and will bail then if the drop still cannot happen.
+
+     - **`VERIFIED=false` AND `COMMITS_AFTER != COMMITS_BEFORE`** (unexpected state — `/bump-version` created more than one commit, or somehow decreased the count):
+       - **step12 family**: **HARD FAILURE**. Print `**⚠ Step 12 — /bump-version did not create exactly one new commit after rebase. Expected $EXPECTED, got $COMMITS_AFTER. Cannot verify bump freshness; bailing to 12d.**` Bail to 12d.
+       - **step10 family**: log warning and break to Step 11.
+
+   **Rationale**: Step 8's permissive warnings are safe because Step 8 is pre-PR — no merge can happen based on a missing bump. Step 12 is pre-merge — missing bump means stale merge. Step 10 is post-PR but pre-merge (Step 12 does the merge) — any bump failure in Step 10 is recoverable by Step 12's mandatory re-bump, so Step 10 can afford to be permissive. **Step 12 is the last-chance enforcement point; Step 10 is best-effort optimization that improves freshness during the Slack-wait phase.**
+
+5. **Push with recovery**:
+   ```bash
+   git push --force-with-lease
+   ```
+   If push exits 0: proceed to step 6. If push fails:
+   a. Refresh the local tracking ref for the feature branch:
+      ```bash
+      BRANCH=$(git symbolic-ref --short HEAD)
+      git fetch origin "$BRANCH"
+      ```
+   b. Compare `git rev-parse HEAD` with `git rev-parse "origin/$BRANCH"`. If equal, the push actually landed (rare race where the remote accepted but the client did not recognize it). Proceed to step 6.
+   c. If they differ, the remote feature branch has something we don't. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`: `Step <N> — force-with-lease push failed; local and remote feature branches diverge after re-bump.` Sleep 5s and retry the push ONCE:
+      ```bash
+      ${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 5
+      git push --force-with-lease
+      ```
+      If the retry succeeds, proceed to step 6. If it fails again:
+      - **step12 family**: bail to 12d with error `Step 12 — re-bump push failed twice with --force-with-lease; remote feature branch has diverged from local. Manual intervention required.`
+      - **step10 family**: print `**⚠ Step 10 — re-bump push failed twice. Proceeding to Step 11 with whatever remote state is (may be stale).**` Log to `CI Issues`. Break to Step 11.
+
+   **Critical (step12 family only)**: Do NOT simply "log and return to caller" on push failure. That would let the merge loop proceed to `ACTION=merge` on a remote branch that does NOT contain the fresh bump commit, violating the feature's core invariant. `ci-wait.sh` and `merge-pr.sh` operate on remote PR state only; they cannot see unpushed local commits.
+
+6. **Refresh PR body Version Bump Reasoning block**:
+   If `$IMPLEMENT_TMPDIR/bump-version-reasoning.md` exists and is non-empty:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_TMPDIR/live-body.md"
+   ```
+   Read `$IMPLEMENT_TMPDIR/live-body.md`, replace the entire inner content of the `<details><summary>Version Bump Reasoning</summary>...</details>` block with the current contents of `$IMPLEMENT_TMPDIR/bump-version-reasoning.md` (preserving blank lines after the opening tag and before the closing `</details>` for GitHub Markdown rendering). Write the result to `$IMPLEMENT_TMPDIR/pr-body.md` (same file Step 11 writes to, so subsequent refreshes operate on the fresh canonical copy). Then:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
+   ```
+   If the `<details><summary>Version Bump Reasoning</summary>` marker is not found in the fetched body, print `**⚠ Step <N> — Version Bump Reasoning block not found in live PR body. Skipping refresh.**` and skip the update. Log to `Warnings`. **PR body refresh failure is NOT a hard failure** — the bump is already pushed and the merge will be correct; the stale body is documentation-only.
+
+7. **Return to caller based on `caller_kind`**:
+   - **`step12_rebase`** (from 12a `ACTION=rebase`): increment `rebase_count`, `iteration`, reset `transient_retries`, **sleep 30s** via `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 30` (give GitHub CI time to register the force-push before polling again), then re-invoke `ci-wait.sh` in Step 12.
+   - **`step12_phase4`** (from Phase 4 exit-0): increment `rebase_count`, `iteration`, reset `transient_retries`, **sleep 30s** via `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 30`, then re-invoke `ci-wait.sh` in Step 12.
+   - **`step12_rebase_then_evaluate`** (from 12a `ACTION=rebase_then_evaluate`): increment `rebase_count`, `iteration`, reset `transient_retries`, then **fall through to 12c** to evaluate the CI failure. Do NOT re-invoke `ci-wait.sh` and do NOT sleep — 12c handles its own timing.
+   - **`step10_rebase`** (from Step 10 `ACTION=rebase`): increment `rebase_count`, `iteration`, reset `transient_retries`, **sleep 30s** via `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 30`, then re-invoke `ci-wait.sh` in Step 10.
+   - **`step10_rebase_then_evaluate`** (from Step 10 `ACTION=rebase_then_evaluate`): increment `rebase_count`, `iteration`, reset `transient_retries`, then **fall through to Step 10's `ACTION=evaluate_failure` handler**. Do NOT re-invoke `ci-wait.sh` and do NOT sleep.
+
+### Phase 4 caller path (`rebase_already_done=true`, `caller_kind=step12_phase4`)
+
+Phase 4 enters the sub-procedure AFTER `rebase-push.sh --continue` has already pushed the resolved rebase. **Skip steps 1–2 entirely.** Still run steps 3 (fast-forward local main), 4 (re-bump with step12 hard-failure semantics), 5 (push with recovery), 6 (PR body refresh), 7 (return with `step12_phase4`). This path necessarily double-pushes (Phase 4 pushed the rebase, then step 5 pushes the new bump), but the Conflict Resolution Procedure is rare enough that the second push cost is acceptable.
+
 ## Step 10 — CI Monitor (initial wait for green)
 
 **If `repo_unavailable=true`**: Print `⏭️ Step 10 — Skipped (repository name could not be determined).` and proceed to Step 11.
 
 Wait for CI to go green so the Slack announcement (Step 11) links to a PR with passing CI. This step does **NOT merge** — Step 12 is the merge-aware loop that handles main advancement and merging.
+
+**Best-effort re-bump during CI wait**: Step 10's rebase handler invokes the same **Rebase + Re-bump Sub-procedure** (defined just before this step) that Step 12 uses, with step10-family semantics: hard failures degrade gracefully (log warning, break out of Step 10 to Step 11) rather than bailing to 12d. This keeps the PR's version fresh during the Slack-wait phase while ensuring Step 10 never blocks the pipeline — Step 12 remains the last-chance enforcement point for the version bump freshness invariant.
 
 Track these counters (all start at 0):
 - `iteration` — passed to `ci-wait.sh`, returned as `ITERATION`
@@ -537,9 +659,9 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
    - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ Step 10 — PR was merged externally.` and proceed to Step 11. (Step 12 will detect `already_merged` again and skip the merge loop.)
 
-   - **`ACTION=rebase`**: Main advanced. Run `${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh`. On exit 0: increment `rebase_count` and `iteration`, reset `transient_retries`, re-invoke `ci-wait.sh`. On exit 1 (conflicts): run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh`, print warning, and proceed to Step 11 (the merge loop in Step 12 will encounter the same conflict and apply the full Conflict Resolution Procedure with reviewer panel validation). On exit 2: retry once, then proceed to Step 11. On exit 3: proceed to Step 11.
+   - **`ACTION=rebase`**: Main advanced. Invoke the **Rebase + Re-bump Sub-procedure** (defined before this step) with `rebase_already_done=false`, `caller_kind=step10_rebase`. The sub-procedure handles drop-before-rebase, rebase, fast-forward local main, re-bump via `/bump-version`, push with recovery, and PR body refresh. On sub-procedure success, counter updates and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On sub-procedure failure (rebase conflict, re-bump failure, or push failure), the sub-procedure logs a warning and breaks out of Step 10 to Step 11 — it does NOT bail to 12d (Step 12 will re-run the sub-procedure under strict semantics).
 
-   - **`ACTION=rebase_then_evaluate`**: Run rebase first (same as above), then fall through to evaluate the CI failure.
+   - **`ACTION=rebase_then_evaluate`**: Invoke the **Rebase + Re-bump Sub-procedure** with `rebase_already_done=false`, `caller_kind=step10_rebase_then_evaluate`. On sub-procedure success, fall through to the `ACTION=evaluate_failure` handler below. On sub-procedure failure, break to Step 11.
 
    - **`ACTION=evaluate_failure`**: Use `FAILED_RUN_ID` to evaluate:
      1. **Transient failure** (runner provisioning, Docker pull rate limit, "hosted runner lost communication", etc.): If `transient_retries < 2`, run `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 60`, then run `${CLAUDE_PLUGIN_ROOT}/scripts/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Parse output for `RERUN_SUBMITTED` and `ERROR`. If `RERUN_SUBMITTED=false`, print the `ERROR` and treat as a real CI failure (fall through to diagnosis). Otherwise increment `transient_retries`, re-invoke `ci-wait.sh`. If `transient_retries >= 2`, treat as real failure.
@@ -549,7 +671,7 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
 **Execution issues**: Log any CI failures, transient retries, or bail events to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `CI Issues` category.
 
-After handling any non-terminal action (rebase, evaluate_failure), **re-invoke `ci-wait.sh`** with updated counter values.
+After handling any non-terminal/non-rebase action (e.g., `evaluate_failure`), **re-invoke `ci-wait.sh`** with updated counter values. The `rebase` and `rebase_then_evaluate` paths handle their own post-return control flow inside the sub-procedure's step 7 — do NOT re-invoke `ci-wait.sh` from here for those paths. The adaptive sleep interval is handled by the caller: sleep 60s after a transient retry rerun before re-invoking `ci-wait.sh`.
 
 ## Step 11 — Post Slack Announcement
 
@@ -599,6 +721,8 @@ If `execution-issues.md` does not exist or is empty, skip this refresh.
 
 Monitor CI and the main branch **in parallel**. The key optimization: don't wait for CI to finish before checking if main has advanced.
 
+**Version bump freshness invariant**: Every successful rebase in this loop is followed by a fresh `/bump-version` run against the new base, so the merged state reflects the version in latest `origin/main` at merge time — not at PR-creation time. This is handled by the **Rebase + Re-bump Sub-procedure** (defined before Step 10 above, shared with Step 10), invoked from 12a's rebase handlers and Phase 4's `--continue` exit-0 path. If re-bumping fails in any way that would leave the branch without a verified fresh bump commit, Step 12 bails to 12d rather than letting the merge loop proceed to a stale merge. (Step 10 uses the same sub-procedure but with best-effort semantics — Step 12 is the last-chance enforcement point.)
+
 ### 12a — Poll Loop
 
 Track these counters (all start at 0):
@@ -620,29 +744,19 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
 **Execute the action** returned by `ci-wait.sh`:
 
-   - **`ACTION=rebase`**: Print a context-specific message based on `CI_STATUS`: if `CI_STATUS=pass`, print `🔄 CI passed but main advanced — rebasing...`; if `CI_STATUS=pending`, print `🔄 Main advanced while CI running — rebasing...` → run `rebase-push.sh` (see rebase handling below) → on success: increment `rebase_count`, increment `iteration`, reset `transient_retries` → re-invoke `ci-wait.sh`.
+   - **`ACTION=rebase`**: Print a context-specific message based on `CI_STATUS`: if `CI_STATUS=pass`, print `🔄 CI passed but main advanced — rebasing + re-bumping...`; if `CI_STATUS=pending`, print `🔄 Main advanced while CI running — rebasing + re-bumping...` → invoke the **Rebase + Re-bump Sub-procedure** (defined before Step 10) with `rebase_already_done=false`, `caller_kind=step12_rebase`. The sub-procedure handles drop-before-rebase, rebase (with Phase 1–4 fallback on conflict), fast-forward local main, `/bump-version`, push with recovery, and PR body refresh. On successful return, counter updates (`rebase_count`, `iteration`, `transient_retries` reset) and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On hard failure, the sub-procedure bails to 12d directly.
 
    - **`ACTION=merge`**: Print `✅ CI passed, main up-to-date — merging!` → proceed to **12b**.
 
    - **`ACTION=already_merged`**: Print `✅ PR was force-merged externally — skipping CI wait and merge.` → skip **12b** (no merge needed) and proceed directly to Step 13. The PR counts as successfully merged for Steps 13–15.
 
-   - **`ACTION=rebase_then_evaluate`**: Run rebase first (same as `rebase` above), then on success fall through to evaluate the CI failure as in **12c**.
+   - **`ACTION=rebase_then_evaluate`**: Invoke the **Rebase + Re-bump Sub-procedure** with `rebase_already_done=false`, `caller_kind=step12_rebase_then_evaluate`. On successful return (counter updates already done inside the sub-procedure), **fall through to 12c** to evaluate the CI failure. Do NOT re-invoke `ci-wait.sh` from the caller — the sub-procedure's `caller_kind=step12_rebase_then_evaluate` branch skips the re-invocation for this path. On hard failure, the sub-procedure bails to 12d.
 
    - **`ACTION=evaluate_failure`**: Evaluate the CI failure → **12c**.
 
    - **`ACTION=bail`**: Print `BAIL_REASON` and bail out → **12d**.
 
-After handling any non-merge/non-bail action (rebase, evaluate_failure, etc.), **re-invoke `ci-wait.sh`** with updated counter values. The adaptive sleep interval is handled by the caller: sleep 30s before re-invoking after a rebase, sleep 60s after a transient retry rerun.
-
-4. **When rebase is needed** (ACTION=rebase or rebase_then_evaluate), use the `rebase-push.sh` script:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh
-   ```
-   Handle exit codes:
-   - **Exit 0**: Rebase and push succeeded.
-   - **Exit 1**: Rebase had conflicts (rebase is still in progress). Read `CONFLICT_FILES=` from stdout. Enter the **Conflict Resolution Procedure** below.
-   - **Exit 2**: `force-with-lease` push failed. Run the script again once (it fetches + rebases internally). If it fails twice, **bail out** (Step 12d).
-   - **Exit 3**: Rebase failed for non-conflict reasons (rebase already aborted). Read `REBASE_ERROR=` from stderr. **Bail out** (Step 12d).
+After handling any non-merge/non-bail/non-rebase action (e.g., `evaluate_failure`), **re-invoke `ci-wait.sh`** with updated counter values. The `rebase` and `rebase_then_evaluate` paths handle their own post-return control flow inside the sub-procedure's step 7: `rebase` sleeps 30s and re-invokes `ci-wait.sh` internally; `rebase_then_evaluate` falls through to 12c without sleeping. The remaining sleep interval handled by the caller: sleep 60s after a transient retry rerun.
 
 ### Conflict Resolution Procedure
 
@@ -656,17 +770,19 @@ For each file in `CONFLICT_FILES`:
 
 1. Run `git ls-files -u` to determine the conflict type per file (check which index stages 1/2/3 exist).
 2. **Unsupported conflict types** — If any stage is missing (modify/delete, rename/delete conflicts) or the file is binary (check via `file --mime-type` or absence of text markers), classify as **uncertain**. Do not attempt auto-resolution.
-3. **Trivial files** — If the file is `version.go`, `go.sum`, or auto-generated, classify as **trivial** and auto-resolve immediately. Stage with `git add`.
+3. **Trivial files** — If the file is `version.go`, `go.sum`, `.claude-plugin/plugin.json`, or auto-generated, classify as **trivial** and auto-resolve immediately. Stage with `git add`. For `.claude-plugin/plugin.json` specifically, resolve to the **upstream (main) version** (run `git checkout --ours -- .claude-plugin/plugin.json` — during rebase, `--ours` refers to the base being rebased onto, i.e., upstream main), because the Rebase + Re-bump Sub-procedure will overwrite `plugin.json` with a fresh bump in its step 4 after the rebase completes. See the note below.
 4. **Text conflicts with both sides available** — Read both sides using explicit labels:
    - `git show :2:<file>` → **upstream (main)** version. If this command fails, classify as uncertain.
    - `git show :3:<file>` → **feature branch commit** version. If this command fails, classify as uncertain.
    - Also read the conflict markers in the working tree file for context.
 5. **Classify confidence**:
-   - **Trivial**: `version.go`, `go.sum`, auto-generated files.
+   - **Trivial**: `version.go`, `go.sum`, `.claude-plugin/plugin.json`, auto-generated files.
    - **High-confidence**: Changes are in non-overlapping regions (both sides added content in different locations), or the conflict markers show only whitespace, import-order, or formatting differences. Both sides' intent is clear and composable.
    - **Uncertain**: Overlapping semantic changes to the same function/block, any file where correctness cannot be verified without domain knowledge, any file where `:2:` or `:3:` reads failed, any non-text/binary conflict.
 6. Auto-resolve trivial and high-confidence files. Stage resolved files with `git add`.
 7. **IMPORTANT**: Always use "upstream (main)" and "feature branch commit" labels when describing the two sides of a conflict — never use "ours"/"theirs" which have inverted semantics during rebase and will cause confusion.
+
+**Note on `.claude-plugin/plugin.json` conflicts**: Under normal operation, the Rebase + Re-bump Sub-procedure drops the bump commit before rebasing, so `.claude-plugin/plugin.json` should not appear in `CONFLICT_FILES`. However, when `drop-bump-commit.sh` reported `DROPPED=false` (a CI fix commit landed on top of the bump, the worktree was dirty, or the commit touched more than `plugin.json`), the stale bump remains mid-stack and WILL conflict on `plugin.json` during rebase. The trivial-files rule above handles this case by auto-resolving to the upstream (main) version — safe because sub-procedure step 4 will overwrite `plugin.json` with a fresh `/bump-version` commit after the rebase completes.
 
 #### Phase 2 — User Escalation (for uncertain conflicts)
 
@@ -730,7 +846,7 @@ If the reviewer panel finds no issues or all findings are addressed: proceed to 
 #### Phase 4 — Continue Rebase
 
 Run `${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --continue` and handle exit codes:
-- **Exit 0**: Rebase and push succeeded. Increment `rebase_count` and `iteration`, reset `transient_retries`. Restart the CI wait loop.
+- **Exit 0**: Rebase and push succeeded. Invoke the **Rebase + Re-bump Sub-procedure** (defined before Step 10) with `rebase_already_done=true`, `caller_kind=step12_phase4`. The sub-procedure performs fast-forward of local main, re-bump via `/bump-version` (with step12 hard-failure semantics), push of the new bump commit with recovery, and PR body refresh. Counter updates and `ci-wait.sh` re-invocation are handled inside the sub-procedure's step 7. If the sub-procedure bails to 12d on hard failure, Phase 4's exit-0 handler also bails to 12d.
 - **Exit 1**: A later commit in the rebase conflicted. Loop back to **Phase 1** for the new conflict (the Conflict Resolution Procedure starts again for the new set of `CONFLICT_FILES`).
 - **Exit 2**: Push `--force-with-lease` failed. Retry `rebase-push.sh --continue` once. If it fails twice, **bail out** (Step 12d — call `git rebase --abort` first if the rebase is still in progress).
 - **Exit 3**: Check the `REBASE_ERROR` output. If it indicates an empty or already-applied commit (e.g., "nothing to commit", "No changes"), run `git rebase --skip` (if `git rebase --skip` itself exits non-zero, run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh` and **bail out** — Step 12d) and then `${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --continue` again (handle the same exit codes). Otherwise, **bail out** (Step 12d).
