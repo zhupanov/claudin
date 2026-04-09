@@ -20,7 +20,7 @@ larch has two overlapping but distinct classifications. Treat them separately wh
 
 **Repo-private (NOT shipped to consumers):**
 
-- `.claude/skills/bump-version/` — classifier and applier; owned by `/implement` Step 8
+- `.claude/skills/bump-version/` — classifier and applier; invoked by `/implement` (Step 8 initial bump; Steps 10/12 re-bump after each rebase)
 - `.claude/skills/relevant-checks/` — reference implementation only; each consumer repo provides its own
 - `.claude/settings.json` — local Claude Code harness config (permissions, dev hooks)
 - `docs/` — prose documentation
@@ -37,6 +37,8 @@ Inside `skills/**` and `agents/**`, the specific triggers are:
 - **MAJOR**: deleting or renaming a `SKILL.md`/agent file, changing its `name:` frontmatter, or removing a `--flag` token from `argument-hint:`
 - **MINOR**: adding a new `SKILL.md`/agent file, or adding a `--flag` token to `argument-hint:`
 - **PATCH**: everything else
+
+The main agent may **escalate** severity (never downgrade) for backward-incompatible behavioral changes anywhere in the diff — see the escalation-only caveat in `.claude/skills/bump-version/SKILL.md`.
 
 ## Golden rules for edits
 
@@ -70,7 +72,7 @@ These invariants are what an editing agent will otherwise get wrong.
 
 ### Validation gate
 
-- After any change, run `/relevant-checks`. It runs `pre-commit run --files <changed>` then `scripts/validate-plugin-structure.sh` — mirroring what CI enforces.
+- After any change, run `/relevant-checks`. It runs `pre-commit run --files <changed>` on branch-modified files; if pre-commit passes, it additionally runs `scripts/validate-plugin-structure.sh`. This is a fast local gate — CI's `lint` job runs repo-wide `make lint`, so a local pass does not guarantee CI passes.
 
 ### Hooks
 
@@ -78,7 +80,7 @@ These invariants are what an editing agent will otherwise get wrong.
 
 ## Workflow entry points — slash commands
 
-Use the bare form (matches `README.md` and all `SKILL.md` references):
+Use the bare form (matches `README.md`; see each `SKILL.md` for full argument details):
 
 - `/design <feature>` — collaborative plan with 5 sketch agents + 5 plan reviewers + voting panel
 - `/implement [--quick] [--auto] [--merge] <feature>` — end-to-end: design → code → PR; with `--merge` also runs the CI+rebase+merge loop
@@ -86,7 +88,7 @@ Use the bare form (matches `README.md` and all `SKILL.md` references):
 - `/research <topic>` — read-only research; 5 researchers + 5 validators, no repo modifications
 - `/loop-review [partition]` — systematic repo-wide review, partitioned into slices
 - `/relevant-checks` — pre-commit linters + plugin-structure validator, scoped to changed files
-- `/bump-version` — classify and apply the semver bump (invoked by `/implement` Step 8)
+- `/bump-version` — classify and apply the semver bump (invoked by `/implement` Step 8 and after each rebase in Steps 10/12)
 
 Full lifecycle: `docs/workflow-lifecycle.md`.
 
