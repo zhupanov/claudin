@@ -12,12 +12,15 @@ graph TD
     IMPLEMENT -->|invokes| REVIEW["/review"]
     IMPLEMENT -->|invokes| CHECKS["/relevant-checks"]
     LOOP["/loop-review"] -->|invokes| IMPLEMENT
+    ALIAS["/alias"] -->|writes| SKILL_FILE[".claude/skills/&lt;name&gt;/SKILL.md"]
 
     style IMPLEMENT fill:#2d5a27,color:#fff
     style LOOP fill:#2d5a27,color:#fff
     style DESIGN fill:#4a3a6e,color:#fff
     style REVIEW fill:#4a3a6e,color:#fff
     style CHECKS fill:#555,color:#fff
+    style ALIAS fill:#6b4c2a,color:#fff
+    style SKILL_FILE fill:#555,color:#fff
 ```
 
 - **`/implement`** is the top-level orchestrator. It runs the full design → code → review → PR workflow by default. With the `--merge` flag, it also runs the CI+rebase+merge loop and local cleanup after PR creation.
@@ -81,6 +84,7 @@ Not every task requires the full `/implement` pipeline. Skills can be used indep
 - **`/design <feature>`** — Plan a feature without implementing it. Creates a branch, runs collaborative sketches, writes and reviews the plan.
 - **`/review`** — Review the current branch's changes. Launches reviewers, runs voting on findings, implements accepted fixes, and re-runs validation checks in a recursive loop.
 - **`/research <topic>`** — Read-only investigation. Does not create branches, modify files, or make commits. Uses a restricted tool set (no Edit, Write, or Skill tools).
+- **`/alias <name> <skill> [flags...]`** — Create a project-level alias skill in `.claude/skills/` that forwards to a larch skill with preset flags. Does not invoke `/implement` — writes files directly and commits.
 
 ## Flags
 
