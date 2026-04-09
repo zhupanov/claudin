@@ -8,9 +8,11 @@ This file orients editing agents. Every rule below is framed as an invariant to 
 
 larch has two overlapping but distinct classifications. Treat them separately when reasoning about a change.
 
-### Axis A — What ships to consumers (plugin surface) vs. repo-private infrastructure
+### Axis A — Plugin surface (active at runtime) vs. supplementary files
 
-**Shipped (installed into consumers' Claude Code environments):**
+The plugin source (`"./"` in `marketplace.json`) ships the **entire repository** to consumers — every file below is physically present in the consumer's plugin install directory. The distinction here is about what the plugin runtime references, not what is physically present.
+
+**Plugin surface (referenced at runtime by skills, hooks, and scripts):**
 
 - `skills/` — public skills (`/design`, `/implement`, `/review`, `/research`, `/loop-review`)
 - `agents/` — reviewer archetype definitions
@@ -18,13 +20,14 @@ larch has two overlapping but distinct classifications. Treat them separately wh
 - `scripts/` — invoked from shipped skills and hooks as `${CLAUDE_PLUGIN_ROOT}/scripts/…`
 - `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` — plugin manifests
 
-**Repo-private (NOT shipped to consumers):**
+**Supplementary (shipped but not referenced by plugin code at runtime):**
 
-- `.claude/skills/bump-version/` — classifier and applier; invoked by `/implement` (Step 8 initial bump; Steps 10/12 re-bump after each rebase)
-- `.claude/skills/relevant-checks/` — reference implementation only; each consumer repo provides its own
-- `.claude/settings.json` — local Claude Code harness config (permissions, dev hooks)
-- `docs/` — prose documentation
-- `.github/`, `Makefile`, `.pre-commit-config.yaml`, `.markdownlint.json`, `CHANGELOG.md`
+- `docs/` — prose documentation (linked from `README.md` with relative paths, readable locally by consumers)
+- `README.md`, `CHANGELOG.md` — project-level documentation
+- `.github/`, `Makefile`, `.pre-commit-config.yaml`, `.markdownlint.json` — CI and linter configuration
+- `.claude/skills/bump-version/` — version classifier and applier; only used during plugin development (invoked by `/implement` Step 8; Steps 10/12 re-bump after each rebase)
+- `.claude/skills/relevant-checks/` — reference implementation; each consumer repo provides its own
+- `.claude/settings.json` — local Claude Code harness config (permissions, dev hooks); not loaded in consumer projects
 
 **Shared fragments (not a skill):** `skills/shared/larch/` — reviewer templates, voting protocol, external-reviewer conventions. No `SKILL.md`.
 
@@ -48,7 +51,7 @@ These invariants are what an editing agent will otherwise get wrong.
 
 - Public `skills/*/SKILL.md` **MUST** use `${CLAUDE_PLUGIN_ROOT}/…` — never `$PWD`, `${PWD}`, or hardcoded absolute paths. Enforced by validator 8 in `scripts/validate-plugin-structure.sh`.
 - `hooks/hooks.json` SHOULD also use `${CLAUDE_PLUGIN_ROOT}/…`. **This is a convention, not validator-enforced** — validator 8 only scans `skills/*/SKILL.md`.
-- Repo-private `.claude/skills/*/SKILL.md` intentionally use `$PWD/…` and are exempt from the hygiene check by design.
+- Development-only `.claude/skills/*/SKILL.md` intentionally use `$PWD/…` and are exempt from the hygiene check by design.
 
 ### Version and release
 
@@ -97,7 +100,7 @@ Full lifecycle: `docs/workflow-lifecycle.md`.
 - **Changing a skill's behavior** → **start** at `skills/<name>/SKILL.md`, then **trace every called helper script** in `skills/<name>/scripts/`, shared scripts in `scripts/`, and shared templates in `skills/shared/larch/` before making changes. Editing only `SKILL.md` is often incomplete — behavior is frequently split between the prompt and executable helpers.
 - **Adding or modifying a reviewer archetype** → edit BOTH `agents/<name>.md` AND `skills/shared/larch/reviewer-templates.md`; they must stay aligned.
 - **Changing a shared workflow script** → edit `scripts/<name>.sh`, then grep for every caller across `skills/`, `hooks/`, `.claude/settings.json`, `.github/workflows/`, and other scripts.
-- **Changing repo-private skills** → edit under `.claude/skills/bump-version/` or `.claude/skills/relevant-checks/`. Classified as PATCH.
+- **Changing development-only skills** → edit under `.claude/skills/bump-version/` or `.claude/skills/relevant-checks/`. Classified as PATCH.
 - **Docs or scripts only** → classified as PATCH. No MAJOR/MINOR impact.
 
 ## Canonical sources
