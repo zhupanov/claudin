@@ -372,12 +372,14 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 
 ## Step 8a — CHANGELOG Update
 
-**Conditional**: Check if `CHANGELOG.md` exists in the project root using the Read tool. If the file does not exist (Read returns an error), print `⏩ Step 8a — No CHANGELOG.md found, skipping.` and proceed to Step 9.
+**Conditional**: Skip Step 8a entirely and proceed to Step 9 if either condition is true:
+- `CHANGELOG.md` does not exist in the project root (check via the Read tool — if Read returns an error, the file does not exist). Print `⏩ Step 8a — No CHANGELOG.md found, skipping.`
+- Step 8 was skipped (`HAS_BUMP=false`). Print `⏩ Step 8a — Skipped (no version bump).`
 
-**If `CHANGELOG.md` exists**:
+**If `CHANGELOG.md` exists AND Step 8 produced a version bump**:
 
 1. Read the current `CHANGELOG.md`.
-2. Read the `NEW_VERSION` from the `/bump-version` output (saved in Step 8). If Step 8 was skipped (`HAS_BUMP=false`), skip this step.
+2. Read the `NEW_VERSION` from the `/bump-version` output (saved in Step 8).
 3. Compose a brief changelog entry using the Summary bullets from the implementation (the same 1-3 bullet points used in Step 9a's PR body `## Summary` section). Use today's date. Format:
 
    ```markdown
@@ -617,6 +619,9 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
        - **step10 family**: log warning and break to Step 11.
 
    **Rationale**: Step 8's permissive warnings are safe because Step 8 is pre-PR — no merge can happen based on a missing bump. Step 12 is pre-merge — missing bump means stale merge. Step 10 is post-PR but pre-merge (Step 12 does the merge) — any bump failure in Step 10 is recoverable by Step 12's mandatory re-bump, so Step 10 can afford to be permissive. **Step 12 is the last-chance enforcement point; Step 10 is best-effort optimization that improves freshness during the Slack-wait phase.**
+
+4a. **Re-apply CHANGELOG update** (mirrors Step 8a):
+   If `CHANGELOG.md` exists in the project root (check via Read tool) and a new bump commit was created (`VERIFIED=true` from step 4), update the CHANGELOG entry to reflect the new version from the re-bump. Follow the same logic as Step 8a: read `CHANGELOG.md`, compose an entry with the `NEW_VERSION` from the re-bump and the same Summary bullets, insert it (or replace the existing entry for the prior version if present), stage, and amend the bump commit via `git add CHANGELOG.md && git commit --amend --no-edit`. If CHANGELOG.md does not exist or the bump was skipped, skip this sub-step silently. **This is best-effort and non-blocking** — failure to update CHANGELOG does not affect the bump or push.
 
 5. **Push with recovery**:
    ```bash

@@ -53,12 +53,15 @@ if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
     exit 0
 fi
 
-# --- Guard 4: commit must touch only .claude-plugin/plugin.json ---
+# --- Guard 4: commit must touch only allowed bump files ---
 # Use diff --name-only against HEAD~1. A legitimate bump commit produced by
-# apply-bump.sh only stages .claude-plugin/plugin.json.
-CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
-if [[ "$CHANGED_FILES" != ".claude-plugin/plugin.json" ]]; then
-    echo "WARN: HEAD subject matches bump pattern but commit touches files other than .claude-plugin/plugin.json (changed: $CHANGED_FILES); refusing to drop" >&2
+# apply-bump.sh stages .claude-plugin/plugin.json. Step 8a of /implement may
+# additionally amend CHANGELOG.md into the same commit. Both are acceptable.
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | sort)
+ALLOWED_ONE=".claude-plugin/plugin.json"
+ALLOWED_TWO=$'CHANGELOG.md\n.claude-plugin/plugin.json'
+if [[ "$CHANGED_FILES" != "$ALLOWED_ONE" && "$CHANGED_FILES" != "$ALLOWED_TWO" ]]; then
+    echo "WARN: HEAD subject matches bump pattern but commit touches unexpected files (changed: $CHANGED_FILES); refusing to drop" >&2
     echo "DROPPED=false"
     exit 0
 fi
