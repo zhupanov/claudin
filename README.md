@@ -45,9 +45,9 @@ claude plugin install larch@larch-local
 | Agents | `general-reviewer`, `deep-analysis-reviewer` |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 
-### `/relevant-checks` is repo-specific (not part of the plugin)
+### `/relevant-checks` is repo-specific (not part of the plugin surface)
 
-The `/relevant-checks` skill is **intentionally not shipped by the larch plugin**. Each consuming repo must provide its own `/relevant-checks` as a project-level skill at `.claude/skills/relevant-checks/` with build and lint commands tailored to that repo. Larch's own copy lives at `.claude/skills/relevant-checks/` in this repo as a reference implementation. The `/implement` and `/review` workflows invoke `/relevant-checks` after each commit, so your repo must define one for those workflows to run cleanly.
+The `/relevant-checks` skill is **not part of the plugin surface** — it is present in the install directory but not loaded by the plugin runtime. Each consuming repo must provide its own `/relevant-checks` as a project-level skill at `.claude/skills/relevant-checks/` with build and lint commands tailored to that repo. Larch's own copy lives at `.claude/skills/relevant-checks/` in this repo as a reference implementation. The `/implement` and `/review` workflows invoke `/relevant-checks` after each commit, so your repo must define one for those workflows to run cleanly.
 
 ## Features
 
@@ -69,7 +69,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/review`](skills/review/SKILL.md) | *(none)* | Code review current branch changes with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
 | [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (2 Claude subagents, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). [(Diagram).](skills/implement/diagram.svg) |
 | [`/loop-review`](skills/loop-review/SKILL.md) | `[partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents (2 Claude + 2 Codex + Cursor, if available), implementing improvements via `/implement`, and logging deferred suggestions. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](skills/loop-review/diagram.svg) |
-| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Repo-private; not shipped by the plugin.** |
+| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
 
 ## Review Agents
 

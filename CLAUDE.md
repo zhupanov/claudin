@@ -25,9 +25,9 @@ The plugin source (`"./"` in `marketplace.json`) ships the **entire repository**
 - `docs/` — prose documentation (linked from `README.md` with relative paths, readable locally by consumers)
 - `README.md`, `CHANGELOG.md` — project-level documentation
 - `.github/`, `Makefile`, `.pre-commit-config.yaml`, `.markdownlint.json` — CI and linter configuration
-- `.claude/skills/bump-version/` — version classifier and applier; only used during plugin development (invoked by `/implement` Step 8; Steps 10/12 re-bump after each rebase)
+- `.claude/skills/bump-version/` — version classifier and applier; reference implementation for consumers (each consumer repo provides its own); invoked during plugin development by `/implement` Steps 8, 10, 12
 - `.claude/skills/relevant-checks/` — reference implementation; each consumer repo provides its own
-- `.claude/settings.json` — local Claude Code harness config (permissions, dev hooks); not loaded in consumer projects
+- `.claude/settings.json` — local Claude Code harness config (permissions, dev hooks); not loaded when installed via the marketplace (only active for `--plugin-dir .` development)
 
 **Shared fragments (not a skill):** `skills/shared/larch/` — reviewer templates, voting protocol, external-reviewer conventions. No `SKILL.md`.
 
