@@ -15,7 +15,7 @@ claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
 ```
 
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, and `/loop-review` slash commands become available in every Claude Code session.
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, and `/alias` slash commands become available in every Claude Code session.
 
 To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
 

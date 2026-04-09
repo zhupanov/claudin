@@ -28,9 +28,12 @@ All validation uses Bash since `${CLAUDE_PLUGIN_ROOT}` is a shell variable not r
    - If invalid, print: `**ERROR: Alias name '<name>' is invalid. Must start with a lowercase letter and contain only lowercase letters, digits, and hyphens.**` and abort.
 
 2. **Reserved name check**: Reject if alias name matches any of: `design`, `implement`, `review`, `research`, `loop-review`, `alias`, `relevant-checks`, `bump-version`.
-   - If reserved, print: `**WARNING: Cannot create alias '<name>' — this name is reserved (it matches an existing larch or common project-level skill). Choose a different name.**` and abort.
+   - If reserved, print: `**ERROR: Cannot create alias '<name>' — this name is reserved (it matches an existing larch or common project-level skill). Choose a different name.**` and abort.
 
-3. **Target skill exists**: Verify target skill exists:
+3. **Target name format**: Verify target skill name matches `^[a-z][a-z0-9-]*$` (same format as alias names).
+   - If invalid, print: `**ERROR: Target name '<target>' is invalid. Must contain only lowercase letters, digits, and hyphens.**` and abort.
+
+4. **Target skill exists**: Verify target skill exists:
    ```bash
    test -f "${CLAUDE_PLUGIN_ROOT}/skills/<target>/SKILL.md"
    ```
@@ -40,10 +43,10 @@ All validation uses Bash since `${CLAUDE_PLUGIN_ROOT}` is a shell variable not r
      ```
      and abort.
 
-4. **Target is not "alias"**: Forbid alias-to-alias recursion.
+5. **Target is not "alias"**: Forbid alias-to-alias recursion.
    - If target is "alias", print: `**ERROR: Cannot create an alias that targets /alias (no alias-to-alias recursion).**` and abort.
 
-5. **Collision check**: Verify `.claude/skills/<alias-name>/` does not already exist in the current project:
+6. **Collision check**: Verify `.claude/skills/<alias-name>/` does not already exist in the current project:
    ```bash
    test -d ".claude/skills/<alias-name>"
    ```
@@ -82,11 +85,18 @@ Write the generated content to `.claude/skills/<alias-name>/SKILL.md` using the 
 
 ## Step 6 — Stage and Commit
 
+Stage and commit using the wrapper script:
+
 ```bash
-git add ".claude/skills/<alias-name>/SKILL.md"
-git commit -m "Add /<alias-name> alias for /<target-skill> <preset-flags>"
+${CLAUDE_PLUGIN_ROOT}/scripts/git-commit.sh \
+  -m "Add /<alias-name> alias for /<target-skill> <preset-flags>" \
+  ".claude/skills/<alias-name>/SKILL.md"
 ```
+
+If `<preset-flags>` is empty (a pure rename alias), omit the trailing flags from the commit message: `"Add /<alias-name> alias for /<target-skill>"`.
 
 ## Step 7 — Confirm
 
-Print: `Alias /<alias-name> created -> /<target-skill> <preset-flags>. Committed on current branch.`
+If `<preset-flags>` is non-empty, print: `Alias /<alias-name> created -> /<target-skill> <preset-flags>. Committed on current branch.`
+
+If `<preset-flags>` is empty, print: `Alias /<alias-name> created -> /<target-skill>. Committed on current branch.`
