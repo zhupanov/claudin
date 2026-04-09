@@ -6,7 +6,7 @@ allowed-tools: Bash, Read
 
 # Bump Version
 
-Classify and apply a semantic version bump for this PR. This is a repo-private skill invoked by `/implement` Step 8. It produces exactly ONE commit: a version-only edit of `.claude-plugin/plugin.json`.
+Classify and apply a semantic version bump for this PR. This is a development-only skill invoked by `/implement` Step 8. It produces exactly ONE commit: a version-only edit of `.claude-plugin/plugin.json`.
 
 ## Classification rules
 
