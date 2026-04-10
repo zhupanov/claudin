@@ -117,12 +117,29 @@ if [[ "$SKIP_SLACK_CHECK" == "false" ]]; then
             echo "SLACK_MISSING=$CALLER_SLACK_MISSING"
         fi
     else
-        # Derive fresh: both vars must be set for Slack to be available
+        # Derive fresh: both vars must be set for Slack to be available.
+        # Check env vars first; fall back to CLAUDE_PLUGIN_OPTION_* (set by
+        # plugin userConfig when installed via marketplace). Env var wins.
+        EFFECTIVE_BOT_TOKEN="${LARCH_SLACK_BOT_TOKEN:-${CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN:-}}"
+        EFFECTIVE_CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-${CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID:-}}"
+
+        # Export effective values so downstream scripts see them as LARCH_SLACK_*
+        if [[ -n "$EFFECTIVE_BOT_TOKEN" && -z "${LARCH_SLACK_BOT_TOKEN:-}" ]]; then
+            export LARCH_SLACK_BOT_TOKEN="$EFFECTIVE_BOT_TOKEN"
+        fi
+        if [[ -n "$EFFECTIVE_CHANNEL_ID" && -z "${LARCH_SLACK_CHANNEL_ID:-}" ]]; then
+            export LARCH_SLACK_CHANNEL_ID="$EFFECTIVE_CHANNEL_ID"
+        fi
+        # Also bridge user ID (optional, used for @-mentions)
+        if [[ -z "${LARCH_SLACK_USER_ID:-}" && -n "${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID:-}" ]]; then
+            export LARCH_SLACK_USER_ID="${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID}"
+        fi
+
         SLACK_MISSING_VARS=""
-        if [[ -z "${LARCH_SLACK_BOT_TOKEN:-}" ]]; then
+        if [[ -z "$EFFECTIVE_BOT_TOKEN" ]]; then
             SLACK_MISSING_VARS="LARCH_SLACK_BOT_TOKEN"
         fi
-        if [[ -z "${LARCH_SLACK_CHANNEL_ID:-}" ]]; then
+        if [[ -z "$EFFECTIVE_CHANNEL_ID" ]]; then
             if [[ -n "$SLACK_MISSING_VARS" ]]; then
                 SLACK_MISSING_VARS="$SLACK_MISSING_VARS,LARCH_SLACK_CHANNEL_ID"
             else

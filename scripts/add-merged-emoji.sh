@@ -40,12 +40,14 @@ if [[ -z "$SLACK_TS" ]] || [[ -z "$CHANNEL_ID" ]]; then
     usage; exit 2
 fi
 
-if [[ -z "${LARCH_SLACK_BOT_TOKEN:-}" ]]; then
-    echo "⚠ LARCH_SLACK_BOT_TOKEN not set. Skipping :merged: emoji."
+# Resolve token: env var > plugin userConfig fallback
+EFFECTIVE_TOKEN="${LARCH_SLACK_BOT_TOKEN:-${CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN:-}}"
+if [[ -z "$EFFECTIVE_TOKEN" ]]; then
+    echo "⚠ Slack bot token not set (checked LARCH_SLACK_BOT_TOKEN and CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN). Skipping :merged: emoji."
     exit 1
 fi
 
-CLEAN_TOKEN=$(echo -n "$LARCH_SLACK_BOT_TOKEN" | tr -d '[:space:]')
+CLEAN_TOKEN=$(echo -n "$EFFECTIVE_TOKEN" | tr -d '[:space:]')
 
 bash "$SCRIPT_DIR/add-slack-emoji.sh" \
     --channel-id "$CHANNEL_ID" \

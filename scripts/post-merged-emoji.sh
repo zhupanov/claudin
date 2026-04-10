@@ -36,11 +36,11 @@ if [[ -z "$SLACK_TS" ]]; then
     exit 0
 fi
 
-# --- Read Slack channel ---
-SLACK_CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-}"
+# --- Read Slack channel (env var > plugin userConfig fallback) ---
+SLACK_CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-${CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID:-}}"
 
 if [[ -z "$SLACK_CHANNEL_ID" ]]; then
-    echo "WARNING: LARCH_SLACK_CHANNEL_ID is not set. Skipping :merged: emoji." >&2
+    echo "WARNING: Slack channel ID not set (checked LARCH_SLACK_CHANNEL_ID and CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID). Skipping :merged: emoji." >&2
     exit 1
 fi
 

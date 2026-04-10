@@ -36,3 +36,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate plugin manifest and layout
         run: bash scripts/validate-plugin-structure.sh
+      - name: Run smoke test
+        run: bash scripts/smoke-test.sh

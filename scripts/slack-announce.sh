@@ -49,17 +49,18 @@ if [[ -z "$PR_NUMBER" ]] || [[ -z "$TMPDIR_PATH" ]] || [[ -z "$CHANNEL_ID" ]]; t
     usage; exit 3
 fi
 
-# --- Check token ---
-if [[ -z "${LARCH_SLACK_BOT_TOKEN:-}" ]]; then
+# --- Check token (env var > plugin userConfig fallback) ---
+EFFECTIVE_TOKEN="${LARCH_SLACK_BOT_TOKEN:-${CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN:-}}"
+if [[ -z "$EFFECTIVE_TOKEN" ]]; then
     echo "SLACK_TS="
-    echo "SLACK_ERROR=LARCH_SLACK_BOT_TOKEN not set"
+    echo "SLACK_ERROR=Slack bot token not set (checked LARCH_SLACK_BOT_TOKEN and CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN)"
     exit 1
 fi
-CLEAN_TOKEN=$(echo -n "$LARCH_SLACK_BOT_TOKEN" | tr -d '[:space:]')
+CLEAN_TOKEN=$(echo -n "$EFFECTIVE_TOKEN" | tr -d '[:space:]')
 
 # --- Resolve git identity ---
 GIT_USER_NAME=$(git config user.name 2>/dev/null || echo "")
-LARCH_SLACK_USER_ID="${LARCH_SLACK_USER_ID:-}"
+LARCH_SLACK_USER_ID="${LARCH_SLACK_USER_ID:-${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID:-}}"
 
 # --- Fetch PR metadata and derive repo name from PR URL ---
 set +e

@@ -40,9 +40,9 @@ The handling of unavailable external tools differs across workflow phases:
 | Phase | Unavailable Tool Handling |
 |---|---|
 | **Sketch phase** (`/design`, `/research`) | Claude replacement agents are used — always 5 agents |
-| **Plan review** (`/design`) | Proceeds with fewer reviewers; voting adjusts thresholds |
-| **Code review** (`/review`) | Proceeds with fewer reviewers; voting adjusts thresholds |
-| **Voting** | Panel reduces to available voters; requires 2+ for quorum |
+| **Plan review** (`/design`) | Claude replacement agents used — always 5 reviewers |
+| **Code review** (`/review`) | Claude replacement agents used — always 5 reviewers |
+| **Voting** | Claude replacement voters used — always 3 voters. 3 voters: 2+ YES to accept; 2 voters: unanimous YES; <2 voters: voting skipped, all findings accepted |
 
 ## How It Works
 

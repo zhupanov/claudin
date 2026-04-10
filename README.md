@@ -45,9 +45,59 @@ claude plugin install larch@larch-local
 | Agents | `general-reviewer`, `deep-analysis-reviewer` |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 
-### `/relevant-checks` is repo-specific (not part of the plugin surface)
+### `/relevant-checks` — required consumer dependency
 
-The `/relevant-checks` skill is **not part of the plugin surface** — it is present in the install directory but not loaded by the plugin runtime. Each consuming repo must provide its own `/relevant-checks` as a project-level skill at `.claude/skills/relevant-checks/` with build and lint commands tailored to that repo. Larch's own copy lives at `.claude/skills/relevant-checks/` in this repo as a reference implementation. The `/implement` and `/review` workflows invoke `/relevant-checks` after each commit, so your repo must define one for those workflows to run cleanly.
+> **Important:** `/implement` and `/review` invoke `/relevant-checks` after each commit during their workflows. If your repo does not define one, these workflows will fail at the validation step.
+
+The `/relevant-checks` skill is **not part of the plugin surface** — it is present in the install directory but not loaded by the plugin runtime. Each consuming repo must provide its own `/relevant-checks` as a project-level skill at `.claude/skills/relevant-checks/` with build and lint commands tailored to that repo.
+
+**To create one for your repo:**
+
+1. Create `.claude/skills/relevant-checks/SKILL.md` with `allowed-tools: Bash`
+2. Add a `scripts/run-checks.sh` that runs your repo's linters, tests, or validators
+3. Reference the script from SKILL.md using `$PWD/.claude/skills/relevant-checks/scripts/run-checks.sh`
+
+Larch's own copy at `.claude/skills/relevant-checks/` serves as a reference implementation — it runs `pre-commit` linters plus the plugin structure validator.
+
+### `--admin` merge behavior
+
+When `/implement --merge` encounters a PR that passes CI but cannot be merged due to branch protection rules (e.g., required reviews), it retries with `gh pr merge --admin` as a fallback. The `--admin` flag overrides **all** branch protection rules including review requirements.
+
+**Safety invariants enforced before `--admin` is attempted:**
+
+1. All CI checks must be passing (every check in the "pass" bucket)
+2. The branch must be up-to-date with main (not behind)
+
+These checks are re-verified immediately before the `--admin` attempt — the script does not rely on cached state. See `scripts/merge-pr.sh` for the implementation.
+
+## Prerequisites
+
+Larch skills have different dependency requirements depending on which features you use.
+
+### Installation
+
+- **Claude Code** — required. Install via [setup instructions](https://code.claude.com/docs/en/setup).
+
+### Workflow automation (`/implement --merge`, `/review`)
+
+These tools are required for the full design → implement → PR → merge workflow:
+
+- **git** — version control (used by all skills)
+- **gh** — [GitHub CLI](https://cli.github.com/), authenticated with repo write access (`gh auth login`). Required for PR creation, CI monitoring, and merge automation.
+- **jq** — [JSON processor](https://jqlang.github.io/jq/). Used by validation scripts and session setup.
+
+### Optional integrations
+
+These tools enhance the workflow but are not required. When unavailable, Claude replacement agents fill in automatically:
+
+- **Codex** — [OpenAI Codex CLI](https://github.com/openai/codex). Participates as an external reviewer and voter alongside Claude subagents. When unavailable, a Claude subagent replacement maintains the reviewer count.
+- **Cursor** — [Cursor AI editor](https://cursor.com/). Participates as an external reviewer and voter. When unavailable, a Claude subagent replacement maintains the reviewer count.
+- **Slack** — PR announcements and `:merged:` emoji reactions. Requires environment variables or plugin `userConfig` (see [Environment Variables](#environment-variables)). When not configured, all Slack operations are skipped with a warning; all other workflow steps proceed normally.
+
+### Contributor development
+
+- **pre-commit** — `pip install pre-commit` for local linting (`make setup` installs git hooks)
+- **Python 3.12+** — required by pre-commit
 
 ## Features
 
@@ -117,7 +167,9 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 
 Larch uses three environment variables for Slack integration. All are optional — when not set, Slack-related features are skipped with warnings and all other workflow steps continue normally.
 
-> **Note:** Both `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` must be set for Slack features to function. If either is missing, all Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent.
+> **Important:** Both `LARCH_SLACK_BOT_TOKEN` **and** `LARCH_SLACK_CHANNEL_ID` must be set in your shell environment for Slack features to function. If either is missing, **all** Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
+
+**Alternative: Plugin `userConfig`** — If you installed larch as a plugin, you can also configure Slack tokens via the plugin's `userConfig` (prompted at plugin enable time). The `userConfig` values are exported as `CLAUDE_PLUGIN_OPTION_*` environment variables to subprocesses. Larch checks both: environment variables take precedence if both are set.
 
 ### `LARCH_SLACK_BOT_TOKEN`
 

@@ -9,9 +9,8 @@
 # including review requirements. It is ONLY used after confirming:
 #   1. All CI checks are passing (bucket == "pass" for every check)
 #   2. The branch is up-to-date with main (mergeStateStatus != "BEHIND")
-# Keep in sync with the same --admin fallback in:
-#   - /admin-upgrade-clients Sub-Step 7
-#   - /admin-add-user Step 10
+# This is the canonical --admin implementation.
+# See skills/implement/SKILL.md Step 12b for usage documentation.
 #
 # Usage:
 #   merge-pr.sh --pr NUMBER --repo OWNER/REPO

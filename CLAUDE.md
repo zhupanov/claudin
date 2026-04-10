@@ -23,7 +23,7 @@ The plugin source (`"./"` in `marketplace.json`) ships the **entire repository**
 **Supplementary (shipped but not referenced by plugin code at runtime):**
 
 - `docs/` — prose documentation (linked from `README.md` with relative paths, readable locally by consumers)
-- `README.md`, `CHANGELOG.md` — project-level documentation
+- `README.md`, `CHANGELOG.md`, `SECURITY.md` — project-level documentation
 - `.github/`, `Makefile`, `.pre-commit-config.yaml`, `.markdownlint.json` — CI and linter configuration
 - `.claude/skills/bump-version/` — version classifier and applier; reference implementation for consumers (each consumer repo provides its own); invoked during plugin development by `/implement` Steps 8, 10, 12
 - `.claude/skills/relevant-checks/` — reference implementation; each consumer repo provides its own
@@ -114,11 +114,13 @@ Read these directly when you need depth — CLAUDE.md deliberately does not dupl
 - `docs/agents.md`, `docs/review-agents.md` — subagent orchestration
 - `docs/external-reviewers.md`, `docs/collaborative-sketches.md` — Codex/Cursor integration
 - `.claude/skills/bump-version/SKILL.md` — authoritative version classification rules
-- `scripts/validate-plugin-structure.sh` — the header comment block is the definitive structural spec (11 validators)
+- `scripts/validate-plugin-structure.sh` — the header comment block is the definitive structural spec (14 validators)
+- `SECURITY.md` — security policy (validated by validator 14; do not delete)
 
 ## Conventions
 
 - **Shell scripts use `set -euo pipefail` by default.** When `-e` is intentionally omitted (e.g., collect-then-report patterns in validators, CI-wait loops), add an inline comment explaining why. See the header of `scripts/validate-plugin-structure.sh` for an example of the rationale.
 - Follow recent history style for commit messages. The string `Bump version to X.Y.Z` is reserved for `/bump-version`.
 - PR creation, Slack posting, and CI polling are automated inside `/implement`. Do not run `gh pr create` manually from inside a workflow — drive it through the skill.
-- Slack env vars (`LARCH_SLACK_BOT_TOKEN`, `LARCH_SLACK_CHANNEL_ID`, `LARCH_SLACK_USER_ID`) are optional; skills degrade gracefully with a warning at session setup when absent.
+- Slack env vars (`LARCH_SLACK_BOT_TOKEN`, `LARCH_SLACK_CHANNEL_ID`, `LARCH_SLACK_USER_ID`) are optional; skills degrade gracefully with a warning at session setup when absent. Plugin `userConfig` values (`CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN`, etc.) are also accepted as fallbacks — env vars take precedence.
+- **`SECURITY.md` must not be deleted** — validator 14 enforces its presence. Update it when security-relevant behavior changes (e.g., external tool delegation, token handling).

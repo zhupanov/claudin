@@ -74,8 +74,8 @@ if [[ "${BULLET_COUNT:-0}" -gt 3 ]]; then
     echo "WARNING: PR #$PR has $BULLET_COUNT summary bullets (> 3). Proceeding without condensation." >&2
 fi
 
-# --- Read Slack channel ---
-SLACK_CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-}"
+# --- Read Slack channel (env var > plugin userConfig fallback) ---
+SLACK_CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-${CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID:-}}"
 
 if [[ -z "$SLACK_CHANNEL_ID" ]]; then
     echo "WARNING: LARCH_SLACK_CHANNEL_ID is not set. Slack announcement skipped." >&2

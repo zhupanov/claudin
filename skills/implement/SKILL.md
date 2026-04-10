@@ -907,7 +907,7 @@ Parse the output for `MERGE_RESULT` and `ERROR`. Handle each result:
 - **`MERGE_RESULT=admin_failed`**: Bail out (Step 12d) with the `ERROR` message.
 - **`MERGE_RESULT=error`**: Bail out (Step 12d) with the `ERROR` message.
 
-**CRITICAL: The `--admin` safety invariant is enforced inside `merge-pr.sh` — it re-verifies CI and branch freshness before attempting `--admin`. See the script's header for the full invariant. (Keep in sync with the same `--admin` fallback in `/admin-upgrade-clients` Sub-Step 7 and `/admin-add-user` Step 10.)**
+**CRITICAL: The `--admin` safety invariant is enforced inside `merge-pr.sh` — it re-verifies CI and branch freshness before attempting `--admin`. See the script's header for the full invariant. This is the canonical `--admin` implementation.**
 
 Save the expected commit title for verification in Step 15: `<PR_TITLE> (#<PR_NUMBER>)` (using the `PR_TITLE` saved in Step 9).
 

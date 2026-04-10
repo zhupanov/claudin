@@ -31,6 +31,12 @@
 #  11. Dead-script detection — every scripts/*.sh must have a STRUCTURED invocation reference
 #                              somewhere in the codebase (path-shaped tokens only — prose
 #                              and comments are not counted as references)
+#  12. Marketplace enriched metadata — marketplace.json has $schema (non-empty string),
+#                              top-level description (non-empty), owner.email (non-empty),
+#                              every plugin entry has category (non-empty)
+#  13. Plugin enriched metadata — plugin.json has description (non-empty), author.email
+#                              (non-empty), keywords (non-empty array with ≥1 element)
+#  14. SECURITY.md presence  — SECURITY.md exists at repo root
 #
 # Exemption from PWD hygiene check (validator 8):
 #   .claude/skills/bump-version/SKILL.md
@@ -510,6 +516,63 @@ validate_dead_scripts() {
 }
 
 # ---------------------------------------------------------------------------
+# Validator 12: marketplace.json enriched metadata
+# ---------------------------------------------------------------------------
+
+validate_marketplace_enriched() {
+    local f=".claude-plugin/marketplace.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0  # skip if invalid JSON (validator 2 catches this)
+
+    local schema desc email
+    schema=$(jq -r '.["$schema"] // empty' "$f")
+    [ -n "$schema" ] || fail "$f missing required field: \$schema"
+
+    desc=$(jq -r '.description // empty' "$f")
+    [ -n "$desc" ] || fail "$f missing required top-level field: description"
+
+    email=$(jq -r '.owner.email // empty' "$f")
+    [ -n "$email" ] || fail "$f missing required field: owner.email"
+
+    # Every plugin entry must have a category
+    local plugin_count i entry_cat
+    plugin_count=$(jq '.plugins | length' "$f")
+    for i in $(seq 0 $((plugin_count - 1))); do
+        entry_cat=$(jq -r ".plugins[$i].category // empty" "$f")
+        [ -n "$entry_cat" ] || fail "$f plugins[$i] missing required field: category"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Validator 13: plugin.json enriched metadata
+# ---------------------------------------------------------------------------
+
+validate_plugin_enriched() {
+    local f=".claude-plugin/plugin.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0  # skip if invalid JSON (validator 1 catches this)
+
+    local desc email
+    desc=$(jq -r '.description // empty' "$f")
+    [ -n "$desc" ] || fail "$f missing required field: description"
+
+    email=$(jq -r '.author.email // empty' "$f")
+    [ -n "$email" ] || fail "$f missing required field: author.email"
+
+    if ! jq -e '.keywords | type == "array" and length > 0' "$f" >/dev/null 2>&1; then
+        fail "$f keywords must be a non-empty array"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Validator 14: SECURITY.md presence
+# ---------------------------------------------------------------------------
+
+validate_security_md() {
+    [ -f "SECURITY.md" ] || fail "SECURITY.md is missing from repo root"
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -525,6 +588,9 @@ main() {
     validate_script_references
     validate_executability
     validate_dead_scripts
+    validate_marketplace_enriched
+    validate_plugin_enriched
+    validate_security_md
 
     if [ "$ERROR_COUNT" -eq 0 ]; then
         echo "Plugin structure OK"
