@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-04-10
+
+### Fixed
+
+- V19: added `LARCH_SLACK_USER_ID` to Slack fallback consistency check (was only checking BOT_TOKEN and CHANNEL_ID).
+- V23: extracted from V18 into standalone `validate_userconfig_sensitive_type()` function with own `main()` call, matching the 1-function-per-validator pattern.
+
+### Removed
+
+- Removed `$schema` and top-level `description` from `marketplace.json` — rejected by Claude CLI schema validator. Removed corresponding V12 checks.
+
 ## [1.1.7] - 2026-04-10
 
 ### Added
