@@ -46,8 +46,9 @@
 #  18. userConfig structure    — if plugin.json has userConfig, it must be an object
 #                              where each key has a "description" string field
 #  19. Slack fallback consistency — every scripts/*.sh that does a bash fallback read
-#                              of LARCH_SLACK_BOT_TOKEN or LARCH_SLACK_CHANNEL_ID must
-#                              also reference the corresponding CLAUDE_PLUGIN_OPTION_* var
+#                              of LARCH_SLACK_BOT_TOKEN, LARCH_SLACK_CHANNEL_ID, or
+#                              LARCH_SLACK_USER_ID must also reference the corresponding
+#                              CLAUDE_PLUGIN_OPTION_* var
 #  20. userConfig key→env mapping — every userConfig key in plugin.json must have a
 #                              corresponding CLAUDE_PLUGIN_OPTION_<UPPER_KEY> reference
 #                              in at least one scripts/*.sh file
@@ -683,35 +684,13 @@ validate_userconfig_structure() {
 }
 
 # ---------------------------------------------------------------------------
-# Validator 23: userConfig sensitive type
-# ---------------------------------------------------------------------------
-
-validate_userconfig_sensitive_type() {
-    local f=".claude-plugin/plugin.json"
-    [ -f "$f" ] || return 0
-    jq empty "$f" 2>/dev/null || return 0
-    jq -e 'has("userConfig")' "$f" >/dev/null 2>&1 || return 0
-    jq -e '.userConfig | type == "object"' "$f" >/dev/null 2>&1 || return 0
-
-    local key
-    while IFS= read -r key; do
-        [ -z "$key" ] && continue
-        if jq -e ".userConfig[\"$key\"] | has(\"sensitive\")" "$f" >/dev/null 2>&1; then
-            if ! jq -e ".userConfig[\"$key\"].sensitive | type == \"boolean\"" "$f" >/dev/null 2>&1; then
-                fail "$f userConfig.$key.sensitive must be a boolean (true/false)"
-            fi
-        fi
-    done < <(jq -r '.userConfig | keys[]' "$f" 2>/dev/null)
-}
-
-# ---------------------------------------------------------------------------
 # Validator 19: Slack fallback consistency
 # ---------------------------------------------------------------------------
 
 validate_slack_fallback_consistency() {
-    # For each script that does a bash fallback read of LARCH_SLACK_BOT_TOKEN or
-    # LARCH_SLACK_CHANNEL_ID (the ${VAR:-...} pattern), verify it also references
-    # the corresponding CLAUDE_PLUGIN_OPTION_* variable in the same file.
+    # For each script that does a bash fallback read of LARCH_SLACK_BOT_TOKEN,
+    # LARCH_SLACK_CHANNEL_ID, or LARCH_SLACK_USER_ID (the ${VAR:-...} pattern),
+    # verify it also references the corresponding CLAUDE_PLUGIN_OPTION_* variable.
     local script var plugin_var
     for script in scripts/*.sh; do
         [ -f "$script" ] || continue
@@ -792,6 +771,28 @@ validate_docs_references() {
         [ -f "$doc_path" ] || fail "docs reference in CLAUDE.md canonical sources not found on disk: $doc_path"
     done < <(awk '/^## Canonical sources/,/^## [^C]/' "$claude_md" 2>/dev/null \
                 | grep -oE 'docs/[a-zA-Z0-9._-]+\.md' | sort -u)
+}
+
+# ---------------------------------------------------------------------------
+# Validator 23: userConfig sensitive type
+# ---------------------------------------------------------------------------
+
+validate_userconfig_sensitive_type() {
+    local f=".claude-plugin/plugin.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0
+    jq -e 'has("userConfig")' "$f" >/dev/null 2>&1 || return 0
+    jq -e '.userConfig | type == "object"' "$f" >/dev/null 2>&1 || return 0
+
+    local key
+    while IFS= read -r key; do
+        [ -z "$key" ] && continue
+        if jq -e ".userConfig[\"$key\"] | has(\"sensitive\")" "$f" >/dev/null 2>&1; then
+            if ! jq -e ".userConfig[\"$key\"].sensitive | type == \"boolean\"" "$f" >/dev/null 2>&1; then
+                fail "$f userConfig.$key.sensitive must be a boolean (true/false)"
+            fi
+        fi
+    done < <(jq -r '.userConfig | keys[]' "$f" 2>/dev/null)
 }
 
 # ---------------------------------------------------------------------------
