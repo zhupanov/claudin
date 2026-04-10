@@ -731,8 +731,11 @@ validate_userconfig_env_mapping() {
     local key upper_key env_var
     while IFS= read -r key; do
         [ -z "$key" ] && continue
-        # Convert key to UPPER_SNAKE_CASE for env var name
-        upper_key=$(echo "$key" | tr '[:lower:]' '[:upper:]')
+        # Convert key to UPPER_SNAKE_CASE for env var name:
+        # - Replace hyphens and dots with underscores
+        # - Insert underscore before uppercase letters (camelCase → CAMEL_CASE)
+        # - Uppercase everything
+        upper_key=$(echo "$key" | sed -E 's/[-.]/_/g; s/([a-z])([A-Z])/\1_\2/g' | tr '[:lower:]' '[:upper:]')
         env_var="CLAUDE_PLUGIN_OPTION_${upper_key}"
         if ! grep -rq "$env_var" scripts/ 2>/dev/null; then
             fail "userConfig key '$key' has no corresponding $env_var reference in scripts/"
@@ -773,12 +776,14 @@ validate_docs_references() {
     local claude_md="CLAUDE.md"
     [ -f "$claude_md" ] || return 0
 
-    # Extract docs/*.md paths from CLAUDE.md (any reference to docs/<name>.md)
+    # Extract docs/*.md paths from the "Canonical sources" section of CLAUDE.md only.
+    # The section starts with "## Canonical sources" and ends at the next "## " header.
     local doc_path
     while IFS= read -r doc_path; do
         [ -z "$doc_path" ] && continue
-        [ -f "$doc_path" ] || fail "docs reference in CLAUDE.md not found on disk: $doc_path"
-    done < <(grep -oE 'docs/[a-zA-Z0-9._-]+\.md' "$claude_md" 2>/dev/null | sort -u)
+        [ -f "$doc_path" ] || fail "docs reference in CLAUDE.md canonical sources not found on disk: $doc_path"
+    done < <(awk '/^## Canonical sources/,/^## [^C]/' "$claude_md" 2>/dev/null \
+                | grep -oE 'docs/[a-zA-Z0-9._-]+\.md' | sort -u)
 }
 
 # ---------------------------------------------------------------------------
