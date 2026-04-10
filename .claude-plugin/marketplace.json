@@ -1,7 +1,5 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "larch-local",
-  "description": "Multi-agent workflow automation marketplace for Claude Code: design, code review, implementation, and PR automation with collaborative reviewers.",
   "owner": {
     "name": "Sergey Zhupanov",
     "email": "sergey@zhupanov.com"

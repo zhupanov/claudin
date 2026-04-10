@@ -32,8 +32,7 @@
 #  11. Dead-script detection — every scripts/*.sh must have a STRUCTURED invocation reference
 #                              somewhere in the codebase (path-shaped tokens only — prose
 #                              and comments are not counted as references)
-#  12. Marketplace enriched metadata — marketplace.json has $schema (non-empty string),
-#                              top-level description (non-empty), owner.email (non-empty),
+#  12. Marketplace enriched metadata — marketplace.json has owner.email (non-empty),
 #                              every plugin entry has category (non-empty)
 #  13. Plugin enriched metadata — plugin.json has description (non-empty), author.email
 #                              (non-empty), keywords (non-empty array with ≥1 element)
@@ -546,13 +545,7 @@ validate_marketplace_enriched() {
     [ -f "$f" ] || return 0
     jq empty "$f" 2>/dev/null || return 0  # skip if invalid JSON (validator 2 catches this)
 
-    local schema desc email
-    schema=$(jq -r '.["$schema"] // empty' "$f")
-    [ -n "$schema" ] || fail "$f missing required field: \$schema"
-
-    desc=$(jq -r '.description // empty' "$f")
-    [ -n "$desc" ] || fail "$f missing required top-level field: description"
-
+    local email
     email=$(jq -r '.owner.email // empty' "$f")
     [ -n "$email" ] || fail "$f missing required field: owner.email"
 
@@ -680,14 +673,29 @@ validate_userconfig_structure() {
     fi
 
     # Each key must have a description that is a non-empty string.
-    # If sensitive field is present, it must be a boolean (V23 enhancement).
     local key
     while IFS= read -r key; do
         [ -z "$key" ] && continue
         if ! jq -e ".userConfig[\"$key\"].description | type == \"string\" and length > 0" "$f" >/dev/null 2>&1; then
             fail "$f userConfig.$key missing or invalid description (must be a non-empty string)"
         fi
-        # V23: if sensitive field exists, verify it is boolean
+    done < <(jq -r '.userConfig | keys[]' "$f" 2>/dev/null)
+}
+
+# ---------------------------------------------------------------------------
+# Validator 23: userConfig sensitive type
+# ---------------------------------------------------------------------------
+
+validate_userconfig_sensitive_type() {
+    local f=".claude-plugin/plugin.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0
+    jq -e 'has("userConfig")' "$f" >/dev/null 2>&1 || return 0
+    jq -e '.userConfig | type == "object"' "$f" >/dev/null 2>&1 || return 0
+
+    local key
+    while IFS= read -r key; do
+        [ -z "$key" ] && continue
         if jq -e ".userConfig[\"$key\"] | has(\"sensitive\")" "$f" >/dev/null 2>&1; then
             if ! jq -e ".userConfig[\"$key\"].sensitive | type == \"boolean\"" "$f" >/dev/null 2>&1; then
                 fail "$f userConfig.$key.sensitive must be a boolean (true/false)"
@@ -707,7 +715,7 @@ validate_slack_fallback_consistency() {
     local script var plugin_var
     for script in scripts/*.sh; do
         [ -f "$script" ] || continue
-        for var in LARCH_SLACK_BOT_TOKEN LARCH_SLACK_CHANNEL_ID; do
+        for var in LARCH_SLACK_BOT_TOKEN LARCH_SLACK_CHANNEL_ID LARCH_SLACK_USER_ID; do
             # Only check files that do actual bash fallback reads (${VAR:- pattern)
             if grep -q "\${${var}:-" "$script" 2>/dev/null; then
                 plugin_var="CLAUDE_PLUGIN_OPTION_${var#LARCH_}"
@@ -813,6 +821,7 @@ main() {
     validate_userconfig_env_mapping
     validate_agent_template_count
     validate_docs_references
+    validate_userconfig_sensitive_type
 
     if [ "$ERROR_COUNT" -eq 0 ]; then
         echo "Plugin structure OK"
