@@ -50,7 +50,7 @@ Set `codex_available` and `cursor_available` flags for the entire session. If ei
 Parse `$ARGUMENTS` as the partition strategy:
 
 - `by directory` — same as default below
-- `by CLI command` — one slice per CLI command: for each `cli/cmd/<command>.go`, the slice includes that file + its corresponding `handler_<command>.go` in `server/pkg/coordinator/` + any related workflow in `server/pkg/workflows/` + relevant types/validation in `shared/`
+- `by module` — one slice per logical module: group related source files, handlers, and tests together based on the project's module/package structure (e.g., one slice per package in Go, one per module directory in Python, one per feature directory in TypeScript)
 - Explicit paths (space-separated) — use those directories as slices
 - Any other text — interpret as a natural-language description of how to partition and apply it
 
@@ -60,7 +60,7 @@ If `$ARGUMENTS` is empty:
 
 1. **Check for `.claude/loop-review-partitions.json`**: If this file exists, read it. It contains an array of `{"name": "<slice name>", "paths": ["<path>", ...]}` objects. Use these as the slices.
 
-2. **Auto-discovery fallback**: If no partition config exists, auto-discover slices by finding directories at depth 1–2 from the repo root that contain source files (`.go`, `.py`, `.ts`, `.rs`, `.sh`). Group them into slices, one per top-level directory. Add a final "Skills & documentation" slice for `.claude/skills/` and top-level `.md` files. Cap at 10 slices; merge smaller directories into an "other" bucket.
+2. **Auto-discovery fallback**: If no partition config exists, auto-discover slices by finding directories at depth 1–2 from the repo root that contain source files (common extensions: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.rs`, `.java`, `.rb`, `.sh`, `.c`, `.cpp`, `.cs`). Group them into slices, one per top-level directory. Add a final "Skills & documentation" slice for `.claude/skills/` and top-level `.md` files. Cap at 10 slices; merge smaller directories into an "other" bucket.
 
 Print the partition plan with file counts per slice.
 
@@ -90,7 +90,7 @@ For each slice (using `N` as the 1-based slice index):
 
 ### 3b — Gather file list
 
-Use Glob to collect relevant source files in the slice (`.go`, `.md`, `.yaml`, `.sh`). Exclude `*_test.go` from review targets (but tests serve as context for reviewers).
+Use Glob to collect relevant source files in the slice (common extensions: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.rs`, `.java`, `.rb`, `.sh`, `.c`, `.cpp`, `.cs`, `.md`, `.yaml`, `.yml`, `.json`). Exclude test files (e.g., `*_test.go`, `*_test.py`, `*.test.ts`, `*.spec.js`) from review targets (but tests serve as context for reviewers).
 
 Write the full file list to `$LR_TMPDIR/slice-N-files.txt` (one path per line) for external reviewers to read.
 

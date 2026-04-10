@@ -114,7 +114,7 @@ Read these directly when you need depth — CLAUDE.md deliberately does not dupl
 - `docs/agents.md`, `docs/review-agents.md` — subagent orchestration
 - `docs/external-reviewers.md`, `docs/collaborative-sketches.md` — Codex/Cursor integration
 - `.claude/skills/bump-version/SKILL.md` — authoritative version classification rules
-- `scripts/validate-plugin-structure.sh` — the header comment block is the definitive structural spec (14 validators)
+- `scripts/validate-plugin-structure.sh` — the header comment block is the definitive structural spec (18 validators)
 - `SECURITY.md` — security policy (validated by validator 14; do not delete)
 
 ## Conventions

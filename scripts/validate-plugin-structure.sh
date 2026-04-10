@@ -2,9 +2,10 @@
 # validate-plugin-structure.sh — Validate the larch plugin's manifest, layout, and references.
 #
 # Called by:
-#   1. .github/workflows/ci.yaml (plugin-structure job) — gates PR merges
+#   1. scripts/smoke-test.sh — the CI entry point (gates PR merges via .github/workflows/ci.yaml)
 #   2. .claude/skills/relevant-checks/scripts/run-checks.sh — runs after pre-commit succeeds
 #   3. Developers, directly: bash scripts/validate-plugin-structure.sh
+#   4. scripts/smoke-test.sh — also called directly by developers as a convenience wrapper
 #
 # Validators (run in order; errors collected via fail() and reported at the end):
 #   1. plugin.json           — file exists, valid JSON, name+version present, strict semver
@@ -37,6 +38,14 @@
 #  13. Plugin enriched metadata — plugin.json has description (non-empty), author.email
 #                              (non-empty), keywords (non-empty array with ≥1 element)
 #  14. SECURITY.md presence  — SECURITY.md exists at repo root
+#  15. Shared markdown reference integrity — every ${CLAUDE_PLUGIN_ROOT}/skills/shared/*.md
+#                              path referenced from skills/*/SKILL.md must exist on disk
+#  16. Agent-template alignment — every agents/*.md must contain a "Derived from
+#                              skills/shared/reviewer-templates.md" marker comment
+#  17. Email format            — owner.email in marketplace.json and author.email in
+#                              plugin.json must match basic email regex (.+@.+\..+)
+#  18. userConfig structure    — if plugin.json has userConfig, it must be an object
+#                              where each key has a "description" string field
 #
 # Exemption from PWD hygiene check (validator 8):
 #   .claude/skills/bump-version/SKILL.md
@@ -573,6 +582,101 @@ validate_security_md() {
 }
 
 # ---------------------------------------------------------------------------
+# Validator 15: shared markdown reference integrity
+# ---------------------------------------------------------------------------
+
+validate_shared_md_references() {
+    # Extract ${CLAUDE_PLUGIN_ROOT}/skills/shared/*.md paths from public SKILL.md files
+    # (not skills/shared/ itself) and verify each referenced file exists on disk.
+    # Mirrors validator 9 for scripts. Scope: skills/*/SKILL.md only (excludes shared/).
+    local ref rel skill_md
+    # shellcheck disable=SC2016  # intentional literal ${CLAUDE_PLUGIN_ROOT} in regex
+    for skill_md in skills/*/SKILL.md; do
+        [ -f "$skill_md" ] || continue
+        case "$skill_md" in skills/shared/*) continue ;; esac
+        while IFS= read -r ref; do
+            [ -z "$ref" ] && continue
+            rel="${ref#\$\{CLAUDE_PLUGIN_ROOT\}/}"
+            [ -f "$rel" ] || fail "shared markdown reference missing on disk: $ref (in $skill_md, expected $rel)"
+        done < <(grep -hoE '\$\{CLAUDE_PLUGIN_ROOT\}/skills/shared/[a-zA-Z0-9._-]+\.md' "$skill_md" 2>/dev/null)
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Validator 16: agent-template alignment
+# ---------------------------------------------------------------------------
+
+validate_agent_template_alignment() {
+    local agents_dir="agents"
+    local templates="skills/shared/reviewer-templates.md"
+    [ -d "$agents_dir" ] || return 0
+    [ -f "$templates" ] || { fail "reviewer-templates.md missing: $templates"; return 0; }
+
+    local agent_md
+    for agent_md in "$agents_dir"/*.md; do
+        [ -f "$agent_md" ] || continue
+        # Each agent file must contain a "Derived from" marker referencing the templates
+        if ! grep -qi "Derived from.*reviewer-templates\.md" "$agent_md"; then
+            fail "$agent_md missing 'Derived from skills/shared/reviewer-templates.md' marker"
+        fi
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Validator 17: email format
+# ---------------------------------------------------------------------------
+
+validate_email_format() {
+    local f email
+    # marketplace.json owner.email
+    f=".claude-plugin/marketplace.json"
+    if [ -f "$f" ] && jq empty "$f" 2>/dev/null; then
+        email=$(jq -r '.owner.email // empty' "$f")
+        if [ -n "$email" ] && ! echo "$email" | grep -qE '^.+@.+\..+$'; then
+            fail "$f owner.email is not a valid email format: $email"
+        fi
+    fi
+    # plugin.json author.email
+    f=".claude-plugin/plugin.json"
+    if [ -f "$f" ] && jq empty "$f" 2>/dev/null; then
+        email=$(jq -r '.author.email // empty' "$f")
+        if [ -n "$email" ] && ! echo "$email" | grep -qE '^.+@.+\..+$'; then
+            fail "$f author.email is not a valid email format: $email"
+        fi
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Validator 18: userConfig structure
+# ---------------------------------------------------------------------------
+
+validate_userconfig_structure() {
+    local f=".claude-plugin/plugin.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0
+
+    # Skip if no userConfig field (use has() to distinguish absent from null)
+    if ! jq -e 'has("userConfig")' "$f" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # userConfig must be an object (catches null, arrays, strings, etc.)
+    if ! jq -e '.userConfig | type == "object"' "$f" >/dev/null 2>&1; then
+        fail "$f userConfig must be an object"
+        return 0
+    fi
+
+    # Each key must have a description that is a non-empty string
+    local key
+    while IFS= read -r key; do
+        [ -z "$key" ] && continue
+        if ! jq -e ".userConfig[\"$key\"].description | type == \"string\" and length > 0" "$f" >/dev/null 2>&1; then
+            fail "$f userConfig.$key missing or invalid description (must be a non-empty string)"
+        fi
+    done < <(jq -r '.userConfig | keys[]' "$f" 2>/dev/null)
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -591,6 +695,10 @@ main() {
     validate_marketplace_enriched
     validate_plugin_enriched
     validate_security_md
+    validate_shared_md_references
+    validate_agent_template_alignment
+    validate_email_format
+    validate_userconfig_structure
 
     if [ "$ERROR_COUNT" -eq 0 ]; then
         echo "Plugin structure OK"
