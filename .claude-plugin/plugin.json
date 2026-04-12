@@ -1,6 +1,6 @@
 {
   "name": "larch",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Multi-agent workflow automation for Claude Code: design, code review, implementation, and PR automation with collaborative reviewers (Claude subagents + Codex + Cursor).",
   "author": {
     "name": "Sergey Zhupanov",
@@ -23,14 +23,20 @@
   ],
   "userConfig": {
     "slack_bot_token": {
+      "title": "Slack Bot Token",
+      "type": "string",
       "description": "Slack Bot User OAuth Token (xoxb-...) for PR announcements. Also accepted via LARCH_SLACK_BOT_TOKEN env var.",
       "sensitive": true
     },
     "slack_channel_id": {
+      "title": "Slack Channel ID",
+      "type": "string",
       "description": "Slack channel ID (e.g., C0123456789) for PR announcements. Also accepted via LARCH_SLACK_CHANNEL_ID env var.",
       "sensitive": false
     },
     "slack_user_id": {
+      "title": "Slack User ID",
+      "type": "string",
       "description": "Your Slack user ID (e.g., U0123456789) for @-mentions in announcements. Also accepted via LARCH_SLACK_USER_ID env var.",
       "sensitive": false
     }
