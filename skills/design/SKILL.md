@@ -14,6 +14,8 @@ Design an implementation plan for a feature and review it with multiple speciali
 - `--auto`: Set a mental flag `auto_mode=true`. When `auto_mode=true`, all interactive question checkpoints (Steps 1c, 1d, 3.5, and 3a) are skipped — the skill runs fully autonomously without user interaction. When `--quick` is set in the caller and `/design` is skipped entirely, `--auto` has no effect.
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) and will be forwarded to `session-setup.sh` via `--caller-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
+- `--step-prefix <prefix>`: Set `STEP_PREFIX` to the given value (e.g., `"1."`). When non-empty, prepend to step numbers **in emoji status lines only** (e.g., `🔀 Step 1.1 — Creating branch...`). Do NOT prefix section headers (e.g., `## Implementation Plan`), structured output headers, or artifact labels. Default: empty (standalone numbering). This is an internal orchestration flag used when `/design` is invoked from `/implement`.
+- `--branch-info <values>`: Set `branch_info_supplied=true` and parse `IS_MAIN`, `IS_USER_BRANCH`, `USER_PREFIX`, `CURRENT_BRANCH` from the space-separated `KEY=VALUE` pairs. All 4 keys are required. Values are safe for space-splitting (`USER_PREFIX` is sanitized by `create-branch.sh`'s `derive_user_prefix()`, `CURRENT_BRANCH` cannot contain spaces). **Validation**: If any of the 4 keys is missing, print `**⚠ --branch-info is incomplete. Falling back to create-branch.sh --check.**` and run the script as fallback. **Fallback**: When `--branch-info` is absent (standalone invocation), run `create-branch.sh --check` as usual. This is an internal orchestration flag used when `/design` is invoked from `/implement` to skip the redundant branch-state check.
 
 The feature to design is described by the remainder of `$ARGUMENTS` after flags are stripped.
 
@@ -22,7 +24,8 @@ The feature to design is described by the remainder of `$ARGUMENTS` after flags 
 **Every step MUST print clearly visible status lines** so the user can instantly see where execution is at. Use distinct emoji prefixes:
 
 - Print a **start line** when entering a step: e.g., `🔀 Step 1 — Creating branch...`
-- Print a **completion line** when done: e.g., `✅ Step 1 — Branch created: <user-prefix>/foo-bar`
+- Print a **completion line** only when it carries informational payload (counts, outcomes, or conditional-skip reasons). Pure "step complete" announcements without payload are not needed — the start line of the next step signals completion. Only the final step (Step 5) prints an unconditional completion announcement.
+- When `STEP_PREFIX` is non-empty, prepend it to step numbers **in emoji status lines only** (e.g., `🔀 Step 1.1 — Creating branch...` when `STEP_PREFIX="1."`). Do NOT prefix section headers (e.g., `## Implementation Plan`), structured output headers, or artifact labels. **This rule overrides the literal step numbers in `Print:` directives and examples throughout this file** — whenever a `Print:` line or example contains `Step N`, emit `Step ${STEP_PREFIX}N` instead (e.g., `Print: \`❓ Step 1c\`` becomes `❓ Step 1.1c` when `STEP_PREFIX="1."`).
 
 Suggested emoji palette (use consistently):
 | Step | Emoji | Description |
@@ -47,7 +50,7 @@ Suggested emoji palette (use consistently):
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step start/completion emoji lines, all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
+- Do not produce explanatory prose between tool call outputs — only print: step start emoji lines, result-bearing completion lines (with counts/outcomes), conditional-skip lines (`⏩`), final completion line (Step 5), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
 
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
@@ -98,7 +101,9 @@ This file reflects both inherited health state and the probe result. It will be 
 
 ### 1a — Check current branch state
 
-Run the `create-branch.sh` script in check mode to get the current branch state:
+**If `branch_info_supplied=true`** (via `--branch-info`): Use the values parsed from the flag (`CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, `USER_PREFIX`). Skip the `create-branch.sh --check` call.
+
+**Otherwise** (standalone invocation or validation failed): Run the `create-branch.sh` script in check mode:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/create-branch.sh --check
@@ -137,8 +142,6 @@ Consider asking about:
 - If the feature description is clear and unambiguous, print `✅ Step 1c — No clarifying questions needed.` and proceed to Step 1d.
 
 After the user responds, incorporate their answers into your understanding of the feature for all subsequent steps.
-
-Print: `✅ Step 1c — Questions resolved.`
 
 ## Step 1d — Design Grilling (Round 1)
 
@@ -288,8 +291,6 @@ Read all 5 sketches (Claude General + Architecture/Standards + Pragmatism/Safety
    List decisions in priority order: High impact first, then by degree of sketch disagreement (more agents on different sides = higher priority), then by order of appearance in the synthesis. If no sketches diverged (all 5 agreed on all points), write exactly `NO_CONTESTED_DECISIONS` as the entire file content.
 
 Print the synthesis under an `## Approach Synthesis` header. Write the synthesis to `$DESIGN_TMPDIR/approach-synthesis.txt` so it can be referenced by Step 2b.
-
-Print: `✅ Step 2a.4 — Approach synthesis written.`
 
 ### 2a.5 — Dialectic Resolution of Contested Decisions
 
@@ -581,8 +582,6 @@ Print: `✅ Step 3a — Post-review confirmation...`
 
 **This step is strictly approval-only** — the user confirms the revised plan is acceptable to proceed with implementation. No substantive plan changes are accepted at this point — the reviewed/voted plan is the canonical artifact. If the user rejects the plan, print a warning and proceed anyway (the plan has already been reviewed and voted on; the user can adjust during implementation or in a follow-up PR).
 
-Print: `✅ Step 3a — Plan confirmed.`
-
 ## Step 3b — Architecture Diagram
 
 Print: `🗺️ Step 3b — Generating architecture diagram...`
@@ -636,4 +635,5 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
 - `**⚠ Codex sketch timed out / produced empty output**`
 - `**⚠ Step 3b — Architecture diagram generation failed. Proceeding without diagram.**`
 
-Print: `🏁 Step 5 — Design complete! The implementation plan is ready. Run /implement to proceed with implementation.`
+If `STEP_PREFIX` is empty (standalone mode): Print: `🏁 Step 5 — Design complete! The implementation plan is ready. Run /implement to proceed with implementation.`
+If `STEP_PREFIX` is non-empty (orchestrated mode): skip this final print — the parent orchestrator handles overall progress.
