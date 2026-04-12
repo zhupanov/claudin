@@ -88,7 +88,7 @@ Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PR
 
 Print: `❓ Step 1c — Clarifying questions...`
 
-**If `auto_mode=true`**: Print `⏩ Step 1c — Skipped (auto mode).` and proceed to Step 2a.
+**If `auto_mode=true`**: Print `⏩ Step 1c — Skipped (auto mode).` and proceed to Step 1d.
 
 **If `auto_mode=false`**: Before launching the expensive collaborative sketch phase, use `AskUserQuestion` to clarify any ambiguities in the feature description. This is the highest-value question point — answers here reshape what the sketch agents explore.
 
@@ -100,7 +100,7 @@ Consider asking about:
 **Guidelines**:
 - Only ask questions when there is genuine ambiguity — do NOT ask trivially answerable questions or re-confirm what is already clear.
 - Batch questions into a single `AskUserQuestion` call with 1-4 questions rather than multiple sequential calls.
-- If the feature description is clear and unambiguous, print `✅ Step 1c — No clarifying questions needed.` and proceed to Step 2a.
+- If the feature description is clear and unambiguous, print `✅ Step 1c — No clarifying questions needed.` and proceed to Step 1d.
 
 After the user responds, incorporate their answers into your understanding of the feature for all subsequent steps.
 
@@ -510,7 +510,7 @@ Unlike Round 1, Round 2 MAY ask about architectural decisions and implementation
 
 ### Short-circuit
 
-If all plan decisions are already covered by Round 1 and no reviewer findings challenged them, print `⏩ Step 3.5 — No additional design decisions require grilling.` and proceed to Step 3a.
+If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ Step 3.5 — No additional design decisions require grilling.` and proceed to Step 3a.
 
 ### Output
 
