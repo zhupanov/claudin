@@ -25,7 +25,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 **Every step MUST print clearly visible status lines** so the user can instantly see where execution is at. Use distinct emoji prefixes:
 
 - Print a **start line** when entering a step: e.g., `🛠️ Step 2 — Implementing feature...`
-- Print a **completion line** when done: e.g., `✅ Step 2 — Implementation complete`
+- Print a **completion line** only when it carries informational payload (counts, outcomes, or conditional-skip reasons). Pure "step complete" announcements without payload are not needed — the start line of the next step signals completion. Only the final step (Step 18) prints an unconditional completion announcement.
 - For long-running steps, print **intermediate progress**: e.g., `⏳ Step 12 — CI running (2m elapsed), main unchanged`
 
 Suggested emoji palette (use consistently):
@@ -62,9 +62,9 @@ Suggested emoji palette (use consistently):
 - Use terse 3-5 word descriptions for Agent tool calls.
 - Do not produce explanatory prose between tool call outputs — only print the designated output categories below.
 
-**Preserved output (NEVER suppressed, regardless of `debug_mode`):** step start/completion emoji lines, all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, competition scoreboards, round summaries, final summaries/reports), architecture diagrams, code flow diagrams, implementation plans (original and revised), dialectic resolutions, accepted/rejected findings lists, out-of-scope observations, PR body sections.
+**Preserved output (NEVER suppressed, regardless of `debug_mode`):** step start emoji lines, result-bearing completion lines (with counts/outcomes), conditional-skip lines (`⏩`), final completion line (Step 18), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, competition scoreboards, round summaries, final summaries/reports), architecture diagrams, code flow diagrams, implementation plans (original and revised), dialectic resolutions, accepted/rejected findings lists, out-of-scope observations, PR body sections.
 
-**Suppressed output (only when `debug_mode=false`):** explanatory prose describing what will happen next or what just happened, script paths and command descriptions, rationale for decisions between tool calls, per-reviewer individual completion messages (replaced by status table in child skills).
+**Suppressed output (only when `debug_mode=false`):** explanatory prose describing what will happen next or what just happened, script paths and command descriptions, rationale for decisions between tool calls, per-reviewer individual completion messages (replaced by status table in child skills), rebase-skip messages (the following three specific variants: `⏩ Rebase skipped — branch already pushed to origin.`, `⏩ Rebase skipped — already at latest main.`, `⏩ Local main already at latest — no update needed.`). Note: non-rebase `⏩` skip messages and rebase outcomes in the Rebase+Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
 
 **When `debug_mode=true`:** use descriptive text for `description` parameter on all Bash and Agent tool calls; print full explanatory text between tool calls (current verbose behavior).
 
@@ -176,7 +176,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
 If the script exits non-zero, print: `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Local main already at latest — no update needed.`
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ Local main already at latest — no update needed.` Otherwise, silently continue.
 - Otherwise, print: `✅ Local main rebased onto latest origin/main.`
 
 ### Quick mode (`quick_mode=true`)
@@ -196,8 +196,8 @@ Proceed to Step 2.
 
 **Decision logic**:
 - If `IS_USER_BRANCH=true` **AND** a reviewed implementation plan is visible in the conversation context above: The plan was created by a prior `/design` invocation in this session. Proceed to Step 2.
-- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` prepended to the feature description to create a plan on the current branch. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Canonical invocation order: `[--debug] [--auto] --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
-- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` prepended to the feature description to create a branch and design the plan. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Canonical invocation order: `[--debug] [--auto] --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
+- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with flags and feature description. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix 1.` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix 1. --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
+- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with the same flags. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix 1.` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix 1. --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
 
 ### Cross-Skill Health Update (after /design)
 
@@ -227,8 +227,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
-- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
+- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 2 — Implement the Feature
@@ -267,8 +266,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
-- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
+- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 5 — Code Review
@@ -295,7 +293,7 @@ Print: `🔍 Step 5 — Quick mode: simplified review (2 Claude subagents, 1 rou
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip this step regardless of the nature of the changes — whether code, skills, documentation, data files, or configuration. All changes require full review.**
 
-Invoke the `/review` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` to forward reviewer health state. **If `debug_mode=true`, invoke `/review --debug --session-env $IMPLEMENT_TMPDIR/session-env.sh`.** Otherwise, invoke `/review --session-env $IMPLEMENT_TMPDIR/session-env.sh`. This launches 2 parallel Claude subagent reviewers (general, deep-analysis) plus two Codex and Cursor reviewers (if available and healthy), implements their suggestions recursively until clean.
+Invoke the `/review` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` to forward reviewer health state. Always prepend `--step-prefix 5.`. **If `debug_mode=true`, also prepend `--debug`.** Canonical invocation order: `[--debug] --step-prefix 5. --session-env $IMPLEMENT_TMPDIR/session-env.sh`. This launches 2 parallel Claude subagent reviewers (general, deep-analysis) plus two Codex and Cursor reviewers (if available and healthy), implements their suggestions recursively until clean.
 
 After `/review` returns, follow the **Cross-Skill Health Propagation** procedure from Step 0 to read the health status file and update `session-env.sh` if any reviewer timed out during the review.
 
@@ -345,8 +343,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
-- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
+- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 7a — Code Flow Diagram
@@ -389,8 +386,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true`, print: `⏩ Rebase skipped — branch already pushed to origin.`
-- Else if the stdout contains `SKIPPED_ALREADY_FRESH=true`, print: `⏩ Rebase skipped — already at latest main.`
+- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
 - Otherwise, print: `✅ Rebased onto latest main.`
 
 ## Step 8 — Version Bump
