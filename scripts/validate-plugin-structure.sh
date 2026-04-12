@@ -59,6 +59,10 @@
 #                              sources section of CLAUDE.md must exist on disk
 #  23. userConfig sensitive type — if a userConfig entry has a "sensitive" field,
 #                              its value must be a boolean (not string/number/null)
+#  24. userConfig title field  — every userConfig entry must have a "title" field
+#                              that is a non-empty string
+#  25. userConfig type field   — every userConfig entry must have a "type" field
+#                              that is a non-empty string
 #
 # Exemption from PWD hygiene check (validator 8):
 #   .claude/skills/bump-version/SKILL.md
@@ -796,6 +800,46 @@ validate_userconfig_sensitive_type() {
 }
 
 # ---------------------------------------------------------------------------
+# Validator 24: userConfig title field
+# ---------------------------------------------------------------------------
+
+validate_userconfig_title() {
+    local f=".claude-plugin/plugin.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0
+    jq -e 'has("userConfig")' "$f" >/dev/null 2>&1 || return 0
+    jq -e '.userConfig | type == "object"' "$f" >/dev/null 2>&1 || return 0
+
+    local key
+    while IFS= read -r key; do
+        [ -z "$key" ] && continue
+        if ! jq -e ".userConfig[\"$key\"].title | type == \"string\" and length > 0" "$f" >/dev/null 2>&1; then
+            fail "$f userConfig.$key missing or invalid title (must be a non-empty string)"
+        fi
+    done < <(jq -r '.userConfig | keys[]' "$f" 2>/dev/null)
+}
+
+# ---------------------------------------------------------------------------
+# Validator 25: userConfig type field
+# ---------------------------------------------------------------------------
+
+validate_userconfig_type() {
+    local f=".claude-plugin/plugin.json"
+    [ -f "$f" ] || return 0
+    jq empty "$f" 2>/dev/null || return 0
+    jq -e 'has("userConfig")' "$f" >/dev/null 2>&1 || return 0
+    jq -e '.userConfig | type == "object"' "$f" >/dev/null 2>&1 || return 0
+
+    local key
+    while IFS= read -r key; do
+        [ -z "$key" ] && continue
+        if ! jq -e ".userConfig[\"$key\"].type | type == \"string\" and length > 0" "$f" >/dev/null 2>&1; then
+            fail "$f userConfig.$key missing or invalid type (must be a non-empty string)"
+        fi
+    done < <(jq -r '.userConfig | keys[]' "$f" 2>/dev/null)
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -823,6 +867,8 @@ main() {
     validate_agent_template_count
     validate_docs_references
     validate_userconfig_sensitive_type
+    validate_userconfig_title
+    validate_userconfig_type
 
     if [ "$ERROR_COUNT" -eq 0 ]; then
         echo "Plugin structure OK"
