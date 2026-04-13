@@ -32,10 +32,10 @@ jobs:
   claude-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: zhupanov/claude-lint@v1
+        continue-on-error: true
         with:
           github-token: ${{ github.token }}
 
