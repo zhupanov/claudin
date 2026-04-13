@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.7] - 2026-04-13
+
+### Added
+
+- `LARCH_CURSOR_MODEL` and `LARCH_CODEX_MODEL` environment variables for controlling which models Cursor and Codex use as external reviewers.
+- New `scripts/reviewer-model-args.sh` script that centralizes model flag injection for both tools.
+- Plugin `userConfig` entries (`cursor_model`, `codex_model`) as alternative to environment variables.
+- Prominent `═══` banner-style warnings in terminal output when Cursor or Codex health checks fail.
+
 ## [1.3.6] - 2026-04-13
 
 ### Fixed

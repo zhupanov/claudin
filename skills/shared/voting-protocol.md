@@ -92,7 +92,7 @@ Launch all 3 voters **in parallel** (in a single message). When external tools a
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "<tmpdir>/cursor-vote-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
     "<voter prompt with ballot>"
 ```
 
@@ -104,7 +104,7 @@ Use `run_in_background: true` and `timeout: 1260000`.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "<tmpdir>/codex-vote-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "<tmpdir>/codex-vote-output.txt" \
     "<voter prompt with ballot>"
 ```

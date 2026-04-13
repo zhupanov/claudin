@@ -61,11 +61,14 @@ if [[ "$PROBE" == "true" ]]; then
     if [[ "$CODEX_AVAILABLE" == "true" && "$SKIP_CODEX_PROBE" == "true" ]]; then
         CODEX_HEALTHY="false"
     elif [[ "$CODEX_AVAILABLE" == "true" ]]; then
+        # Build codex command with optional model from LARCH_CODEX_MODEL
+        CODEX_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool codex)
+        # shellcheck disable=SC2086
         "$SCRIPT_DIR/run-external-reviewer.sh" \
             --tool codex \
             --output "$PROBE_DIR/codex-probe.txt" \
             --timeout 60 \
-            -- codex exec --full-auto -C "$PWD" \
+            -- codex exec --full-auto -C "$PWD" $CODEX_MODEL_ARGS \
             --output-last-message "$PROBE_DIR/codex-probe.txt" \
             "Respond with OK" \
             >"$PROBE_DIR/codex-wrapper.log" 2>&1 &
@@ -74,12 +77,15 @@ if [[ "$PROBE" == "true" ]]; then
     if [[ "$CURSOR_AVAILABLE" == "true" && "$SKIP_CURSOR_PROBE" == "true" ]]; then
         CURSOR_HEALTHY="false"
     elif [[ "$CURSOR_AVAILABLE" == "true" ]]; then
+        # Build cursor command with optional model from LARCH_CURSOR_MODEL
+        CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool cursor)
+        # shellcheck disable=SC2086
         "$SCRIPT_DIR/run-external-reviewer.sh" \
             --tool cursor \
             --output "$PROBE_DIR/cursor-probe.txt" \
             --timeout 60 \
             --capture-stdout \
-            -- cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
+            -- cursor agent -p --force --trust $CURSOR_MODEL_ARGS --workspace "$PWD" \
             "Respond with OK" \
             >"$PROBE_DIR/cursor-wrapper.log" 2>&1 &
     fi
@@ -133,4 +139,5 @@ if [[ "$PROBE" == "true" ]]; then
     if [[ "$CURSOR_AVAILABLE" == "true" ]]; then
         echo "CURSOR_HEALTHY=$CURSOR_HEALTHY"
     fi
+
 fi

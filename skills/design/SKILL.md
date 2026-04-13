@@ -210,7 +210,7 @@ Print `▸ 2a: sketches` and proceed to 2a.2.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
     "You are looking at a codebase and need to propose a high-level implementation approach for this feature: <FEATURE_DESCRIPTION>. Explore the codebase to understand the relevant architecture, then write 2-3 paragraphs covering: (1) Key architectural decisions and the approach you would take, (2) Which files/modules to modify and why, (3) Main tradeoffs you would consider. Do NOT modify files."
 ```
 
@@ -224,7 +224,7 @@ Prompt: `"You are an Innovation/Exploration architect. Propose a high-level impl
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$DESIGN_TMPDIR/codex-sketch-output.txt" \
     "You are looking at a codebase and need to propose a high-level implementation approach for this feature: <FEATURE_DESCRIPTION>. Explore the codebase to understand the relevant architecture, then write 2-3 paragraphs covering: (1) Key architectural decisions and the approach you would take, (2) Which files/modules to modify and why, (3) Main tradeoffs you would consider. Do NOT modify files."
 ```
@@ -379,7 +379,7 @@ Invoke Cursor via the shared monitored wrapper script (with `--capture-stdout` s
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Combine 4 perspectives: (1) General: logical flaws, code reuse, test coverage, backward compat, pattern consistency. (2) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
@@ -397,7 +397,7 @@ Run both Codex instances **second** in the parallel message (after Cursor). Each
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-general-plan-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$DESIGN_TMPDIR/codex-general-plan-output.txt" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Focus on general code quality and risk/integration perspectives: (1) General: logical flaws, code reuse, test coverage, backward compat, pattern consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -408,7 +408,7 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-deep-plan-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$DESIGN_TMPDIR/codex-deep-plan-output.txt" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Focus on correctness and architecture perspectives: (1) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (2) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```

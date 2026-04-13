@@ -116,7 +116,7 @@ Print `▸ 1: research` and proceed to 1.2.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
     "You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Explore the codebase to understand the relevant architecture and code. Write 2-3 paragraphs covering: (1) Your key findings and observations relevant to the research question, (2) Which files/modules/areas are most relevant and why, (3) Any risks, constraints, or feasibility concerns you identify. Do NOT modify files."
 ```
 
@@ -130,7 +130,7 @@ Prompt: `"You are an Alternative Perspectives researcher. Investigate this resea
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-research-output.txt" \
     "You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Explore the codebase to understand the relevant architecture and code. Write 2-3 paragraphs covering: (1) Your key findings and observations relevant to the research question, (2) Which files/modules/areas are most relevant and why, (3) Any risks, constraints, or feasibility concerns you identify. Do NOT modify files."
 ```
@@ -198,7 +198,7 @@ Run Cursor **first** in the parallel message (it takes the longest):
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-validation-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$PWD" \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
     "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Combine 4 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Correctness: Are specific code references correct? Are there factual errors about the codebase? (3) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? (4) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
@@ -210,7 +210,7 @@ Run Codex-General **second** in the parallel message:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-general-validation-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-general-validation-output.txt" \
     "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
@@ -223,7 +223,7 @@ Run Codex-Deep-Analysis **third** in the parallel message:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" \
     "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) Correctness: Are specific code references correct? Are there factual errors about the codebase? (2) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```

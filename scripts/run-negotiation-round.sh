@@ -54,13 +54,19 @@ fi
 # Remove previous output to ensure fresh results
 rm -f "$OUTPUT_FILE"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 case "$TOOL" in
     codex)
-        codex exec --full-auto -C "$WORKSPACE" \
+        CODEX_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool codex)
+        # shellcheck disable=SC2086
+        codex exec --full-auto -C "$WORKSPACE" $CODEX_MODEL_ARGS \
             --output-last-message "$OUTPUT_FILE" - < "$PROMPT_FILE" 2>&1
         ;;
     cursor)
-        cursor agent -p --force --trust --model gpt-5.4-medium --workspace "$WORKSPACE" \
+        CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool cursor)
+        # shellcheck disable=SC2086
+        cursor agent -p --force --trust $CURSOR_MODEL_ARGS --workspace "$WORKSPACE" \
             "Read the negotiation prompt from $PROMPT_FILE and respond to it." \
             > "$OUTPUT_FILE" 2>&1
         ;;
