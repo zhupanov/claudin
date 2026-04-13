@@ -39,6 +39,18 @@
       "type": "string",
       "description": "Your Slack user ID (e.g., U0123456789) for @-mentions in announcements. Also accepted via LARCH_SLACK_USER_ID env var.",
       "sensitive": false
+    },
+    "cursor_model": {
+      "title": "Cursor Model",
+      "type": "string",
+      "description": "Model for Cursor reviewer (e.g., gpt-5.4-medium). Also accepted via LARCH_CURSOR_MODEL env var. When unset, Cursor uses its own default.",
+      "sensitive": false
+    },
+    "codex_model": {
+      "title": "Codex Model",
+      "type": "string",
+      "description": "Model for Codex reviewer (e.g., o3). Also accepted via LARCH_CODEX_MODEL env var. When unset, Codex uses its own default.",
+      "sensitive": false
     }
   }
 }

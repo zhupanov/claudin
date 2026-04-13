@@ -165,7 +165,7 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 
 ## Environment Variables
 
-Larch uses three environment variables for Slack integration. All are optional — when not set, Slack-related features are skipped with warnings and all other workflow steps continue normally.
+Larch uses environment variables for Slack integration and external reviewer model configuration. All are optional — when not set, Slack-related features are skipped with warnings, and external reviewers use their default models.
 
 > **Important:** Both `LARCH_SLACK_BOT_TOKEN` **and** `LARCH_SLACK_CHANNEL_ID` must be set in your shell environment for Slack features to function. If either is missing, **all** Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
 
@@ -207,6 +207,34 @@ A Slack user ID (e.g., `U0123456789`) used to @-mention the PR author in Slack a
 
 **When not set:**
 - Slack announcements are still posted, but without an @-mention — the message appears without a user notification
+
+### External Reviewer Model Configuration
+
+These variables control which model Cursor and Codex use when running as external reviewers. When unset, each tool uses its own default model. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex).
+
+Model configuration is also available via plugin `userConfig` — environment variables take precedence if both are set.
+
+### `LARCH_CURSOR_MODEL`
+
+The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `claude-sonnet-4-6`).
+
+**When set:**
+- All Cursor invocations (reviews, sketches, voting, health probes, negotiations) use this model
+- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
+
+**When not set:**
+- Cursor runs without an explicit `--model` flag, using its own configured default
+
+### `LARCH_CODEX_MODEL`
+
+The model name to pass to Codex's `-m` / `--model` flag (e.g., `o3`, `o4-mini`).
+
+**When set:**
+- All Codex invocations (reviews, sketches, voting, health probes, negotiations) use this model
+- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
+
+**When not set:**
+- Codex runs without an explicit `-m` flag, using its own configured default
 
 ## Detailed Documentation
 

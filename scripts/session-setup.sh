@@ -180,6 +180,14 @@ if [[ "$SKIP_SLACK_CHECK" == "false" ]]; then
             export LARCH_SLACK_USER_ID="${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID}"
         fi
 
+        # Bridge reviewer model env vars from plugin userConfig
+        if [[ -z "${LARCH_CURSOR_MODEL:-}" && -n "${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL:-}" ]]; then
+            export LARCH_CURSOR_MODEL="${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL}"
+        fi
+        if [[ -z "${LARCH_CODEX_MODEL:-}" && -n "${CLAUDE_PLUGIN_OPTION_CODEX_MODEL:-}" ]]; then
+            export LARCH_CODEX_MODEL="${CLAUDE_PLUGIN_OPTION_CODEX_MODEL}"
+        fi
+
         SLACK_MISSING_VARS=""
         if [[ -z "$EFFECTIVE_BOT_TOKEN" ]]; then
             SLACK_MISSING_VARS="LARCH_SLACK_BOT_TOKEN"
