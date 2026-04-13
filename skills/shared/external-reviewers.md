@@ -2,19 +2,21 @@
 
 Shared mechanical procedures for running Codex and Cursor as external reviewers. Each skill provides its own reviewer invocation commands (prompts, output paths, tmpdir variables) — this file covers the common scaffolding.
 
-## Binary Check and Health Probe (Step 0b)
+## Binary Check and Health Probe (Step 0)
 
-Run the shared `check-reviewers.sh` script with `--probe` to check for binaries **and** verify each tool is actually responding:
+The binary check, health probe, and health status file write are now handled by `session-setup.sh` with the `--check-reviewers` flag. Skills call a single script in Step 0:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/check-reviewers.sh --probe
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix <name> [--skip-preflight] [--skip-branch-check] \
+  [--skip-slack-check] [--skip-repo-check] --check-reviewers [--caller-env <path>] \
+  [--skip-codex-probe] [--skip-cursor-probe] [--write-health <path>]
 ```
 
-Parse the output for `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`.
+The `--check-reviewers` flag runs `check-reviewers.sh --probe` internally and emits `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY` on stdout.
 
-**Session-env override**: If session-env (from `--caller-env` or `--session-env`) provides `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false`, set the corresponding `*_available` mental flag to `false` immediately **without re-probing that tool**. Pass `--skip-codex-probe` and/or `--skip-cursor-probe` to `check-reviewers.sh` for tools already known unhealthy. Still run the full check (binary + probe) for tools whose health is unknown (not present in session-env). Print: `**⚠ <Codex|Cursor> marked unhealthy by caller — using Claude replacement for this session.**`
+**Session-env override**: If `--caller-env` provides `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false`, the script auto-sets the corresponding `--skip-codex-probe` / `--skip-cursor-probe` flag internally — you do not need to pass these explicitly when using `--caller-env`.
 
-Set mental flags `codex_available` and `cursor_available` based on the combined result:
+Set mental flags `codex_available` and `cursor_available` based on the output:
 - If `CODEX_AVAILABLE=false`: `codex_available=false`. Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
 - Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
 - Else: `codex_available=true`
@@ -37,31 +39,32 @@ This is a mental flag flip within the current skill invocation. For cross-skill 
 
 **Note**: Once a reviewer is marked unhealthy during a session, it stays unhealthy for the remainder of that session. This is intentional — it prevents oscillation and wasted time on flaky tools during extended outages.
 
-## Monitoring External Reviewers
+## Collecting External Reviewer Results
 
-After launching Codex and/or Cursor as background tasks, **poll for `.done` sentinel files** to detect completion. The wrapper script (`run-external-reviewer.sh`) writes `<output-file>.done` (containing the exit code) when it finishes. Do NOT poll the output files directly — Cursor buffers all stdout until exit, so its output file is empty until the process finishes.
+After launching Codex and/or Cursor as background tasks (via `run-external-reviewer.sh` with `run_in_background: true`), continue working on other tasks (e.g., processing Claude subagent results) while external reviewers run.
 
-1. Continue working on other tasks (e.g., processing Claude subagent results) while external reviewers run in the background.
-2. After all other tasks are done, invoke the wait script with the sentinel file paths for all launched reviewers:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/wait-for-reviewers.sh --timeout 1860 "<cursor-output-file>.done" "<codex-output-file>.done"
-   ```
-   Only include paths for reviewers that were actually launched. For this `wait-for-reviewers.sh` Bash tool call, use `timeout: 1860000` (1860 seconds = 1 860 000 ms) and **do NOT** set `run_in_background: true` — this call must block until all sentinels are found. The script polls every 5 seconds, prints compact dot-based progress to stderr, and outputs machine-parseable `DONE <name>: exit=<code>` or `TIMEOUT <name>` lines to stdout. It always exits 0. **Important**: Invoke the wait script exactly ONCE with ALL sentinel file paths in a SINGLE Bash tool call. Do NOT make multiple Bash calls or write ad-hoc polling loops. If you launched the reviewer with a custom timeout via `run-external-reviewer.sh`, pass the matching value plus 60 seconds grace with `--timeout <seconds>` (seconds) and set the Bash tool `timeout` to the same value in milliseconds.
-3. **Do NOT read output files until the corresponding `.done` sentinel file exists.** Reading early will see an empty file (especially for Cursor, whose stdout is fully buffered). Parse the script's stdout `DONE`/`TIMEOUT` lines to determine which reviewers completed.
-4. For any reviewer that shows `TIMEOUT` in the script output, print `**⚠ <Reviewer> sentinel file not found after timeout. The wrapper may have been killed externally. Proceeding without <Reviewer> findings.**` and continue without that reviewer.
+After all other tasks are done, collect and validate external reviewer outputs using the shared collection script:
 
-## Validating External Reviewer Output
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] <output-file> [<output-file> ...]
+```
 
-**Only after** the corresponding `.done` sentinel file exists, read the output file. The exit code is in the sentinel file (e.g., `cat "<output-file>.done"`). The wrapper script (`run-external-reviewer.sh`) also prints diagnostic lines to its own stdout (captured in the background task output):
-- `✓ <tool> review: completed (exit code 0, Xs elapsed, output N bytes)` — success
-- `❌ <tool> review: FAILED (exit code N, Xs elapsed, output N bytes)` — failure with details
-- `⚠ <tool> review: completed but OUTPUT IS EMPTY` — process succeeded but wrote nothing
+Only include output file paths for reviewers that were actually launched. For the Bash tool call, use `timeout: <seconds>000` (milliseconds) and **do NOT** set `run_in_background: true` — this call must block. The script internally calls `wait-for-reviewers.sh` to poll for `.done` sentinel files, validates each output, and retries once on empty output (using `.meta` files written by `run-external-reviewer.sh`).
 
-**Validation steps:**
-1. Read the output file with the Read tool.
-2. Check that it is non-empty and looks like a review (contains numbered findings or "NO_ISSUES_FOUND").
-3. If the output is empty despite exit code 0, **retry the reviewer once** with a fresh invocation (same prompt, new output file path with `-retry` suffix). Some tools have transient startup failures that resolve on retry.
-4. If the output is empty after retry, or if the reviewer exited non-zero, print a detailed warning including the exit code and elapsed time from the wrapper's diagnostic output: `**⚠ <Reviewer> review failed (exit code X, Ys elapsed, 0 bytes output). Proceeding without <Reviewer> findings.**`
+**Output**: The script emits structured `KEY=value` blocks on stdout (one block per reviewer, separated by blank lines):
+```
+REVIEWER_FILE=<output-path>
+TOOL=<codex|cursor|unknown>
+STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT>
+EXIT_CODE=<N>
+HEALTHY=<true|false>
+```
+
+Parse each reviewer's `STATUS` and `REVIEWER_FILE`:
+- `STATUS=OK`: Read the output file — it is non-empty and validated.
+- Any other status: The reviewer failed. Follow the **Runtime Timeout Fallback** procedure below.
+
+**Important**: Do NOT read output files before calling `collect-reviewer-results.sh`. Cursor buffers all stdout until exit — its output file is empty until the process finishes. The collection script handles all sentinel polling and validation internally.
 
 ## Negotiation Protocol
 

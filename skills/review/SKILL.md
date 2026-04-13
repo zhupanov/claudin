@@ -75,34 +75,23 @@ When changes touch files under `scripts/` or `skills/shared/`, verify the change
 
 ## Step 0 — Session Setup
 
-### 0a — Create Session Temp Directory
-
-Create a session-scoped temporary directory to avoid collisions with parallel sessions:
+Run the shared session setup script. This handles temp directory creation, reviewer health probe, and health status file in a single call:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/create-session-tmpdir.sh --prefix claude-review
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-review --skip-preflight --skip-branch-check --skip-slack-check --skip-repo-check --check-reviewers [--caller-env "$SESSION_ENV_PATH"] [--skip-codex-probe] [--skip-cursor-probe] [--write-health "${SESSION_ENV_PATH}.health"]
 ```
 
-Parse the output for `SESSION_TMPDIR`. Set `REVIEW_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
+Only include `--caller-env "$SESSION_ENV_PATH"` and `--write-health "${SESSION_ENV_PATH}.health"` if `SESSION_ENV_PATH` is non-empty. If `SESSION_ENV_PATH` provides `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false`, the script auto-sets the corresponding `--skip-codex-probe` / `--skip-cursor-probe` flag — you do not need to pass these explicitly when using `--caller-env`.
 
-### 0a.1 — Read Session Env (if provided)
+If the script exits non-zero, print the error and abort.
 
-If `SESSION_ENV_PATH` is non-empty, read the file and parse `CODEX_HEALTHY` and `CURSOR_HEALTHY` keys (line-by-line, same safe parsing as `session-setup.sh` — do NOT source the file). Save these values for use in Step 0b. If the file does not exist or keys are absent, treat health as unknown (will be probed in Step 0b).
+Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set `REVIEW_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
 
-### 0b — Quick External Reviewer Check
-
-Read and follow the **Binary Check and Health Probe** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. If `SESSION_ENV_PATH` provided `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false`, honor those values per the session-env override procedure in that section.
-
-### 0b.1 — Write Health Status File (if session-env provided)
-
-If `SESSION_ENV_PATH` is non-empty, write the final reviewer health state to `${SESSION_ENV_PATH}.health` so the calling skill (e.g., `/implement`) can read it after `/review` returns:
-
-```
-CODEX_HEALTHY=<true|false>
-CURSOR_HEALTHY=<true|false>
-```
-
-This file reflects both inherited health state and any runtime timeout fallbacks that occurred during this skill's execution. The calling skill reads this file to update its session-env before invoking the next child skill.
+Set mental flags `codex_available` and `cursor_available` based on the output:
+- If `CODEX_AVAILABLE=false`: `codex_available=false`. Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
+- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
+- Else: `codex_available=true`
+- Same logic for Cursor.
 
 ## Step 1 — Gather Context
 
@@ -195,11 +184,9 @@ Additionally, append the following competition context to each reviewer's prompt
 
 > **Competition notice**: Your findings will be voted on by a 3-agent panel (General Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
 
-### Monitoring External Reviewers
+### Collecting External Reviewer Results
 
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$REVIEW_TMPDIR/codex-general-output.txt`, `$REVIEW_TMPDIR/codex-deep-output.txt`, and `$REVIEW_TMPDIR/cursor-output.txt` as the output files.
-
-**Critical**: Do NOT read `$REVIEW_TMPDIR/cursor-output.txt` until `$REVIEW_TMPDIR/cursor-output.txt.done` exists. Cursor buffers all stdout — the file is empty (0 bytes) until the process exits. The `.done` sentinel file is written by the wrapper script upon completion and contains the exit code.
+External reviewer output collection, validation, and retry are handled by the shared collection script — see the **Collecting External Reviewer Results** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. The explicit `collect-reviewer-results.sh` invocation is in Step 3a below.
 
 ## Step 3 — Collect, Deduplicate, and Implement (Recursive Loop)
 
@@ -210,8 +197,11 @@ This step repeats until reviewers find no more issues. Track the current **round
 **Process Claude findings immediately** — do not wait for external reviewers before starting. After both Claude subagents return:
 
 1. Collect findings from the two Claude subagents right away. Claude subagents produce **dual-list output** (per `reviewer-templates.md`): "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists from each subagent.
-2. **Then** poll for external reviewer sentinel files (`$REVIEW_TMPDIR/cursor-output.txt.done`, `$REVIEW_TMPDIR/codex-general-output.txt.done`, and `$REVIEW_TMPDIR/codex-deep-output.txt.done`, only for reviewers that were actually launched) using the polling procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`.
-3. Once sentinel files exist, read each reviewer's exit code, then read and validate the output per the shared procedure. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
+2. **Then** collect and validate external reviewer outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 [--write-health "${SESSION_ENV_PATH}.health"] "$REVIEW_TMPDIR/cursor-output.txt" "$REVIEW_TMPDIR/codex-general-output.txt" "$REVIEW_TMPDIR/codex-deep-output.txt"
+   ```
+   Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
 4. Merge external reviewer in-scope findings into the Claude in-scope findings. Deduplicate in-scope findings and OOS observations separately (see `voting-protocol.md` OOS section). If the same issue appears in both lists from different reviewers, merge under the in-scope finding.
 
 This way Claude findings are processed during the 5-10 minutes external reviewers take, instead of sitting idle. OOS observations are only collected in round 1 — rounds 2+ use Claude-only reviewers without OOS collection.
@@ -297,7 +287,7 @@ Print a final summary:
 
 ### 5a — Update Health Status File
 
-If `SESSION_ENV_PATH` is non-empty and any reviewer was marked unhealthy during this session (via the Runtime Timeout Fallback procedure in `external-reviewers.md`), re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup. This ensures the calling skill sees any runtime timeouts that occurred during this skill's execution, not just the initial state.
+Health status file updates are now handled automatically by `collect-reviewer-results.sh --write-health` during reviewer collection (Step 3a). No additional cleanup-time write is needed unless a reviewer was marked unhealthy outside of a `collect-reviewer-results.sh` call. If `SESSION_ENV_PATH` is non-empty and any such untracked health change occurred, re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup.
 
 ### 5b — Remove Temp Directory
 

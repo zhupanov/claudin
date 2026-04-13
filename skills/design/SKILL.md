@@ -68,34 +68,25 @@ Icons: ✅ done, ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unava
 
 ## Step 0 — Session Setup
 
-### 0a — Preflight and Temp Directory
-
-Run the shared session setup script. Since `/design` does not need Slack or repo checks, pass `--skip-slack-check` and `--skip-repo-check`. If `SESSION_ENV_PATH` is non-empty (passed via `--session-env`), include `--caller-env`:
+Run the shared session setup script. This handles preflight, temp directory creation, reviewer health probe, and health status file in a single call:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-design --skip-branch-check --skip-slack-check --skip-repo-check [--caller-env "$SESSION_ENV_PATH"]
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-design --skip-branch-check --skip-slack-check --skip-repo-check --check-reviewers [--caller-env "$SESSION_ENV_PATH"] [--skip-codex-probe] [--skip-cursor-probe] [--write-health "${SESSION_ENV_PATH}.health"]
 ```
 
-Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-empty. This is behavior-preserving: `/design` today has no Slack or repo steps, and the skip flags ensure the script skips them.
+Only include `--caller-env "$SESSION_ENV_PATH"` and `--write-health "${SESSION_ENV_PATH}.health"` if `SESSION_ENV_PATH` is non-empty. If `SESSION_ENV_PATH` provides `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false`, the script auto-sets the corresponding `--skip-codex-probe` / `--skip-cursor-probe` flag — you do not need to pass these explicitly when using `--caller-env`.
 
 If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
 
-Parse the output for `SESSION_TMPDIR`, and also `CODEX_HEALTHY`, `CURSOR_HEALTHY` if present (passed through from caller-env). Set `DESIGN_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
+Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set `DESIGN_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
 
-### 0b — Quick External Reviewer Check
+Set mental flags `codex_available` and `cursor_available` based on the output:
+- If `CODEX_AVAILABLE=false`: `codex_available=false`. Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
+- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
+- Else: `codex_available=true`
+- Same logic for Cursor.
 
-Read and follow the **Binary Check and Health Probe** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. If `session-setup.sh` output included `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false` (inherited from caller), honor those values per the session-env override procedure in that section.
-
-### 0b.1 — Write Health Status File (if session-env provided)
-
-If `SESSION_ENV_PATH` is non-empty, write the initial reviewer health state to `${SESSION_ENV_PATH}.health` so the calling skill (e.g., `/implement`) can read it after `/design` returns:
-
-```
-CODEX_HEALTHY=<true|false>
-CURSOR_HEALTHY=<true|false>
-```
-
-This file reflects both inherited health state and the probe result. It will be updated again before cleanup if any runtime timeout fallbacks occur during this skill's execution.
+The `--write-health` flag writes the health status file for cross-skill propagation. It will be updated by `collect-reviewer-results.sh --write-health` during runtime if any reviewer times out.
 
 ## Step 1 — Create Branch
 
@@ -256,17 +247,17 @@ Prompt: `"You are a Pragmatism/Safety engineer. Propose a high-level implementat
 
 ### 2a.3 — Wait and Validate Sketches
 
-Wait for external sketch sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched (not Claude replacements — those return via Agent tool):
+Collect and validate external sketch outputs using the shared collection script. Only include output paths for external reviewers that were actually launched (not Claude replacements — those return via Agent tool):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/wait-for-reviewers.sh --timeout 1260 "$DESIGN_TMPDIR/cursor-sketch-output.txt.done" "$DESIGN_TMPDIR/codex-sketch-output.txt.done"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1260 "$DESIGN_TMPDIR/cursor-sketch-output.txt" "$DESIGN_TMPDIR/codex-sketch-output.txt"
 ```
 
-Use `timeout: 1260000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include sentinel paths for external reviewers that were actually launched — omit any path whose reviewer was replaced by a Claude subagent.
+Use `timeout: 1260000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include output paths for external reviewers that were actually launched — omit any path whose reviewer was replaced by a Claude subagent.
 
-Note: This is a separate `wait-for-reviewers.sh` call from the one in Step 3. Both are permitted because they operate on completely distinct sentinel file sets (`*-sketch-output.txt.done` vs `*-plan-output.txt.done`).
+Note: This is a separate `collect-reviewer-results.sh` call from the one in Step 3. Both are permitted because they operate on completely distinct output file sets (`*-sketch-output.txt` vs `*-plan-output.txt`).
 
-**Validate sketch outputs**: Follow the **Validating External Reviewer Output** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$DESIGN_TMPDIR/cursor-sketch-output.txt` and `$DESIGN_TMPDIR/codex-sketch-output.txt` as the output files. For sketches, a valid output is non-empty and contains substantive architectural content (at least a paragraph). If a sketch is empty despite exit code 0, retry once with a `-retry` suffix per the shared procedure.
+Parse the structured output for each reviewer's `STATUS`, `REVIEWER_FILE`, and `HEALTHY`. For sketches, a valid output is non-empty and contains substantive architectural content (at least a paragraph). If a reviewer's `STATUS` is not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` (set `*_available=false` for all subsequent steps).
 
 ### 2a.4 — Synthesis
 
@@ -451,16 +442,16 @@ Additionally, append the following competition context to each reviewer's prompt
 
 > **Competition notice**: Your findings will be voted on by a 3-agent panel (Deep Analysis Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
 
-### Monitoring External Reviewers
-
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$DESIGN_TMPDIR/codex-general-plan-output.txt`, `$DESIGN_TMPDIR/codex-deep-plan-output.txt`, and `$DESIGN_TMPDIR/cursor-plan-output.txt` as the output files.
-
-### After all reviewers return
+### Collecting External Reviewer Results
 
 **Process Claude findings immediately** — do not wait for external reviewers before starting:
 
 1. Collect findings from the two Claude subagents right away. Claude subagents produce **dual-list output** (per `reviewer-templates.md`): "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists from each subagent.
-2. **Then** poll for external reviewer sentinel files (only for reviewers that were actually launched: `$DESIGN_TMPDIR/cursor-plan-output.txt.done`, `$DESIGN_TMPDIR/codex-general-plan-output.txt.done`, and/or `$DESIGN_TMPDIR/codex-deep-plan-output.txt.done`). Read each reviewer's exit code from its sentinel file, then validate its output per the shared procedure. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
+2. **Then** collect and validate external reviewer outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 [--write-health "${SESSION_ENV_PATH}.health"] "$DESIGN_TMPDIR/cursor-plan-output.txt" "$DESIGN_TMPDIR/codex-general-plan-output.txt" "$DESIGN_TMPDIR/codex-deep-plan-output.txt"
+   ```
+   Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. Read valid output files. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
 3. Merge external reviewer in-scope findings into the Claude in-scope findings.
 4. Deduplicate in-scope findings separately. Assign each a stable sequential ID (`FINDING_1`, `FINDING_2`, etc.) and note which reviewer(s) proposed each.
 5. Deduplicate out-of-scope observations separately. Assign each an `OOS_` prefixed ID (`OOS_1`, `OOS_2`, etc.). If the same issue appears in both in-scope and OOS from different reviewers, merge under the in-scope finding (in-scope takes precedence).
@@ -618,7 +609,7 @@ Print any rejected plan review findings:
 
 ### 5a — Update Health Status File
 
-If `SESSION_ENV_PATH` is non-empty and any reviewer was marked unhealthy during this session (via the Runtime Timeout Fallback procedure in `external-reviewers.md`), re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup. This ensures the calling skill sees any runtime timeouts that occurred during this skill's execution, not just the initial state.
+Health status file updates are now handled automatically by `collect-reviewer-results.sh --write-health` during reviewer collection (Steps 2a.3 and 3). No additional cleanup-time write is needed unless a reviewer was marked unhealthy outside of a `collect-reviewer-results.sh` call (e.g., via a manual timeout detection). If `SESSION_ENV_PATH` is non-empty and any reviewer was marked unhealthy during this session that was NOT already written by `collect-reviewer-results.sh`, re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup.
 
 ### 5b — Remove Temp Directory
 

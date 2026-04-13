@@ -58,10 +58,9 @@ if [[ -z "$PR" ]]; then
 fi
 
 # --- Create temp directory ---
-TMPDIR_OUTPUT=$("$SCRIPT_DIR/create-session-tmpdir.sh" --prefix claude-post-pr)
-POST_PR_TMPDIR=$(echo "$TMPDIR_OUTPUT" | grep '^SESSION_TMPDIR=' | cut -d= -f2-)
+POST_PR_TMPDIR=$(mktemp -d "/tmp/claude-post-pr-XXXXXX")
 
-if [[ -z "$POST_PR_TMPDIR" ]]; then
+if [[ -z "$POST_PR_TMPDIR" || ! -d "$POST_PR_TMPDIR" ]]; then
     echo "ERROR: Failed to create temp directory" >&2
     exit 3
 fi

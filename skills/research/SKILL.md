@@ -57,19 +57,23 @@ Icons: ✅ done, ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unava
 
 ## Step 0 — Session Setup
 
-### 0a — Create Temp Directory
+### 0a — Session Setup and Reviewer Check
 
-Create a session-scoped temporary directory:
+Run the shared session setup script:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/create-session-tmpdir.sh --prefix claude-research
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-research --skip-preflight --skip-branch-check --skip-slack-check --skip-repo-check --check-reviewers
 ```
 
-Parse the output for `SESSION_TMPDIR`. Set `RESEARCH_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
+If the script exits non-zero, print the error and abort.
 
-### 0b — Quick External Reviewer Check
+Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set `RESEARCH_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
 
-Read and follow the **Binary Check and Health Probe** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`.
+Set mental flags `codex_available` and `cursor_available` based on the output:
+- If `CODEX_AVAILABLE=false`: `codex_available=false`. Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
+- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
+- Else: `codex_available=true`
+- Same logic for Cursor.
 
 ### 0c — Record Research Context
 
@@ -149,15 +153,15 @@ Prompt: `"You are a Risk/Feasibility researcher. Investigate this research quest
 
 ### 1.3 — Wait and Validate Research Outputs
 
-Wait for external research sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched (not Claude replacements — those return via Agent tool):
+Collect and validate external research outputs using the shared collection script. Only include output paths for external reviewers that were actually launched (not Claude replacements — those return via Agent tool):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/wait-for-reviewers.sh --timeout 1860 "$RESEARCH_TMPDIR/cursor-research-output.txt.done" "$RESEARCH_TMPDIR/codex-research-output.txt.done"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "$RESEARCH_TMPDIR/cursor-research-output.txt" "$RESEARCH_TMPDIR/codex-research-output.txt"
 ```
 
-Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include sentinel paths for external reviewers that were actually launched.
+Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include output paths for external reviewers that were actually launched.
 
-**Validate research outputs**: For research outputs, the validation criteria differ from the standard review validation in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`: instead of checking for numbered findings or `NO_ISSUES_FOUND`, check that the output is non-empty and contains at least one paragraph of substantive prose. Use `$RESEARCH_TMPDIR/cursor-research-output.txt` and `$RESEARCH_TMPDIR/codex-research-output.txt` as the output files. If an output is empty despite exit code 0, retry once with a `-retry` suffix per the shared procedure in `external-reviewers.md`.
+Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. For research outputs, additionally check that valid output contains at least one paragraph of substantive prose (the script validates non-empty; content validation is the caller's responsibility).
 
 ### 1.4 — Synthesis
 
@@ -243,27 +247,23 @@ Use the two reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
 
 **Research-specific acceptance criteria**: Accept a finding unless it is factually incorrect (misreads the codebase, references wrong file/line) or is already addressed in the synthesis. For research validation, "factually incorrect" means the finding misidentifies code, misattributes behavior, or contradicts something verifiable by reading source files.
 
-### Monitoring External Reviewers
-
-Follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$RESEARCH_TMPDIR/codex-general-validation-output.txt`, `$RESEARCH_TMPDIR/codex-deep-validation-output.txt`, and `$RESEARCH_TMPDIR/cursor-validation-output.txt` as the output files.
-
 ### After all reviewers return
 
 **Process Claude findings immediately** — do not wait for external reviewers before starting:
 
 1. Collect and deduplicate findings from the two Claude subagents right away.
 
-### 2.4 — Wait and Validate External Reviewers
+### 2.4 — Collect and Validate External Reviewers
 
-After processing Claude findings, wait for external reviewer sentinels using `wait-for-reviewers.sh`. Only include paths for external reviewers that were actually launched:
+After processing Claude findings, collect and validate external reviewer outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/wait-for-reviewers.sh --timeout 1860 "$RESEARCH_TMPDIR/cursor-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-general-validation-output.txt.done" "$RESEARCH_TMPDIR/codex-deep-validation-output.txt.done"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "$RESEARCH_TMPDIR/cursor-validation-output.txt" "$RESEARCH_TMPDIR/codex-general-validation-output.txt" "$RESEARCH_TMPDIR/codex-deep-validation-output.txt"
 ```
 
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
-2. Read each reviewer's exit code from its sentinel file, then validate its output per the shared procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`.
+2. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. Read valid output files.
 3. Merge external reviewer findings into the already-processed Claude findings.
 
 ### Codex and Cursor Negotiation (in parallel)

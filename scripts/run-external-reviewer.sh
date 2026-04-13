@@ -58,13 +58,24 @@ if [[ $# -eq 0 ]]; then
     usage; exit 1
 fi
 
-# Clear stale output and sentinel file
-rm -f "$OUTPUT_FILE" "${OUTPUT_FILE}.done"
+# Clear stale output, sentinel, and metadata files
+rm -f "$OUTPUT_FILE" "${OUTPUT_FILE}.done" "${OUTPUT_FILE}.meta"
 
 # Write sentinel file on ANY exit — the reliable completion signal for callers.
 # Callers poll for <output-file>.done instead of waiting for runtime notifications.
+# Installed BEFORE .meta write so that any early exit still creates a sentinel.
 EXIT_CODE=99  # default: wrapper crashed before capturing real exit code
 trap 'echo "$EXIT_CODE" > "${OUTPUT_FILE}.done" 2>/dev/null || true' EXIT
+
+# Write metadata for collect-reviewer-results.sh retry support.
+# CMD is shell-quoted via printf '%q' to preserve argument boundaries.
+{
+    echo "TOOL=$TOOL_NAME"
+    echo "TIMEOUT=$TIMEOUT_SECONDS"
+    echo "CAPTURE_STDOUT=$CAPTURE_STDOUT"
+    echo "OUTPUT_FILE=$OUTPUT_FILE"
+    printf 'CMD=%s\n' "$(printf '%q ' "$@")"
+} > "${OUTPUT_FILE}.meta"
 
 # Launch the reviewer in the background
 if [ "$CAPTURE_STDOUT" = true ]; then

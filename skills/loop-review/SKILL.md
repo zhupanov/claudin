@@ -48,35 +48,33 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 ## Step 0 — Session Setup
 
-### 0a — Preflight
+### 0a — Session Setup, Preflight, and Reviewer Check
 
-Ensure you are on the `main` branch with a clean working tree and the latest code:
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/preflight.sh
-```
-
-If it exits non-zero, print the `PREFLIGHT_ERROR` from stdout and abort.
-
-### 0b — Create Session and Tracking Files
-
-Create a session-scoped temp directory:
+Run the shared session setup script. This handles preflight (must be on clean `main`), temp directory creation, and reviewer health probe in a single call:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/create-session-tmpdir.sh --prefix claude-loop-review
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-loop-review --skip-slack-check --skip-repo-check --check-reviewers
 ```
 
-Parse the output for `SESSION_TMPDIR`. Set `LR_TMPDIR` = `SESSION_TMPDIR`. Initialize tracking files:
+Note: Neither `--skip-preflight` nor `--skip-branch-check` is passed — this ensures full preflight with branch check, which enforces the on-main requirement.
+
+If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
+
+Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set `LR_TMPDIR` = `SESSION_TMPDIR`.
+
+Set `codex_available` and `cursor_available` flags for the entire session:
+- If `CODEX_AVAILABLE=false`: `codex_available=false`. Append `**⚠ Codex not available (binary not found).**` to `$LR_TMPDIR/warnings.md`.
+- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Append `**⚠ Codex installed but not responding. Using Claude replacement.**` to `$LR_TMPDIR/warnings.md`.
+- Else: `codex_available=true`
+- Same logic for Cursor.
+
+### 0b — Initialize Tracking Files
+
+Initialize tracking files for the slice review loop:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/init-session-files.sh --dir "$LR_TMPDIR"
 ```
-
-### 0c — Quick External Reviewer Check
-
-Read and follow the **Binary Check and Health Probe** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`.
-
-Set `codex_available` and `cursor_available` flags for the entire session. If either is unavailable, append the warning to `$LR_TMPDIR/warnings.md`.
 
 ## Step 1 — Partition the Repository
 
@@ -193,13 +191,15 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 **Reviewer B — Deep Analysis:**
 > Review EXISTING code for correctness and architecture. Files: {FILE_LIST}. Read each file. Focus on: off-by-one errors, nil/zero-value handling, race conditions, incorrect return values, type mismatches, math errors, error path gaps. Also check: single responsibility violations, implicit contracts between components, unchecked invariants, layer boundary violations, semantic boundary issues. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
 
-**Monitoring External Reviewers:**
+**Collecting External Reviewer Results:**
 
-If any external reviewer was launched, follow the **Monitoring External Reviewers** and **Validating External Reviewer Output** sections in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$LR_TMPDIR/codex-general-output-slice-N.txt`, `$LR_TMPDIR/codex-deep-output-slice-N.txt`, and `$LR_TMPDIR/cursor-output-slice-N.txt` as the output files. Poll for sentinel files: `$LR_TMPDIR/cursor-output-slice-N.txt.done`, `$LR_TMPDIR/codex-general-output-slice-N.txt.done`, and `$LR_TMPDIR/codex-deep-output-slice-N.txt.done`. Only monitor reviewers that were actually launched.
+If any external reviewer was launched, collect and validate their outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
 
-**Critical**: Do NOT read Cursor's output file until `$LR_TMPDIR/cursor-output-slice-N.txt.done` exists. Cursor buffers all stdout — the file is empty (0 bytes) until the process exits. The `.done` sentinel file is the reliable completion signal.
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "$LR_TMPDIR/cursor-output-slice-N.txt" "$LR_TMPDIR/codex-general-output-slice-N.txt" "$LR_TMPDIR/codex-deep-output-slice-N.txt"
+```
 
-If validation fails (empty output after retry, timeout, or non-zero exit), append a detailed warning (including exit code and elapsed time) to `$LR_TMPDIR/warnings.md`, proceed without that reviewer's findings, and **flip that reviewer's availability flag to false** so it is skipped for all remaining slices (prevents repeated failures).
+Parse the structured output for each reviewer's `STATUS`, `REVIEWER_FILE`, and `HEALTHY`. For any reviewer with `HEALTHY=false`, append a detailed warning to `$LR_TMPDIR/warnings.md`, proceed without that reviewer's findings, and **flip that reviewer's availability flag to false** so it is skipped for all remaining slices (prevents repeated failures).
 
 ### 3d — Collect, negotiate, deduplicate, and classify findings
 

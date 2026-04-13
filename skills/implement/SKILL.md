@@ -72,39 +72,17 @@ Suggested emoji palette (use consistently):
 
 ## Step 0 — Session Setup
 
-Run the shared session setup script. If `SESSION_ENV_PATH` is non-empty (passed via `--session-env`), include `--caller-env` to reuse already-discovered values:
+Run the shared session setup script. This handles preflight, temp directory creation, reviewer health probe, and session-env file writing in a single call:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-implement --skip-branch-check [--caller-env "$SESSION_ENV_PATH"]
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-implement --skip-branch-check --check-reviewers [--caller-env "$SESSION_ENV_PATH"] [--skip-codex-probe] [--skip-cursor-probe] --write-session-env "$IMPLEMENT_TMPDIR/session-env.sh"
 ```
 
 `--skip-branch-check` is required so that the inlined Step 1 user-branch decision logic (`IS_USER_BRANCH=true` paths) is reachable. Without it, `preflight.sh` would refuse to run unless the user is on a clean `main` branch, making Step 1's branch-resume paths dead code.
 
-Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-empty.
+Only include `--caller-env "$SESSION_ENV_PATH"` if `SESSION_ENV_PATH` is non-empty. If `SESSION_ENV_PATH` provides `CODEX_HEALTHY=false` or `CURSOR_HEALTHY=false`, the script auto-sets the corresponding `--skip-codex-probe` / `--skip-cursor-probe` flag — you do not need to pass these explicitly when using `--caller-env`.
 
-If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
-
-Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`. Set:
-- `IMPLEMENT_TMPDIR` = `SESSION_TMPDIR`
-- If `SLACK_OK=false`, print: `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.**` Set a mental flag `slack_available=false`.
-- If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository name. CI monitoring (Steps 10, 12) and merge (Step 12b) will be skipped.**` Set a mental flag `repo_unavailable=true`.
-
-### Health Probe
-
-Run the reviewer health probe to determine initial external reviewer availability. If `SESSION_ENV_PATH` is non-empty, first parse the `session-setup.sh` output for `CODEX_HEALTHY` and `CURSOR_HEALTHY` (passed through from caller-env). If either is `false`, pass the corresponding `--skip-codex-probe` or `--skip-cursor-probe` flag to avoid re-probing a tool already known to be unhealthy:
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/check-reviewers.sh --probe [--skip-codex-probe] [--skip-cursor-probe]
-```
-
-Parse the output for `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Use the same precedence as `external-reviewers.md`:
-- If `CODEX_AVAILABLE=false`: print `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
-- Else if `CODEX_HEALTHY=false`: print `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
-- Same for Cursor. Only check `*_HEALTHY` when `*_AVAILABLE=true`.
-
-### Write Session Env for Child Skills
-
-Write the discovered values to `$IMPLEMENT_TMPDIR/session-env.sh` so they can be forwarded to child skills (`/design`, `/review`):
+**Note**: `--write-session-env` uses `$IMPLEMENT_TMPDIR` which is `SESSION_TMPDIR` from the script's output. Since the script creates the tmpdir before writing session-env, pass the actual path after parsing `SESSION_TMPDIR` from stdout. In practice, run the script first to get `SESSION_TMPDIR`, set `IMPLEMENT_TMPDIR` = `SESSION_TMPDIR`, then re-invoke `write-session-env.sh` separately if needed. **Alternative**: Omit `--write-session-env` from the initial call and run it as a separate post-step:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$IMPLEMENT_TMPDIR/session-env.sh" \
@@ -112,7 +90,17 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$IMPLEMENT_TMPDIR/s
   --codex-healthy <value> --cursor-healthy <value>
 ```
 
-This file will be passed to `/design` via `--session-env` in Step 1, and to `/review` via `--session-env` in Step 5.
+If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
+
+Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set:
+- `IMPLEMENT_TMPDIR` = `SESSION_TMPDIR`
+- If `SLACK_OK=false`, print: `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.**` Set a mental flag `slack_available=false`.
+- If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository name. CI monitoring (Steps 10, 12) and merge (Step 12b) will be skipped.**` Set a mental flag `repo_unavailable=true`.
+- If `CODEX_AVAILABLE=false`: print `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
+- Else if `CODEX_HEALTHY=false`: print `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
+- Same for Cursor. Only check `*_HEALTHY` when `*_AVAILABLE=true`.
+
+The session-env file (`$IMPLEMENT_TMPDIR/session-env.sh`) will be passed to `/design` via `--session-env` in Step 1, and to `/review` via `--session-env` in Step 5.
 
 ### Cross-Skill Health Propagation
 
