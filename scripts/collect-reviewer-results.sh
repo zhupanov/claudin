@@ -316,7 +316,7 @@ done
 # --- 5. Write health file (if requested, monotonic per tool) ---
 # F2 fix: uses CODEX_TOOL_HEALTHY/CURSOR_TOOL_HEALTHY which were seeded from
 # the existing health file (if any) and only downgraded during this run.
-if [[ -n "$WRITE_HEALTH" ]]; then
+if [[ -n "$WRITE_HEALTH" && "$WRITE_HEALTH" != "/dev/null" ]]; then
     HEALTH_TMPFILE=$(mktemp "${WRITE_HEALTH}.tmp.XXXXXX")
     {
         echo "CODEX_HEALTHY=$CODEX_TOOL_HEALTHY"

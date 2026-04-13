@@ -334,7 +334,7 @@ else
 fi
 
 # --- 6. Write health file (if requested) ---
-if [[ -n "$WRITE_HEALTH" ]]; then
+if [[ -n "$WRITE_HEALTH" && "$WRITE_HEALTH" != "/dev/null" ]]; then
     HEALTH_TMPFILE=$(mktemp "${WRITE_HEALTH}.tmp.XXXXXX")
     {
         echo "CODEX_HEALTHY=${FINAL_CODEX_HEALTHY:-true}"

@@ -13,6 +13,7 @@
 #   --codex-healthy/--cursor-healthy are optional (reviewer health state from probe).
 #
 # Output: Writes a shell-sourceable file to --output path (atomic via temp+mv).
+#         When --output is /dev/null, the output is silently discarded.
 # Exit codes: 0 success, 1 invalid args
 
 set -euo pipefail
@@ -43,15 +44,22 @@ if [[ -z "$OUTPUT" || -z "$SLACK_OK" || -z "$REPO_UNAVAILABLE" ]]; then
   exit 1
 fi
 
-# Atomic write: write to temp file first, then mv into place
-TMPFILE=$(mktemp "${OUTPUT}.tmp.XXXXXX")
-{
-  echo "SLACK_OK=$SLACK_OK"
-  echo "SLACK_MISSING=$SLACK_MISSING"
-  echo "REPO=$REPO"
-  echo "REPO_UNAVAILABLE=$REPO_UNAVAILABLE"
-  # Only write health keys when values are non-empty (omit = absent/unknown)
-  [[ -n "$CODEX_HEALTHY" ]] && echo "CODEX_HEALTHY=$CODEX_HEALTHY"
-  [[ -n "$CURSOR_HEALTHY" ]] && echo "CURSOR_HEALTHY=$CURSOR_HEALTHY"
-} > "$TMPFILE"
-mv "$TMPFILE" "$OUTPUT"
+# Build the content
+CONTENT="SLACK_OK=$SLACK_OK
+SLACK_MISSING=$SLACK_MISSING
+REPO=$REPO
+REPO_UNAVAILABLE=$REPO_UNAVAILABLE"
+[[ -n "$CODEX_HEALTHY" ]] && CONTENT="$CONTENT
+CODEX_HEALTHY=$CODEX_HEALTHY"
+[[ -n "$CURSOR_HEALTHY" ]] && CONTENT="$CONTENT
+CURSOR_HEALTHY=$CURSOR_HEALTHY"
+
+# Write atomically via temp+mv for regular paths.
+# Skip /dev/null — mktemp and mv both fail on device nodes.
+if [[ "$OUTPUT" == "/dev/null" ]]; then
+  : # Discard — caller explicitly requested no output
+else
+  TMPFILE=$(mktemp "${OUTPUT}.tmp.XXXXXX")
+  echo "$CONTENT" > "$TMPFILE"
+  mv "$TMPFILE" "$OUTPUT"
+fi
