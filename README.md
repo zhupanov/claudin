@@ -227,7 +227,7 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 
 ### `LARCH_CODEX_MODEL`
 
-The model name to pass to Codex's `-m` / `--model` flag (e.g., `o3`, `o4-mini`).
+The model name to pass to Codex's `-m` flag (e.g., `o3`, `o4-mini`).
 
 **When set:**
 - All Codex invocations (reviews, sketches, voting, health probes, negotiations) use this model

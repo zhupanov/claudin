@@ -140,20 +140,4 @@ if [[ "$PROBE" == "true" ]]; then
         echo "CURSOR_HEALTHY=$CURSOR_HEALTHY"
     fi
 
-    # Emit prominent banners to stderr for failed health checks so they are
-    # hard to miss in terminal output.
-    if [[ "$CODEX_AVAILABLE" == "true" && "$CODEX_HEALTHY" == "false" && "$SKIP_CODEX_PROBE" == "false" ]]; then
-        echo "═══════════════════════════════════════════════════════════" >&2
-        echo "  ⚠  CODEX HEALTH CHECK FAILED — not responding" >&2
-        echo "     Codex binary found but health probe timed out or errored." >&2
-        echo "     Will use Claude replacement for this session." >&2
-        echo "═══════════════════════════════════════════════════════════" >&2
-    fi
-    if [[ "$CURSOR_AVAILABLE" == "true" && "$CURSOR_HEALTHY" == "false" && "$SKIP_CURSOR_PROBE" == "false" ]]; then
-        echo "═══════════════════════════════════════════════════════════" >&2
-        echo "  ⚠  CURSOR HEALTH CHECK FAILED — not responding" >&2
-        echo "     Cursor binary found but health probe timed out or errored." >&2
-        echo "     Will use Claude replacement for this session." >&2
-        echo "═══════════════════════════════════════════════════════════" >&2
-    fi
 fi

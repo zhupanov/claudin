@@ -147,6 +147,14 @@ fi
 SESSION_TMPDIR=$(mktemp -d "/tmp/${PREFIX}-XXXXXX")
 echo "SESSION_TMPDIR=$SESSION_TMPDIR"
 
+# --- 2a. Bridge reviewer model env vars from plugin userConfig (always, regardless of --skip-slack-check) ---
+if [[ -z "${LARCH_CURSOR_MODEL:-}" && -n "${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL:-}" ]]; then
+    export LARCH_CURSOR_MODEL="${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL}"
+fi
+if [[ -z "${LARCH_CODEX_MODEL:-}" && -n "${CLAUDE_PLUGIN_OPTION_CODEX_MODEL:-}" ]]; then
+    export LARCH_CODEX_MODEL="${CLAUDE_PLUGIN_OPTION_CODEX_MODEL}"
+fi
+
 # --- 3. Check Slack configuration (LARCH_SLACK_BOT_TOKEN + LARCH_SLACK_CHANNEL_ID) ---
 # Track values for potential --write-session-env use
 SLACK_OK_VALUE=""
@@ -178,14 +186,6 @@ if [[ "$SKIP_SLACK_CHECK" == "false" ]]; then
         # Also bridge user ID (optional, used for @-mentions)
         if [[ -z "${LARCH_SLACK_USER_ID:-}" && -n "${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID:-}" ]]; then
             export LARCH_SLACK_USER_ID="${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID}"
-        fi
-
-        # Bridge reviewer model env vars from plugin userConfig
-        if [[ -z "${LARCH_CURSOR_MODEL:-}" && -n "${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL:-}" ]]; then
-            export LARCH_CURSOR_MODEL="${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL}"
-        fi
-        if [[ -z "${LARCH_CODEX_MODEL:-}" && -n "${CLAUDE_PLUGIN_OPTION_CODEX_MODEL:-}" ]]; then
-            export LARCH_CODEX_MODEL="${CLAUDE_PLUGIN_OPTION_CODEX_MODEL}"
         fi
 
         SLACK_MISSING_VARS=""
@@ -297,6 +297,26 @@ if [[ "$CHECK_REVIEWERS" == "true" ]]; then
     [[ -n "$PROBED_CURSOR_AVAILABLE" ]] && echo "CURSOR_AVAILABLE=$PROBED_CURSOR_AVAILABLE"
     [[ -n "$PROBED_CODEX_HEALTHY" ]] && echo "CODEX_HEALTHY=$PROBED_CODEX_HEALTHY"
     [[ -n "$PROBED_CURSOR_HEALTHY" ]] && echo "CURSOR_HEALTHY=$PROBED_CURSOR_HEALTHY"
+
+    # Emit prominent banners to stderr for failed health checks (must be here,
+    # not in check-reviewers.sh, because session-setup captures its stdout+stderr
+    # via 2>&1 — banners emitted there would be swallowed).
+    if [[ "$PROBED_CODEX_AVAILABLE" == "true" && "$PROBED_CODEX_HEALTHY" == "false" \
+          && "$SKIP_CODEX_PROBE" == "false" ]]; then
+        echo "═══════════════════════════════════════════════════════════" >&2
+        echo "  ⚠  CODEX HEALTH CHECK FAILED — not responding" >&2
+        echo "     Codex binary found but health probe timed out or errored." >&2
+        echo "     Will use Claude replacement for this session." >&2
+        echo "═══════════════════════════════════════════════════════════" >&2
+    fi
+    if [[ "$PROBED_CURSOR_AVAILABLE" == "true" && "$PROBED_CURSOR_HEALTHY" == "false" \
+          && "$SKIP_CURSOR_PROBE" == "false" ]]; then
+        echo "═══════════════════════════════════════════════════════════" >&2
+        echo "  ⚠  CURSOR HEALTH CHECK FAILED — not responding" >&2
+        echo "     Cursor binary found but health probe timed out or errored." >&2
+        echo "     Will use Claude replacement for this session." >&2
+        echo "═══════════════════════════════════════════════════════════" >&2
+    fi
 
     # Use probed values for downstream sections
     FINAL_CODEX_HEALTHY="${PROBED_CODEX_HEALTHY:-}"
