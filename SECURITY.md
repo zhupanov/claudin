@@ -13,7 +13,7 @@ Only the latest released version receives security updates.
 
 If you discover a security vulnerability in larch, please report it responsibly:
 
-1. **Email**: Send details to <sergey@zhupanov.com>
+1. **Email**: Send details to <zhupanov@yahoo.com>
 2. **Do not** open a public GitHub issue for security vulnerabilities
 3. Include steps to reproduce the issue and any relevant context
 
