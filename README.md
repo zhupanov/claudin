@@ -223,7 +223,7 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 - The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
 
 **When not set:**
-- Cursor runs without an explicit `--model` flag, using its own configured default
+- Defaults to `composer-2-fast` — Cursor's `cursor agent` CLI does not honor the model configured in `~/.cursor/cli-config.json`, so an explicit default is required to avoid falling back to a potentially rate-limited model
 
 ### `LARCH_CODEX_MODEL`
 
