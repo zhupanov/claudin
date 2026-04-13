@@ -36,15 +36,15 @@ flowchart TD
 
     subgraph DESIGN_PHASE["Design Phase (/design)"]
         BRANCH[Create branch] --> QUESTIONS[Clarifying questions]
-        QUESTIONS --> GRILL1[Design grilling round 1]
-        GRILL1 --> SKETCHES[5-agent collaborative sketches]
+        QUESTIONS --> DISCUSS1[Design discussion round 1]
+        DISCUSS1 --> SKETCHES[5-agent collaborative sketches]
         SKETCHES --> SYNTHESIS[Approach synthesis]
         SYNTHESIS --> DIALECTIC[Dialectic debate on contested decisions]
         DIALECTIC --> PLAN[Write implementation plan]
         PLAN --> PLAN_REVIEW[Plan review: 5 reviewers]
         PLAN_REVIEW --> VOTE1[Voting panel adjudicates findings]
         VOTE1 --> REVISE[Revise plan if needed]
-        REVISE --> GRILL2[Design grilling round 2]
+        REVISE --> DISCUSS2[Design discussion round 2]
     end
 
     DESIGN_PHASE --> IMPL_PHASE

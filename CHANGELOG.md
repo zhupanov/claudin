@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-04-12
+
+### Changed
+
+- Renamed "grilling"/"grill" terminology to "discussion"/"discuss" throughout `/design` skill, `docs/workflow-lifecycle.md`, and prior CHANGELOG entries for clarity.
+
 ## [1.3.2] - 2026-04-12
 
 ### Changed
@@ -56,12 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Two-round design grilling steps in `/design` skill: Step 1d (pre-sketch, scope/requirements interrogation) and Step 3.5 (post-review, covers decisions not addressed in round 1 or deemed suboptimal by reviewers). Both rounds walk the decision tree one question at a time with recommended answers, explore the codebase first, and are skipped in `--auto` mode.
+- Two-round design discussion steps in `/design` skill: Step 1d (pre-sketch, scope/requirements interrogation) and Step 3.5 (post-review, covers decisions not addressed in round 1 or deemed suboptimal by reviewers). Both rounds walk the decision tree one question at a time with recommended answers, explore the codebase first, and are skipped in `--auto` mode.
 - New `accepted-plan-findings.md` artifact written during plan review finalization, bridging Step 3 and Step 3.5.
 
 ### Changed
 
-- Updated `docs/workflow-lifecycle.md` mermaid diagram to include both grilling nodes in the design phase.
+- Updated `docs/workflow-lifecycle.md` mermaid diagram to include both discussion nodes in the design phase.
 
 ## [1.1.11] - 2026-04-12
 

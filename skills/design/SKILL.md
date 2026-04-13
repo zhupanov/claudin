@@ -33,12 +33,12 @@ Suggested emoji palette (use consistently):
 | 0 | 🔧 | Session setup |
 | 1 | 🔀 | Branch creation |
 | 1c | ❓ | Clarifying questions |
-| 1d | 🔥 | Design grilling (round 1) |
+| 1d | 🔥 | Design discussion (round 1) |
 | 2a | 🤝 | Collaborative sketches |
 | 2a.5 | ⚖️ | Dialectic debate |
 | 2b | 📐 | Full plan design |
 | 3 | 🔍 | Plan review |
-| 3.5 | 🔥 | Design grilling (round 2) |
+| 3.5 | 🔥 | Design discussion (round 2) |
 | 3a | ✅ | Post-review confirmation |
 | 3b | 🗺️ | Architecture diagram |
 | 4 | 📊 | Rejected findings report |
@@ -134,9 +134,9 @@ Consider asking about:
 
 After the user responds, incorporate their answers into your understanding of the feature for all subsequent steps.
 
-## Step 1d — Design Grilling (Round 1)
+## Step 1d — Design Discussion (Round 1)
 
-Print: `🔥 Step 1d — Design grilling (round 1)...`
+Print: `🔥 Step 1d — Design discussion (round 1)...`
 
 **If `auto_mode=true`**: Print `⏩ Step 1d — Skipped (auto mode).` and proceed to Step 2a.
 
@@ -156,11 +156,11 @@ Then walk each branch one question at a time via sequential `AskUserQuestion` ca
 
 ### Short-circuit
 
-If the feature is straightforward with fewer than 2 scope decision branches, print `⏩ Step 1d — No scope decisions require grilling.` and proceed to Step 2a.
+If the feature is straightforward with fewer than 2 scope decision branches, print `⏩ Step 1d — No scope decisions require discussion.` and proceed to Step 2a.
 
 ### Output
 
-Write resolved decisions to `$DESIGN_TMPDIR/grilling-round1.md` using a simple Q&A format:
+Write resolved decisions to `$DESIGN_TMPDIR/discussion-round1.md` using a simple Q&A format:
 
 ```markdown
 ### Decision 1: <short title>
@@ -179,7 +179,7 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer (e.g., "I don't know", "your recommendation is fine", "sure"), accept the recommended answer and move on without re-asking.
 
-Print: `✅ Step 1d — Design grilling (round 1) complete. <N> decisions resolved.`
+Print: `✅ Step 1d — Design discussion (round 1) complete. <N> decisions resolved.`
 
 ## Step 2a — Collaborative Approach Sketches
 
@@ -347,7 +347,7 @@ Before writing any code, create a concrete implementation plan. Research the cod
 
 Read `$DESIGN_TMPDIR/approach-synthesis.txt` from Step 2a and incorporate the synthesis into the plan. The synthesis should inform architectural decisions, file selection, and tradeoff resolutions.
 
-Also read `$DESIGN_TMPDIR/grilling-round1.md` if it exists and is non-empty. Incorporate the scope boundaries and hard constraints established during the design grilling into the plan — these define what is in-scope, what must not break, and what the user explicitly does not want.
+Also read `$DESIGN_TMPDIR/discussion-round1.md` if it exists and is non-empty. Incorporate the scope boundaries and hard constraints established during the design discussion into the plan — these define what is in-scope, what must not break, and what the user explicitly does not want.
 
 Also read `$DESIGN_TMPDIR/dialectic-resolutions.md` if it exists and is non-empty. For each resolved decision, the plan **must** follow the resolution direction and explicitly note how the antithesis concern was addressed. These resolutions are binding for Step 2b — do not override them. (Note: Step 3 plan review may subsequently revise the plan based on accepted review findings, which supersede dialectic resolutions.)
 
@@ -456,7 +456,7 @@ Additionally, append the following competition context to each reviewer's prompt
 4. Deduplicate in-scope findings separately. Assign each a stable sequential ID (`FINDING_1`, `FINDING_2`, etc.) and note which reviewer(s) proposed each.
 5. Deduplicate out-of-scope observations separately. Assign each an `OOS_` prefixed ID (`OOS_1`, `OOS_2`, etc.). If the same issue appears in both in-scope and OOS from different reviewers, merge under the in-scope finding (in-scope takes precedence).
 
-If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 (Design Grilling Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
+If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
 
 ### Voting Panel (replaces negotiation)
 
@@ -482,7 +482,7 @@ If any in-scope findings or promoted OOS items were **accepted by vote** (2+ YES
 1. Print them under a `## Plan Review Findings (Voted In)` header with vote counts. Include any promoted OOS items (labelled as `[PROMOTED FROM OUT-OF-SCOPE]`).
 2. Revise the implementation plan to address each accepted finding and promoted OOS item.
 3. Print the revised plan under a `## Revised Implementation Plan` header.
-4. Write the accepted findings to `$DESIGN_TMPDIR/accepted-plan-findings.md` so Step 3.5 (Design Grilling Round 2) has a stable artifact to read. Use the format:
+4. Write the accepted findings to `$DESIGN_TMPDIR/accepted-plan-findings.md` so Step 3.5 (Design Discussion Round 2) has a stable artifact to read. Use the format:
    ```markdown
    ### FINDING_N: <title>
    - **Concern**: <what was raised>
@@ -491,7 +491,7 @@ If any in-scope findings or promoted OOS items were **accepted by vote** (2+ YES
 
 Print any non-promoted OOS items under a `## Out-of-Scope Observations` header for visibility. These are not implemented but are recorded for future attention.
 
-If voting rejects all in-scope findings and no OOS items are promoted, print: `**ℹ Voting panel rejected all findings. Plan unchanged.**` and proceed to Step 3.5 (Design Grilling Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
+If voting rejects all in-scope findings and no OOS items are promoted, print: `**ℹ Voting panel rejected all findings. Plan unchanged.**` and proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
 
 ### Track Rejected Plan Review Findings
 
@@ -505,9 +505,9 @@ For any **in-scope** findings that were **not accepted by vote** (fewer than 2 Y
 
 If no findings were rejected, do not create the file yet.
 
-## Step 3.5 — Design Grilling (Round 2)
+## Step 3.5 — Design Discussion (Round 2)
 
-Print: `🔥 Step 3.5 — Design grilling (round 2)...`
+Print: `🔥 Step 3.5 — Design discussion (round 2)...`
 
 **If `auto_mode=true`**: Print `⏩ Step 3.5 — Skipped (auto mode).` and proceed to Step 3a.
 
@@ -516,7 +516,7 @@ Print: `🔥 Step 3.5 — Design grilling (round 2)...`
 ### Inputs
 
 Read the following artifacts:
-- `$DESIGN_TMPDIR/grilling-round1.md` — If it exists and is non-empty, use it to identify decisions already covered in Round 1 (avoid re-asking). **If it does not exist or is empty** (Round 1 short-circuited or was skipped), treat all candidate decisions as uncovered by Round 1 and proceed normally.
+- `$DESIGN_TMPDIR/discussion-round1.md` — If it exists and is non-empty, use it to identify decisions already covered in Round 1 (avoid re-asking). **If it does not exist or is empty** (Round 1 short-circuited or was skipped), treat all candidate decisions as uncovered by Round 1 and proceed normally.
 - `$DESIGN_TMPDIR/accepted-plan-findings.md` — If it exists and is non-empty, use it to identify decisions that reviewers challenged as suboptimal or that required plan revision.
 - `$DESIGN_TMPDIR/contested-decisions.md` — Decisions that sketch agents disagreed on.
 - `$DESIGN_TMPDIR/dialectic-resolutions.md` — How contested decisions were resolved.
@@ -536,11 +536,11 @@ Unlike Round 1, Round 2 MAY ask about architectural decisions and implementation
 
 ### Short-circuit
 
-If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ Step 3.5 — No additional design decisions require grilling.` and proceed to Step 3a.
+If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ Step 3.5 — No additional design decisions require discussion.` and proceed to Step 3a.
 
 ### Output
 
-Write resolved decisions to `$DESIGN_TMPDIR/grilling-round2.md` using the same format as Round 1:
+Write resolved decisions to `$DESIGN_TMPDIR/discussion-round2.md` using the same format as Round 1:
 
 ```markdown
 ### Decision 1: <short title>
@@ -559,7 +559,7 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer, accept the recommended answer and move on without re-asking.
 
-Print: `✅ Step 3.5 — Design grilling (round 2) complete. <N> decisions resolved.`
+Print: `✅ Step 3.5 — Design discussion (round 2) complete. <N> decisions resolved.`
 
 ## Step 3a — Post-Review Confirmation
 
@@ -567,9 +567,9 @@ Print: `✅ Step 3a — Post-review confirmation...`
 
 **If `auto_mode=true`**: Print `⏩ Step 3a — Skipped (auto mode).` and proceed to Step 3b.
 
-**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 grilling made no changes): Print `⏩ Step 3a — Skipped (plan unchanged by review or grilling).` and proceed to Step 3b.
+**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ Step 3a — Skipped (plan unchanged by review or discussion).` and proceed to Step 3b.
 
-**If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 grilling): Use `AskUserQuestion` to confirm the revised plan addresses the user's original intent. Present a brief summary of what changed and ask the user to approve or reject.
+**If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 discussion): Use `AskUserQuestion` to confirm the revised plan addresses the user's original intent. Present a brief summary of what changed and ask the user to approve or reject.
 
 **This step is strictly approval-only** — the user confirms the revised plan is acceptable to proceed with implementation. No substantive plan changes are accepted at this point — the reviewed/voted plan is the canonical artifact. If the user rejects the plan, print a warning and proceed anyway (the plan has already been reviewed and voted on; the user can adjust during implementation or in a follow-up PR).
 
