@@ -13,6 +13,7 @@
 #   --codex-healthy/--cursor-healthy are optional (reviewer health state from probe).
 #
 # Output: Writes a shell-sourceable file to --output path (atomic via temp+mv).
+#         When --output is /dev/null, the output is silently discarded.
 # Exit codes: 0 success, 1 invalid args
 
 set -euo pipefail
