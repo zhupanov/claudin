@@ -210,7 +210,7 @@ A Slack user ID (e.g., `U0123456789`) used to @-mention the PR author in Slack a
 
 ### External Reviewer Model Configuration
 
-These variables control which model Cursor and Codex use when running as external reviewers. When unset, each tool uses its own default model. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex).
+These variables control which model Cursor and Codex use when running as external reviewers. When unset, Cursor defaults to `composer-2-fast` and Codex uses its own configured default. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex).
 
 Model configuration is also available via plugin `userConfig` — environment variables take precedence if both are set.
 

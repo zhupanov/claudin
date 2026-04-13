@@ -17,7 +17,8 @@
 #   reviewer-model-args.sh --tool cursor|codex
 #
 # Output (stdout):
-#   The model flag(s) to splice into the command, or empty string if no model configured.
+#   The model flag(s) to splice into the command, or empty string (Codex only;
+#   Cursor always emits a model flag).
 #   Examples:
 #     --model gpt-5.4-medium    (cursor with LARCH_CURSOR_MODEL=gpt-5.4-medium)
 #     --model composer-2-fast   (cursor with no env var — default)
