@@ -14,35 +14,35 @@ Design an implementation plan for a feature and review it with multiple speciali
 - `--auto`: Set a mental flag `auto_mode=true`. When `auto_mode=true`, all interactive question checkpoints (Steps 1c, 1d, 3.5, and 3a) are skipped — the skill runs fully autonomously without user interaction. When `--quick` is set in the caller and `/design` is skipped entirely, `--auto` has no effect.
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) and will be forwarded to `session-setup.sh` via `--caller-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
-- `--step-prefix <prefix>`: Set `STEP_PREFIX` to the given value (e.g., `"1."`). When non-empty, prepend to step numbers **in emoji status lines only** (e.g., `🔀 Step 1.1 — Creating branch...`). Do NOT prefix section headers (e.g., `## Implementation Plan`), structured output headers, or artifact labels. Default: empty (standalone numbering). This is an internal orchestration flag used when `/design` is invoked from `/implement`.
+- `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"1.::design plan"` (numeric `1.`, path `design plan`), `"1."` (numeric only, backward compat). Parse into `STEP_NUM_PREFIX` (before `::`) and `STEP_PATH_PREFIX` (after `::`, or empty if `::` absent). Default: empty (standalone numbering). This is an internal orchestration flag used when `/design` is invoked from `/implement`.
 - `--branch-info <values>`: Set `branch_info_supplied=true` and parse `IS_MAIN`, `IS_USER_BRANCH`, `USER_PREFIX`, `CURRENT_BRANCH` from the space-separated `KEY=VALUE` pairs. All 4 keys are required. Values are safe for space-splitting (`USER_PREFIX` is sanitized by `create-branch.sh`'s `derive_user_prefix()`, `CURRENT_BRANCH` cannot contain spaces). **Validation**: If any of the 4 keys is missing, print `**⚠ --branch-info is incomplete. Falling back to create-branch.sh --check.**` and run the script as fallback. **Fallback**: When `--branch-info` is absent (standalone invocation), run `create-branch.sh --check` as usual. This is an internal orchestration flag used when `/design` is invoked from `/implement` to skip the redundant branch-state check.
 
 The feature to design is described by the remainder of `$ARGUMENTS` after flags are stripped.
 
 ## Progress Reporting
 
-**Every step MUST print clearly visible status lines** so the user can instantly see where execution is at. Use distinct emoji prefixes:
+**Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔀 Step 1 — Creating branch...`
-- Print a **completion line** only when it carries informational payload (counts, outcomes, or conditional-skip reasons). Pure "step complete" announcements without payload are not needed — the start line of the next step signals completion. Only the final step (Step 5) prints an unconditional completion announcement.
-- When `STEP_PREFIX` is non-empty, prepend it to step numbers **in emoji status lines only** (e.g., `🔀 Step 1.1 — Creating branch...` when `STEP_PREFIX="1."`). Do NOT prefix section headers (e.g., `## Implementation Plan`), structured output headers, or artifact labels. **This rule overrides the literal step numbers in `Print:` directives and examples throughout this file** — whenever a `Print:` line or example contains `Step N`, emit `Step ${STEP_PREFIX}N` instead (e.g., `Print: \`❓ Step 1c\`` becomes `❓ Step 1.1c` when `STEP_PREFIX="1."`).
+- Print a **start line** when entering a step: e.g., `▸ 1: branch` (standalone) or `▸ 1.1: design plan | branch` (nested from `/implement`)
+- Print a **completion line** only when it carries informational payload. Only the final step (Step 5) prints an unconditional completion announcement.
+- When `STEP_NUM_PREFIX` is non-empty, prepend it to step numbers: `{STEP_NUM_PREFIX}{local_step}`. When `STEP_PATH_PREFIX` is non-empty, prepend it to breadcrumb paths: `{STEP_PATH_PREFIX} | {step_short_name}`. **This rule overrides the literal step numbers and names in `Print:` directives and examples throughout this file.** Examples shown below assume standalone mode; when nested, prepend the parent context.
 
-Suggested emoji palette (use consistently):
-| Step | Emoji | Description |
-|------|-------|-------------|
-| 0 | 🔧 | Session setup |
-| 1 | 🔀 | Branch creation |
-| 1c | ❓ | Clarifying questions |
-| 1d | 🔥 | Design discussion (round 1) |
-| 2a | 🤝 | Collaborative sketches |
-| 2a.5 | ⚖️ | Dialectic debate |
-| 2b | 📐 | Full plan design |
-| 3 | 🔍 | Plan review |
-| 3.5 | 🔥 | Design discussion (round 2) |
-| 3a | ✅ | Post-review confirmation |
-| 3b | 🗺️ | Architecture diagram |
-| 4 | 📊 | Rejected findings report |
-| 5 | 🏁 | Cleanup |
+Step Name Registry:
+| Step | Short Name |
+|------|------------|
+| 0 | setup |
+| 1 | branch |
+| 1c | questions |
+| 1d | discussion r1 |
+| 2a | sketches |
+| 2a.5 | dialectic |
+| 2b | full plan |
+| 3 | plan review |
+| 3.5 | discussion r2 |
+| 3a | confirmation |
+| 3b | arch diagram |
+| 4 | rejected findings |
+| 5 | cleanup |
 
 ### Verbosity Control
 
@@ -50,7 +50,7 @@ Suggested emoji palette (use consistently):
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step start emoji lines, result-bearing completion lines (with counts/outcomes), conditional-skip lines (`⏩`), final completion line (Step 5), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
+- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`), final completion line (Step 5), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
 
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
@@ -110,15 +110,15 @@ Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PR
   ${CLAUDE_PLUGIN_ROOT}/scripts/create-branch.sh --branch <USER_PREFIX>/<branch-name>
   ```
 
-- If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch as above. Otherwise, skip branch creation. Print: `🔀 Step 1 — Using existing branch: <branch-name>`
+- If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch as above. Otherwise, skip branch creation. Print: `▸ 1: branch — using existing: <branch-name>`
 
 - Otherwise (non-main, non-user branch): Print a warning: `**⚠ Currently on branch '<branch-name>' which doesn't match the expected '<USER_PREFIX>/*' pattern. Creating a new branch from main.**` Then derive a name and create as above.
 
 ## Step 1c — Clarifying Questions
 
-Print: `❓ Step 1c — Clarifying questions...`
+Print: `▸ 1c: questions`
 
-**If `auto_mode=true`**: Print `⏩ Step 1c — Skipped (auto mode).` and proceed to Step 1d.
+**If `auto_mode=true`**: Print `⏩ 1c: questions — skipped (auto mode)` and proceed to Step 1d.
 
 **If `auto_mode=false`**: Before launching the expensive collaborative sketch phase, use `AskUserQuestion` to clarify any ambiguities in the feature description. This is the highest-value question point — answers here reshape what the sketch agents explore.
 
@@ -130,15 +130,15 @@ Consider asking about:
 **Guidelines**:
 - Only ask questions when there is genuine ambiguity — do NOT ask trivially answerable questions or re-confirm what is already clear.
 - Batch questions into a single `AskUserQuestion` call with 1-4 questions rather than multiple sequential calls.
-- If the feature description is clear and unambiguous, print `✅ Step 1c — No clarifying questions needed.` and proceed to Step 1d.
+- If the feature description is clear and unambiguous, print `✅ 1c: questions — no clarifying questions needed` and proceed to Step 1d.
 
 After the user responds, incorporate their answers into your understanding of the feature for all subsequent steps.
 
 ## Step 1d — Design Discussion (Round 1)
 
-Print: `🔥 Step 1d — Design discussion (round 1)...`
+Print: `▸ 1d: discussion r1`
 
-**If `auto_mode=true`**: Print `⏩ Step 1d — Skipped (auto mode).` and proceed to Step 2a.
+**If `auto_mode=true`**: Print `⏩ 1d: discussion r1 — skipped (auto mode)` and proceed to Step 2a.
 
 **If `auto_mode=false`**: Before launching the expensive collaborative sketch phase, stress-test the feature's scope and requirements by walking through the decision tree one question at a time. This is a deeper, sequential interrogation that resolves dependencies between decisions — each answer may reshape subsequent questions.
 
@@ -156,7 +156,7 @@ Then walk each branch one question at a time via sequential `AskUserQuestion` ca
 
 ### Short-circuit
 
-If the feature is straightforward with fewer than 2 scope decision branches, print `⏩ Step 1d — No scope decisions require discussion.` and proceed to Step 2a.
+If the feature is straightforward with fewer than 2 scope decision branches, print `⏩ 1d: discussion r1 — no scope decisions require discussion` and proceed to Step 2a.
 
 ### Output
 
@@ -179,7 +179,7 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer (e.g., "I don't know", "your recommendation is fine", "sure"), accept the recommended answer and move on without re-asking.
 
-Print: `✅ Step 1d — Design discussion (round 1) complete. <N> decisions resolved.`
+Print: `✅ 1d: discussion r1 — <N> decisions resolved`
 
 ## Step 2a — Collaborative Approach Sketches
 
@@ -198,7 +198,7 @@ Plus 2 external agents (or Claude replacements):
 4. **Cursor** (if available) — or **Claude (Innovation/Exploration)** replacement: proposes creative alternative approaches, questions assumptions, and suggests unconventional solutions
 5. **Codex** (if available) — or **Claude (Edge-cases/Failure-modes)** replacement: focuses on what can go wrong, boundary conditions, error handling, and failure recovery
 
-Print `🤝 Step 2a — Running collaborative sketch phase.` and proceed to 2a.2.
+Print `▸ 2a: sketches` and proceed to 2a.2.
 
 ### 2a.2 — Launch Sketches in Parallel
 
@@ -285,9 +285,9 @@ Print the synthesis under an `## Approach Synthesis` header. Write the synthesis
 
 ### 2a.5 — Dialectic Resolution of Contested Decisions
 
-Print: `⚖️ Step 2a.5 — Running dialectic debate on contested decisions...`
+Print: `▸ 2a.5: dialectic`
 
-Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ Step 2a.5 — No contested decisions found. Skipping dialectic debate.` and proceed to Step 2b.
+Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions` and proceed to Step 2b.
 
 Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNTHESIS_TEXT}` for the agent prompts below. Select up to the first 3 decisions from the file (they are already in priority order from Step 2a.4). For each selected decision, launch a **thesis agent** and an **antithesis agent** as Claude subagents via the Agent tool. **All thesis+antithesis pairs across all decisions must be issued in a single Agent fan-out message** (up to 6 Agent tool calls in one message) to maximize parallelism.
 
@@ -339,7 +339,7 @@ Print resolutions under a `## Dialectic Resolutions` header.
 
 **Scope**: Dialectic resolutions are **binding for Step 2b plan generation only**. They may be superseded later by accepted Step 3 review findings. The finalized plan (after Step 3 review) remains the sole canonical output.
 
-Print: `✅ Step 2a.5 — Dialectic debate complete (<N> decisions resolved).` (where N is the count of decisions that passed the quorum rule).
+Print: `✅ 2a.5: dialectic — <N> decisions resolved` (where N is the count of decisions that passed the quorum rule).
 
 ## Step 2b — Design the Implementation Plan
 
@@ -507,9 +507,9 @@ If no findings were rejected, do not create the file yet.
 
 ## Step 3.5 — Design Discussion (Round 2)
 
-Print: `🔥 Step 3.5 — Design discussion (round 2)...`
+Print: `▸ 3.5: discussion r2`
 
-**If `auto_mode=true`**: Print `⏩ Step 3.5 — Skipped (auto mode).` and proceed to Step 3a.
+**If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode)` and proceed to Step 3a.
 
 **If `auto_mode=false`**: After the plan has been reviewed and revised, stress-test the remaining design decisions that were either (a) not covered in Round 1, or (b) deemed suboptimal by reviewers, or (c) introduced by the plan itself (decisions that didn't exist at the feature-description stage).
 
@@ -536,7 +536,7 @@ Unlike Round 1, Round 2 MAY ask about architectural decisions and implementation
 
 ### Short-circuit
 
-If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ Step 3.5 — No additional design decisions require discussion.` and proceed to Step 3a.
+If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ 3.5: discussion r2 — no additional decisions require discussion` and proceed to Step 3a.
 
 ### Output
 
@@ -559,15 +559,15 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer, accept the recommended answer and move on without re-asking.
 
-Print: `✅ Step 3.5 — Design discussion (round 2) complete. <N> decisions resolved.`
+Print: `✅ 3.5: discussion r2 — <N> decisions resolved`
 
 ## Step 3a — Post-Review Confirmation
 
-Print: `✅ Step 3a — Post-review confirmation...`
+Print: `▸ 3a: confirmation`
 
-**If `auto_mode=true`**: Print `⏩ Step 3a — Skipped (auto mode).` and proceed to Step 3b.
+**If `auto_mode=true`**: Print `⏩ 3a: confirmation — skipped (auto mode)` and proceed to Step 3b.
 
-**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ Step 3a — Skipped (plan unchanged by review or discussion).` and proceed to Step 3b.
+**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ 3a: confirmation — skipped (plan unchanged)` and proceed to Step 3b.
 
 **If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 discussion): Use `AskUserQuestion` to confirm the revised plan addresses the user's original intent. Present a brief summary of what changed and ask the user to approve or reject.
 
@@ -575,7 +575,7 @@ Print: `✅ Step 3a — Post-review confirmation...`
 
 ## Step 3b — Architecture Diagram
 
-Print: `🗺️ Step 3b — Generating architecture diagram...`
+Print: `▸ 3b: arch diagram`
 
 **This step runs on ALL paths through Step 3** — whether voting produced revisions, rejected all findings, or was skipped entirely because all reviewers reported no issues. It always executes before Step 4.
 
@@ -593,9 +593,9 @@ Print the diagram under a `## Architecture Diagram` header with a mermaid code f
 ```
 ```
 
-**If diagram generation succeeds**, print: `✅ Step 3b — Architecture diagram generated.`
+**If diagram generation succeeds**, print: `✅ 3b: arch diagram — generated`
 
-**If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ Step 3b — Architecture diagram generation failed. Proceeding without diagram.**`
+**If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ 3b: arch diagram — generation failed, proceeding without diagram**`
 
 ## Step 4 — Rejected Plan Review Findings Report
 
@@ -603,7 +603,7 @@ Print any rejected plan review findings:
 
 1. Check if `$DESIGN_TMPDIR/rejected-findings.md` exists and is non-empty.
 2. If it has content, print it under a `## Unimplemented Plan Review Suggestions` header, formatted clearly with the reviewer name, the suggestion, and the reason for each.
-3. If the file doesn't exist or is empty, print: `📊 Step 4 — All plan review suggestions were implemented.`
+3. If the file doesn't exist or is empty, print: `✅ 4: rejected findings — all suggestions implemented`
 
 ## Step 5 — Cleanup and Final Warnings
 
@@ -624,7 +624,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
 - `**⚠ Cursor review failed: <reason>**`
 - `**⚠ Cursor sketch timed out / produced empty output**`
 - `**⚠ Codex sketch timed out / produced empty output**`
-- `**⚠ Step 3b — Architecture diagram generation failed. Proceeding without diagram.**`
+- `**⚠ 3b: arch diagram — generation failed, proceeding without diagram**`
 
-If `STEP_PREFIX` is empty (standalone mode): Print: `🏁 Step 5 — Design complete! The implementation plan is ready. Run /implement to proceed with implementation.`
-If `STEP_PREFIX` is non-empty (orchestrated mode): skip this final print — the parent orchestrator handles overall progress.
+If `STEP_NUM_PREFIX` is empty (standalone mode): Print: `✅ 5: cleanup — design complete!`
+If `STEP_NUM_PREFIX` is non-empty (orchestrated mode): skip this final print — the parent orchestrator handles overall progress.

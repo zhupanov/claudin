@@ -13,24 +13,25 @@ Review all changes on the current branch (vs `main`) using two specialized Claud
 
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) including reviewer health state (`CODEX_HEALTHY`, `CURSOR_HEALTHY`). If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full health probe at Step 0b).
-- `--step-prefix <prefix>`: Set `STEP_PREFIX` to the given value (e.g., `"5."`). When non-empty, prepend to step numbers **in emoji status lines only** (e.g., `🔍 Step 5.2 — Launching reviewers...`). Do NOT prefix section headers (e.g., `## Review Round {N}`), structured output headers, or artifact labels. Default: empty (standalone numbering). This is an internal orchestration flag used when `/review` is invoked from `/implement`.
+- `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"5.::code review"` (numeric `5.`, path `code review`), `"5."` (numeric only, backward compat). Parse into `STEP_NUM_PREFIX` (before `::`) and `STEP_PATH_PREFIX` (after `::`, or empty if `::` absent). Default: empty (standalone numbering). This is an internal orchestration flag used when `/review` is invoked from `/implement`.
 
 ## Progress Reporting
 
-**Every step MUST print clearly visible status lines** so the user can instantly see where execution is at. Use distinct emoji prefixes:
+**Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔍 Step 2 — Launching reviewers...`
-- Print a **completion line** only when it carries informational payload (counts, outcomes, or conditional-skip reasons). Pure "step complete" announcements without payload are not needed — the start line of the next step signals completion.
-- When `STEP_PREFIX` is non-empty, prepend it to step numbers **in emoji status lines only** (e.g., `🔍 Step 5.2 — Launching reviewers...` when `STEP_PREFIX="5."`). Do NOT prefix section headers (e.g., `## Review Round {N}`), structured output headers, or artifact labels. **This rule overrides the literal step numbers in `Print:` directives and examples throughout this file** — whenever a `Print:` line or example contains `Step N`, emit `Step ${STEP_PREFIX}N` instead.
+- Print a **start line** when entering a step: e.g., `▸ 2: launch reviewers` (standalone) or `▸ 5.2: code review | launch reviewers` (nested from `/implement`)
+- Print a **completion line** only when it carries informational payload. Pure "step complete" announcements without payload are not needed.
+- When `STEP_NUM_PREFIX` is non-empty, prepend it to step numbers. When `STEP_PATH_PREFIX` is non-empty, prepend it to breadcrumb paths. **This rule overrides the literal step numbers and names in `Print:` directives and examples throughout this file.** Examples shown below assume standalone mode; when nested, prepend the parent context.
 
-| Step | Emoji | Description |
-|------|-------|-------------|
-| 0 | 🔧 | Session setup |
-| 1 | 📋 | Gather context |
-| 2 | 🔍 | Launch reviewers |
-| 3 | 🔄 | Collect, deduplicate, implement |
-| 4 | 📊 | Final summary |
-| 5 | 🧹 | Cleanup |
+Step Name Registry:
+| Step | Short Name |
+|------|------------|
+| 0 | setup |
+| 1 | gather context |
+| 2 | launch reviewers |
+| 3 | review cycle |
+| 4 | final summary |
+| 5 | cleanup |
 
 ### Verbosity Control
 
@@ -38,7 +39,7 @@ Review all changes on the current branch (vs `main`) using two specialized Claud
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step start emoji lines, result-bearing completion lines (with counts/outcomes), conditional-skip lines (`⏩`), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, final summary), and the compact reviewer status table (see below).
+- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, final summary), and the compact reviewer status table (see below).
 
 **Compact reviewer status table**: After launching all reviewers (Step 2), maintain a mental tracker of each reviewer's status. Print a compact table after EACH status change:
 

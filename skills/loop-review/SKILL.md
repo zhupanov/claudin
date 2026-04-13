@@ -17,20 +17,21 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 ## Progress Reporting
 
-**Every step MUST print clearly visible status lines** so the user can instantly see where execution is at. Use distinct emoji prefixes:
+**Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔄 Step 3 — Reviewing slice: scripts/...`
-- Print a **completion line** when done: e.g., `✅ Step 3 — Slice complete (3 findings implemented, 1 deferred)`
+- Print a **start line** when entering a step: e.g., `▸ 3: implement/defer — slice: scripts/...`
+- Print a **completion line** when done: e.g., `✅ 3: implement/defer — 3 findings implemented, 1 deferred`
 
-| Step | Emoji | Description |
-|------|-------|-------------|
-| 0 | 🔧 | Session setup |
-| 1 | 📋 | Partition repository |
-| 2 | 🔍 | Review slice |
-| 3 | 🔄 | Implement/defer findings |
-| 4 | 💾 | Final deferred commit |
-| 5 | 📊 | Summary report |
-| 6 | 🏁 | Cleanup |
+Step Name Registry:
+| Step | Short Name |
+|------|------------|
+| 0 | setup |
+| 1 | partition |
+| 2 | review slice |
+| 3 | implement/defer |
+| 4 | deferred commit |
+| 5 | summary |
+| 6 | cleanup |
 
 ### Verbosity Control
 
@@ -38,7 +39,7 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step start/completion emoji lines, all warning/error lines (`**⚠ ...`), structured summaries (slice results, findings lists, deferred items, final report).
+- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (slice results, findings lists, deferred items, final report).
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls.
 

@@ -22,37 +22,41 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 ## Progress Reporting
 
-**Every step MUST print clearly visible status lines** so the user can instantly see where execution is at. Use distinct emoji prefixes:
+**Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🛠️ Step 2 — Implementing feature...`
-- Print a **completion line** only when it carries informational payload (counts, outcomes, or conditional-skip reasons). Pure "step complete" announcements without payload are not needed — the start line of the next step signals completion. Only the final step (Step 18) prints an unconditional completion announcement.
-- For long-running steps, print **intermediate progress**: e.g., `⏳ Step 12 — CI running (2m elapsed), main unchanged`
+- Print a **start line** when entering a step: e.g., `▸ 2: implementation`
+- Print a **completion line** only when it carries informational payload. Only the final step (Step 18) prints an unconditional completion announcement.
+- For long-running steps, print **intermediate progress**: e.g., `⏳ 12: CI+merge loop — CI running (2m elapsed), main unchanged`
 
-Suggested emoji palette (use consistently):
-| Step | Emoji | Description |
-|------|-------|-------------|
-| 0 | 🔧 | Session setup |
-| 1 | 📐 | Ensure design plan |
-| 🔃 | 🔃 | Rebase onto latest main |
-| 2 | 🛠️ | Implementation |
-| 3 | 🧹 | Relevant checks (first pass) |
-| 4 | 💾 | First commit |
-| 5 | 🔍 | Code review |
-| 6 | 🧹 | Relevant checks (second pass) |
-| 7 | 💾 | Second commit |
-| 7a | 🗺️ | Code flow diagram |
-| 8 | 🏷️ | Version bump |
-| 8a | 📝 | CHANGELOG update |
-| 9 | 🚀 | Create PR |
-| 10 | 🔄 | CI monitor (initial wait for green) |
-| 11 | 📋 | Slack announcement |
-| 12 | 🔁 | CI + rebase + merge loop |
-| 13 | ✨ | :merged: emoji |
-| 14 | 🧹 | Local cleanup |
-| 15 | ✅ | Verify main |
-| 16 | 📊 | Rejected code review findings report |
-| 17 | 📊 | Final report |
-| 18 | 🏁 | Final cleanup + warnings |
+Step Name Registry:
+| Step | Short Name |
+|------|------------|
+| 0 | setup |
+| 1 | design plan |
+| 1.m | update main |
+| 1.r | rebase |
+| 2 | implementation |
+| 3 | checks (1) |
+| 4 | commit (impl) |
+| 4.r | rebase |
+| 5 | code review |
+| 6 | checks (2) |
+| 7 | commit (review) |
+| 7.r | rebase |
+| 7a | code flow |
+| 7a.r | rebase |
+| 8 | version bump |
+| 8a | changelog |
+| 9 | create PR |
+| 10 | CI monitor |
+| 11 | slack announce |
+| 12 | CI+merge loop |
+| 13 | merged emoji |
+| 14 | local cleanup |
+| 15 | verify main |
+| 16 | rejected findings |
+| 17 | final report |
+| 18 | cleanup |
 
 ### Verbosity Control
 
@@ -62,9 +66,9 @@ Suggested emoji palette (use consistently):
 - Use terse 3-5 word descriptions for Agent tool calls.
 - Do not produce explanatory prose between tool call outputs — only print the designated output categories below.
 
-**Preserved output (NEVER suppressed, regardless of `debug_mode`):** step start emoji lines, result-bearing completion lines (with counts/outcomes), conditional-skip lines (`⏩`) — except the three rebase-skip variants listed in Suppressed output below, final completion line (Step 18), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, competition scoreboards, round summaries, final summaries/reports), architecture diagrams, code flow diagrams, implementation plans (original and revised), dialectic resolutions, accepted/rejected findings lists, out-of-scope observations, PR body sections.
+**Preserved output (NEVER suppressed, regardless of `debug_mode`):** step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`/`⏭️`) — except the three rebase-skip variants listed in Suppressed output below, final completion line (Step 18), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, competition scoreboards, round summaries, final summaries/reports), architecture diagrams, code flow diagrams, implementation plans (original and revised), dialectic resolutions, accepted/rejected findings lists, out-of-scope observations, PR body sections.
 
-**Suppressed output (only when `debug_mode=false`):** explanatory prose describing what will happen next or what just happened, script paths and command descriptions, rationale for decisions between tool calls, per-reviewer individual completion messages (replaced by status table in child skills), rebase-skip messages (the following three specific variants: `⏩ Rebase skipped — branch already pushed to origin.`, `⏩ Rebase skipped — already at latest main.`, `⏩ Local main already at latest — no update needed.`). Note: non-rebase `⏩` skip messages and rebase outcomes in the Rebase+Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
+**Suppressed output (only when `debug_mode=false`):** explanatory prose describing what will happen next or what just happened, script paths and command descriptions, rationale for decisions between tool calls, per-reviewer individual completion messages (replaced by status table in child skills), rebase-skip messages (the following three specific variants: `⏩ 1.m: design plan | update main — already at latest`, `⏩ 1.r: design plan | rebase — already pushed`, `⏩ 1.r: design plan | rebase — already at latest main`). Note: non-rebase `⏩` skip messages and rebase outcomes in the Rebase+Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
 
 **When `debug_mode=true`:** use descriptive text for `description` parameter on all Bash and Agent tool calls; print full explanatory text between tool calls (current verbose behavior).
 
@@ -152,7 +156,7 @@ Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PR
 
 **This block runs only when `CURRENT_BRANCH == "main"`.** Detached HEAD also reports `IS_MAIN=true` from `create-branch.sh --check`, but a rebase on detached HEAD would fail (`rebase-push.sh` errors with "Not on a branch"); fall through to the mode-specific branch creation logic below so a new branch can be created from `origin/main`. Also skip this block for `IS_USER_BRANCH=true` (we are not creating a branch from main — the feature branch rebase at the end of Step 1 handles freshness) and for the non-main/non-user-branch warning path (we are on some other branch, and `create-branch.sh --branch` will fetch and create the new branch directly from `origin/main`).
 
-Print: `🔃 Ensuring local main is up to date before branching...`
+Print: `🔃 1.m: design plan | update main`
 
 Run:
 ```bash
@@ -164,8 +168,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
 If the script exits non-zero, print: `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ Local main already at latest — no update needed.` Otherwise, silently continue.
-- Otherwise, print: `✅ Local main rebased onto latest origin/main.`
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 1.m: design plan | update main — already at latest` Otherwise, silently continue.
+- Otherwise, print: `✅ 1.m: design plan | update main — rebased onto latest origin/main`
 
 ### Quick mode (`quick_mode=true`)
 
@@ -176,7 +180,7 @@ Skip `/design` entirely. Handle branch creation directly, then produce an inline
 - If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch. Otherwise, use the existing branch.
 - Otherwise (non-main, non-user branch): Print a warning: `**⚠ Currently on branch '<branch-name>' which doesn't match the expected '<USER_PREFIX>/*' pattern. Creating a new branch from main.**` and create a new branch.
 
-**Inline design**: Research the codebase (read relevant files, grep for patterns), then produce a concrete implementation plan under a `## Implementation Plan` header. This plan should include files to modify, approach, and edge cases — the same content `/design` would produce, but without collaborative sketches, plan review, or voting. Print: `⚡ Step 1 — Quick mode: skipped /design, produced inline plan.`
+**Inline design**: Research the codebase (read relevant files, grep for patterns), then produce a concrete implementation plan under a `## Implementation Plan` header. This plan should include files to modify, approach, and edge cases — the same content `/design` would produce, but without collaborative sketches, plan review, or voting. Print: `⚡ 1: design plan — quick mode, inline plan`
 
 Proceed to Step 2.
 
@@ -184,8 +188,8 @@ Proceed to Step 2.
 
 **Decision logic**:
 - If `IS_USER_BRANCH=true` **AND** a reviewed implementation plan is visible in the conversation context above: The plan was created by a prior `/design` invocation in this session. Proceed to Step 2.
-- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with flags and feature description. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix 1.` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix 1. --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
-- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with the same flags. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix 1.` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix 1. --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
+- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with flags and feature description. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
+- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with the same flags. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
 
 ### Cross-Skill Health Update (after /design)
 
@@ -205,7 +209,7 @@ Save the output as `BRANCH_NAME`. This variable is referenced later by Step 14 (
 
 **This rebase runs unconditionally in both quick and normal mode** — freshness is beneficial regardless of mode. Both the quick-mode "Proceed to Step 2" and normal-mode "proceed to Step 2" instructions above lead here before entering Step 2.
 
-Print: `🔃 Rebasing onto latest main before starting implementation...`
+Print: `🔃 1.r: design plan | rebase`
 
 Run:
 ```bash
@@ -215,8 +219,9 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
-- Otherwise, print: `✅ Rebased onto latest main.`
+- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 1.r: design plan | rebase — already pushed` Otherwise, silently continue.
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 1.r: design plan | rebase — already at latest main` Otherwise, silently continue.
+- Otherwise, print: `✅ 1.r: design plan | rebase — rebased onto latest main`
 
 ## Step 2 — Implement the Feature
 
@@ -244,7 +249,7 @@ The commit message should describe WHAT was implemented and WHY, not HOW.
 
 ### Rebase onto latest main (after implementation commit)
 
-Print: `🔃 Rebasing onto latest main after implementation commit...`
+Print: `🔃 4.r: commit (impl) | rebase`
 
 Run:
 ```bash
@@ -254,8 +259,9 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
-- Otherwise, print: `✅ Rebased onto latest main.`
+- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 4.r: commit (impl) | rebase — already pushed` Otherwise, silently continue.
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 4.r: commit (impl) | rebase — already at latest main` Otherwise, silently continue.
+- Otherwise, print: `✅ 4.r: commit (impl) | rebase — rebased onto latest main`
 
 ## Step 5 — Code Review
 
@@ -275,13 +281,13 @@ Skip `/review`. Instead, run a simplified one-round review:
 6. **One round only** — no re-review loop.
 7. For rejected findings, write them to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 16 and PR body sections work unchanged.
 
-Print: `🔍 Step 5 — Quick mode: simplified review (2 Claude subagents, 1 round, no voting).`
+Print: `▸ 5: code review — quick mode (2 Claude subagents, 1 round, no voting)`
 
 ### Normal mode (`quick_mode=false`)
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip this step regardless of the nature of the changes — whether code, skills, documentation, data files, or configuration. All changes require full review.**
 
-Invoke the `/review` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` to forward reviewer health state. Always prepend `--step-prefix 5.`. **If `debug_mode=true`, also prepend `--debug`.** Canonical invocation order: `[--debug] --step-prefix 5. --session-env $IMPLEMENT_TMPDIR/session-env.sh`. This launches 2 parallel Claude subagent reviewers (general, deep-analysis) plus two Codex and Cursor reviewers (if available and healthy), implements their suggestions recursively until clean.
+Invoke the `/review` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` to forward reviewer health state. Always prepend `--step-prefix "5.::code review"`. **If `debug_mode=true`, also prepend `--debug`.** Canonical invocation order: `[--debug] --step-prefix "5.::code review" --session-env $IMPLEMENT_TMPDIR/session-env.sh`. This launches 2 parallel Claude subagent reviewers (general, deep-analysis) plus two Codex and Cursor reviewers (if available and healthy), implements their suggestions recursively until clean.
 
 After `/review` returns, follow the **Cross-Skill Health Propagation** procedure from Step 0 to read the health status file and update `session-env.sh` if any reviewer timed out during the review.
 
@@ -303,7 +309,7 @@ After the code review completes (whether `/review` in normal mode or the simplif
 ${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh
 ```
 
-Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ Step 6 — Skipping second validation — review made no changes.` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
+Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ 6: checks (2) — skipped, no review changes` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
 
 If files **did change**, invoke `/relevant-checks` to ensure review fixes didn't introduce new issues. If checks fail, diagnose and fix, then re-invoke `/relevant-checks`.
 
@@ -321,7 +327,7 @@ If no files changed (review found no issues), skip this commit.
 
 **Conditional**: Only run this rebase if `FILES_CHANGED=true` from Step 6's `check-review-changes.sh` output (meaning Step 7 created a commit). If Steps 6–7 were skipped (no review changes), skip this rebase — the pre-Step-8 rebase provides the safety net.
 
-Print: `🔃 Rebasing onto latest main after review fixes commit...`
+Print: `🔃 7.r: commit (review) | rebase`
 
 Run:
 ```bash
@@ -331,16 +337,17 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
-- Otherwise, print: `✅ Rebased onto latest main.`
+- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 7.r: commit (review) | rebase — already pushed` Otherwise, silently continue.
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 7.r: commit (review) | rebase — already at latest main` Otherwise, silently continue.
+- Otherwise, print: `✅ 7.r: commit (review) | rebase — rebased onto latest main`
 
 ## Step 7a — Code Flow Diagram
 
-Print: `🗺️ Step 7a — Generating code flow diagram...`
+Print: `▸ 7a: code flow`
 
 **This step runs unconditionally after Step 7** — regardless of whether Steps 6-7 were skipped due to no review changes.
 
-**If `quick_mode=true`**: Print `⏩ Step 7a — Skipped (quick mode).` and proceed to Step 8.
+**If `quick_mode=true`**: Print `⏩ 7a: code flow — skipped (quick mode)` and proceed to Step 8.
 
 **If `quick_mode=false`**: Generate a mermaid Code Flow Diagram based on the actual committed implementation. The diagram should focus on **runtime behavior** — function call sequences, data flow, or control flow through the implemented code paths. Do NOT duplicate the Architecture Diagram's structural/component view.
 
@@ -356,15 +363,15 @@ Print the diagram under a `## Code Flow Diagram` header with a mermaid code fenc
 ```
 ```
 
-**If diagram generation succeeds**, print: `✅ Step 7a — Code flow diagram generated.`
+**If diagram generation succeeds**, print: `✅ 7a: code flow — diagram generated`
 
-**If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ Step 7a — Code flow diagram generation failed. Proceeding without diagram.**` Log this warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category.
+**If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ 7a: code flow — generation failed, proceeding without diagram**` Log this warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category.
 
 ### Rebase onto latest main (before version bump)
 
 This rebase runs as a final safety net before the version bump and PR creation, even if a previous rebase just ran. It ensures the branch is as fresh as possible before the version bump becomes the last commit. Exception: if the branch is already on origin (e.g., re-run on an existing PR branch), the `--skip-if-pushed` flag causes this rebase to be skipped — freshness of already-pushed branches is the CI+rebase+merge loop's responsibility (Step 12).
 
-Print: `🔃 Rebasing onto latest main before version bump...`
+Print: `🔃 7a.r: code flow | rebase`
 
 Run:
 ```bash
@@ -374,8 +381,9 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
 If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
 
 If successful:
-- If the stdout contains `SKIPPED_ALREADY_PUSHED=true` or `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print the corresponding skip message. Otherwise, silently continue.
-- Otherwise, print: `✅ Rebased onto latest main.`
+- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 7a.r: code flow | rebase — already pushed` Otherwise, silently continue.
+- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 7a.r: code flow | rebase — already at latest main` Otherwise, silently continue.
+- Otherwise, print: `✅ 7a.r: code flow | rebase — rebased onto latest main`
 
 ## Step 8 — Version Bump
 
@@ -403,8 +411,8 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 ## Step 8a — CHANGELOG Update
 
 **Conditional**: Skip Step 8a entirely and proceed to Step 9 if either condition is true:
-- `CHANGELOG.md` does not exist in the project root (check via the Read tool — if Read returns an error, the file does not exist). Print `⏩ Step 8a — No CHANGELOG.md found, skipping.`
-- Step 8 was skipped (`HAS_BUMP=false`). Print `⏩ Step 8a — Skipped (no version bump).`
+- `CHANGELOG.md` does not exist in the project root (check via the Read tool — if Read returns an error, the file does not exist). Print `⏩ 8a: changelog — skipped (no CHANGELOG.md)`
+- Step 8 was skipped (`HAS_BUMP=false`). Print `⏩ 8a: changelog — skipped (no version bump)`
 
 **If `CHANGELOG.md` exists AND Step 8 produced a version bump**:
 
@@ -433,7 +441,7 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 
    This keeps the bump commit as the single HEAD commit containing both the version bump and the changelog update.
 
-Print: `📝 Step 8a — CHANGELOG.md updated for v<NEW_VERSION>.`
+Print: `✅ 8a: changelog — updated for v<NEW_VERSION>`
 
 ## Step 9 — Create PR
 
@@ -606,10 +614,10 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
        - **Fallback exit 1**: conflict; rebase is in progress. Enter the **Conflict Resolution Procedure** (Phase 1–4, defined in Step 12 below). **Phase 4's `rebase-push.sh --continue` exit-0 handler (at the end of Step 12's Conflict Resolution Procedure) itself dispatches the sub-procedure with `rebase_already_done=true, caller_kind=step12_phase4`** — i.e., the post-conflict re-bump is owned entirely by Phase 4. **Control transfer is terminal**: the moment Phase 1 is entered, the current (fallback) sub-procedure invocation is conceptually suspended and its remaining steps 3–7 are NOT executed. All further action for this rebase (Phase 2, Phase 3, Phase 4, and the sub-procedure dispatched by Phase 4's exit-0 handler) runs under Phase 4's ownership. When Phase 4 completes (success or bail), it returns control directly to Step 12's outer loop via its own caller-return path — it does NOT return back into the current invocation. Do NOT continue executing steps 3–7 of the current invocation, regardless of whether Phase 4 succeeds or bails.
        - **Fallback exit 2**: `force-with-lease` push failure after a successful rebase. The rebase is complete locally but the branch has NOT been pushed. Do NOT skip steps 3–4: proceed to step 3 (fast-forward local main), then step 4 (re-bump), then step 5 (which will try to push the re-bumped branch and apply its own fetch + compare + retry + bail recovery on any subsequent push failure). Setting `rebase_already_done` is NOT appropriate here because step 5 still needs to push. This is the only way to guarantee the freshness invariant is enforced — skipping straight to step 5's recovery would push a rebased-but-unbumped branch, silently violating the invariant.
        - **Fallback exit 3**: non-conflict rebase failure; rebase already aborted. Read `REBASE_ERROR` and bail to 12d.
-     - **step10 family**: print `**⚠ Step 10 — Rebase conflict detected; deferring to Step 12 for conflict resolution. Proceeding to Step 11 without re-bump.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. **Break out of Step 10's loop and proceed to Step 11.**
+     - **step10 family**: print `**⚠ 10: CI monitor — rebase conflict, deferring to Step 12. Proceeding to Step 11.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. **Break out of Step 10's loop and proceed to Step 11.**
    - **Exit 3** (non-conflict rebase failure in `--no-push` mode; rebase already aborted):
      - **step12 family**: read `REBASE_ERROR` and bail to 12d.
-     - **step10 family**: print `**⚠ Step 10 — Rebase failed (non-conflict): $REBASE_ERROR. Proceeding to Step 11.**` Log to `CI Issues`. Break to Step 11.
+     - **step10 family**: print `**⚠ 10: CI monitor — rebase failed: $REBASE_ERROR. Proceeding to Step 11.**` Log to `CI Issues`. Break to Step 11.
 
 3. **Fast-forward local `main` to `origin/main`**:
    `rebase-push.sh` refreshes `origin/main` via `git fetch`, but local `main` is not automatically updated. `classify-bump.sh` prefers local `main` for its `merge-base` computation, so without this step `BASE` could point to an older commit than the one the branch was just rebased onto, causing the classifier's diff to include commits that belong to main (not the feature).
@@ -627,8 +635,8 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
    ```
    Parse `HAS_BUMP` and `COMMITS_BEFORE`.
    - **If `HAS_BUMP=false`**:
-     - **step12 family**: **HARD FAILURE**. Print `**⚠ Step 12 — /bump-version skill not found at .claude/skills/bump-version/SKILL.md; cannot re-bump after rebase. Merged PR would reflect a stale version. Bailing to 12d.**` Bail to 12d.
-     - **step10 family**: Print `**⚠ Step 10 — /bump-version skill not found; skipping re-bump. Proceeding to Step 11 with whatever version is currently on the branch.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
+     - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version not found, cannot re-bump. Bailing to 12d.**` Bail to 12d.
+     - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
    - **If `HAS_BUMP=true`**: Invoke `/bump-version` via the Skill tool. If the skill invocation itself fails (returns an error, or bails internally):
      - **step12 family**: hard failure — bail to 12d.
      - **step10 family**: log warning and break out of Step 10 to Step 11.
@@ -641,11 +649,11 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
      - **`VERIFIED=true`** (a new commit was created — the common case): proceed to step 5.
 
      - **`VERIFIED=false` AND `COMMITS_AFTER == COMMITS_BEFORE`** (zero new commits — `/bump-version` ran a `BUMP_TYPE=NONE` no-op path, because `classify-bump.sh` detected HEAD is already a bump commit). This normally happens when `drop-bump-commit.sh` reported `DROPPED=false` (e.g., Guard 4 refused the drop because the bump commit touched files beyond `.claude-plugin/plugin.json`) and the stale bump commit survived the rebase unchanged. **Note**: this condition is also reached in the degenerate case where `count_commits()` in `check-bump-version.sh` returned `0` for both pre and post calls because neither local `main` nor `origin/main` exists — in that case, a `WARN: ... neither local 'main' nor 'origin/main' exists` line will have been printed to stderr. Before acting on the bail, check the stderr output of the most recent `check-bump-version.sh` calls for that WARN to determine the true root cause. Caller-family handling:
-       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ Step 12 — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE, or neither local 'main' nor 'origin/main' exists — inspect stderr WARN from check-bump-version.sh to distinguish). Either way, cannot verify bump freshness against current origin/main. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues` (including the relevant stderr excerpt if the WARN was seen). Rationale: Step 12 is the last-chance enforcement point for the version bump freshness invariant. Either a stale bump commit classified against an older base or a missing base ref means we cannot guarantee the merged version is correct; we must fail loudly rather than silently merge a potentially-wrong version.
-       - **step10 family**: log warning `**⚠ Step 10 — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE or missing main ref — inspect stderr WARN). Proceeding to Step 11 with the existing branch state. Step 12 will re-attempt under strict semantics.**` to `Warnings`, then proceed directly to step 5 (the rebased history still needs to be force-pushed). Step 10 can afford to be permissive here because Step 12 re-runs the sub-procedure under strict semantics and will bail then if the drop still cannot happen.
+       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ 12: CI+merge loop — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE or missing main ref). Cannot verify bump freshness. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues` (including the relevant stderr excerpt if the WARN was seen). Rationale: Step 12 is the last-chance enforcement point for the version bump freshness invariant. Either a stale bump commit classified against an older base or a missing base ref means we cannot guarantee the merged version is correct; we must fail loudly rather than silently merge a potentially-wrong version.
+       - **step10 family**: log warning `**⚠ 10: CI monitor — /bump-version created 0 new commits (BUMP_TYPE=NONE or missing main ref). Proceeding to Step 11. Step 12 will re-attempt.**` to `Warnings`, then proceed directly to step 5 (the rebased history still needs to be force-pushed). Step 10 can afford to be permissive here because Step 12 re-runs the sub-procedure under strict semantics and will bail then if the drop still cannot happen.
 
      - **`VERIFIED=false` AND `COMMITS_AFTER != COMMITS_BEFORE`** (unexpected state — `/bump-version` created more than one commit, or somehow decreased the count):
-       - **step12 family**: **HARD FAILURE**. Print `**⚠ Step 12 — /bump-version did not create exactly one new commit after rebase. Expected $EXPECTED, got $COMMITS_AFTER. Cannot verify bump freshness; bailing to 12d.**` Bail to 12d.
+       - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Bailing to 12d.**` Bail to 12d.
        - **step10 family**: log warning and break to Step 11.
 
    **Rationale**: Step 8's permissive warnings are safe because Step 8 is pre-PR — no merge can happen based on a missing bump. Step 12 is pre-merge — missing bump means stale merge. Step 10 is post-PR but pre-merge (Step 12 does the merge) — any bump failure in Step 10 is recoverable by Step 12's mandatory re-bump, so Step 10 can afford to be permissive. **Step 12 is the last-chance enforcement point; Step 10 is best-effort optimization that improves freshness during the Slack-wait phase.**
@@ -670,8 +678,8 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
       git push --force-with-lease
       ```
       If the retry succeeds, proceed to step 6. If it fails again:
-      - **step12 family**: bail to 12d with error `Step 12 — re-bump push failed twice with --force-with-lease; remote feature branch has diverged from local. Manual intervention required.`
-      - **step10 family**: print `**⚠ Step 10 — re-bump push failed twice. Proceeding to Step 11 with whatever remote state is (may be stale).**` Log to `CI Issues`. Break to Step 11.
+      - **step12 family**: bail to 12d with error `12: CI+merge loop — re-bump push failed twice, remote diverged. Manual intervention required.`
+      - **step10 family**: print `**⚠ 10: CI monitor — re-bump push failed twice. Proceeding to Step 11 (may be stale).**` Log to `CI Issues`. Break to Step 11.
 
    **Critical (step12 family only)**: Do NOT simply "log and return to caller" on push failure. That would let the merge loop proceed to `ACTION=merge` on a remote branch that does NOT contain the fresh bump commit, violating the feature's core invariant. `ci-wait.sh` and `merge-pr.sh` operate on remote PR state only; they cannot see unpushed local commits.
 
@@ -699,7 +707,7 @@ Phase 4 enters the sub-procedure AFTER `rebase-push.sh --continue` has already p
 
 ## Step 10 — CI Monitor (initial wait for green)
 
-**If `repo_unavailable=true`**: Print `⏭️ Step 10 — Skipped (repository name could not be determined).` and proceed to Step 11.
+**If `repo_unavailable=true`**: Print `⏭️ 10: CI monitor — skipped (repo unavailable)` and proceed to Step 11.
 
 Wait for CI to go green so the Slack announcement (Step 11) links to a PR with passing CI. This step does **NOT merge** — Step 12 is the merge-aware loop that handles main advancement and merging.
 
@@ -724,9 +732,9 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
 **Execute the action** returned by `ci-wait.sh`:
 
-   - **`ACTION=merge`**: CI passed and branch is up-to-date. Print `✅ Step 10 — CI passed!` and proceed to Step 11. **Do NOT merge here** — Step 12 handles merging.
+   - **`ACTION=merge`**: CI passed and branch is up-to-date. Print `✅ 10: CI monitor — CI passed!` and proceed to Step 11. **Do NOT merge here** — Step 12 handles merging.
 
-   - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ Step 10 — PR was merged externally.` and proceed to Step 11. (Step 12 will detect `already_merged` again and skip the merge loop.)
+   - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ 10: CI monitor — PR merged externally` and proceed to Step 11. (Step 12 will detect `already_merged` again and skip the merge loop.)
 
    - **`ACTION=rebase`**: Main advanced. Invoke the **Rebase + Re-bump Sub-procedure** (defined before this step) with `rebase_already_done=false`, `caller_kind=step10_rebase`. The sub-procedure handles drop-before-rebase, rebase, fast-forward local main, re-bump via `/bump-version`, push with recovery, and PR body refresh. On sub-procedure success, counter updates and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On sub-procedure failure (rebase conflict, re-bump failure, or push failure), the sub-procedure logs a warning and breaks out of Step 10 to Step 11 — it does NOT bail to 12d (Step 12 will re-run the sub-procedure under strict semantics).
 
@@ -736,7 +744,7 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
      1. **Transient failure** (runner provisioning, Docker pull rate limit, "hosted runner lost communication", etc.): If `transient_retries < 2`, run `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 60`, then run `${CLAUDE_PLUGIN_ROOT}/scripts/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Parse output for `RERUN_SUBMITTED` and `ERROR`. If `RERUN_SUBMITTED=false`, print the `ERROR` and treat as a real CI failure (fall through to diagnosis). Otherwise increment `transient_retries`, re-invoke `ci-wait.sh`. If `transient_retries >= 2`, treat as real failure.
      2. **Real CI failure**: Run `${CLAUDE_PLUGIN_ROOT}/scripts/gh-run-logs.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Diagnose the issue, fix it, run `/relevant-checks`, stage and commit using `${CLAUDE_PLUGIN_ROOT}/scripts/git-commit.sh -m "Fix CI failure" <fixed-files>`, push. Increment `fix_attempts`. Re-invoke `ci-wait.sh`.
 
-   - **`ACTION=bail`**: Print `BAIL_REASON`. Print `**⚠ Step 10 — CI monitoring bailed. PR may have failing CI.**` and proceed to Step 11.
+   - **`ACTION=bail`**: Print `BAIL_REASON`. Print `**⚠ 10: CI monitor — bailed, PR may have failing CI**` and proceed to Step 11.
 
 **Execution issues**: Log any CI failures, transient retries, or bail events to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `CI Issues` category.
 
@@ -744,9 +752,9 @@ After handling any non-terminal/non-rebase action (e.g., `evaluate_failure`), **
 
 ## Step 11 — Post Slack Announcement
 
-**If `slack_available=false`**: Print `⏭️ Step 11 — Skipped (Slack not configured).` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
+**If `slack_available=false`**: Print `⏭️ 11: slack announce — skipped (Slack not configured)` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
 
-**If `PR_STATUS=existing`**: Print `⏭️ Step 11 — Skipped (PR already existed, avoiding duplicate Slack post). Run post-pr-announce.sh --pr <PR-NUMBER> manually to post the announcement.` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
+**If `PR_STATUS=existing`**: Print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually)` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
 
 **Otherwise** (`slack_available=true` and `PR_STATUS=created`):
 
@@ -784,9 +792,9 @@ If `execution-issues.md` does not exist or is empty, skip this refresh.
 
 ## Step 12 — CI + Rebase + Merge Loop
 
-**If `merge=false`**: Print `⏭️ Step 12 — Skipped (--merge flag not set). PR created but not merged.` and skip to Step 16.
+**If `merge=false`**: Print `⏭️ 12: CI+merge loop — skipped (--merge not set)` and skip to Step 16.
 
-**If `repo_unavailable=true`**: Print `⏭️ Step 12 — Skipped (repository name could not be determined).` and skip to Step 16.
+**If `repo_unavailable=true`**: Print `⏭️ 12: CI+merge loop — skipped (repo unavailable)` and skip to Step 16.
 
 Monitor CI and the main branch **in parallel**. The key optimization: don't wait for CI to finish before checking if main has advanced.
 
@@ -813,9 +821,9 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
 **Execute the action** returned by `ci-wait.sh`:
 
-   - **`ACTION=rebase`**: Print a context-specific message based on `CI_STATUS`: if `CI_STATUS=pass`, print `🔄 CI passed but main advanced — rebasing + re-bumping...`; if `CI_STATUS=pending`, print `🔄 Main advanced while CI running — rebasing + re-bumping...` → invoke the **Rebase + Re-bump Sub-procedure** (defined before Step 10) with `rebase_already_done=false`, `caller_kind=step12_rebase`. The sub-procedure handles drop-before-rebase, rebase (with Phase 1–4 fallback on conflict), fast-forward local main, `/bump-version`, push with recovery, and PR body refresh. On successful return, counter updates (`rebase_count`, `iteration`, `transient_retries` reset) and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On hard failure, the sub-procedure bails to 12d directly.
+   - **`ACTION=rebase`**: Print a context-specific message based on `CI_STATUS`: if `CI_STATUS=pass`, print `🔃 12: CI+merge loop — CI passed, main advanced, rebasing + re-bumping`; if `CI_STATUS=pending`, print `🔃 12: CI+merge loop — main advanced, rebasing + re-bumping` → invoke the **Rebase + Re-bump Sub-procedure** (defined before Step 10) with `rebase_already_done=false`, `caller_kind=step12_rebase`. The sub-procedure handles drop-before-rebase, rebase (with Phase 1–4 fallback on conflict), fast-forward local main, `/bump-version`, push with recovery, and PR body refresh. On successful return, counter updates (`rebase_count`, `iteration`, `transient_retries` reset) and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On hard failure, the sub-procedure bails to 12d directly.
 
-   - **`ACTION=merge`**: Print `✅ CI passed, main up-to-date — merging!` → proceed to **12b**.
+   - **`ACTION=merge`**: Print `✅ 12: CI+merge loop — CI passed, main up-to-date, merging!` → proceed to **12b**.
 
    - **`ACTION=already_merged`**: Print `✅ PR was force-merged externally — skipping CI wait and merge.` → skip **12b** (no merge needed) and proceed directly to Step 13. The PR counts as successfully merged for Steps 13–15.
 
@@ -930,8 +938,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/merge-pr.sh --pr <PR-NUMBER> --repo $REPO
 
 Parse the output for `MERGE_RESULT` and `ERROR`. Handle each result:
 
-- **`MERGE_RESULT=merged`**: Print `✅ Step 12 — PR #<NUMBER> merged!` and continue.
-- **`MERGE_RESULT=admin_merged`**: Print `**⚠ Merged with --admin (review requirement overridden).** ✅ Step 12 — PR #<NUMBER> merged!` and continue.
+- **`MERGE_RESULT=merged`**: Print `✅ 12: CI+merge loop — PR #<NUMBER> merged!` and continue.
+- **`MERGE_RESULT=admin_merged`**: Print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged!` and continue.
 - **`MERGE_RESULT=main_advanced`**: Go back to **12a** (the next iteration will detect the branch is behind and rebase).
 - **`MERGE_RESULT=ci_not_ready`**: Go back to **12a** (CI may need more time or a rerun).
 - **`MERGE_RESULT=admin_failed`**: Bail out (Step 12d) with the `ERROR` message.
@@ -975,7 +983,7 @@ When bailing out:
 
 **If `merge=false`**: Skip this step.
 
-**If `slack_available=false`**: Print `⏭️ Step 13 — Skipped (Slack not configured).` and proceed to Step 14.
+**If `slack_available=false`**: Print `⏭️ 13: merged emoji — skipped (Slack not configured)` and proceed to Step 14.
 
 **Only if the PR was successfully merged in Step 12b or force-merged externally** (not bailed in 12d).
 
@@ -991,7 +999,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/post-merged-emoji.sh --slack-ts "$SLACK_TS"
 
 ## Step 14 — Local Cleanup
 
-**If `merge=false`**: Print `⏩ Step 14 — Skipped (--merge not set). You are still on branch $BRANCH_NAME.` and skip to Step 16.
+**If `merge=false`**: Print `⏭️ 14: local cleanup — skipped (--merge not set), still on $BRANCH_NAME` and skip to Step 16.
 
 **If the PR was successfully merged (Step 12b or force-merged externally)**:
 
@@ -1001,13 +1009,13 @@ Switch back to main, pull the merged changes, and delete the development branch:
 ${CLAUDE_PLUGIN_ROOT}/scripts/local-cleanup.sh --branch "$BRANCH_NAME"
 ```
 
-Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `🧹 Step 14 — Switched to main, deleted local branch $BRANCH_NAME`. If `CLEANUP_SUCCESS=false`, print: `**⚠ Step 14 — Cleanup partially failed. Current branch: <CURRENT_BRANCH>, branch deleted: <BRANCH_DELETED>.**`
+Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `✅ 14: local cleanup — switched to main, deleted $BRANCH_NAME`. If `CLEANUP_SUCCESS=false`, print: `**⚠ 14: local cleanup — partially failed, branch: <CURRENT_BRANCH>, deleted: <BRANCH_DELETED>**`
 
 **If Step 12 bailed out (PR was NOT merged)**:
 
 Do NOT switch branches or delete the local branch. The user will need the branch to continue manually.
 
-Print: `⚠️ Step 14 — Skipped cleanup (PR not merged). You are still on branch $BRANCH_NAME.`
+Print: `⚠ 14: local cleanup — skipped (PR not merged), still on $BRANCH_NAME`
 
 `$BRANCH_NAME` is the variable captured at the end of Step 1 (after branch resolution by `/design` or quick-mode branch creation).
 
@@ -1025,8 +1033,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/verify-main.sh --expected-title "<PR_TITLE> (#<PR_
 
 Parse the output for `VERIFIED`, `COMMIT_HASH`, and `COMMIT_MESSAGE`. Print the result:
 
-- If `VERIFIED=true`: `✅ Step 15 — Verified: main is at <COMMIT_HASH> "<COMMIT_MESSAGE>"`
-- If `VERIFIED=false`: `**⚠ Step 15 — Unexpected HEAD on main: <COMMIT_HASH> "<COMMIT_MESSAGE>". Expected: "<PR_TITLE> (#<PR_NUMBER>)". Another merge may have landed simultaneously.**`
+- If `VERIFIED=true`: `✅ 15: verify main — at <COMMIT_HASH> "<COMMIT_MESSAGE>"`
+- If `VERIFIED=false`: `**⚠ 15: verify main — unexpected HEAD: <COMMIT_HASH> "<COMMIT_MESSAGE>". Expected: "<PR_TITLE> (#<PR_NUMBER>)"**`
 
 ## Step 16 — Rejected Code Review Findings Report
 
@@ -1034,17 +1042,17 @@ Print a report of all code review suggestions that were **not** implemented.
 
 1. Check if `$IMPLEMENT_TMPDIR/rejected-findings.md` exists and is non-empty.
 2. If it has content, print it under a `## Unimplemented Code Review Suggestions` header, formatted clearly with the reviewer name, the suggestion, and the reason for each.
-3. If the file doesn't exist or is empty, print: `📊 Step 16 — All code review suggestions were implemented.`
+3. If the file doesn't exist or is empty, print: `✅ 16: rejected findings — all suggestions implemented`
 
 ## Step 17 — Final Report
 
-**If `quick_mode=true`**: Print: `📊 Step 17 — Quick mode: /design was skipped, code review was simplified (2 Claude subagents, 1 round, no voting).`
+**If `quick_mode=true`**: Print: `✅ 17: final report — quick mode (/design skipped, 2 subagent review)`
 
 **If `quick_mode=false`**: Print a summary noting that:
 - Plan review findings were reported by the `/design` phase (visible in conversation above)
 - Code review findings were reported by the `/review` phase (visible in conversation above)
 
-If both phases reported all suggestions implemented, print: `📊 Step 17 — All review suggestions were implemented across both plan review and code review.`
+If both phases reported all suggestions implemented, print: `✅ 17: final report — all suggestions implemented (plan + code review)`
 
 ## Step 18 — Cleanup and Final Warnings
 
@@ -1060,4 +1068,4 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 
 If `merge=false`, remind: `**Note: --merge was not set. PR was created but not merged. Merge manually when ready.**`
 
-Print: `🏁 Step 18 — Implement complete!`
+Print: `✅ 18: cleanup — implement complete!`
