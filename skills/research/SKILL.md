@@ -1,6 +1,6 @@
 ---
 name: research
-description: Collaborative read-only research using 5 research agents (3 Claude + Cursor + Codex) then 5 validation reviewers (2 Claude + 2 Codex + Cursor). Produces findings summary, risk assessment, difficulty estimates, and feasibility verdict without modifying the repo.
+description: "Use when read-only research is needed. 5 research agents then 5 validation reviewers produce findings summary, risk assessment, difficulty estimates, and feasibility verdict."
 argument-hint: "[--debug] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---

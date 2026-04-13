@@ -1,6 +1,6 @@
 ---
 name: loop-review
-description: Systematic code review of entire repository by partitioning into slices, reviewing each with specialized subagents, implementing improvements via /implement, and logging deferred suggestions. Use when the user wants a comprehensive quality sweep, systematic code review, or iterative improvement pass across the whole codebase.
+description: "Use when a comprehensive quality sweep or systematic code review is needed. Partitions the repo into slices, reviews each with subagents, implements fixes via /implement, and logs deferred suggestions."
 argument-hint: "[--debug] [partition criteria]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---

@@ -1,6 +1,6 @@
 ---
 name: alias
-description: Create shortcut aliases for existing larch skills with preset flags. Generates a project-level skill in .claude/skills/ that forwards to the target skill.
+description: "Use when creating shortcut aliases for existing larch skills with preset flags. Generates a project-level skill in .claude/skills/ that forwards to the target skill."
 argument-hint: "<alias-name> <target-skill> [preset-flags...]"
 allowed-tools: Bash, Read, Write, Grep, Glob
 ---

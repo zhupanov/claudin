@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Full end-to-end feature workflow — design, implement, code review, version bump, PR, Slack announce, and cleanup. Pass --merge to additionally run the CI+rebase+merge loop and delete the local branch after merging.
+description: "Use when implementing a feature end-to-end: design, implement, code review, version bump, PR, Slack announce, and cleanup. Pass --merge to additionally run the CI+rebase+merge loop and delete the local branch after merging."
 argument-hint: "[--quick] [--auto] [--merge] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---

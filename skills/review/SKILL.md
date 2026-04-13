@@ -1,6 +1,6 @@
 ---
 name: review
-description: Code review current branch changes with specialized subagents
+description: "Use when reviewing current branch changes with specialized subagents."
 argument-hint: "[--debug] [--session-env <path>]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 ---

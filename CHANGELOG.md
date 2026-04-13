@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.6] - 2026-04-13
+
+### Fixed
+
+- Resolved all claude-lint errors: added trigger context to skill descriptions (S017), shortened long descriptions to ≤250 chars (S015), and rewrote descriptions in third person (S016).
+- Removed `continue-on-error: true` from claude-lint CI step now that all errors are resolved.
+
+### Added
+
+- `claude-lint.toml` config file disabling the `body-too-long` rule for intentionally long SKILL.md bodies.
+
 ## [1.3.5] - 2026-04-13
 
 ### Added

@@ -1,6 +1,6 @@
 ---
 name: design
-description: Design an implementation plan with collaborative multi-reviewer review. 5 agents independently propose approaches before the full plan, then 5 reviewers validate the plan.
+description: "Use when designing an implementation plan with collaborative multi-reviewer review. 5 agents propose approaches, then 5 reviewers validate the plan."
 argument-hint: "[--auto] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
