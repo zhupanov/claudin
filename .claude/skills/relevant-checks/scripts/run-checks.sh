@@ -16,6 +16,29 @@ REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "ERROR: not inside a git 
 cd "$REPO_ROOT" || exit 1
 
 # ---------------------------------------------------------------------------
+# Shared post-check function: plugin structure validation + claude-lint
+# ---------------------------------------------------------------------------
+run_post_checks() {
+    echo ""
+    echo "=== Running plugin structure validation ==="
+    bash "$REPO_ROOT/scripts/validate-plugin-structure.sh"
+    local validator_exit=$?
+    if [ "$validator_exit" -ne 0 ]; then
+        return "$validator_exit"
+    fi
+
+    if command -v claude-lint >/dev/null 2>&1; then
+        echo ""
+        echo "=== Running claude-lint ==="
+        claude-lint "$REPO_ROOT"
+        return $?
+    else
+        echo ""
+        echo "WARNING: claude-lint not found on PATH — skipping"
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Determine changed files (union of branch diff + staged + unstaged + untracked)
 # ---------------------------------------------------------------------------
 # Only fall back to origin/main if local main is truly unavailable, not if the
@@ -68,9 +91,7 @@ done <<< "$MODIFIED_FILES"
 # ---------------------------------------------------------------------------
 if [ ${#files[@]} -eq 0 ]; then
     echo "No existing modified files to check (all changes are deletions)."
-    echo ""
-    echo "=== Running plugin structure validation ==="
-    bash "$REPO_ROOT/scripts/validate-plugin-structure.sh"
+    run_post_checks
     exit $?
 fi
 
@@ -93,6 +114,4 @@ fi
 # validator invoked by CI's plugin-structure job, so developers can catch
 # regressions locally before pushing.
 # ---------------------------------------------------------------------------
-echo ""
-echo "=== Running plugin structure validation ==="
-bash "$REPO_ROOT/scripts/validate-plugin-structure.sh"
+run_post_checks
