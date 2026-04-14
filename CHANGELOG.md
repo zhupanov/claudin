@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] - 2026-04-13
+
+### Changed
+
+- Moved lock step before triage in `/fix-issue` (Step 2 → before read details and triage) to eliminate race conditions where concurrent runs could claim the same issue during triage
+- Enhanced triage close to include detailed research summary explaining why the issue is no longer material
+- Combined `update-body` + `close` into a single `issue-lifecycle.sh close --pr-url` call, eliminating a consecutive Bash call anti-pattern in Step 7
+- Replaced saved `$SLACK_TOKEN`/`$SLACK_CHANNEL` variables with inline env var expansion to eliminate unnecessary env var resolution Bash call in Step 0
+- Fixed `cmd_update_body` using `exit` instead of `return` for error paths, which would bypass `cmd_close`'s error guard when called as an internal function
+
 ## [2.0.8] - 2026-04-13
 
 ### Changed

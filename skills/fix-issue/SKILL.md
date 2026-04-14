@@ -26,9 +26,9 @@ Step Name Registry:
 |------|-----------|
 | 0 | setup |
 | 1 | fetch issue |
-| 2 | read details |
-| 3 | triage |
-| 4 | lock |
+| 2 | lock |
+| 3 | read details |
+| 4 | triage |
 | 5 | classify |
 | 6 | implement |
 | 7 | close issue |
@@ -45,7 +45,7 @@ Parse output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UN
 
 If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository. GitHub issue access requires a valid repo. Aborting.**` and skip to Step 9.
 
-If `SLACK_OK=true`, resolve `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` from the environment (or `CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN` / `CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID` fallbacks) and save as `SLACK_TOKEN` and `SLACK_CHANNEL` for Steps 3 and 8. Set `slack_available=true`.
+If `SLACK_OK=true`, set `slack_available=true`. **Do NOT make a separate Bash call to resolve Slack env vars.** When Slack tokens are needed (Steps 4 and 8), use inline shell expansion: `"${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}"` and `"${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"`.
 
 If `SLACK_OK=false`, print `**⚠ Slack not configured ($SLACK_MISSING). Slack announcements will be skipped.**` Set `slack_available=false`.
 
@@ -71,7 +71,20 @@ Handle exit codes:
 - **Exit 1**: Print `✅ 1: fetch issue — no approved issues found (<elapsed>)`. Skip to Step 9.
 - **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR (<elapsed>)**`. Skip to Step 9.
 
-## Step 2 — Read Issue Details
+## Step 2 — Lock Issue
+
+Lock immediately after finding an eligible issue to prevent race conditions with concurrent runs.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
+  --issue $ISSUE_NUMBER --body "IN PROGRESS" --lock
+```
+
+Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 2: lock — failed ($ERROR). Another run may have claimed this issue. (<elapsed>)**` Skip to Step 9.
+
+If `LOCK_ACQUIRED=true`, print `✅ 2: lock — issue #$ISSUE_NUMBER locked (<elapsed>)`.
+
+## Step 3 — Read Issue Details
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/get-issue-details.sh \
@@ -80,11 +93,11 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/get-issue-details.sh \
 
 Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
-## Step 3 — Triage
+## Step 4 — Triage
 
-Print `▶ 3: triage`
+Print `▶ 4: triage`
 
-Read the issue details from Step 2. Explore the codebase using Read, Grep, and Glob to determine if the issue is still actual — that is, whether it describes a real problem that still needs fixing.
+Read the issue details from Step 3. Explore the codebase using Read, Grep, and Glob to determine if the issue is still actual — that is, whether it describes a real problem that still needs fixing.
 
 Check for:
 
@@ -94,39 +107,29 @@ Check for:
 
 **If the issue is no longer material** (already fixed, invalid, or no longer relevant):
 
-1. Compose a one-sentence explanation of why the issue is no longer material.
-2. Close with comment:
+1. Compose a detailed explanation of why the issue is no longer material. Include a summary of the research performed: which files were checked, what recent commits were examined, and what evidence led to the conclusion. This explanation is written into the issue body so that anyone reviewing the closed issue can understand the rationale without re-investigating.
+2. Close with comment containing the detailed explanation:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
-     --issue $ISSUE_NUMBER --comment "Closing: <explanation>"
+     --issue $ISSUE_NUMBER --comment "Closing: <detailed explanation with research summary>"
    ```
 3. If `slack_available=true`, post Slack notification:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
      --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" \
-     --token "$SLACK_TOKEN" --channel-id "$SLACK_CHANNEL" \
+     --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
+     --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
      --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence reason>"
    ```
-4. Print `✅ 3: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 9.
+4. Print `✅ 4: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 9.
 
-**If the issue is still actual**, print `✅ 3: triage — issue is active, proceeding (<elapsed>)` and continue.
-
-## Step 4 — Lock Issue
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
-  --issue $ISSUE_NUMBER --body "IN PROGRESS" --lock
-```
-
-Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 4: lock — failed ($ERROR). Another run may have claimed this issue. (<elapsed>)**` Skip to Step 9.
-
-If `LOCK_ACQUIRED=true`, print `✅ 4: lock — issue #$ISSUE_NUMBER locked (<elapsed>)`.
+**If the issue is still actual**, print `✅ 4: triage — issue is active, proceeding (<elapsed>)` and continue.
 
 ## Step 5 — Classify Complexity
 
 Print `▶ 5: classify`
 
-Based on the issue details and codebase exploration from Step 3, classify the issue:
+Based on the issue details and codebase exploration from Step 4, classify the issue:
 
 - **SIMPLE**: Isolated fix in 2 or fewer files. Obvious solution with no architectural decisions needed. Examples: typo fix, small bug with clear root cause, config change.
 - **HARD**: Everything else. Multi-file changes, new features, architectural decisions, unclear root cause, or any uncertainty.
@@ -154,18 +157,11 @@ If `/implement` fails or bails, print `**⚠ 6: implement — failed. Issue #$IS
 
 Print `▶ 7: close issue`
 
-Update the issue body with PR link (idempotent):
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh update-body \
-  --issue $ISSUE_NUMBER --pr-url "$PR_URL"
-```
-
-Close the issue with DONE comment:
+Update the issue body with PR link and close with DONE comment (single call):
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
-  --issue $ISSUE_NUMBER --comment "DONE"
+  --issue $ISSUE_NUMBER --pr-url "$PR_URL" --comment "DONE"
 ```
 
 Print `✅ 7: close issue — #$ISSUE_NUMBER closed (<elapsed>)`
@@ -177,7 +173,8 @@ If `slack_available=false`, print `⏭️ 8: slack announce — skipped (Slack n
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
   --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" --pr-url "$PR_URL" \
-  --token "$SLACK_TOKEN" --channel-id "$SLACK_CHANNEL"
+  --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
+  --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"
 ```
 
 If the script exits non-zero, print `**⚠ 8: slack announce — failed. Continuing.**`
@@ -196,5 +193,5 @@ Print `✅ 9: cleanup — fix-issue complete! (<elapsed>)`
 
 ## Known Limitations
 
-- **Stale IN PROGRESS lock**: If the skill crashes after Step 4, the issue remains locked with `IN PROGRESS` as the last comment. Recovery: manually delete the `IN PROGRESS` comment and re-add `GO` to re-enable the issue for automated processing.
-- **Single-runner assumption**: The comment-based locking (Step 4) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
+- **Stale IN PROGRESS lock**: If the skill crashes after Step 2, the issue remains locked with `IN PROGRESS` as the last comment. Recovery: manually delete the `IN PROGRESS` comment and re-add `GO` to re-enable the issue for automated processing.
+- **Single-runner assumption**: The comment-based locking (Step 2) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
