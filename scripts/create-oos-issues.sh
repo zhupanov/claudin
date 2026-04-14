@@ -14,7 +14,8 @@
 #
 # Input file format (one or more blocks):
 #   ### OOS_N: <short title>
-#   - **Description**: <full description>
+#   - **Description**: <full description, may span multiple lines>
+#     <continuation lines are appended until the next field>
 #   - **Reviewer**: <attribution>
 #   - **Vote tally**: <YES/NO/EXONERATE counts>
 #   - **Phase**: design|review
@@ -117,6 +118,7 @@ CURRENT_DESCRIPTION=""
 CURRENT_REVIEWER=""
 CURRENT_VOTE=""
 CURRENT_PHASE=""
+IN_DESCRIPTION=false
 
 create_issue() {
     local title="$1"
@@ -199,14 +201,22 @@ while IFS= read -r line; do
     if [[ "$line" =~ ^###\ OOS_[0-9]+:\ (.+)$ ]]; then
         flush_item
         CURRENT_TITLE="${BASH_REMATCH[1]}"
+        IN_DESCRIPTION=false
     elif [[ "$line" =~ ^-\ \*\*Description\*\*:\ (.+)$ ]]; then
         CURRENT_DESCRIPTION="${BASH_REMATCH[1]}"
+        IN_DESCRIPTION=true
     elif [[ "$line" =~ ^-\ \*\*Reviewer\*\*:\ (.+)$ ]]; then
         CURRENT_REVIEWER="${BASH_REMATCH[1]}"
+        IN_DESCRIPTION=false
     elif [[ "$line" =~ ^-\ \*\*Vote\ tally\*\*:\ (.+)$ ]]; then
         CURRENT_VOTE="${BASH_REMATCH[1]}"
+        IN_DESCRIPTION=false
     elif [[ "$line" =~ ^-\ \*\*Phase\*\*:\ (.+)$ ]]; then
         CURRENT_PHASE="${BASH_REMATCH[1]}"
+        IN_DESCRIPTION=false
+    elif [[ "$IN_DESCRIPTION" == true ]]; then
+        # Accumulate continuation lines for multi-line descriptions
+        CURRENT_DESCRIPTION+=$'\n'"$line"
     fi
 done < "$INPUT_FILE"
 
