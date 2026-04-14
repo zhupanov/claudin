@@ -584,6 +584,8 @@ Read the OOS artifact files:
 
 **If at least one file has content**:
 
+**Idempotency**: If `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation entirely — read the existing file to get previously created issue URLs and proceed to Step 9b.
+
 1. Read and parse all accepted OOS items from both files.
 2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in both design and review (matching by normalized title similarity), keep one entry noting both phases.
 3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for the creation script.
@@ -595,9 +597,9 @@ Read the OOS artifact files:
 6. If `ISSUES_FAILED > 0`: Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — create-oos-issues.sh failed to create <N> of <total> OOS issues.`
 7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links.
 
-Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> issues filed`
+8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as a sentinel for idempotency. Include the `ISSUES_CREATED`, `ISSUES_FAILED`, and all `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE` lines from the script output.
 
-**Idempotency note**: Step 9a.1 runs before `create-pr.sh` in Step 9b. If the PR already exists (`PR_STATUS` will be determined by `create-pr.sh`), the OOS issues have already been created in a prior run. However, since Step 9a.1 runs before Step 9b determines `PR_STATUS`, there is no `PR_STATUS` available yet. To handle reruns: if `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation and reuse the existing file.
+Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> issues filed`
 
 ### 9b — Create PR via script
 

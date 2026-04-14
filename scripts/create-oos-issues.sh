@@ -96,7 +96,7 @@ create_issue() {
 ## Out-of-Scope Observation
 
 **Surfaced by**: $reviewer
-**Phase**: $phase review
+**Phase**: $phase
 **Vote tally**: $vote
 
 ## Description
@@ -129,6 +129,10 @@ BODY_EOF
 flush_item() {
     if [[ -n "$CURRENT_TITLE" ]] && [[ -n "$CURRENT_DESCRIPTION" ]]; then
         create_issue "$CURRENT_TITLE" "$CURRENT_DESCRIPTION" "$CURRENT_REVIEWER" "$CURRENT_VOTE" "$CURRENT_PHASE"
+    elif [[ -n "$CURRENT_TITLE" ]] && [[ -z "$CURRENT_DESCRIPTION" ]]; then
+        # Malformed input: title without description — count as failure
+        ISSUES_FAILED=$((ISSUES_FAILED + 1))
+        echo "SKIPPED: '$CURRENT_TITLE' — missing description" >&2
     fi
     CURRENT_TITLE=""
     CURRENT_DESCRIPTION=""

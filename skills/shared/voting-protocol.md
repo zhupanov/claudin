@@ -24,12 +24,14 @@ Include the reviewer attribution (e.g., "General", "Deep-Analysis", "Codex-Gener
 
 ## Voter Output Format
 
-Each voter must output one line per finding:
+Each voter must output one line per ballot item, **using the same ID that appears on the ballot** — `FINDING_N` for in-scope items and `OOS_N` for out-of-scope items:
 
 ```
 FINDING_1: YES — <one-line rationale>
 FINDING_2: NO — <one-line rationale>
 FINDING_3: EXONERATE — <one-line rationale>
+OOS_1: YES — <one-line rationale>
+OOS_2: NO — <one-line rationale>
 ...
 ```
 
@@ -76,14 +78,20 @@ Be scrupulous — only vote YES for findings that genuinely improve the {REVIEW_
 
 {BALLOT}
 
-For each finding, output exactly one line:
+For each ballot item, output exactly one line using the same ID from the ballot (FINDING_N or OOS_N):
 FINDING_N: YES — <one-line rationale>
 or
 FINDING_N: NO — <one-line rationale>
 or
 FINDING_N: EXONERATE — <one-line rationale>
+or
+OOS_N: YES — <one-line rationale>
+or
+OOS_N: NO — <one-line rationale>
+or
+OOS_N: EXONERATE — <one-line rationale>
 
-You must vote on every finding. Do NOT skip any. Do NOT modify files.
+You must vote on every item. Do NOT skip any. Do NOT modify files.
 ```
 
 ## Launching Voters
