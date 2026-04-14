@@ -57,7 +57,7 @@ The `/relevant-checks` skill is **not part of the plugin surface** — it is pre
 2. Add a `scripts/run-checks.sh` that runs your repo's linters, tests, or validators
 3. Reference the script from SKILL.md using `$PWD/.claude/skills/relevant-checks/scripts/run-checks.sh`
 
-Larch's own copy at `.claude/skills/relevant-checks/` serves as a reference implementation — it runs `pre-commit` linters plus the plugin structure validator.
+Larch's own copy at `.claude/skills/relevant-checks/` serves as a reference implementation — it runs `pre-commit` linters plus `claude-lint` (if available on PATH).
 
 ### `--admin` merge behavior
 

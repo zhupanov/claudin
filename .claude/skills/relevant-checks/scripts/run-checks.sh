@@ -2,6 +2,8 @@
 # Run validation checks relevant to modified files on the current branch.
 # Delegates to pre-commit for file-type routing and linting.
 # This script is private to the /relevant-checks skill.
+# Note: -e intentionally omitted — pre-commit exit code is captured explicitly
+# (PRE_COMMIT_EXIT) rather than aborting, so later checks can still run.
 set -uo pipefail
 
 # ---------------------------------------------------------------------------
