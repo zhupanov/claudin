@@ -593,13 +593,13 @@ Read the OOS artifact files:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/create-oos-issues.sh --input-file "$IMPLEMENT_TMPDIR/oos-items.md" --repo $REPO
    ```
-5. Parse the structured output for `ISSUES_CREATED`, `ISSUES_FAILED`, and per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL` pairs.
+5. Parse the structured output for `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_DUPLICATE`/`ISSUE_N_DUPLICATE_OF_NUMBER`/`ISSUE_N_DUPLICATE_OF_URL` pairs.
 6. If `ISSUES_FAILED > 0`: Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — create-oos-issues.sh failed to create <N> of <total> OOS issues.`
-7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links.
+7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links. For deduplicated items, link to the existing issue instead: `"- #<EXISTING_NUMBER>: <title> (deduplicated — already tracked) (<reviewer attribution>)"`.
 
-8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as a sentinel for idempotency. Include the `ISSUES_CREATED`, `ISSUES_FAILED`, and all `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE` lines from the script output.
+8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as a sentinel for idempotency. Include the `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and all `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE`/`ISSUE_N_DUPLICATE*` lines from the script output.
 
-Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> issues filed`
+Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated`
 
 ### 9b — Create PR via script
 

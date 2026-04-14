@@ -22,9 +22,13 @@
 # Outputs (key=value to stdout):
 #   ISSUES_CREATED=<N>
 #   ISSUES_FAILED=<N>
+#   ISSUES_DEDUPLICATED=<N>
 #   ISSUE_1_NUMBER=<N>
 #   ISSUE_1_URL=<url>
 #   ISSUE_1_TITLE=<title>
+#   ISSUE_1_DUPLICATE=true           (if deduplicated)
+#   ISSUE_1_DUPLICATE_OF_NUMBER=<N>  (existing issue number)
+#   ISSUE_1_DUPLICATE_OF_URL=<url>   (existing issue URL)
 #   ...
 #
 # Exit codes:
@@ -69,10 +73,50 @@ if gh label list --repo "$REPO" --search "out-of-scope" --json name --jq '.[].na
     LABEL_FLAG="--label out-of-scope"
 fi
 
+# Fetch all open issue titles for deduplication (one API call, reused per item)
+EXISTING_ISSUES_FILE=$(mktemp)
+trap 'rm -f "$EXISTING_ISSUES_FILE"' EXIT
+gh issue list --repo "$REPO" --state open --json title,number,url --limit 500 --jq '.[] | "\(.number)\t\(.url)\t\(.title)"' > "$EXISTING_ISSUES_FILE" 2>/dev/null || true
+
+# Normalize a title for comparison: lowercase, strip [OOS] prefix, collapse whitespace, trim
+normalize_title() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/^\[oos\]\s*//' | tr -s '[:space:]' ' ' | sed 's/^ *//;s/ *$//'
+}
+
+# Check if a title is a duplicate of an existing open issue.
+# Returns 0 (match found) and prints "NUMBER<tab>URL" of the match, or returns 1 (no match).
+check_duplicate() {
+    local new_title="$1"
+    local new_norm
+    new_norm=$(normalize_title "$new_title")
+    [[ -z "$new_norm" ]] && return 1
+
+    while IFS=$'\t' read -r num url existing_title; do
+        local existing_norm
+        existing_norm=$(normalize_title "$existing_title")
+        [[ -z "$existing_norm" ]] && continue
+
+        # Exact match after normalization
+        if [[ "$new_norm" == "$existing_norm" ]]; then
+            printf '%s\t%s' "$num" "$url"
+            return 0
+        fi
+
+        # Substring containment (either direction)
+        if [[ "$existing_norm" == *"$new_norm"* ]] || [[ "$new_norm" == *"$existing_norm"* ]]; then
+            printf '%s\t%s' "$num" "$url"
+            return 0
+        fi
+    done < "$EXISTING_ISSUES_FILE"
+
+    return 1
+}
+
 # Parse OOS items from the input file
 # Each item starts with "### OOS_" and contains Description, Reviewer, Vote tally, Phase
 ISSUES_CREATED=0
 ISSUES_FAILED=0
+ISSUES_DEDUPLICATED=0
 ITEM_INDEX=0
 CURRENT_TITLE=""
 CURRENT_DESCRIPTION=""
@@ -88,6 +132,20 @@ create_issue() {
     local phase="$5"
 
     ITEM_INDEX=$((ITEM_INDEX + 1))
+
+    # Check for duplicate before creating
+    local dup_info
+    if dup_info=$(check_duplicate "$title"); then
+        local dup_number dup_url
+        dup_number=$(echo "$dup_info" | cut -f1)
+        dup_url=$(echo "$dup_info" | cut -f2)
+        ISSUES_DEDUPLICATED=$((ISSUES_DEDUPLICATED + 1))
+        echo "ISSUE_${ITEM_INDEX}_DUPLICATE=true"
+        echo "ISSUE_${ITEM_INDEX}_DUPLICATE_OF_NUMBER=$dup_number"
+        echo "ISSUE_${ITEM_INDEX}_DUPLICATE_OF_URL=$dup_url"
+        echo "ISSUE_${ITEM_INDEX}_TITLE=$title"
+        return
+    fi
 
     # Write issue body to temp file (avoids shell quoting issues)
     local body_file
@@ -161,3 +219,4 @@ flush_item
 
 echo "ISSUES_CREATED=$ISSUES_CREATED"
 echo "ISSUES_FAILED=$ISSUES_FAILED"
+echo "ISSUES_DEDUPLICATED=$ISSUES_DEDUPLICATED"
