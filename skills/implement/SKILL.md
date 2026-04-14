@@ -231,7 +231,8 @@ Implement the feature following the (reviewed) plan from the `/design` phase. Fo
 - Read existing code before modifying
 - Match existing style and patterns
 - Avoid code duplication — search for reusable code first
-- Don't over-engineer
+- Don't over-engineer — for each abstraction, helper, or indirection you introduce, ask: is this justified by a concrete current need? If the answer is "it might be useful later," don't add it
+- When the project has test infrastructure (look for: test directories, Makefile test targets, package.json test scripts, or a test framework), prefer test-driven development: write a failing test for the expected behavior first, then implement to make it pass. For changes that are purely configuration, documentation, or prompt-text edits, skip TDD
 
 ## Step 3 — Relevant Checks (first pass)
 
@@ -276,7 +277,7 @@ Skip `/review`. Instead, run a simplified one-round review:
    Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log.
 2. Launch **2 Claude subagent reviewers** (general, deep-analysis) using the same reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with these variable bindings: `{REVIEW_TARGET}` = `"code changes"`, `{CONTEXT_BLOCK}` = the commit log + file list + full diff, `{OUTPUT_INSTRUCTION}` = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. **No Codex, no Cursor, no external reviewers. No competition notice** (there is no voting panel in quick mode).
 3. Collect findings from all 2 subagents. Deduplicate.
-4. **Main agent decides**: Evaluate each finding and unilaterally accept or reject it. No voting panel. Accept findings that identify genuine bugs, logic errors, or important improvements. Reject trivial style nits or speculative concerns.
+4. **Main agent decides**: Evaluate each finding and unilaterally accept or reject it. No voting panel. Accept findings that identify genuine bugs, logic errors, or important improvements. Reject trivial style nits or speculative concerns. Also reject findings whose proposed fix would introduce more complexity than the issue warrants (disproportionate fix).
 5. Implement accepted fixes. Run `/relevant-checks` if files changed.
 6. **One round only** — no re-review loop.
 7. For rejected findings, write them to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 16 and PR body sections work unchanged.

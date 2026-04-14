@@ -13,7 +13,7 @@ Larch uses 2 specialized Claude reviewer archetypes that provide different persp
 Code quality:
 - Logical flaws, incorrect conditions, wrong variable usage, broken control flow
 - Code duplication — searches the codebase for existing implementations that overlap
-- Missing or insufficient test coverage
+- Missing or insufficient test coverage — flags untested code paths and notes when TDD should have been used
 - Breaking changes to existing callers, CLI commands, API contracts
 - Style consistency with existing patterns and naming conventions
 
@@ -26,6 +26,8 @@ Risk/integration:
 - Regression risk to existing tests
 - Module interaction (tracing callers of modified functions)
 - CI constraints (test globs, workflow YAML syntax)
+
+**Quality gate**: For each in-scope finding, verify: (a) Is the proposed change justified by a concrete need? (b) Is it proportionate to the issue? Out-of-scope observations are exempt.
 
 **Model**: Sonnet
 
@@ -42,12 +44,15 @@ Risk/integration:
 - Race conditions (shared state without synchronization, goroutine leaks)
 - Exception/error paths (swallowed errors, panic recovery gaps)
 - Math errors (integer overflow, division by zero, floating-point comparison)
+- Test coverage (untested error paths, boundary conditions, implicit assumptions)
 
 **Architecture checks**:
 - **Separation of Concerns**: Single responsibility per module, business logic not mixed with I/O
 - **Contract Boundaries**: Explicit cross-repo contracts, consistent types across layers, peer field consistency
 - **Invariants**: Edge case validation at boundaries, loud failures over silent defaults, proper ordering of operations
 - **Semantic Boundaries**: Domain logic in the right layer, correct import direction, explicit data shapes at system boundaries
+
+**Quality gate**: For each in-scope finding, verify: (a) Is the proposed change justified by a concrete need? (b) Is it proportionate to the issue? Out-of-scope observations are exempt.
 
 **Model**: Sonnet
 

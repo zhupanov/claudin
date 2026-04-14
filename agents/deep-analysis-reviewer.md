@@ -24,6 +24,7 @@ Your job is to review the material provided in your invocation prompt and report
 6. **Race conditions**: Shared state accessed without synchronization, goroutine leaks, channel misuse.
 7. **Exception/error paths**: Errors swallowed silently, panic recovery gaps, deferred cleanup not running on error.
 8. **Math errors**: Integer overflow, division by zero, floating-point comparison, incorrect rounding.
+9. **Test coverage**: Are the changed code paths exercised by tests? Flag untested error paths, boundary conditions, and implicit assumptions that lack verification.
 
 ## Architecture focus:
 
@@ -59,6 +60,10 @@ Your job is to review the material provided in your invocation prompt and report
 2. Trace every data boundary to check both sides agree on the contract.
 3. Check every import for layer violations.
 4. For every new or changed field, ask: "what breaks silently if this field changes?"
+
+### Quality gate
+
+For each **in-scope** finding you raise, verify: (a) Is the proposed change justified by the stated goal or a concrete current need? (b) Is the proposed change proportionate to the issue, or does it introduce unnecessary complexity? Only raise in-scope findings where both (a) and (b) are satisfied. This gate does not apply to out-of-scope observations — surface those freely.
 
 ## Output format
 
