@@ -440,7 +440,7 @@ Use the two reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
 
 Additionally, append the following competition context to each reviewer's prompt (both Claude subagents and external reviewers):
 
-> **Competition notice**: Your findings will be voted on by a 3-agent panel (Deep Analysis Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
+> **Competition notice**: Your findings will be voted on by a 3-agent panel (Deep Analysis Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations use the same scoring as in-scope findings: OOS items that receive 2+ YES votes earn +1 point and will be filed as GitHub issues. OOS items with 0 YES and 0 EXONERATE cost -1 point. OOS items with exactly 1 YES or with 1+ EXONERATE earn 0 points.
 
 ### Collecting External Reviewer Results
 
@@ -460,7 +460,7 @@ If **all reviewers** report no in-scope issues and no out-of-scope observations,
 
 ### Voting Panel (replaces negotiation)
 
-After deduplication, submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section — voters can promote OOS items to in-scope by voting YES. For plan review:
+After deduplication, submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section — voters decide whether each OOS item deserves a GitHub issue (YES = file issue, not implement). For plan review:
 
 - **Voter 1**: Claude Deep Analysis reviewer subagent — fresh Agent tool invocation with the voting prompt. Instruct: `"You are a senior architect and correctness specialist on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
 - **Voter 2**: Codex — via `run-external-reviewer.sh` with the ballot. If `codex_available` is false, launch a Claude subagent voter instead per the Voting Protocol.
@@ -478,24 +478,34 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 ### Finalize Plan Review
 
-If any in-scope findings or promoted OOS items were **accepted by vote** (2+ YES votes):
-1. Print them under a `## Plan Review Findings (Voted In)` header with vote counts. Include any promoted OOS items (labelled as `[PROMOTED FROM OUT-OF-SCOPE]`).
-2. Revise the implementation plan to address each accepted finding and promoted OOS item.
+If any in-scope findings were **accepted by vote** (2+ YES votes):
+1. Print them under a `## Plan Review Findings (Voted In)` header with vote counts.
+2. Revise the implementation plan to address each accepted in-scope finding.
 3. Print the revised plan under a `## Revised Implementation Plan` header.
-4. Write the accepted findings to `$DESIGN_TMPDIR/accepted-plan-findings.md` so Step 3.5 (Design Discussion Round 2) has a stable artifact to read. Use the format:
+4. Write the accepted in-scope findings to `$DESIGN_TMPDIR/accepted-plan-findings.md` so Step 3.5 (Design Discussion Round 2) has a stable artifact to read. **Only include in-scope `FINDING_*` items — do not include OOS items.** Use the format:
    ```markdown
    ### FINDING_N: <title>
    - **Concern**: <what was raised>
    - **Resolution**: <how the plan was revised>
    ```
 
-Print any non-promoted OOS items under a `## Out-of-Scope Observations` header for visibility. These are not implemented but are recorded for future attention.
+**OOS items accepted by vote** (2+ YES): These are accepted for GitHub issue filing, NOT for plan revision. **Only when `SESSION_ENV_PATH` is non-empty**: write accepted OOS items to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-design.md` using the format:
+```markdown
+### OOS_N: <short title>
+- **Description**: <full description of the observation>
+- **Reviewer**: <attribution>
+- **Vote tally**: <YES/NO/EXONERATE counts>
+- **Phase**: design
+```
+When `SESSION_ENV_PATH` is empty (standalone invocation), skip the OOS artifact write — there is no parent `/implement` to consume it.
 
-If voting rejects all in-scope findings and no OOS items are promoted, print: `**ℹ Voting panel rejected all findings. Plan unchanged.**` and proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
+Print any non-accepted OOS items under a `## Out-of-Scope Observations` header for visibility. These are not filed as issues but are recorded for future attention.
+
+If voting rejects all in-scope findings, print: `**ℹ Voting panel rejected all in-scope findings. Plan unchanged.**` (OOS items accepted for issue filing are processed separately by `/implement`.) Proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
 
 ### Track Rejected Plan Review Findings
 
-For any **in-scope** findings that were **not accepted by vote** (fewer than 2 YES votes — whether rejected or exonerated) during plan review (from any reviewer — Claude subagents, Codex, or Cursor), append each to `$DESIGN_TMPDIR/rejected-findings.md` using this format. **Do not include non-promoted OOS items** — those are reported separately in the "Out-of-Scope Observations" PR body section per `voting-protocol.md`:
+For any **in-scope** findings that were **not accepted by vote** (fewer than 2 YES votes — whether rejected or exonerated) during plan review (from any reviewer — Claude subagents, Codex, or Cursor), append each to `$DESIGN_TMPDIR/rejected-findings.md` using this format. **Do not include OOS items** — those follow a separate pipeline (accepted OOS → GitHub issues via `/implement`, non-accepted OOS → PR body observations):
 
 ```markdown
 ### [Plan Review] <Reviewer Name>

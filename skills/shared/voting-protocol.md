@@ -72,6 +72,8 @@ You are a {VOTER_ROLE} participating in a voting panel. You will be presented wi
 
 Be scrupulous — only vote YES for findings that genuinely improve the {REVIEW_CONTEXT}. Use EXONERATE when a concern is valid but not actionable now.
 
+**For items prefixed with `[OUT_OF_SCOPE]`:** These are pre-existing issues beyond this PR's scope. Vote YES if the observation deserves a GitHub issue for future tracking. Vote NO if it is not worth tracking. Vote EXONERATE if the concern is legitimate but not worth filing a GitHub issue. OOS items are never implemented in this PR — YES means "file an issue," not "implement now."
+
 {BALLOT}
 
 For each finding, output exactly one line:
@@ -145,13 +147,13 @@ After voting, print a scoreboard to the session:
 ```
 ## Reviewer Competition Scoreboard
 
-| Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | Score |
-|----------|----------|----------|-----------------|-------------------------------|---------------------------|-------|
-| General              | 3        | 2        | 1               | 0                             | 0                         | +2    |
-| Deep-Analysis        | 2        | 1        | 0               | 1                             | 0                         | +1    |
-| Codex-General        | 1        | 0        | 0               | 0                             | 1                         | -1    |
-| Codex-Deep-Analysis  | 1        | 1        | 0               | 0                             | 0                         | +1    |
-| Cursor               | 2        | 1        | 1               | 0                             | 0                         | +1    |
+| Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Accepted | Score |
+|----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
+| General              | 3        | 2        | 1               | 0                             | 0                         | 1            | 0            | +2    |
+| Deep-Analysis        | 2        | 1        | 0               | 1                             | 0                         | 0            | 0            | +1    |
+| Codex-General        | 1        | 0        | 0               | 0                             | 1                         | 0            | 0            | -1    |
+| Codex-Deep-Analysis  | 1        | 1        | 0               | 0                             | 0                         | 0            | 0            | +1    |
+| Cursor               | 2        | 1        | 1               | 0                             | 0                         | 0            | 0            | +1    |
 
 Note: In future iterations, token allocation will be weighted proportionally
 to reviewer scores — higher-scoring reviewers will receive more tokens.
@@ -172,35 +174,42 @@ OOS_1: [OUT_OF_SCOPE] General — <description of pre-existing issue>
 ### OOS Vote Semantics
 
 For out-of-scope items, the vote meanings are:
-- **YES**: Promote this observation to in-scope — it should be implemented in this PR.
-- **NO**: Keep as observation — not worth addressing now.
-- **EXONERATE**: Legitimate observation worth documenting — keep as observation.
+- **YES**: This observation deserves a GitHub issue for future attention.
+- **NO**: Not worth tracking — the observation is trivial or incorrect.
+- **EXONERATE**: Legitimate observation worth documenting, but not worth filing a GitHub issue.
 
-If an OOS item receives 2+ YES votes, it is **promoted** to in-scope and treated as an accepted finding (implemented/revised). Otherwise it remains an observation.
+If an OOS item receives 2+ YES votes, it is **accepted** and will be filed as a GitHub issue by `/implement`. Otherwise it remains an observation reported in the PR body.
+
+**OOS items are never implemented in the current PR** — accepted OOS items result in issue creation only. This cleanly separates "fix now" (in-scope findings) from "fix later" (OOS observations).
 
 ### OOS Scoring
 
-Out-of-scope items use a **per-item scoring floor of 0**. This floor applies **only to OOS items** — in-scope findings retain normal scoring including -1 for rejected.
+Out-of-scope items use the **same symmetric scoring** as in-scope findings:
 
 | OOS Vote Result | Points | Description |
 |---|---|---|
-| OOS promoted (2+ YES) | +1 | Reviewer surfaced an issue worth fixing now |
-| OOS not promoted | 0 | Reviewer surfaced a useful observation (no penalty) |
+| OOS accepted (2+ YES) | +1 | Reviewer surfaced an issue worth tracking |
+| OOS neutral (exactly 1 YES) | 0 | Insufficient support, but not dismissed |
+| OOS exonerated (0 YES, 1+ EXONERATE) | 0 | Legitimate observation, but not worth an issue |
+| OOS rejected (0 YES, 0 EXONERATE) | -1 | Observation was unanimously dismissed |
 
 ### OOS Scoreboard
 
 The scoreboard includes additional columns for OOS items:
 
 ```
-| Reviewer | ... | OOS Proposed | OOS Promoted | ...
+| Reviewer | ... | OOS Proposed | OOS Accepted | ...
 ```
 
 ### OOS Reporting
 
-Non-promoted OOS items are **not** written to `rejected-findings.md`. They are collected separately and reported in a dedicated `<details><summary>Out-of-Scope Observations</summary>` section in the PR body. This section is populated by `/implement` Step 9a from conversation context.
+OOS items are **not** written to `rejected-findings.md`. They follow a separate pipeline:
+
+- **Accepted OOS items** (2+ YES): Written to an artifact file (`oos-accepted-design.md` or `oos-accepted-review.md`) in `$IMPLEMENT_TMPDIR` during the voting phase. `/implement` Step 9a.1 reads these files, deduplicates across phases, and creates GitHub issues via `scripts/create-oos-issues.sh`.
+- **Non-accepted OOS items**: Collected and reported in a dedicated `<details><summary>Out-of-Scope Observations</summary>` section in the PR body for future reference.
 
 External reviewers (Codex, Cursor) use single-list prompts and do not produce OOS items — their entire output is treated as in-scope findings. Only Claude subagent reviewers (which use the dual-list templates from `reviewer-templates.md`) produce OOS items.
 
 ## Zero Accepted Findings
 
-If voting filters out **all** in-scope findings (every in-scope finding rejected by the panel), print: `**ℹ Voting panel rejected all findings. No changes to implement.**` and skip the implementation/revision step. Proceed directly to the rejected findings report. (OOS items that were not promoted are still collected for reporting.)
+If voting filters out **all** in-scope findings (every in-scope finding rejected by the panel), print: `**ℹ Voting panel rejected all findings. No changes to implement.**` and skip the implementation/revision step. Proceed directly to the rejected findings report. (OOS items accepted for issue filing are processed separately by `/implement` and do not count as implementation work.)

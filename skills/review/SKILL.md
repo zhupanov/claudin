@@ -183,7 +183,7 @@ Use the two reviewer archetypes from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
 
 Additionally, append the following competition context to each reviewer's prompt (both Claude subagents and external reviewers):
 
-> **Competition notice**: Your findings will be voted on by a 3-agent panel (General Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations (pre-existing issues, items beyond PR scope) can never cost you points — surface them freely.
+> **Competition notice**: Your findings will be voted on by a 3-agent panel (General Reviewer, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations use the same scoring as in-scope findings: OOS items that receive 2+ YES votes earn +1 point and will be filed as GitHub issues. OOS items with 0 YES and 0 EXONERATE cost -1 point. OOS items with exactly 1 YES or with 1+ EXONERATE earn 0 points.
 
 ### Collecting External Reviewer Results
 
@@ -231,7 +231,17 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 **Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol. Note in the scoreboard that scores apply to round 1 only — round 2+ findings are auto-accepted and do not contribute to scores.
 
-**Zero accepted findings**: If voting rejects all findings, print `**ℹ Voting panel rejected all findings. No changes to implement.**` and skip to **Step 4**.
+**Zero accepted in-scope findings**: If voting rejects all in-scope findings, print `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` (OOS items accepted for issue filing are processed separately by `/implement`.) and skip to **Step 4**.
+
+**OOS items accepted by vote** (2+ YES in round 1): These are accepted for GitHub issue filing, NOT for code implementation. **Only when `SESSION_ENV_PATH` is non-empty**: write accepted OOS items to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` using the format:
+```markdown
+### OOS_N: <short title>
+- **Description**: <full description of the observation>
+- **Reviewer**: <attribution>
+- **Vote tally**: <YES/NO/EXONERATE counts>
+- **Phase**: review
+```
+When `SESSION_ENV_PATH` is empty (standalone invocation), skip the OOS artifact write.
 
 **Save not-accepted finding IDs**: Record the IDs of findings not accepted by vote in round 1 (whether rejected or exonerated). In rounds 2+, if a Claude-only reviewer re-raises a finding that was not accepted by the round-1 voting panel (same file, same issue), suppress it — do not re-accept a finding the panel already voted down or exonerated.
 
@@ -247,7 +257,7 @@ Print to the user:
 
 ### 3e — Implement Fixes
 
-For each **accepted** finding (voted in during round 1, or all findings in rounds 2+):
+For each **accepted in-scope** finding (`FINDING_*` items only — exclude `OOS_*` items, which are processed separately for issue filing by `/implement`; voted in during round 1, or all findings in rounds 2+):
 
 1. Apply the suggested fix by editing the relevant file.
 2. If the fix involves creating new tests, write them.
