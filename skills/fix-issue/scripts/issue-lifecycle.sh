@@ -168,13 +168,13 @@ cmd_update_body() {
         case "$1" in
             --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
             --pr-url) pr_url="${2:?--pr-url requires a value}"; shift 2 ;;
-            *) echo "Unknown option for update-body: $1" >&2; exit 2 ;;
+            *) echo "Unknown option for update-body: $1" >&2; return 2 ;;
         esac
     done
 
     if [[ -z "$issue" ]] || [[ -z "$pr_url" ]]; then
         echo "Usage: issue-lifecycle.sh update-body --issue N --pr-url URL" >&2
-        exit 2
+        return 2
     fi
 
     # Read current body
@@ -182,7 +182,7 @@ cmd_update_body() {
     current_body=$(gh issue view "$issue" --json body --jq '.body // ""' 2>/dev/null) || {
         echo "UPDATED=false"
         echo "ERROR=Failed to read issue #$issue body"
-        exit 1
+        return 1
     }
 
     # Idempotency check: skip if PR URL already present
@@ -200,7 +200,7 @@ cmd_update_body() {
     gh issue edit "$issue" --body "$new_body" >/dev/null 2>&1 || {
         echo "UPDATED=false"
         echo "ERROR=Failed to update issue #$issue body"
-        exit 1
+        return 1
     }
 
     echo "UPDATED=true"
