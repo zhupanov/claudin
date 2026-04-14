@@ -55,10 +55,10 @@ Step Name Registry:
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
 ```
-📊 Reviewers: | General: ✅ | Arch: ⏳ | Pragmatic: ✅ | Cursor: ❌ | Codex: ⏳ |
+📊 Reviewers: | General: ✅ 2m31s | Arch: ⏳ | Pragmatic: ✅ 3m5s | Cursor: ❌ | Codex: ⏳ |
 ```
 
-Icons: ✅ done, ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode.
+Icons: ✅ done (with elapsed time), ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time format rules.
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls, per-reviewer individual completion messages.
 

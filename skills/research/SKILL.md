@@ -44,10 +44,10 @@ Step Name Registry:
 **Compact agent status table**: After launching research agents (Step 1) or validation reviewers (Step 2), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
 ```
-📊 Agents: | General: ✅ | Domain: ⏳ | Contrarian: ✅ | Cursor: ❌ | Codex: ⏳ |
+📊 Agents: | General: ✅ 2m31s | Domain: ⏳ | Contrarian: ✅ 3m5s | Cursor: ❌ | Codex: ⏳ |
 ```
 
-Icons: ✅ done, ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode.
+Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time format rules.
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls, per-agent individual completion messages.
 
