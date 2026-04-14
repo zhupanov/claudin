@@ -49,8 +49,8 @@ These invariants are what an editing agent will otherwise get wrong.
 
 ### Path conventions
 
-- Public `skills/*/SKILL.md` **MUST** use `${CLAUDE_PLUGIN_ROOT}/…` — never `$PWD`, `${PWD}`, or hardcoded absolute paths. Enforced by validator 8 in `scripts/validate-plugin-structure.sh`.
-- `hooks/hooks.json` SHOULD also use `${CLAUDE_PLUGIN_ROOT}/…`. **This is a convention, not validator-enforced** — validator 8 only scans `skills/*/SKILL.md`.
+- Public `skills/*/SKILL.md` **MUST** use `${CLAUDE_PLUGIN_ROOT}/…` — never `$PWD`, `${PWD}`, or hardcoded absolute paths. Enforced by claude-lint.
+- `hooks/hooks.json` SHOULD also use `${CLAUDE_PLUGIN_ROOT}/…`.
 - Development-only `.claude/skills/*/SKILL.md` intentionally use `$PWD/…` and are exempt from the hygiene check by design.
 
 ### Version and release
@@ -59,14 +59,14 @@ These invariants are what an editing agent will otherwise get wrong.
 
 ### Scripts and references
 
-- **Dead-script invariant**: every `scripts/*.sh` must have a structured reference somewhere in the repo. The authoritative list of accepted reference patterns (SKILL.md files, `hooks/hooks.json`, `.claude/settings.json`, workflow `run:` blocks, inter-script `$SCRIPT_DIR/` references, and fenced code blocks in `skills/shared/*.md`) is defined by **validator 11** in `scripts/validate-plugin-structure.sh` — consult its header when in doubt.
-- **Script reference integrity** (validator 9): any script path referenced from a `SKILL.md` or `skills/shared/*.md` must exist on disk.
-- **Executability** (validator 10): every `.sh` file under `scripts/`, `skills/*/scripts/`, and `.claude/skills/*/scripts/` must be `chmod +x`.
+- **Dead-script invariant**: every `scripts/*.sh` must have a structured reference somewhere in the repo (SKILL.md files, `hooks/hooks.json`, `.claude/settings.json`, workflow `run:` blocks, inter-script `$SCRIPT_DIR/` references, and fenced code blocks in `skills/shared/*.md`). Enforced by claude-lint.
+- **Script reference integrity**: any script path referenced from a `SKILL.md` or `skills/shared/*.md` must exist on disk.
+- **Executability**: every `.sh` file under `scripts/`, `skills/*/scripts/`, and `.claude/skills/*/scripts/` must be `chmod +x`.
 
 ### SKILL.md and agents
 
-- **Frontmatter** (validator 6): `name:` must equal `basename(dirname)`; `description:` is required.
-- **Agents** (validator 7): every `agents/*.md` must have YAML frontmatter with `name:` and `description:`.
+- **Frontmatter**: `name:` must equal `basename(dirname)`; `description:` is required.
+- **Agents**: every `agents/*.md` must have YAML frontmatter with `name:` and `description:`.
 - **Reviewer archetypes must stay aligned**: `agents/<name>.md` and `skills/shared/reviewer-templates.md` are two sides of the same contract. The shared-templates file is the prompt source; the agent file is the harness registration. Never change one without the other.
 
 ### Linter configuration
@@ -75,7 +75,7 @@ These invariants are what an editing agent will otherwise get wrong.
 
 ### Validation gate
 
-- After any change, run `/relevant-checks`. It runs `pre-commit run --files <changed>` on branch-modified files; if pre-commit passes, it additionally runs `scripts/validate-plugin-structure.sh`. This is a fast local gate — CI's `lint` job runs repo-wide `make lint`, so a local pass does not guarantee CI passes.
+- After any change, run `/relevant-checks`. It runs `pre-commit run --files <changed>` on branch-modified files; if pre-commit passes, it additionally runs `claude-lint`. This is a fast local gate — CI's `lint` job runs repo-wide `make lint`, so a local pass does not guarantee CI passes.
 
 ### Hooks
 
@@ -90,7 +90,7 @@ Use the bare form (matches `README.md`; see each `SKILL.md` for full argument de
 - `/review [--debug]` — code review of current branch with 2 Claude + 2 Codex + Cursor reviewers
 - `/research [--debug] <topic>` — read-only research; 5 researchers + 5 validators, no repo modifications
 - `/loop-review [--debug] [partition]` — systematic repo-wide review, partitioned into slices
-- `/relevant-checks` — pre-commit linters + plugin-structure validator, scoped to changed files
+- `/relevant-checks` — pre-commit linters + claude-lint, scoped to changed files
 - `/fix-issue [--debug] [--issue <number-or-url>]` — process one approved GitHub issue: triage, classify, delegate to `/implement`
 - `/alias <name> <skill> [flags...]` — create a project-level alias skill in `.claude/skills/` that forwards to a larch skill with preset flags
 - `/bump-version` — classify and apply the semver bump (invoked by `/implement` Step 8 and after each rebase in Steps 10/12)
@@ -115,13 +115,12 @@ Read these directly when you need depth — CLAUDE.md deliberately does not dupl
 - `docs/agents.md`, `docs/review-agents.md` — subagent orchestration
 - `docs/external-reviewers.md`, `docs/collaborative-sketches.md` — Codex/Cursor integration
 - `.claude/skills/bump-version/SKILL.md` — authoritative version classification rules
-- `scripts/validate-plugin-structure.sh` — the header comment block is the definitive structural spec (25 validators)
-- `SECURITY.md` — security policy (validated by validator 14; do not delete)
+- `SECURITY.md` — security policy; do not delete
 
 ## Conventions
 
-- **Shell scripts use `set -euo pipefail` by default.** When `-e` is intentionally omitted (e.g., collect-then-report patterns in validators, CI-wait loops), add an inline comment explaining why. See the header of `scripts/validate-plugin-structure.sh` for an example of the rationale.
+- **Shell scripts use `set -euo pipefail` by default.** When `-e` is intentionally omitted (e.g., collect-then-report patterns, CI-wait loops), add an inline comment explaining why.
 - Follow recent history style for commit messages. The string `Bump version to X.Y.Z` is reserved for `/bump-version`.
 - PR creation, Slack posting, and CI polling are automated inside `/implement`. Do not run `gh pr create` manually from inside a workflow — drive it through the skill.
 - Slack env vars (`LARCH_SLACK_BOT_TOKEN`, `LARCH_SLACK_CHANNEL_ID`, `LARCH_SLACK_USER_ID`) are optional; skills degrade gracefully with a warning at session setup when absent. Plugin `userConfig` values (`CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN`, etc.) are also accepted as fallbacks — env vars take precedence.
-- **`SECURITY.md` must not be deleted** — validator 14 enforces its presence. Update it when security-relevant behavior changes (e.g., external tool delegation, token handling).
+- **`SECURITY.md` must not be deleted** — enforced by claude-lint. Update it when security-relevant behavior changes (e.g., external tool delegation, token handling).

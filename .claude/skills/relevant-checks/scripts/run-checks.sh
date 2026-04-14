@@ -16,17 +16,9 @@ REPO_ROOT="$(git rev-parse --show-toplevel)" || { echo "ERROR: not inside a git 
 cd "$REPO_ROOT" || exit 1
 
 # ---------------------------------------------------------------------------
-# Shared post-check function: plugin structure validation + claude-lint
+# Shared post-check function: claude-lint
 # ---------------------------------------------------------------------------
 run_post_checks() {
-    echo ""
-    echo "=== Running plugin structure validation ==="
-    bash "$REPO_ROOT/scripts/validate-plugin-structure.sh"
-    local validator_exit=$?
-    if [ "$validator_exit" -ne 0 ]; then
-        return "$validator_exit"
-    fi
-
     if command -v claude-lint >/dev/null 2>&1; then
         echo ""
         echo "=== Running claude-lint ==="
@@ -84,10 +76,9 @@ done <<< "$MODIFIED_FILES"
 
 # ---------------------------------------------------------------------------
 # If all changes are deletions (files[] empty but MODIFIED_FILES non-empty),
-# pre-commit has nothing to lint, but the plugin structure validator is
-# exactly what we want — deletions are the most likely cause of structural
-# regressions (deleted referenced scripts, removed SKILL.md, etc.). Run the
-# validator before exiting.
+# pre-commit has nothing to lint, but claude-lint is exactly what we want —
+# deletions are the most likely cause of structural regressions (deleted
+# referenced scripts, removed SKILL.md, etc.). Run claude-lint before exiting.
 # ---------------------------------------------------------------------------
 if [ ${#files[@]} -eq 0 ]; then
     echo "No existing modified files to check (all changes are deletions)."
@@ -108,10 +99,10 @@ if [ "$PRE_COMMIT_EXIT" -ne 0 ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Pre-commit succeeded — run plugin structure validation on the full repo.
+# Pre-commit succeeded — run claude-lint on the full repo.
 # This catches structural regressions (frontmatter, references, dead scripts,
 # etc.) that pre-commit's file-type linters cannot detect. Mirrors the same
-# validator invoked by CI's plugin-structure job, so developers can catch
-# regressions locally before pushing.
+# linter invoked by CI's claude-lint job, so developers can catch regressions
+# locally before pushing.
 # ---------------------------------------------------------------------------
 run_post_checks
