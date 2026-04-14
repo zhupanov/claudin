@@ -19,7 +19,7 @@ Review all changes on the current branch (vs `main`) using two specialized Claud
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔶 2: launch reviewers` (standalone) or `🔶 5.2: code review | launch reviewers` (nested from `/implement`)
+- Print a **start line** when entering a step: e.g., `> **🔶 2: launch reviewers**` (standalone) or `> **🔶 5.2: code review | launch reviewers**` (nested from `/implement`)
 - Print a **completion line** only when it carries informational payload. Pure "step complete" announcements without payload are not needed.
 - When `STEP_NUM_PREFIX` is non-empty, prepend it to step numbers. When `STEP_PATH_PREFIX` is non-empty, prepend it to breadcrumb paths. **This rule overrides the literal step numbers and names in `Print:` directives and examples throughout this file.** Examples shown below assume standalone mode; when nested, prepend the parent context.
 

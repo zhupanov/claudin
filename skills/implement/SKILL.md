@@ -24,7 +24,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔶 2: implementation`
+- Print a **start line** when entering a step: e.g., `> **🔶 2: implementation**`
 - Print a **completion line** only when it carries informational payload. Only the final step (Step 18) prints an unconditional completion announcement.
 - For long-running steps, print **intermediate progress**: e.g., `⏳ 12: CI+merge loop — CI running (2m elapsed), main unchanged`
 
@@ -283,7 +283,7 @@ Skip `/review`. Instead, run a simplified one-round review:
 6. **One round only** — no re-review loop.
 7. For rejected findings, write them to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 16 and PR body sections work unchanged.
 
-Print: `🔶 5: code review — quick mode (2 Claude subagents, 1 round, no voting)`
+Print: `> **🔶 5: code review — quick mode (2 Claude subagents, 1 round, no voting)**`
 
 ### Normal mode (`quick_mode=false`)
 
@@ -345,7 +345,7 @@ If successful:
 
 ## Step 7a — Code Flow Diagram
 
-Print: `🔶 7a: code flow`
+Print: `> **🔶 7a: code flow**`
 
 **This step runs unconditionally after Step 7** — regardless of whether Steps 6-7 were skipped due to no review changes.
 

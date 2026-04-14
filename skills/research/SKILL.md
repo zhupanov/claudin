@@ -21,7 +21,7 @@ The research question is described by `RESEARCH_QUESTION` (not raw `$ARGUMENTS`)
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔶 1: research`
+- Print a **start line** when entering a step: e.g., `> **🔶 1: research**`
 - Print a **completion line** when done: e.g., `✅ 1: research — synthesis complete, 5 agents (3m12s)`
 
 Step Name Registry:
@@ -104,7 +104,7 @@ Plus 2 external agents (or Claude replacements):
 4. **Cursor** (if available) — or **Claude (Alternative Perspectives)** replacement: questions assumptions, explores unconventional angles, and surfaces insights that the other agents might overlook
 5. **Codex** (if available) — or **Claude (Edge-cases/Gaps)** replacement: focuses on what might be missing, edge cases, gaps in the codebase, failure modes, and boundary conditions relevant to the research question
 
-Print `🔶 1: research` and proceed to 1.2.
+Print `> **🔶 1: research**` and proceed to 1.2.
 
 ### 1.2 — Launch Research Perspectives in Parallel
 
@@ -182,7 +182,7 @@ Print: `✅ 1: research — synthesis complete, 5 agents (<elapsed>)`
 
 ## Step 2 — Findings Validation
 
-Print: `🔶 2: validation`
+Print: `> **🔶 2: validation**`
 
 **IMPORTANT: Findings validation MUST ALWAYS run with all available reviewers (2 Claude subagents + 2 Codex instances and Cursor if available). Never skip or abbreviate this step regardless of how straightforward the findings appear. Reviewers validate against the actual codebase state, catching inaccuracies or omissions that the research phase may have missed.**
 
@@ -283,7 +283,7 @@ If all reviewers report no issues, print: `✅ 2: validation — all findings va
 
 ## Step 3 — Final Research Report
 
-Print: `🔶 3: report`
+Print: `> **🔶 3: report**`
 
 Print the final research report under a `## Research Report` header with the following structure:
 

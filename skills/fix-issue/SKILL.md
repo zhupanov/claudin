@@ -67,7 +67,7 @@ Only include `--issue "$ISSUE_ARG"` if `ISSUE_ARG` is non-empty (the user provid
 
 Handle exit codes:
 
-- **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `🔶 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE`
+- **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `> **🔶 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE**`
 - **Exit 1**: Print `✅ 1: fetch issue — no approved issues found (<elapsed>)`. Skip to Step 9.
 - **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR (<elapsed>)**`. Skip to Step 9.
 
@@ -95,7 +95,7 @@ Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
 ## Step 4 — Triage
 
-Print `🔶 4: triage`
+Print `> **🔶 4: triage**`
 
 Read the issue details from Step 3. Explore the codebase using Read, Grep, and Glob to determine if the issue is still actual — that is, whether it describes a real problem that still needs fixing.
 
@@ -127,7 +127,7 @@ Check for:
 
 ## Step 5 — Classify Complexity
 
-Print `🔶 5: classify`
+Print `> **🔶 5: classify**`
 
 Based on the issue details and codebase exploration from Step 4, classify the issue:
 
@@ -140,7 +140,7 @@ Print `✅ 5: classify — $CLASSIFICATION (<elapsed>)`
 
 ## Step 6 — Implement
 
-Print `🔶 6: implement`
+Print `> **🔶 6: implement**`
 
 Compose the feature description from the issue content: use the issue title as the primary description, with key details from the issue body and comments as context.
 
@@ -155,7 +155,7 @@ If `/implement` fails or bails, print `**⚠ 6: implement — failed. Issue #$IS
 
 ## Step 7 — Close Issue
 
-Print `🔶 7: close issue`
+Print `> **🔶 7: close issue**`
 
 Update the issue body with PR link and close with DONE comment (single call):
 

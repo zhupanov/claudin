@@ -19,7 +19,7 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `🔶 3: implement/defer — slice: scripts/...`
+- Print a **start line** when entering a step: e.g., `> **🔶 3: implement/defer — slice: scripts/...**`
 - Print a **completion line** when done: e.g., `✅ 3: implement/defer — 3 findings implemented, 1 deferred (5m22s)`
 
 Step Name Registry:
