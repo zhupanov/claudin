@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.11] - 2026-04-13
+## [1.4.0] - 2026-04-13
+
+### Added
+
+- New `/fix-issues` skill that processes one approved GitHub issue per invocation: fetches issues with `GO` sentinel, triages against codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement`
+- Added `claude-lint` to `/relevant-checks` validation pipeline (runs after plugin structure validation when available on PATH)
 
 ### Fixed
 
