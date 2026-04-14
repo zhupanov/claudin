@@ -68,7 +68,7 @@ Only include `--issue "$ISSUE_ARG"` if `ISSUE_ARG` is non-empty (the user provid
 Handle exit codes:
 
 - **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `▸ 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE`
-- **Exit 1**: Print `✅ 1: fetch issue — no approved issues found`. Skip to Step 9.
+- **Exit 1**: Print `✅ 1: fetch issue — no approved issues found (<elapsed>)`. Skip to Step 9.
 - **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR**`. Skip to Step 9.
 
 ## Step 2 — Read Issue Details
@@ -107,9 +107,9 @@ Check for:
      --token "$SLACK_TOKEN" --channel-id "$SLACK_CHANNEL" \
      --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence reason>"
    ```
-4. Print `✅ 3: triage — issue #$ISSUE_NUMBER closed (not material)`. Skip to Step 9.
+4. Print `✅ 3: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 9.
 
-**If the issue is still actual**, print `✅ 3: triage — issue is active, proceeding` and continue.
+**If the issue is still actual**, print `✅ 3: triage — issue is active, proceeding (<elapsed>)` and continue.
 
 ## Step 4 — Lock Issue
 
@@ -120,7 +120,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
 
 Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 4: lock — failed ($ERROR). Another run may have claimed this issue.**` Skip to Step 9.
 
-If `LOCK_ACQUIRED=true`, print `✅ 4: lock — issue #$ISSUE_NUMBER locked`.
+If `LOCK_ACQUIRED=true`, print `✅ 4: lock — issue #$ISSUE_NUMBER locked (<elapsed>)`.
 
 ## Step 5 — Classify Complexity
 
@@ -133,7 +133,7 @@ Based on the issue details and codebase exploration from Step 3, classify the is
 
 **Default to HARD when uncertain.** A HARD classification uses the full `/design` + `/review` pipeline, which is safer for non-trivial changes.
 
-Print `✅ 5: classify — $CLASSIFICATION`
+Print `✅ 5: classify — $CLASSIFICATION (<elapsed>)`
 
 ## Step 6 — Implement
 
@@ -168,7 +168,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
   --issue $ISSUE_NUMBER --comment "DONE"
 ```
 
-Print `✅ 7: close issue — #$ISSUE_NUMBER closed`
+Print `✅ 7: close issue — #$ISSUE_NUMBER closed (<elapsed>)`
 
 ## Step 8 — Slack Announce
 
@@ -182,7 +182,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
 
 If the script exits non-zero, print `**⚠ 8: slack announce — failed. Continuing.**`
 
-Print `✅ 8: slack announce — posted`
+Print `✅ 8: slack announce — posted (<elapsed>)`
 
 ## Step 9 — Cleanup
 
@@ -192,7 +192,7 @@ Print `✅ 8: slack announce — posted`
 ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$FIX_ISSUE_TMPDIR"
 ```
 
-Print `✅ 9: cleanup — fix-issue complete!`
+Print `✅ 9: cleanup — fix-issue complete! (<elapsed>)`
 
 ## Known Limitations
 

@@ -58,7 +58,7 @@ Other status icons (`⏳`, `❌`, `⊘`) do not include timing.
 Use the shortest representation:
 - Under 1 minute: `45s`
 - 1–59 minutes: `2m31s`
-- 1+ hours: `1h3m`
+- 1+ hours: `1h3m` (seconds are always omitted in the hours tier)
 
 Omit zero components: use `2m` not `2m0s`, use `1h` not `1h0m`.
 

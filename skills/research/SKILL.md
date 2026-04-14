@@ -22,7 +22,7 @@ The research question is described by `RESEARCH_QUESTION` (not raw `$ARGUMENTS`)
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
 - Print a **start line** when entering a step: e.g., `▸ 1: research`
-- Print a **completion line** when done: e.g., `✅ 1: research — synthesis complete (5 agents)`
+- Print a **completion line** when done: e.g., `✅ 1: research — synthesis complete, 5 agents (3m12s)`
 
 Step Name Registry:
 | Step | Short Name |
@@ -85,7 +85,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/git-branch-info.sh
 
 Parse the output for `HEAD_SHA` and `CURRENT_BRANCH`. If `CURRENT_BRANCH` is empty (detached HEAD), use `"(detached HEAD)"` in the report.
 
-Print: `✅ 0: setup — researching on branch <CURRENT_BRANCH> at <HEAD_SHA>`
+Print: `✅ 0: setup — researching on branch <CURRENT_BRANCH> at <HEAD_SHA> (<elapsed>)`
 
 ## Step 1 — Collaborative Research Perspectives
 
@@ -178,7 +178,7 @@ Print the synthesis under a `## Research Synthesis` header. Write the synthesis 
 - The branch and commit being researched
 - The synthesized findings
 
-Print: `✅ 1: research — synthesis complete (5 agents)`
+Print: `✅ 1: research — synthesis complete, 5 agents (<elapsed>)`
 
 ## Step 2 — Findings Validation
 
@@ -279,7 +279,7 @@ If any findings were accepted (from Claude subagents, Codex, or Cursor):
 2. Revise the research synthesis to incorporate corrections and additions.
 3. Print the revised synthesis under a `## Revised Research Findings` header.
 
-If all reviewers report no issues, print: `✅ 2: validation — all findings validated, no corrections needed`
+If all reviewers report no issues, print: `✅ 2: validation — all findings validated, no corrections needed (<elapsed>)`
 
 ## Step 3 — Final Research Report
 
@@ -316,7 +316,7 @@ Print the final research report under a `## Research Report` header with the fol
 
 If risk assessment, difficulty estimate, or feasibility verdict are not applicable to the nature of the research question (e.g., a pure "how does X work?" question), mark them as **N/A** with a brief explanation.
 
-Print: `✅ 3: report — complete`
+Print: `✅ 3: report — complete (<elapsed>)`
 
 ## Step 4 — Cleanup and Final Warnings
 
@@ -332,4 +332,4 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$RESEARCH_TMPDIR"
 - `**⚠ Cursor research timed out / produced empty output**`
 - `**⚠ Codex research timed out / produced empty output**`
 
-Print: `✅ 4: cleanup — research complete!`
+Print: `✅ 4: cleanup — research complete! (<elapsed>)`

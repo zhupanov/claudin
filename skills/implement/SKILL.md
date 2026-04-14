@@ -170,7 +170,7 @@ If the script exits non-zero, print: `**⚠ Failed to ensure local main is fresh
 
 If successful:
 - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 1.m: design plan | update main — already at latest` Otherwise, silently continue.
-- Otherwise, print: `✅ 1.m: design plan | update main — rebased onto latest origin/main`
+- Otherwise, print: `✅ 1.m: design plan | update main — rebased onto latest origin/main (<elapsed>)`
 
 ### Quick mode (`quick_mode=true`)
 
@@ -222,7 +222,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 If successful:
 - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 1.r: design plan | rebase — already pushed` Otherwise, silently continue.
 - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 1.r: design plan | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 1.r: design plan | rebase — rebased onto latest main`
+- Otherwise, print: `✅ 1.r: design plan | rebase — rebased onto latest main (<elapsed>)`
 
 ## Step 2 — Implement the Feature
 
@@ -263,7 +263,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 If successful:
 - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 4.r: commit (impl) | rebase — already pushed` Otherwise, silently continue.
 - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 4.r: commit (impl) | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 4.r: commit (impl) | rebase — rebased onto latest main`
+- Otherwise, print: `✅ 4.r: commit (impl) | rebase — rebased onto latest main (<elapsed>)`
 
 ## Step 5 — Code Review
 
@@ -341,7 +341,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 If successful:
 - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 7.r: commit (review) | rebase — already pushed` Otherwise, silently continue.
 - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 7.r: commit (review) | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 7.r: commit (review) | rebase — rebased onto latest main`
+- Otherwise, print: `✅ 7.r: commit (review) | rebase — rebased onto latest main (<elapsed>)`
 
 ## Step 7a — Code Flow Diagram
 
@@ -365,7 +365,7 @@ Print the diagram under a `## Code Flow Diagram` header with a mermaid code fenc
 ```
 ```
 
-**If diagram generation succeeds**, print: `✅ 7a: code flow — diagram generated`
+**If diagram generation succeeds**, print: `✅ 7a: code flow — diagram generated (<elapsed>)`
 
 **If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ 7a: code flow — generation failed, proceeding without diagram**` Log this warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category.
 
@@ -385,7 +385,7 @@ If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to 
 If successful:
 - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 7a.r: code flow | rebase — already pushed` Otherwise, silently continue.
 - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 7a.r: code flow | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 7a.r: code flow | rebase — rebased onto latest main`
+- Otherwise, print: `✅ 7a.r: code flow | rebase — rebased onto latest main (<elapsed>)`
 
 ## Step 8 — Version Bump
 
@@ -443,7 +443,7 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 
    This keeps the bump commit as the single HEAD commit containing both the version bump and the changelog update.
 
-Print: `✅ 8a: changelog — updated for v<NEW_VERSION>`
+Print: `✅ 8a: changelog — updated for v<NEW_VERSION> (<elapsed>)`
 
 ## Step 9 — Create PR
 
@@ -599,7 +599,7 @@ Read the OOS artifact files:
 
 8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as a sentinel for idempotency. Include the `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and all `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE`/`ISSUE_N_DUPLICATE*` lines from the script output.
 
-Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated`
+Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated (<elapsed>)`
 
 ### 9b — Create PR via script
 
@@ -770,9 +770,9 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
 **Execute the action** returned by `ci-wait.sh`:
 
-   - **`ACTION=merge`**: CI passed and branch is up-to-date. Print `✅ 10: CI monitor — CI passed!` and proceed to Step 11. **Do NOT merge here** — Step 12 handles merging.
+   - **`ACTION=merge`**: CI passed and branch is up-to-date. Print `✅ 10: CI monitor — CI passed! (<elapsed>)` and proceed to Step 11. **Do NOT merge here** — Step 12 handles merging.
 
-   - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ 10: CI monitor — PR merged externally` and proceed to Step 11. (Step 12 will detect `already_merged` again and skip the merge loop.)
+   - **`ACTION=already_merged`**: PR was merged externally during CI wait. Print `✅ 10: CI monitor — PR merged externally (<elapsed>)` and proceed to Step 11. (Step 12 will detect `already_merged` again and skip the merge loop.)
 
    - **`ACTION=rebase`**: Main advanced. Invoke the **Rebase + Re-bump Sub-procedure** (defined before this step) with `rebase_already_done=false`, `caller_kind=step10_rebase`. The sub-procedure handles drop-before-rebase, rebase, fast-forward local main, re-bump via `/bump-version`, push with recovery, and PR body refresh. On sub-procedure success, counter updates and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On sub-procedure failure (rebase conflict, re-bump failure, or push failure), the sub-procedure logs a warning and breaks out of Step 10 to Step 11 — it does NOT bail to 12d (Step 12 will re-run the sub-procedure under strict semantics).
 
@@ -861,9 +861,9 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
 
    - **`ACTION=rebase`**: Print a context-specific message based on `CI_STATUS`: if `CI_STATUS=pass`, print `🔃 12: CI+merge loop — CI passed, main advanced, rebasing + re-bumping`; if `CI_STATUS=pending`, print `🔃 12: CI+merge loop — main advanced, rebasing + re-bumping` → invoke the **Rebase + Re-bump Sub-procedure** (defined before Step 10) with `rebase_already_done=false`, `caller_kind=step12_rebase`. The sub-procedure handles drop-before-rebase, rebase (with Phase 1–4 fallback on conflict), fast-forward local main, `/bump-version`, push with recovery, and PR body refresh. On successful return, counter updates (`rebase_count`, `iteration`, `transient_retries` reset) and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On hard failure, the sub-procedure bails to 12d directly.
 
-   - **`ACTION=merge`**: Print `✅ 12: CI+merge loop — CI passed, main up-to-date, merging!` → proceed to **12b**.
+   - **`ACTION=merge`**: Print `✅ 12: CI+merge loop — CI passed, main up-to-date, merging! (<elapsed>)` → proceed to **12b**.
 
-   - **`ACTION=already_merged`**: Print `✅ PR was force-merged externally — skipping CI wait and merge.` → skip **12b** (no merge needed) and proceed directly to Step 13. The PR counts as successfully merged for Steps 13–15.
+   - **`ACTION=already_merged`**: Print `✅ PR was force-merged externally — skipping CI wait and merge. (<elapsed>)` → skip **12b** (no merge needed) and proceed directly to Step 13. The PR counts as successfully merged for Steps 13–15.
 
    - **`ACTION=rebase_then_evaluate`**: Invoke the **Rebase + Re-bump Sub-procedure** with `rebase_already_done=false`, `caller_kind=step12_rebase_then_evaluate`. On successful return (counter updates already done inside the sub-procedure), **fall through to 12c** to evaluate the CI failure. Do NOT re-invoke `ci-wait.sh` from the caller — the sub-procedure's `caller_kind=step12_rebase_then_evaluate` branch skips the re-invocation for this path. On hard failure, the sub-procedure bails to 12d.
 
@@ -976,8 +976,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/merge-pr.sh --pr <PR-NUMBER> --repo $REPO
 
 Parse the output for `MERGE_RESULT` and `ERROR`. Handle each result:
 
-- **`MERGE_RESULT=merged`**: Print `✅ 12: CI+merge loop — PR #<NUMBER> merged!` and continue.
-- **`MERGE_RESULT=admin_merged`**: Print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged!` and continue.
+- **`MERGE_RESULT=merged`**: Print `✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)` and continue.
+- **`MERGE_RESULT=admin_merged`**: Print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)` and continue.
 - **`MERGE_RESULT=main_advanced`**: Go back to **12a** (the next iteration will detect the branch is behind and rebase).
 - **`MERGE_RESULT=ci_not_ready`**: Go back to **12a** (CI may need more time or a rerun).
 - **`MERGE_RESULT=admin_failed`**: Bail out (Step 12d) with the `ERROR` message.
@@ -1047,7 +1047,7 @@ Switch back to main, pull the merged changes, and delete the development branch:
 ${CLAUDE_PLUGIN_ROOT}/scripts/local-cleanup.sh --branch "$BRANCH_NAME"
 ```
 
-Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `✅ 14: local cleanup — switched to main, deleted $BRANCH_NAME`. If `CLEANUP_SUCCESS=false`, print: `**⚠ 14: local cleanup — partially failed, branch: <CURRENT_BRANCH>, deleted: <BRANCH_DELETED>**`
+Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `✅ 14: local cleanup — switched to main, deleted $BRANCH_NAME (<elapsed>)`. If `CLEANUP_SUCCESS=false`, print: `**⚠ 14: local cleanup — partially failed, branch: <CURRENT_BRANCH>, deleted: <BRANCH_DELETED>**`
 
 **If Step 12 bailed out (PR was NOT merged)**:
 
@@ -1071,7 +1071,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/verify-main.sh --expected-title "<PR_TITLE> (#<PR_
 
 Parse the output for `VERIFIED`, `COMMIT_HASH`, and `COMMIT_MESSAGE`. Print the result:
 
-- If `VERIFIED=true`: `✅ 15: verify main — at <COMMIT_HASH> "<COMMIT_MESSAGE>"`
+- If `VERIFIED=true`: `✅ 15: verify main — at <COMMIT_HASH> "<COMMIT_MESSAGE>" (<elapsed>)`
 - If `VERIFIED=false`: `**⚠ 15: verify main — unexpected HEAD: <COMMIT_HASH> "<COMMIT_MESSAGE>". Expected: "<PR_TITLE> (#<PR_NUMBER>)"**`
 
 ## Step 16 — Rejected Code Review Findings Report
@@ -1080,17 +1080,17 @@ Print a report of all code review suggestions that were **not** implemented.
 
 1. Check if `$IMPLEMENT_TMPDIR/rejected-findings.md` exists and is non-empty.
 2. If it has content, print it under a `## Unimplemented Code Review Suggestions` header, formatted clearly with the reviewer name, the suggestion, and the reason for each.
-3. If the file doesn't exist or is empty, print: `✅ 16: rejected findings — all suggestions implemented`
+3. If the file doesn't exist or is empty, print: `✅ 16: rejected findings — all suggestions implemented (<elapsed>)`
 
 ## Step 17 — Final Report
 
-**If `quick_mode=true`**: Print: `✅ 17: final report — quick mode (/design skipped, 2 subagent review)`
+**If `quick_mode=true`**: Print: `✅ 17: final report — quick mode, /design skipped, 2 subagent review (<elapsed>)`
 
 **If `quick_mode=false`**: Print a summary noting that:
 - Plan review findings were reported by the `/design` phase (visible in conversation above)
 - Code review findings were reported by the `/review` phase (visible in conversation above)
 
-If both phases reported all suggestions implemented, print: `✅ 17: final report — all suggestions implemented (plan + code review)`
+If both phases reported all suggestions implemented, print: `✅ 17: final report — all suggestions implemented, plan + code review (<elapsed>)`
 
 ## Step 18 — Cleanup and Final Warnings
 
@@ -1106,4 +1106,4 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 
 If `merge=false`, remind: `**Note: --merge was not set. PR was created but not merged. Merge manually when ready.**`
 
-Print: `✅ 18: cleanup — implement complete!`
+Print: `✅ 18: cleanup — implement complete! (<elapsed>)`
