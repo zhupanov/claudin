@@ -67,7 +67,7 @@ Only include `--issue "$ISSUE_ARG"` if `ISSUE_ARG` is non-empty (the user provid
 
 Handle exit codes:
 
-- **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `▸ 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE`
+- **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `▶ 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE`
 - **Exit 1**: Print `✅ 1: fetch issue — no approved issues found (<elapsed>)`. Skip to Step 9.
 - **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR**`. Skip to Step 9.
 
@@ -82,7 +82,7 @@ Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
 ## Step 3 — Triage
 
-Print `▸ 3: triage`
+Print `▶ 3: triage`
 
 Read the issue details from Step 2. Explore the codebase using Read, Grep, and Glob to determine if the issue is still actual — that is, whether it describes a real problem that still needs fixing.
 
@@ -124,7 +124,7 @@ If `LOCK_ACQUIRED=true`, print `✅ 4: lock — issue #$ISSUE_NUMBER locked (<el
 
 ## Step 5 — Classify Complexity
 
-Print `▸ 5: classify`
+Print `▶ 5: classify`
 
 Based on the issue details and codebase exploration from Step 3, classify the issue:
 
@@ -137,7 +137,7 @@ Print `✅ 5: classify — $CLASSIFICATION (<elapsed>)`
 
 ## Step 6 — Implement
 
-Print `▸ 6: implement`
+Print `▶ 6: implement`
 
 Compose the feature description from the issue content: use the issue title as the primary description, with key details from the issue body and comments as context.
 
@@ -152,7 +152,7 @@ If `/implement` fails or bails, print `**⚠ 6: implement — failed. Issue #$IS
 
 ## Step 7 — Close Issue
 
-Print `▸ 7: close issue`
+Print `▶ 7: close issue`
 
 Update the issue body with PR link (idempotent):
 
@@ -172,7 +172,7 @@ Print `✅ 7: close issue — #$ISSUE_NUMBER closed (<elapsed>)`
 
 ## Step 8 — Slack Announce
 
-If `slack_available=false`, print `⏭️ 8: slack announce — skipped (Slack not configured)` and proceed to Step 9.
+If `slack_available=false`, print `⏭️ 8: slack announce — skipped (Slack not configured) (<elapsed>)` and proceed to Step 9.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \

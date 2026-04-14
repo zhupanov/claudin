@@ -24,7 +24,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `▸ 2: implementation`
+- Print a **start line** when entering a step: e.g., `▶ 2: implementation`
 - Print a **completion line** only when it carries informational payload. Only the final step (Step 18) prints an unconditional completion announcement.
 - For long-running steps, print **intermediate progress**: e.g., `⏳ 12: CI+merge loop — CI running (2m elapsed), main unchanged`
 
@@ -67,7 +67,7 @@ Step Name Registry:
 - Use terse 3-5 word descriptions for Agent tool calls.
 - Do not produce explanatory prose between tool call outputs — only print the designated output categories below.
 
-**Preserved output (NEVER suppressed, regardless of `debug_mode`):** step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`/`⏭️`) — except the three rebase-skip variants listed in Suppressed output below, final completion line (Step 18), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, competition scoreboards, round summaries, final summaries/reports), architecture diagrams, code flow diagrams, implementation plans (original and revised), dialectic resolutions, accepted/rejected findings lists, out-of-scope observations, PR body sections.
+**Preserved output (NEVER suppressed, regardless of `debug_mode`):** step breadcrumb lines (start `▶`, completion `✅`, skip `⏩`/`⏭️`) — except the three rebase-skip variants listed in Suppressed output below, final completion line (Step 18), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, competition scoreboards, round summaries, final summaries/reports), architecture diagrams, code flow diagrams, implementation plans (original and revised), dialectic resolutions, accepted/rejected findings lists, out-of-scope observations, PR body sections.
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose describing what will happen next or what just happened, script paths and command descriptions, rationale for decisions between tool calls, per-reviewer individual completion messages (replaced by status table in child skills), rebase-skip messages (the following three specific variants: `⏩ 1.m: design plan | update main — already at latest`, `⏩ 1.r: design plan | rebase — already pushed`, `⏩ 1.r: design plan | rebase — already at latest main`). Note: non-rebase `⏩` skip messages and rebase outcomes in the Rebase+Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
 
@@ -283,7 +283,7 @@ Skip `/review`. Instead, run a simplified one-round review:
 6. **One round only** — no re-review loop.
 7. For rejected findings, write them to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the same format as normal mode (see below), so Step 16 and PR body sections work unchanged.
 
-Print: `▸ 5: code review — quick mode (2 Claude subagents, 1 round, no voting)`
+Print: `▶ 5: code review — quick mode (2 Claude subagents, 1 round, no voting)`
 
 ### Normal mode (`quick_mode=false`)
 
@@ -311,7 +311,7 @@ After the code review completes (whether `/review` in normal mode or the simplif
 ${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh
 ```
 
-Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ 6: checks (2) — skipped, no review changes` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
+Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ 6: checks (2) — skipped, no review changes (<elapsed>)` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
 
 If files **did change**, invoke `/relevant-checks` to ensure review fixes didn't introduce new issues. If checks fail, diagnose and fix, then re-invoke `/relevant-checks`.
 
@@ -345,11 +345,11 @@ If successful:
 
 ## Step 7a — Code Flow Diagram
 
-Print: `▸ 7a: code flow`
+Print: `▶ 7a: code flow`
 
 **This step runs unconditionally after Step 7** — regardless of whether Steps 6-7 were skipped due to no review changes.
 
-**If `quick_mode=true`**: Print `⏩ 7a: code flow — skipped (quick mode)` and proceed to Step 8.
+**If `quick_mode=true`**: Print `⏩ 7a: code flow — skipped (quick mode) (<elapsed>)` and proceed to Step 8.
 
 **If `quick_mode=false`**: Generate a mermaid Code Flow Diagram based on the actual committed implementation. The diagram should focus on **runtime behavior** — function call sequences, data flow, or control flow through the implemented code paths. Do NOT duplicate the Architecture Diagram's structural/component view.
 
@@ -413,8 +413,8 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 ## Step 8a — CHANGELOG Update
 
 **Conditional**: Skip Step 8a entirely and proceed to Step 9 if either condition is true:
-- `CHANGELOG.md` does not exist in the project root (check via the Read tool — if Read returns an error, the file does not exist). Print `⏩ 8a: changelog — skipped (no CHANGELOG.md)`
-- Step 8 was skipped (`HAS_BUMP=false`). Print `⏩ 8a: changelog — skipped (no version bump)`
+- `CHANGELOG.md` does not exist in the project root (check via the Read tool — if Read returns an error, the file does not exist). Print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`
+- Step 8 was skipped (`HAS_BUMP=false`). Print `⏩ 8a: changelog — skipped (no version bump) (<elapsed>)`
 
 **If `CHANGELOG.md` exists AND Step 8 produced a version bump**:
 
@@ -572,15 +572,15 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 
 ### 9a.1 — Create OOS GitHub Issues
 
-**If `quick_mode=true`**: Print `⏩ 9a.1: OOS issues — skipped (quick mode)` and proceed to Step 9b.
+**If `quick_mode=true`**: Print `⏩ 9a.1: OOS issues — skipped (quick mode) (<elapsed>)` and proceed to Step 9b.
 
-**If `repo_unavailable=true`**: Print `⏩ 9a.1: OOS issues — skipped (repo unavailable)` and proceed to Step 9b. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`.
+**If `repo_unavailable=true`**: Print `⏩ 9a.1: OOS issues — skipped (repo unavailable) (<elapsed>)` and proceed to Step 9b. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`.
 
 Read the OOS artifact files:
 - `$IMPLEMENT_TMPDIR/oos-accepted-design.md` (from `/design` plan review)
 - `$IMPLEMENT_TMPDIR/oos-accepted-review.md` (from `/review` code review)
 
-**If neither file exists or both are empty**: Print `⏩ 9a.1: OOS issues — no accepted OOS items` and proceed to Step 9b.
+**If neither file exists or both are empty**: Print `⏩ 9a.1: OOS issues — no accepted OOS items (<elapsed>)` and proceed to Step 9b.
 
 **If at least one file has content**:
 
@@ -745,7 +745,7 @@ Phase 4 enters the sub-procedure AFTER `rebase-push.sh --continue` has already p
 
 ## Step 10 — CI Monitor (initial wait for green)
 
-**If `repo_unavailable=true`**: Print `⏭️ 10: CI monitor — skipped (repo unavailable)` and proceed to Step 11.
+**If `repo_unavailable=true`**: Print `⏭️ 10: CI monitor — skipped (repo unavailable) (<elapsed>)` and proceed to Step 11.
 
 Wait for CI to go green so the Slack announcement (Step 11) links to a PR with passing CI. This step does **NOT merge** — Step 12 is the merge-aware loop that handles main advancement and merging.
 
@@ -790,9 +790,9 @@ After handling any non-terminal/non-rebase action (e.g., `evaluate_failure`), **
 
 ## Step 11 — Post Slack Announcement
 
-**If `slack_available=false`**: Print `⏭️ 11: slack announce — skipped (Slack not configured)` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
+**If `slack_available=false`**: Print `⏭️ 11: slack announce — skipped (Slack not configured) (<elapsed>)` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
 
-**If `PR_STATUS=existing`**: Print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually)` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
+**If `PR_STATUS=existing`**: Print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually) (<elapsed>)` Set `SLACK_TS` to empty and proceed to the post-execution PR body refresh below.
 
 **Otherwise** (`slack_available=true` and `PR_STATUS=created`):
 
@@ -830,9 +830,9 @@ If `execution-issues.md` does not exist or is empty, skip this refresh.
 
 ## Step 12 — CI + Rebase + Merge Loop
 
-**If `merge=false`**: Print `⏭️ 12: CI+merge loop — skipped (--merge not set)` and skip to Step 16.
+**If `merge=false`**: Print `⏭️ 12: CI+merge loop — skipped (--merge not set) (<elapsed>)` and skip to Step 16.
 
-**If `repo_unavailable=true`**: Print `⏭️ 12: CI+merge loop — skipped (repo unavailable)` and skip to Step 16.
+**If `repo_unavailable=true`**: Print `⏭️ 12: CI+merge loop — skipped (repo unavailable) (<elapsed>)` and skip to Step 16.
 
 Monitor CI and the main branch **in parallel**. The key optimization: don't wait for CI to finish before checking if main has advanced.
 
@@ -1021,7 +1021,7 @@ When bailing out:
 
 **If `merge=false`**: Skip this step.
 
-**If `slack_available=false`**: Print `⏭️ 13: merged emoji — skipped (Slack not configured)` and proceed to Step 14.
+**If `slack_available=false`**: Print `⏭️ 13: merged emoji — skipped (Slack not configured) (<elapsed>)` and proceed to Step 14.
 
 **Only if the PR was successfully merged in Step 12b or force-merged externally** (not bailed in 12d).
 
@@ -1037,7 +1037,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/post-merged-emoji.sh --slack-ts "$SLACK_TS"
 
 ## Step 14 — Local Cleanup
 
-**If `merge=false`**: Print `⏭️ 14: local cleanup — skipped (--merge not set), still on $BRANCH_NAME` and skip to Step 16.
+**If `merge=false`**: Print `⏭️ 14: local cleanup — skipped (--merge not set), still on $BRANCH_NAME (<elapsed>)` and skip to Step 16.
 
 **If the PR was successfully merged (Step 12b or force-merged externally)**:
 

@@ -19,7 +19,7 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `▸ 3: implement/defer — slice: scripts/...`
+- Print a **start line** when entering a step: e.g., `▶ 3: implement/defer — slice: scripts/...`
 - Print a **completion line** when done: e.g., `✅ 3: implement/defer — 3 findings implemented, 1 deferred (5m22s)`
 
 Step Name Registry:
@@ -39,7 +39,7 @@ Step Name Registry:
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (slice results, findings lists, deferred items, final report).
+- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▶`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (slice results, findings lists, deferred items, final report).
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls.
 

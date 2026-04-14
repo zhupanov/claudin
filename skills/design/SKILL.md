@@ -23,7 +23,7 @@ The feature to design is described by the remainder of `$ARGUMENTS` after flags 
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `▸ 1: branch` (standalone) or `▸ 1.1: design plan | branch` (nested from `/implement`)
+- Print a **start line** when entering a step: e.g., `▶ 1: branch` (standalone) or `▶ 1.1: design plan | branch` (nested from `/implement`)
 - Print a **completion line** only when it carries informational payload. Only the final step (Step 5) prints an unconditional completion announcement.
 - When `STEP_NUM_PREFIX` is non-empty, prepend it to step numbers: `{STEP_NUM_PREFIX}{local_step}`. When `STEP_PATH_PREFIX` is non-empty, prepend it to breadcrumb paths: `{STEP_PATH_PREFIX} | {step_short_name}`. **This rule overrides the literal step numbers and names in `Print:` directives and examples throughout this file.** Examples shown below assume standalone mode; when nested, prepend the parent context.
 
@@ -50,15 +50,15 @@ Step Name Registry:
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▸`, completion `✅`, skip `⏩`), final completion line (Step 5), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
+- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `▶`, completion `✅`, skip `⏩`), final completion line (Step 5), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
 
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
 ```
-📊 Reviewers: | General: ✅ 2m31s | Arch: ⏳ | Pragmatic: ✅ 3m5s | Cursor: ❌ | Codex: ⏳ |
+📊 Reviewers: | General: ✅ 2m31s | Arch: ⏳ | Pragmatic: ✅ 3m5s | Cursor: ❌ 8m3s | Codex: ⏳ |
 ```
 
-Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time format rules.
+Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout (with elapsed time since launch), ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time and step start formatting rules.
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls, per-reviewer individual completion messages.
 
@@ -110,13 +110,13 @@ Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PR
   ${CLAUDE_PLUGIN_ROOT}/scripts/create-branch.sh --branch <USER_PREFIX>/<branch-name>
   ```
 
-- If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch as above. Otherwise, skip branch creation. Print: `▸ 1: branch — using existing: <branch-name>`
+- If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch as above. Otherwise, skip branch creation. Print: `▶ 1: branch — using existing: <branch-name>`
 
 - Otherwise (non-main, non-user branch): Print a warning: `**⚠ Currently on branch '<branch-name>' which doesn't match the expected '<USER_PREFIX>/*' pattern. Creating a new branch from main.**` Then derive a name and create as above.
 
 ## Step 1c — Clarifying Questions
 
-Print: `▸ 1c: questions`
+Print: `▶ 1c: questions`
 
 **If `auto_mode=true`**: Print `⏩ 1c: questions — skipped (auto mode)` and proceed to Step 1d.
 
@@ -136,7 +136,7 @@ After the user responds, incorporate their answers into your understanding of th
 
 ## Step 1d — Design Discussion (Round 1)
 
-Print: `▸ 1d: discussion r1`
+Print: `▶ 1d: discussion r1`
 
 **If `auto_mode=true`**: Print `⏩ 1d: discussion r1 — skipped (auto mode)` and proceed to Step 2a.
 
@@ -198,7 +198,7 @@ Plus 2 external agents (or Claude replacements):
 4. **Cursor** (if available) — or **Claude (Innovation/Exploration)** replacement: proposes creative alternative approaches, questions assumptions, and suggests unconventional solutions
 5. **Codex** (if available) — or **Claude (Edge-cases/Failure-modes)** replacement: focuses on what can go wrong, boundary conditions, error handling, and failure recovery
 
-Print `▸ 2a: sketches` and proceed to 2a.2.
+Print `▶ 2a: sketches` and proceed to 2a.2.
 
 ### 2a.2 — Launch Sketches in Parallel
 
@@ -285,7 +285,7 @@ Print the synthesis under an `## Approach Synthesis` header. Write the synthesis
 
 ### 2a.5 — Dialectic Resolution of Contested Decisions
 
-Print: `▸ 2a.5: dialectic`
+Print: `▶ 2a.5: dialectic`
 
 Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions` and proceed to Step 2b.
 
@@ -517,7 +517,7 @@ If no findings were rejected, do not create the file yet.
 
 ## Step 3.5 — Design Discussion (Round 2)
 
-Print: `▸ 3.5: discussion r2`
+Print: `▶ 3.5: discussion r2`
 
 **If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode)` and proceed to Step 3a.
 
@@ -573,7 +573,7 @@ Print: `✅ 3.5: discussion r2 — <N> decisions resolved (<elapsed>)`
 
 ## Step 3a — Post-Review Confirmation
 
-Print: `▸ 3a: confirmation`
+Print: `▶ 3a: confirmation`
 
 **If `auto_mode=true`**: Print `⏩ 3a: confirmation — skipped (auto mode)` and proceed to Step 3b.
 
@@ -585,7 +585,7 @@ Print: `▸ 3a: confirmation`
 
 ## Step 3b — Architecture Diagram
 
-Print: `▸ 3b: arch diagram`
+Print: `▶ 3b: arch diagram`
 
 **This step runs on ALL paths through Step 3** — whether voting produced revisions, rejected all findings, or was skipped entirely because all reviewers reported no issues. It always executes before Step 4.
 
