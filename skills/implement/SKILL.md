@@ -367,7 +367,7 @@ Print the diagram under a `## Code Flow Diagram` header with a mermaid code fenc
 
 **If diagram generation succeeds**, print: `✅ 7a: code flow — diagram generated (<elapsed>)`
 
-**If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ 7a: code flow — generation failed, proceeding without diagram**` Log this warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category.
+**If diagram generation fails** (e.g., the implementation is too abstract to diagram meaningfully), print: `**⚠ 7a: code flow — generation failed, proceeding without diagram (<elapsed>)**` Log this warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category.
 
 ### Rebase onto latest main (before version bump)
 
@@ -782,7 +782,7 @@ Parse the output for: `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `B
      1. **Transient failure** (runner provisioning, Docker pull rate limit, "hosted runner lost communication", etc.): If `transient_retries < 2`, run `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 60`, then run `${CLAUDE_PLUGIN_ROOT}/scripts/ci-rerun-failed.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Parse output for `RERUN_SUBMITTED` and `ERROR`. If `RERUN_SUBMITTED=false`, print the `ERROR` and treat as a real CI failure (fall through to diagnosis). Otherwise increment `transient_retries`, re-invoke `ci-wait.sh`. If `transient_retries >= 2`, treat as real failure.
      2. **Real CI failure**: Run `${CLAUDE_PLUGIN_ROOT}/scripts/gh-run-logs.sh --run-id <FAILED_RUN_ID> --repo $REPO`. Diagnose the issue, fix it, run `/relevant-checks`, stage and commit using `${CLAUDE_PLUGIN_ROOT}/scripts/git-commit.sh -m "Fix CI failure" <fixed-files>`, push. Increment `fix_attempts`. Re-invoke `ci-wait.sh`.
 
-   - **`ACTION=bail`**: Print `BAIL_REASON`. Print `**⚠ 10: CI monitor — bailed, PR may have failing CI**` and proceed to Step 11.
+   - **`ACTION=bail`**: Print `BAIL_REASON`. Print `**⚠ 10: CI monitor — bailed, PR may have failing CI (<elapsed>)**` and proceed to Step 11.
 
 **Execution issues**: Log any CI failures, transient retries, or bail events to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `CI Issues` category.
 
@@ -1047,13 +1047,13 @@ Switch back to main, pull the merged changes, and delete the development branch:
 ${CLAUDE_PLUGIN_ROOT}/scripts/local-cleanup.sh --branch "$BRANCH_NAME"
 ```
 
-Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `✅ 14: local cleanup — switched to main, deleted $BRANCH_NAME (<elapsed>)`. If `CLEANUP_SUCCESS=false`, print: `**⚠ 14: local cleanup — partially failed, branch: <CURRENT_BRANCH>, deleted: <BRANCH_DELETED>**`
+Parse the output for `CLEANUP_SUCCESS`, `CURRENT_BRANCH`, and `BRANCH_DELETED`. If `CLEANUP_SUCCESS=true`, print: `✅ 14: local cleanup — switched to main, deleted $BRANCH_NAME (<elapsed>)`. If `CLEANUP_SUCCESS=false`, print: `**⚠ 14: local cleanup — partially failed, branch: <CURRENT_BRANCH>, deleted: <BRANCH_DELETED> (<elapsed>)**`
 
 **If Step 12 bailed out (PR was NOT merged)**:
 
 Do NOT switch branches or delete the local branch. The user will need the branch to continue manually.
 
-Print: `⚠ 14: local cleanup — skipped (PR not merged), still on $BRANCH_NAME`
+Print: `**⚠ 14: local cleanup — skipped (PR not merged), still on $BRANCH_NAME (<elapsed>)**`
 
 `$BRANCH_NAME` is the variable captured at the end of Step 1 (after branch resolution by `/design` or quick-mode branch creation).
 
@@ -1072,7 +1072,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/verify-main.sh --expected-title "<PR_TITLE> (#<PR_
 Parse the output for `VERIFIED`, `COMMIT_HASH`, and `COMMIT_MESSAGE`. Print the result:
 
 - If `VERIFIED=true`: `✅ 15: verify main — at <COMMIT_HASH> "<COMMIT_MESSAGE>" (<elapsed>)`
-- If `VERIFIED=false`: `**⚠ 15: verify main — unexpected HEAD: <COMMIT_HASH> "<COMMIT_MESSAGE>". Expected: "<PR_TITLE> (#<PR_NUMBER>)"**`
+- If `VERIFIED=false`: `**⚠ 15: verify main — unexpected HEAD: <COMMIT_HASH> "<COMMIT_MESSAGE>". Expected: "<PR_TITLE> (#<PR_NUMBER>)" (<elapsed>)**`
 
 ## Step 16 — Rejected Code Review Findings Report
 

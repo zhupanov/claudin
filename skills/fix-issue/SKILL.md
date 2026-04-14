@@ -69,7 +69,7 @@ Handle exit codes:
 
 - **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `▶ 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE`
 - **Exit 1**: Print `✅ 1: fetch issue — no approved issues found (<elapsed>)`. Skip to Step 9.
-- **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR**`. Skip to Step 9.
+- **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR (<elapsed>)**`. Skip to Step 9.
 
 ## Step 2 — Read Issue Details
 
@@ -118,7 +118,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
   --issue $ISSUE_NUMBER --body "IN PROGRESS" --lock
 ```
 
-Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 4: lock — failed ($ERROR). Another run may have claimed this issue.**` Skip to Step 9.
+Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 4: lock — failed ($ERROR). Another run may have claimed this issue. (<elapsed>)**` Skip to Step 9.
 
 If `LOCK_ACQUIRED=true`, print `✅ 4: lock — issue #$ISSUE_NUMBER locked (<elapsed>)`.
 
@@ -148,7 +148,7 @@ Invoke `/implement` via the Skill tool:
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
-If `/implement` fails or bails, print `**⚠ 6: implement — failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS.**` Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
+If `/implement` fails or bails, print `**⚠ 6: implement — failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
 
 ## Step 7 — Close Issue
 

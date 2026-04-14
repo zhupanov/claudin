@@ -118,7 +118,7 @@ Parse the output for `CURRENT_BRANCH`, `IS_MAIN`, `IS_USER_BRANCH`, and `USER_PR
 
 Print: `▶ 1c: questions`
 
-**If `auto_mode=true`**: Print `⏩ 1c: questions — skipped (auto mode)` and proceed to Step 1d.
+**If `auto_mode=true`**: Print `⏩ 1c: questions — skipped (auto mode) (<elapsed>)` and proceed to Step 1d.
 
 **If `auto_mode=false`**: Before launching the expensive collaborative sketch phase, use `AskUserQuestion` to clarify any ambiguities in the feature description. This is the highest-value question point — answers here reshape what the sketch agents explore.
 
@@ -138,7 +138,7 @@ After the user responds, incorporate their answers into your understanding of th
 
 Print: `▶ 1d: discussion r1`
 
-**If `auto_mode=true`**: Print `⏩ 1d: discussion r1 — skipped (auto mode)` and proceed to Step 2a.
+**If `auto_mode=true`**: Print `⏩ 1d: discussion r1 — skipped (auto mode) (<elapsed>)` and proceed to Step 2a.
 
 **If `auto_mode=false`**: Before launching the expensive collaborative sketch phase, stress-test the feature's scope and requirements by walking through the decision tree one question at a time. This is a deeper, sequential interrogation that resolves dependencies between decisions — each answer may reshape subsequent questions.
 
@@ -156,7 +156,7 @@ Then walk each branch one question at a time via sequential `AskUserQuestion` ca
 
 ### Short-circuit
 
-If the feature is straightforward with fewer than 2 scope decision branches, print `⏩ 1d: discussion r1 — no scope decisions require discussion` and proceed to Step 2a.
+If the feature is straightforward with fewer than 2 scope decision branches, print `⏩ 1d: discussion r1 — no scope decisions require discussion (<elapsed>)` and proceed to Step 2a.
 
 ### Output
 
@@ -287,7 +287,7 @@ Print the synthesis under an `## Approach Synthesis` header. Write the synthesis
 
 Print: `▶ 2a.5: dialectic`
 
-Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions` and proceed to Step 2b.
+Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions (<elapsed>)` and proceed to Step 2b.
 
 Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNTHESIS_TEXT}` for the agent prompts below. Select up to the first 3 decisions from the file (they are already in priority order from Step 2a.4). For each selected decision, launch a **thesis agent** and an **antithesis agent** as Claude subagents via the Agent tool. **All thesis+antithesis pairs across all decisions must be issued in a single Agent fan-out message** (up to 6 Agent tool calls in one message) to maximize parallelism.
 
@@ -519,7 +519,7 @@ If no findings were rejected, do not create the file yet.
 
 Print: `▶ 3.5: discussion r2`
 
-**If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode)` and proceed to Step 3a.
+**If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode) (<elapsed>)` and proceed to Step 3a.
 
 **If `auto_mode=false`**: After the plan has been reviewed and revised, stress-test the remaining design decisions that were either (a) not covered in Round 1, or (b) deemed suboptimal by reviewers, or (c) introduced by the plan itself (decisions that didn't exist at the feature-description stage).
 
@@ -546,7 +546,7 @@ Unlike Round 1, Round 2 MAY ask about architectural decisions and implementation
 
 ### Short-circuit
 
-If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ 3.5: discussion r2 — no additional decisions require discussion` and proceed to Step 3a.
+If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ 3.5: discussion r2 — no additional decisions require discussion (<elapsed>)` and proceed to Step 3a.
 
 ### Output
 
@@ -575,9 +575,9 @@ Print: `✅ 3.5: discussion r2 — <N> decisions resolved (<elapsed>)`
 
 Print: `▶ 3a: confirmation`
 
-**If `auto_mode=true`**: Print `⏩ 3a: confirmation — skipped (auto mode)` and proceed to Step 3b.
+**If `auto_mode=true`**: Print `⏩ 3a: confirmation — skipped (auto mode) (<elapsed>)` and proceed to Step 3b.
 
-**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ 3a: confirmation — skipped (plan unchanged)` and proceed to Step 3b.
+**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ 3a: confirmation — skipped (plan unchanged) (<elapsed>)` and proceed to Step 3b.
 
 **If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 discussion): Use `AskUserQuestion` to confirm the revised plan addresses the user's original intent. Present a brief summary of what changed and ask the user to approve or reject.
 
@@ -605,7 +605,7 @@ Print the diagram under a `## Architecture Diagram` header with a mermaid code f
 
 **If diagram generation succeeds**, print: `✅ 3b: arch diagram — generated (<elapsed>)`
 
-**If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ 3b: arch diagram — generation failed, proceeding without diagram**`
+**If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ 3b: arch diagram — generation failed, proceeding without diagram (<elapsed>)**`
 
 ## Step 4 — Rejected Plan Review Findings Report
 
@@ -634,7 +634,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
 - `**⚠ Cursor review failed: <reason>**`
 - `**⚠ Cursor sketch timed out / produced empty output**`
 - `**⚠ Codex sketch timed out / produced empty output**`
-- `**⚠ 3b: arch diagram — generation failed, proceeding without diagram**`
+- `**⚠ 3b: arch diagram — generation failed, proceeding without diagram (<elapsed>)**`
 
 If `STEP_NUM_PREFIX` is empty (standalone mode): Print: `✅ 5: cleanup — design complete! (<elapsed>)`
 If `STEP_NUM_PREFIX` is non-empty (orchestrated mode): skip this final print — the parent orchestrator handles overall progress.

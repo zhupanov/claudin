@@ -48,6 +48,8 @@ Only `▶` step start lines get the separator and bold treatment. Completion (`�
 
 Every line that marks the **end** of a step or work item must include elapsed time — whether it completed successfully, was skipped, failed, or timed out. This applies to: `✅`, `⏩`, `⏭️`, and step-ending `⚠` lines.
 
+**Step-ending `⚠`** means any `⚠` that contains a step-number prefix (e.g., `⚠ 7a: ...`, `⚠ 14: ...`). Unnumbered bail lines (e.g., `⚠ Rebase onto main failed. Bailing to cleanup.`) do not require elapsed time.
+
 ### Step progress lines
 
 Append the elapsed time in parentheses at the end of the line, using short form. The timer starts when the step logically began (its `▶` start line, or entry into the step if no `▶` line exists).
