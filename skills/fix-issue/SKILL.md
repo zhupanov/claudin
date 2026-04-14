@@ -1,11 +1,11 @@
 ---
-name: fix-issues
+name: fix-issue
 description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: triages, classifies complexity, and delegates to /implement."
-argument-hint: "[--debug]"
+argument-hint: "[--debug] [--issue <number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
-# Fix Issues
+# Fix Issue
 
 Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, triages against the codebase, classifies complexity, and delegates to `/implement`.
 
@@ -14,6 +14,7 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 **Flags**: Parse flags from the start of `$ARGUMENTS`.
 
 - `--debug`: Set `debug_mode=true`. Forward `--debug` to `/implement` in Step 6. Default: `debug_mode=false`.
+- `--issue <number-or-url>`: Set `ISSUE_ARG` to the provided value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open and have `GO` as its last comment. Default: empty (auto-pick mode).
 
 ## Progress Reporting
 
@@ -37,10 +38,10 @@ Step Name Registry:
 ## Step 0 — Setup
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-fix-issues --skip-branch-check
+${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-fix-issue --skip-branch-check
 ```
 
-Parse output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`. Set `FIX_ISSUES_TMPDIR` = `SESSION_TMPDIR`.
+Parse output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`. Set `FIX_ISSUE_TMPDIR` = `SESSION_TMPDIR`.
 
 If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository. GitHub issue access requires a valid repo. Aborting.**` and skip to Step 9.
 
@@ -51,7 +52,7 @@ If `SLACK_OK=false`, print `**⚠ Slack not configured ($SLACK_MISSING). Slack a
 Write session-env for forwarding to `/implement`:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$FIX_ISSUES_TMPDIR/session-env.sh" \
+${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$FIX_ISSUE_TMPDIR/session-env.sh" \
   --slack-ok <value> --slack-missing <value> --repo <value> --repo-unavailable <value> \
   --codex-healthy true --cursor-healthy true
 ```
@@ -59,23 +60,25 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$FIX_ISSUES_TMPDIR/
 ## Step 1 — Fetch Eligible Issue
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/fetch-eligible-issue.sh
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/fetch-eligible-issue.sh [--issue "$ISSUE_ARG"]
 ```
+
+Only include `--issue "$ISSUE_ARG"` if `ISSUE_ARG` is non-empty (the user provided `--issue`).
 
 Handle exit codes:
 
 - **Exit 0**: Parse `ISSUE_NUMBER` and `ISSUE_TITLE`. Print `▸ 1: fetch issue — found #$ISSUE_NUMBER: $ISSUE_TITLE`
 - **Exit 1**: Print `✅ 1: fetch issue — no approved issues found`. Skip to Step 9.
-- **Exit 2+**: Print `**⚠ 1: fetch issue — error: $ERROR**`. Skip to Step 9.
+- **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 1: fetch issue — error: $ERROR**`. Skip to Step 9.
 
 ## Step 2 — Read Issue Details
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/get-issue-details.sh \
-  --issue $ISSUE_NUMBER --output "$FIX_ISSUES_TMPDIR/issue-details.txt"
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/get-issue-details.sh \
+  --issue $ISSUE_NUMBER --output "$FIX_ISSUE_TMPDIR/issue-details.txt"
 ```
 
-Read `$FIX_ISSUES_TMPDIR/issue-details.txt` to get the full issue content.
+Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
 ## Step 3 — Triage
 
@@ -94,12 +97,12 @@ Check for:
 1. Compose a one-sentence explanation of why the issue is no longer material.
 2. Close with comment:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/issue-lifecycle.sh close \
+   ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
      --issue $ISSUE_NUMBER --comment "Closing: <explanation>"
    ```
 3. If `slack_available=true`, post Slack notification:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/post-issue-slack.sh \
+   ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
      --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" \
      --token "$SLACK_TOKEN" --channel-id "$SLACK_CHANNEL" \
      --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence reason>"
@@ -111,7 +114,7 @@ Check for:
 ## Step 4 — Lock Issue
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/issue-lifecycle.sh comment \
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
   --issue $ISSUE_NUMBER --body "IN PROGRESS" --lock
 ```
 
@@ -140,8 +143,8 @@ Compose the feature description from the issue content: use the issue title as t
 
 Invoke `/implement` via the Skill tool:
 
-- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUES_TMPDIR/session-env.sh [--debug if debug_mode] <feature description>`
-- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUES_TMPDIR/session-env.sh [--debug if debug_mode] <feature description>`
+- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--debug if debug_mode] <feature description>`
+- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--debug if debug_mode] <feature description>`
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
@@ -154,14 +157,14 @@ Print `▸ 7: close issue`
 Update the issue body with PR link (idempotent):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/issue-lifecycle.sh update-body \
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh update-body \
   --issue $ISSUE_NUMBER --pr-url "$PR_URL"
 ```
 
 Close the issue with DONE comment:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/issue-lifecycle.sh close \
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
   --issue $ISSUE_NUMBER --comment "DONE"
 ```
 
@@ -172,7 +175,7 @@ Print `✅ 7: close issue — #$ISSUE_NUMBER closed`
 If `slack_available=false`, print `⏭️ 8: slack announce — skipped (Slack not configured)` and proceed to Step 9.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issues/scripts/post-issue-slack.sh \
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
   --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" --pr-url "$PR_URL" \
   --token "$SLACK_TOKEN" --channel-id "$SLACK_CHANNEL"
 ```
@@ -186,12 +189,12 @@ Print `✅ 8: slack announce — posted`
 **This step ALWAYS runs**, regardless of the outcome of prior steps (success, failure, early exit, or abort).
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$FIX_ISSUES_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$FIX_ISSUE_TMPDIR"
 ```
 
-Print `✅ 9: cleanup — fix-issues complete!`
+Print `✅ 9: cleanup — fix-issue complete!`
 
 ## Known Limitations
 
 - **Stale IN PROGRESS lock**: If the skill crashes after Step 4, the issue remains locked with `IN PROGRESS` as the last comment. Recovery: manually delete the `IN PROGRESS` comment and re-add `GO` to re-enable the issue for automated processing.
-- **Single-runner assumption**: The comment-based locking (Step 4) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issues` at a time per repository.
+- **Single-runner assumption**: The comment-based locking (Step 4) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
