@@ -44,12 +44,12 @@ Step Name Registry:
 **Compact reviewer status table**: After launching all reviewers (Step 2), maintain a mental tracker of each reviewer's status. Print a compact table after EACH status change:
 
 ```
-📊 Reviewers: | General: ✅ | Deep: ⏳ | Codex-G: ✅ | Codex-D: ❌ | Cursor: ⏳ |
+📊 Reviewers: | General: ✅ 2m31s | Deep: ⏳ | Codex-G: ✅ 4m12s | Codex-D: ❌ | Cursor: ⏳ |
 ```
 
-Icons: ✅ done, ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable).
+Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time format rules.
 
-**Timing**: (1) Print initial table after launching all reviewers (all ⏳ or ⊘). (2) Update after each Claude subagent returns. (3) Update after `wait-for-reviewers.sh` returns (all external reviewers resolved).
+**Status table updates**: (1) Print initial table after launching all reviewers (all ⏳ or ⊘). (2) Update after each Claude subagent returns (adding elapsed time to its ✅). (3) Update after `wait-for-reviewers.sh` returns (all external reviewers resolved).
 
 This replaces individual per-reviewer completion messages in non-debug mode. Do NOT print individual "Reviewer X completed" or "Reviewer X returned N findings" lines.
 

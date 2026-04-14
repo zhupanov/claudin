@@ -55,10 +55,10 @@ Step Name Registry:
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
 ```
-📊 Reviewers: | General: ✅ | Arch: ⏳ | Pragmatic: ✅ | Cursor: ❌ | Codex: ⏳ |
+📊 Reviewers: | General: ✅ 2m31s | Arch: ⏳ | Pragmatic: ✅ 3m5s | Cursor: ❌ | Codex: ⏳ |
 ```
 
-Icons: ✅ done, ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode.
+Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout, ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time format rules.
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls, per-reviewer individual completion messages.
 
@@ -130,7 +130,7 @@ Consider asking about:
 **Guidelines**:
 - Only ask questions when there is genuine ambiguity — do NOT ask trivially answerable questions or re-confirm what is already clear.
 - Batch questions into a single `AskUserQuestion` call with 1-4 questions rather than multiple sequential calls.
-- If the feature description is clear and unambiguous, print `✅ 1c: questions — no clarifying questions needed` and proceed to Step 1d.
+- If the feature description is clear and unambiguous, print `✅ 1c: questions — no clarifying questions needed (<elapsed>)` and proceed to Step 1d.
 
 After the user responds, incorporate their answers into your understanding of the feature for all subsequent steps.
 
@@ -179,7 +179,7 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer (e.g., "I don't know", "your recommendation is fine", "sure"), accept the recommended answer and move on without re-asking.
 
-Print: `✅ 1d: discussion r1 — <N> decisions resolved`
+Print: `✅ 1d: discussion r1 — <N> decisions resolved (<elapsed>)`
 
 ## Step 2a — Collaborative Approach Sketches
 
@@ -339,7 +339,7 @@ Print resolutions under a `## Dialectic Resolutions` header.
 
 **Scope**: Dialectic resolutions are **binding for Step 2b plan generation only**. They may be superseded later by accepted Step 3 review findings. The finalized plan (after Step 3 review) remains the sole canonical output.
 
-Print: `✅ 2a.5: dialectic — <N> decisions resolved` (where N is the count of decisions that passed the quorum rule).
+Print: `✅ 2a.5: dialectic — <N> decisions resolved (<elapsed>)` (where N is the count of decisions that passed the quorum rule).
 
 ## Step 2b — Design the Implementation Plan
 
@@ -569,7 +569,7 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer, accept the recommended answer and move on without re-asking.
 
-Print: `✅ 3.5: discussion r2 — <N> decisions resolved`
+Print: `✅ 3.5: discussion r2 — <N> decisions resolved (<elapsed>)`
 
 ## Step 3a — Post-Review Confirmation
 
@@ -603,7 +603,7 @@ Print the diagram under a `## Architecture Diagram` header with a mermaid code f
 ```
 ```
 
-**If diagram generation succeeds**, print: `✅ 3b: arch diagram — generated`
+**If diagram generation succeeds**, print: `✅ 3b: arch diagram — generated (<elapsed>)`
 
 **If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ 3b: arch diagram — generation failed, proceeding without diagram**`
 
@@ -613,7 +613,7 @@ Print any rejected plan review findings:
 
 1. Check if `$DESIGN_TMPDIR/rejected-findings.md` exists and is non-empty.
 2. If it has content, print it under a `## Unimplemented Plan Review Suggestions` header, formatted clearly with the reviewer name, the suggestion, and the reason for each.
-3. If the file doesn't exist or is empty, print: `✅ 4: rejected findings — all suggestions implemented`
+3. If the file doesn't exist or is empty, print: `✅ 4: rejected findings — all suggestions implemented (<elapsed>)`
 
 ## Step 5 — Cleanup and Final Warnings
 
@@ -636,5 +636,5 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$DESIGN_TMPDIR"
 - `**⚠ Codex sketch timed out / produced empty output**`
 - `**⚠ 3b: arch diagram — generation failed, proceeding without diagram**`
 
-If `STEP_NUM_PREFIX` is empty (standalone mode): Print: `✅ 5: cleanup — design complete!`
+If `STEP_NUM_PREFIX` is empty (standalone mode): Print: `✅ 5: cleanup — design complete! (<elapsed>)`
 If `STEP_NUM_PREFIX` is non-empty (orchestrated mode): skip this final print — the parent orchestrator handles overall progress.

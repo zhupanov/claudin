@@ -30,6 +30,38 @@ Every progress line follows:
 
 **Semantic distinction**: `⏩` and `⏭️` are intentionally separate. `⏩` indicates a lightweight skip within the normal flow; `⏭️` indicates a precondition failure that causes an entire major step to be bypassed.
 
+## Elapsed Time
+
+Every `✅` indicator — whether in a step completion line or a compact status table — must include the elapsed time for that work item.
+
+### `✅` completion lines
+
+Append the elapsed time in parentheses at the end of the line, using short form. The timer starts when the corresponding `▸` start line was printed (or when the step logically began if no `▸` line exists).
+
+```
+✅ 2a.5: dialectic — 3 decisions resolved (1m42s)
+✅ 8a: changelog — updated for v2.1.0 (4s)
+```
+
+### Compact status tables (`📊` lines)
+
+For reviewer/agent status tables, include elapsed time immediately after each `✅`. The timer for each entry starts when that agent/reviewer was launched.
+
+```
+📊 Reviewers: | General: ✅ 2m31s | Deep: ⏳ | Codex-G: ✅ 4m12s | Codex-D: ❌ | Cursor: ⏳ |
+```
+
+Other status icons (`⏳`, `❌`, `⊘`) do not include timing.
+
+### Time format
+
+Use the shortest representation:
+- Under 1 minute: `45s`
+- 1–59 minutes: `2m31s`
+- 1+ hours: `1h3m` (seconds are always omitted in the hours tier)
+
+Omit zero components: use `2m` not `2m0s`, use `1h` not `1h0m`.
+
 ## `--step-prefix` Encoding
 
 When a parent skill invokes a child skill (e.g., `/implement` → `/design`), it passes step context via `--step-prefix` using this encoding:
@@ -61,14 +93,14 @@ Standalone `/design` (no `--step-prefix`):
 ```
 ▸ 2a: sketches
 ▸ 2a.5: dialectic
-✅ 2a.5: dialectic — 3 decisions resolved
+✅ 2a.5: dialectic — 3 decisions resolved (1m42s)
 ```
 
 `/design` called from `/implement` with `--step-prefix "1.::design plan"`:
 ```
 ▸ 1.2a: design plan | sketches
 ▸ 1.2a.5: design plan | dialectic
-✅ 1.2a.5: design plan | dialectic — 3 decisions resolved
+✅ 1.2a.5: design plan | dialectic — 3 decisions resolved (1m42s)
 ```
 
 `/review` called from `/implement` with `--step-prefix "5.::code review"`:

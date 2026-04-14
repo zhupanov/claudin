@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2026-04-13
+
+### Changed
+
+- Added elapsed time reporting to all `✅` completion indicators — step completion lines show `(<elapsed>)` and compact status tables show timing after each `✅`
+- Defined elapsed time format rules in `skills/shared/progress-reporting.md` (central contract)
+- Updated all `Print:` directives across all 7 skills to include `(<elapsed>)` placeholders
+
 ## [2.0.5] - 2026-04-13
 
 ### Changed
