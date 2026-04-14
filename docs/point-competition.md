@@ -17,16 +17,16 @@ If a deduplicated finding was proposed by multiple reviewers (merged during dedu
 
 ## Out-of-Scope Scoring
 
-Out-of-scope (OOS) observations use a **per-item scoring floor of 0**. This asymmetry is a deliberate design decision: reviewers should feel free to surface pre-existing issues and observations beyond the PR's scope without risking penalty.
+Out-of-scope (OOS) observations use the **same symmetric scoring** as in-scope findings. Both classes of proposals carry the same risk/reward profile, creating two identical competitions running in parallel on the same ballot.
 
 | OOS Vote Result | Points | Description |
 |---|---|---|
-| **OOS Promoted** (2+ YES) | +1 | Reviewer surfaced an issue worth fixing in this PR |
-| **OOS Not Promoted** | 0 | Useful observation, no penalty regardless of vote outcome |
+| **OOS Accepted** (2+ YES) | +1 | Reviewer surfaced an issue worth tracking as a GitHub issue |
+| **OOS Neutral** (exactly 1 YES) | 0 | Insufficient support, but not dismissed |
+| **OOS Exonerated** (0 YES, 1+ EXONERATE) | 0 | Legitimate observation, but not worth filing an issue |
+| **OOS Rejected** (0 YES, 0 EXONERATE) | -1 | Observation was unanimously dismissed by the panel |
 
-The key invariant: **OOS items can never score below 0.** This encourages reviewers to report pre-existing code issues, technical debt, and architectural concerns freely.
-
-## OOS Promotion Mechanics
+## OOS Issue Filing
 
 Out-of-scope items go on the same voting ballot as in-scope findings, labeled with `[OUT_OF_SCOPE]`:
 
@@ -34,22 +34,24 @@ Out-of-scope items go on the same voting ballot as in-scope findings, labeled wi
 OOS_1: [OUT_OF_SCOPE] General — <description>
 ```
 
-Voters can promote an OOS item to in-scope by voting YES:
+Voters decide whether each OOS item deserves a GitHub issue:
 
-- **2+ YES** → Promoted to in-scope, implemented in this PR, reviewer earns +1
-- **Fewer than 2 YES** → Remains an observation, reported in the PR body, reviewer earns 0
+- **2+ YES** → Accepted: filed as a GitHub issue by `/implement` for future attention, reviewer earns +1
+- **Fewer than 2 YES** → Not accepted: remains an observation reported in the PR body
+
+**OOS items are never implemented in the current PR.** Accepted OOS items result in GitHub issue creation only — this cleanly separates "fix now" (in-scope findings) from "fix later" (OOS observations).
 
 ## Scoreboard
 
 After voting completes, a scoreboard is printed showing each reviewer's performance:
 
-| Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Promoted | Score |
+| Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Accepted | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
 | General | 3 | 2 | 1 | 0 | 0 | 1 | 0 | +2 |
 | Deep-Analysis | 2 | 1 | 0 | 1 | 0 | 0 | 0 | +1 |
 | Codex-General | 1 | 0 | 0 | 0 | 1 | 0 | 0 | -1 |
 | Codex-Deep-Analysis | 1 | 1 | 0 | 0 | 0 | 0 | 0 | +1 |
-| Cursor | 2 | 1 | 1 | 0 | 0 | 0 | 0 | +1 |
+| Cursor | 2 | 1 | 1 | 0 | 0 | 1 | 1 | +2 |
 
 ## Future Plans
 

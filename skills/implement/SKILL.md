@@ -47,6 +47,7 @@ Step Name Registry:
 | 7a.r | rebase |
 | 8 | version bump |
 | 8a | changelog |
+| 9a.1 | OOS issues |
 | 9 | create PR |
 | 10 | CI monitor |
 | 11 | slack announce |
@@ -294,7 +295,7 @@ After `/review` returns, follow the **Cross-Skill Health Propagation** procedure
 
 ### Track Rejected Code Review Findings
 
-After the code review completes (whether `/review` in normal mode or the simplified review in quick mode), examine the final output. For any **in-scope** findings that were not accepted (not enough YES votes in normal mode — whether rejected or exonerated — or rejected by the main agent in quick mode), append each to `$IMPLEMENT_TMPDIR/rejected-findings.md` using this format. **Do not include non-promoted OOS items** — those are reported separately in the "Out-of-Scope Observations" PR body section:
+After the code review completes (whether `/review` in normal mode or the simplified review in quick mode), examine the final output. For any **in-scope** findings that were not accepted (not enough YES votes in normal mode — whether rejected or exonerated — or rejected by the main agent in quick mode), append each to `$IMPLEMENT_TMPDIR/rejected-findings.md` using this format. **Do not include OOS items** — those follow a separate pipeline (accepted OOS → GitHub issues via Step 9a.1, non-accepted OOS → PR body observations):
 
 ```markdown
 ### [Code Review] <Reviewer Name>
@@ -522,7 +523,11 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 
 <details><summary>Out-of-Scope Observations</summary>
 
-<non-promoted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-promoted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available.">
+**Accepted OOS (GitHub issues filed):**
+<If Step 9a.1 created issues, list each with its issue link: "- #<NUMBER>: <title> (<reviewer attribution>)". If no OOS items were accepted, write "No OOS items were accepted for issue filing.">
+
+**Non-accepted OOS observations:**
+<Non-accepted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-accepted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available.">
 
 </details>
 
@@ -541,6 +546,7 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 | Code review findings | <N> accepted, <N> rejected |
 | Warnings logged | <N> |
 | Pre-existing issues noticed | <N> |
+| OOS issues filed | <N> |
 | External reviewers | Cursor: <✅/❌>, Codex: <✅/❌> |
 
 </details>
@@ -562,7 +568,38 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 - **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings from 2 Claude subagents."
 - **Implementation Deviations**: Compare implementation to the inline plan (same as normal mode).
 - **Out-of-Scope Observations**: Write "Quick mode — no out-of-scope observations collected."
-- **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)". Code review findings should reflect the quick review results.
+- **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)", "OOS issues filed" to "N/A (quick mode)". Code review findings should reflect the quick review results.
+
+### 9a.1 — Create OOS GitHub Issues
+
+**If `quick_mode=true`**: Print `⏩ 9a.1: OOS issues — skipped (quick mode)` and proceed to Step 9b.
+
+**If `repo_unavailable=true`**: Print `⏩ 9a.1: OOS issues — skipped (repo unavailable)` and proceed to Step 9b. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`.
+
+Read the OOS artifact files:
+- `$IMPLEMENT_TMPDIR/oos-accepted-design.md` (from `/design` plan review)
+- `$IMPLEMENT_TMPDIR/oos-accepted-review.md` (from `/review` code review)
+
+**If neither file exists or both are empty**: Print `⏩ 9a.1: OOS issues — no accepted OOS items` and proceed to Step 9b.
+
+**If at least one file has content**:
+
+**Idempotency**: If `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation entirely — read the existing file to get previously created issue URLs and proceed to Step 9b.
+
+1. Read and parse all accepted OOS items from both files.
+2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in both design and review (matching by normalized title similarity), keep one entry noting both phases.
+3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for the creation script.
+4. Invoke the creation script:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/create-oos-issues.sh --input-file "$IMPLEMENT_TMPDIR/oos-items.md" --repo $REPO
+   ```
+5. Parse the structured output for `ISSUES_CREATED`, `ISSUES_FAILED`, and per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL` pairs.
+6. If `ISSUES_FAILED > 0`: Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — create-oos-issues.sh failed to create <N> of <total> OOS issues.`
+7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links.
+
+8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as a sentinel for idempotency. Include the `ISSUES_CREATED`, `ISSUES_FAILED`, and all `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE` lines from the script output.
+
+Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> issues filed`
 
 ### 9b — Create PR via script
 
@@ -904,7 +941,7 @@ Also capture `git diff --cached` as supplementary context showing the full stage
 
 Follow `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` for launch order (Cursor first, Codex, then Claude subagents), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
 
-**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings + OOS observations). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`.
+**3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse Claude subagent dual-list outputs (in-scope findings only — **discard OOS observations** from conflict-review context, as conflict resolution is a narrow validation context not suitable for OOS issue filing). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all in-scope findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`. **Do not include OOS items on the conflict-review ballot.**
 
 **3e. Voting**: Run the voting protocol from `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` with code review voter composition:
 - **Voter 1**: Claude General Reviewer subagent (fresh Agent invocation)

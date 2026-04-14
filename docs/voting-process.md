@@ -69,33 +69,40 @@ flowchart TD
     LAUNCH --> COLLECT[Collect votes]
     COLLECT --> TALLY{Tally per finding}
 
-    TALLY -->|2+ YES| ACCEPT[Finding accepted]
+    TALLY -->|In-scope 2+ YES| ACCEPT[Finding accepted]
     TALLY -->|1 YES| NEUTRAL[Finding neutral]
     TALLY -->|0 YES, 1+ EXON| EXON[Finding exonerated]
     TALLY -->|0 YES, 0 EXON| REJECT[Finding rejected]
+    TALLY -->|OOS 2+ YES| OOS_ACCEPT[OOS accepted]
 
     ACCEPT --> IMPLEMENT[Implement accepted findings]
+    OOS_ACCEPT --> ISSUE[File GitHub issue]
     NEUTRAL --> SCORE[Score reviewers]
     EXON --> SCORE
     REJECT --> SCORE
     IMPLEMENT --> SCORE
+    ISSUE --> SCORE
 
     style ACCEPT fill:#2d5a27,color:#fff
     style REJECT fill:#8b1a1a,color:#fff
     style EXON fill:#4a3a6e,color:#fff
     style NEUTRAL fill:#555,color:#fff
+    style OOS_ACCEPT fill:#1a3a5a,color:#fff
+    style ISSUE fill:#1a3a5a,color:#fff
 ```
 
 ## Out-of-Scope Observations
 
-Reviewers may surface **out-of-scope (OOS) observations** — pre-existing issues or concerns beyond the PR's scope. These are handled alongside in-scope findings but with different semantics:
+Reviewers may surface **out-of-scope (OOS) observations** — pre-existing issues or concerns beyond the PR's scope. These are handled alongside in-scope findings on the same ballot but with different vote semantics and outcomes:
 
 - OOS items are included on the ballot with the `[OUT_OF_SCOPE]` prefix
-- **YES** on an OOS item means "promote to in-scope — implement in this PR"
-- **NO** means "keep as observation"
-- **EXONERATE** means "legitimate observation worth documenting"
-- If an OOS item receives 2+ YES votes, it is **promoted** to in-scope and implemented
-- Non-promoted OOS items are collected and reported in the PR body for future attention
+- **YES** on an OOS item means "this deserves a GitHub issue for future attention"
+- **NO** means "not worth tracking"
+- **EXONERATE** means "legitimate observation but not worth filing an issue"
+- If an OOS item receives 2+ YES votes, it is **accepted** and filed as a GitHub issue by `/implement`
+- Non-accepted OOS items are collected and reported in the PR body for future attention
+- **OOS items are never implemented in the current PR** — accepted items result in issue creation only
+- OOS scoring uses the same symmetric -1/0/+1 rules as in-scope findings (see [Point Competition](point-competition.md))
 
 Only Claude subagent reviewers produce OOS observations (via their dual-list output format). External reviewers (Codex, Cursor) produce single-list output treated entirely as in-scope.
 
