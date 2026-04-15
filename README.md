@@ -127,10 +127,10 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 
 Shortcut skills shipped with the plugin. Each alias forwards to an existing skill with preset flags.
 
-| Alias | Equivalent | Description |
-|---|---|---|
-| [`/im`](skills/im/SKILL.md) | `/implement --merge` | Implement a feature and merge the PR after CI passes. |
-| [`/imaq`](skills/imaq/SKILL.md) | `/implement --merge --auto --quick` | Quick autonomous implementation — skips `/design`, uses simplified code review, suppresses interactive questions, and merges after CI. |
+| Alias | Equivalent |
+|---|---|
+| [`/im`](skills/im/SKILL.md) | `/implement --merge` |
+| [`/imaq`](skills/imaq/SKILL.md) | `/implement --merge --auto --quick` |
 
 ## Review Agents
 
