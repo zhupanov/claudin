@@ -14,7 +14,7 @@ The plugin source (`"./"` in `marketplace.json`) ships the **entire repository**
 
 **Plugin surface (referenced at runtime by skills, hooks, and scripts):**
 
-- `skills/` — public skills (`/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/alias`)
+- `skills/` — public skills (`/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/alias`, `/im`, `/imaq`)
 - `agents/` — reviewer archetype definitions
 - `hooks/hooks.json` — `PreToolUse` hook registrations
 - `scripts/` — invoked from shipped skills and hooks as `${CLAUDE_PLUGIN_ROOT}/scripts/…`
@@ -93,6 +93,8 @@ Use the bare form (matches `README.md`; see each `SKILL.md` for full argument de
 - `/relevant-checks` — pre-commit linters + agent-lint, scoped to changed files
 - `/fix-issue [--debug] [<number-or-url>]` — process one approved GitHub issue: triage, classify, delegate to `/implement`
 - `/alias [--merge] <name> <skill> [flags...]` — create a project-level alias skill in `.claude/skills/` via `/implement --quick --auto`; `--merge` also merges the PR
+- `/im <feature>` — alias for `/implement --merge`
+- `/imaq <feature>` — alias for `/implement --merge --auto --quick`
 - `/bump-version` — classify and apply the semver bump (invoked by `/implement` Step 8 and after each rebase in Steps 10/12)
 
 Full lifecycle: `docs/workflow-lifecycle.md`.

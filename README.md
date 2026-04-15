@@ -15,7 +15,7 @@ claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
 ```
 
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, and `/alias` slash commands become available in every Claude Code session.
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/alias`, `/im`, and `/imaq` slash commands become available in every Claude Code session.
 
 To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
 
@@ -41,7 +41,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/alias` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/alias`, `/im`, `/imaq` |
 | Agents | `general-reviewer`, `deep-analysis-reviewer` |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 
@@ -122,6 +122,15 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/fix-issue`](skills/fix-issue/SKILL.md) | `[--debug] [<number-or-url>]` | Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement`. With a number or URL argument, targets a specific issue instead of auto-picking. Single-iteration design — the caller handles repetition. |
 | [`/alias`](skills/alias/SKILL.md) | `[--merge] <alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
 | [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
+
+### Aliases
+
+Shortcut skills shipped with the plugin. Each alias forwards to an existing skill with preset flags.
+
+| Alias | Equivalent | Description |
+|---|---|---|
+| [`/im`](skills/im/SKILL.md) | `/implement --merge` | Implement a feature and merge the PR after CI passes. |
+| [`/imaq`](skills/imaq/SKILL.md) | `/implement --merge --auto --quick` | Quick autonomous implementation — skips `/design`, uses simplified code review, suppresses interactive questions, and merges after CI. |
 
 ## Review Agents
 
