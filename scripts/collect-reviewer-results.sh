@@ -29,6 +29,7 @@
 #   STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT>
 #   EXIT_CODE=<N>
 #   HEALTHY=<true|false>
+#   FAILURE_REASON=<explanation>  (non-empty when STATUS != OK; explains the cause of failure)
 #
 # Exit codes:
 #   0 — normal completion (results are informational, not errors)
@@ -137,6 +138,28 @@ is_timed_out() {
     echo "$TIMED_OUT_SENTINELS" | grep -qxF "$needle"
 }
 
+# --- Helper: build failure reason from .diag file or status ---
+build_failure_reason() {
+    local output_file="$1"
+    local status="$2"
+    local exit_code="$3"
+    local diag_file="${output_file}.diag"
+
+    if [[ -f "$diag_file" ]]; then
+        cat "$diag_file"
+        return
+    fi
+
+    # Fallback: construct reason from status and exit code
+    case "$status" in
+        SENTINEL_TIMEOUT) echo "Process did not complete (sentinel file missing — possible crash or system kill)" ;;
+        TIMED_OUT)        echo "Process timed out (exit code 124)" ;;
+        FAILED)           echo "Process failed with exit code $exit_code" ;;
+        EMPTY_OUTPUT)     echo "Process exited successfully but produced no output" ;;
+        *)                echo "Unknown failure (status=$status, exit_code=$exit_code)" ;;
+    esac
+}
+
 # --- 2. Validate each output and collect results ---
 RETRY_FILES=()
 RETRY_INDICES=()
@@ -151,6 +174,7 @@ for i in "${!OUTPUT_FILES[@]}"; do
     STATUS="OK"
     EXIT_CODE="0"
     HEALTHY="true"
+    FAILURE_REASON=""
 
     # F1 fix: strip .done suffix to match wait-for-reviewers.sh output format
     SENTINEL_BASE=$(basename "$SENTINEL" .done)
@@ -159,19 +183,23 @@ for i in "${!OUTPUT_FILES[@]}"; do
         STATUS="SENTINEL_TIMEOUT"
         EXIT_CODE="124"
         HEALTHY="false"
+        FAILURE_REASON=$(build_failure_reason "$OUTPUT" "$STATUS" "$EXIT_CODE")
     elif [[ -f "$SENTINEL" ]]; then
         EXIT_CODE=$(cat "$SENTINEL" 2>/dev/null || echo "99")
         if [[ "$EXIT_CODE" == "124" ]]; then
             STATUS="TIMED_OUT"
             HEALTHY="false"
+            FAILURE_REASON=$(build_failure_reason "$OUTPUT" "$STATUS" "$EXIT_CODE")
         elif [[ "$EXIT_CODE" != "0" ]]; then
             STATUS="FAILED"
             HEALTHY="false"
+            FAILURE_REASON=$(build_failure_reason "$OUTPUT" "$STATUS" "$EXIT_CODE")
         elif [[ ! -s "$OUTPUT" ]]; then
             # F4 fix: empty output is a retry candidate, NOT an immediate health failure.
             # Health is only set to false after retry also fails (see section 3 below).
             STATUS="EMPTY_OUTPUT"
             HEALTHY="true"  # tentative — will be set false if retry fails
+            FAILURE_REASON=$(build_failure_reason "$OUTPUT" "$STATUS" "$EXIT_CODE")
             # Queue for retry if .meta exists
             if [[ -f "$META" ]]; then
                 # Parse META_TIMEOUT for retry wait calculation
@@ -193,6 +221,7 @@ for i in "${!OUTPUT_FILES[@]}"; do
         STATUS="SENTINEL_TIMEOUT"
         EXIT_CODE="124"
         HEALTHY="false"
+        FAILURE_REASON=$(build_failure_reason "$OUTPUT" "$STATUS" "$EXIT_CODE")
     fi
 
     # Monotonic health: if this tool was already marked unhealthy, keep it
@@ -203,7 +232,7 @@ for i in "${!OUTPUT_FILES[@]}"; do
         set_tool_unhealthy "$TOOL"
     fi
 
-    RESULTS+=("REVIEWER_FILE=$OUTPUT|TOOL=$TOOL|STATUS=$STATUS|EXIT_CODE=$EXIT_CODE|HEALTHY=$HEALTHY")
+    RESULTS+=("REVIEWER_FILE=$OUTPUT|TOOL=$TOOL|STATUS=$STATUS|EXIT_CODE=$EXIT_CODE|HEALTHY=$HEALTHY|FAILURE_REASON=$FAILURE_REASON")
 done
 
 # --- 3. Retry empty outputs using .meta files ---
@@ -286,16 +315,17 @@ if [[ ${#RETRY_FILES[@]} -gt 0 ]]; then
                     if [[ "$(get_tool_healthy "$TOOL")" == "false" ]]; then
                         HEALTHY="false"
                     fi
-                    RESULTS[IDX]="REVIEWER_FILE=$RETRY_OUTPUT|TOOL=$TOOL|STATUS=OK|EXIT_CODE=0|HEALTHY=$HEALTHY"
+                    RESULTS[IDX]="REVIEWER_FILE=$RETRY_OUTPUT|TOOL=$TOOL|STATUS=OK|EXIT_CODE=0|HEALTHY=$HEALTHY|FAILURE_REASON="
                 else
                     # Retry also failed — NOW mark tool unhealthy
                     set_tool_unhealthy "$TOOL"
-                    RESULTS[IDX]="REVIEWER_FILE=$ORIG_OUTPUT|TOOL=$TOOL|STATUS=EMPTY_OUTPUT|EXIT_CODE=0|HEALTHY=false"
+                    RETRY_REASON=$(build_failure_reason "$RETRY_OUTPUT" "EMPTY_OUTPUT" "$RETRY_EXIT")
+                    RESULTS[IDX]="REVIEWER_FILE=$ORIG_OUTPUT|TOOL=$TOOL|STATUS=EMPTY_OUTPUT|EXIT_CODE=0|HEALTHY=false|FAILURE_REASON=Retry also failed: $RETRY_REASON"
                 fi
             else
                 # Retry sentinel never appeared — mark unhealthy
                 set_tool_unhealthy "$TOOL"
-                RESULTS[IDX]="REVIEWER_FILE=$ORIG_OUTPUT|TOOL=$TOOL|STATUS=EMPTY_OUTPUT|EXIT_CODE=0|HEALTHY=false"
+                RESULTS[IDX]="REVIEWER_FILE=$ORIG_OUTPUT|TOOL=$TOOL|STATUS=EMPTY_OUTPUT|EXIT_CODE=0|HEALTHY=false|FAILURE_REASON=Retry process did not complete (sentinel file missing)"
             fi
         done
     fi

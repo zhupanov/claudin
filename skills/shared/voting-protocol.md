@@ -135,6 +135,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/wait-for-reviewers.sh --timeout 1260 \
 
 Use `timeout: 1260000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Note: voter output files use the `-vote-` infix to avoid collision with reviewer output files (`-plan-output` or `-output`).
 
+**Collecting voter results**: Use `collect-reviewer-results.sh` to validate external voter outputs (same as for reviewer outputs). Parse `STATUS` and `FAILURE_REASON` for each voter. If a voter fails (`STATUS != OK`), print: `**⚠ <Voter> voter failed — <FAILURE_REASON>. Proceeding with <N> voters (<remaining voter names>).**` Always include the `FAILURE_REASON` so the user can see why the voter failed (e.g., timeout, crash, empty output). Reduce the eligible voter count accordingly and apply the threshold rules above.
+
 ## Competition Scoring
 
 After tallying votes, compute a score for each **original reviewer** (not voters):

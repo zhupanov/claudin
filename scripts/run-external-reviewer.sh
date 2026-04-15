@@ -102,6 +102,8 @@ while kill -0 "$PID" 2>/dev/null; do
             OUTPUT_SIZE=$(wc -c < "$OUTPUT_FILE" | tr -d ' ')
         fi
         echo "❌ ${TOOL_NAME} review: TIMED OUT (exit code 124, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
+        # Write diagnostic file for callers
+        echo "Timed out after ${SECONDS}s (limit: ${TIMEOUT_SECONDS}s). Process was killed after exceeding the timeout. Output size: ${OUTPUT_SIZE} bytes." > "${OUTPUT_FILE}.diag"
         EXIT_CODE=124
         exit "$EXIT_CODE"
     fi
@@ -123,14 +125,20 @@ fi
 
 if [ "$EXIT_CODE" -ne 0 ]; then
     echo "❌ ${TOOL_NAME} review: FAILED (exit code ${EXIT_CODE}, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
+    DIAG_DETAIL=""
     if [ "$OUTPUT_SIZE" -gt 0 ]; then
         echo "--- ${TOOL_NAME} output (last 5 lines) ---"
         tail -5 "$OUTPUT_FILE"
         echo "--- end ---"
+        DIAG_DETAIL=" Last output: $(tail -1 "$OUTPUT_FILE" | head -c 200)"
     fi
+    # Write diagnostic file for callers
+    echo "Failed with exit code ${EXIT_CODE} after ${SECONDS}s. Output size: ${OUTPUT_SIZE} bytes.${DIAG_DETAIL}" > "${OUTPUT_FILE}.diag"
 elif [ "$OUTPUT_SIZE" -eq 0 ]; then
     echo "⚠ ${TOOL_NAME} review: completed but OUTPUT IS EMPTY (exit code 0, ${SECONDS}s elapsed)"
     echo "This typically means ${TOOL_NAME} exited without producing findings."
+    # Write diagnostic file for callers
+    echo "Process exited successfully (code 0) after ${SECONDS}s but produced no output. This typically means the tool started but did not generate a response." > "${OUTPUT_FILE}.diag"
 else
     echo "✓ ${TOOL_NAME} review: completed (exit code 0, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
 fi

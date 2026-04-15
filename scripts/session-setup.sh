@@ -38,6 +38,8 @@
 #   CURSOR_AVAILABLE=true|false Output when --check-reviewers
 #   CODEX_HEALTHY=true|false    Output when --check-reviewers, or passthrough from --caller-env
 #   CURSOR_HEALTHY=true|false   Output when --check-reviewers, or passthrough from --caller-env
+#   CODEX_PROBE_ERROR=<reason>  Output when --check-reviewers and CODEX_HEALTHY=false (explains why)
+#   CURSOR_PROBE_ERROR=<reason> Output when --check-reviewers and CURSOR_HEALTHY=false (explains why)
 #
 # On preflight failure, outputs PREFLIGHT_ERROR=<message> and exits non-zero.
 #
@@ -283,13 +285,17 @@ if [[ "$CHECK_REVIEWERS" == "true" ]]; then
     PROBED_CURSOR_AVAILABLE=""
     PROBED_CODEX_HEALTHY=""
     PROBED_CURSOR_HEALTHY=""
+    PROBED_CODEX_PROBE_ERROR=""
+    PROBED_CURSOR_PROBE_ERROR=""
     while IFS='=' read -r key value || [[ -n "$key" ]]; do
         [[ -z "$key" || "$key" =~ ^# ]] && continue
         case "$key" in
-            CODEX_AVAILABLE)  PROBED_CODEX_AVAILABLE="$value" ;;
-            CURSOR_AVAILABLE) PROBED_CURSOR_AVAILABLE="$value" ;;
-            CODEX_HEALTHY)    PROBED_CODEX_HEALTHY="$value" ;;
-            CURSOR_HEALTHY)   PROBED_CURSOR_HEALTHY="$value" ;;
+            CODEX_AVAILABLE)   PROBED_CODEX_AVAILABLE="$value" ;;
+            CURSOR_AVAILABLE)  PROBED_CURSOR_AVAILABLE="$value" ;;
+            CODEX_HEALTHY)     PROBED_CODEX_HEALTHY="$value" ;;
+            CURSOR_HEALTHY)    PROBED_CURSOR_HEALTHY="$value" ;;
+            CODEX_PROBE_ERROR) PROBED_CODEX_PROBE_ERROR="$value" ;;
+            CURSOR_PROBE_ERROR) PROBED_CURSOR_PROBE_ERROR="$value" ;;
         esac
     done <<< "$REVIEWER_OUTPUT"
 
@@ -297,6 +303,8 @@ if [[ "$CHECK_REVIEWERS" == "true" ]]; then
     [[ -n "$PROBED_CURSOR_AVAILABLE" ]] && echo "CURSOR_AVAILABLE=$PROBED_CURSOR_AVAILABLE"
     [[ -n "$PROBED_CODEX_HEALTHY" ]] && echo "CODEX_HEALTHY=$PROBED_CODEX_HEALTHY"
     [[ -n "$PROBED_CURSOR_HEALTHY" ]] && echo "CURSOR_HEALTHY=$PROBED_CURSOR_HEALTHY"
+    [[ -n "$PROBED_CODEX_PROBE_ERROR" ]] && echo "CODEX_PROBE_ERROR=$PROBED_CODEX_PROBE_ERROR"
+    [[ -n "$PROBED_CURSOR_PROBE_ERROR" ]] && echo "CURSOR_PROBE_ERROR=$PROBED_CURSOR_PROBE_ERROR"
 
     # Emit prominent banners to stderr for failed health checks (must be here,
     # not in check-reviewers.sh, because session-setup captures its stdout+stderr
@@ -305,7 +313,11 @@ if [[ "$CHECK_REVIEWERS" == "true" ]]; then
           && "$SKIP_CODEX_PROBE" == "false" ]]; then
         echo "═══════════════════════════════════════════════════════════" >&2
         echo "  ⚠  CODEX HEALTH CHECK FAILED — not responding" >&2
-        echo "     Codex binary found but health probe timed out or errored." >&2
+        if [[ -n "$PROBED_CODEX_PROBE_ERROR" ]]; then
+            echo "     Cause: $PROBED_CODEX_PROBE_ERROR" >&2
+        else
+            echo "     Codex binary found but health probe timed out or errored." >&2
+        fi
         echo "     Will use Claude replacement for this session." >&2
         echo "═══════════════════════════════════════════════════════════" >&2
     fi
@@ -313,7 +325,11 @@ if [[ "$CHECK_REVIEWERS" == "true" ]]; then
           && "$SKIP_CURSOR_PROBE" == "false" ]]; then
         echo "═══════════════════════════════════════════════════════════" >&2
         echo "  ⚠  CURSOR HEALTH CHECK FAILED — not responding" >&2
-        echo "     Cursor binary found but health probe timed out or errored." >&2
+        if [[ -n "$PROBED_CURSOR_PROBE_ERROR" ]]; then
+            echo "     Cause: $PROBED_CURSOR_PROBE_ERROR" >&2
+        else
+            echo "     Cursor binary found but health probe timed out or errored." >&2
+        fi
         echo "     Will use Claude replacement for this session." >&2
         echo "═══════════════════════════════════════════════════════════" >&2
     fi

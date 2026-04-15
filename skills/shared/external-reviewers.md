@@ -18,9 +18,9 @@ The `--check-reviewers` flag runs `check-reviewers.sh --probe` internally and em
 
 Set mental flags `codex_available` and `cursor_available` based on the output:
 - If `CODEX_AVAILABLE=false`: `codex_available=false`. Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
-- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
+- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed: <CODEX_PROBE_ERROR>). Using Claude replacement.**` where `<CODEX_PROBE_ERROR>` is the `CODEX_PROBE_ERROR` value from `session-setup.sh` output (if available; omit the parenthetical detail if not present).
 - Else: `codex_available=true`
-- Same logic for Cursor.
+- Same logic for Cursor (using `CURSOR_PROBE_ERROR`).
 
 **Note**: `*_AVAILABLE` is a pure install-state signal (binary exists on PATH). `*_HEALTHY` indicates whether the tool actually responded to a trivial prompt within the 60-second probe timeout. Callers must combine both to determine runtime usability.
 
@@ -33,7 +33,9 @@ When processing reviewer results (after `wait-for-reviewers.sh` returns), check 
 - Output is empty/invalid after the retry-once procedure (per "Validating External Reviewer Output" below)
 - `wait-for-reviewers.sh` reports `TIMEOUT` for the reviewer (sentinel never appeared — wrapper killed externally)
 
-Print: `**⚠ <Reviewer> timed out — using Claude replacement for remainder of session.**`
+Print: `**⚠ <Reviewer> failed — <FAILURE_REASON>. Using Claude replacement for remainder of session.**`
+
+Where `<FAILURE_REASON>` is the `FAILURE_REASON` value from `collect-reviewer-results.sh` output (or from the `.diag` file if collecting results manually). Always include the reason so the user can diagnose the root cause (e.g., timeout duration, exit code, last error output).
 
 This is a mental flag flip within the current skill invocation. For cross-skill propagation within `/implement`, child skills write a structured health status file — see the `/implement` SKILL.md for details.
 
@@ -58,11 +60,12 @@ TOOL=<codex|cursor|unknown>
 STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT>
 EXIT_CODE=<N>
 HEALTHY=<true|false>
+FAILURE_REASON=<explanation>
 ```
 
-Parse each reviewer's `STATUS` and `REVIEWER_FILE`:
-- `STATUS=OK`: Read the output file — it is non-empty and validated.
-- Any other status: The reviewer failed. Follow the **Runtime Timeout Fallback** procedure below.
+Parse each reviewer's `STATUS`, `REVIEWER_FILE`, and `FAILURE_REASON`:
+- `STATUS=OK`: Read the output file — it is non-empty and validated. `FAILURE_REASON` is empty.
+- Any other status: The reviewer failed. `FAILURE_REASON` explains why (e.g., "Timed out after 1800s (limit: 1800s). Process was killed after exceeding the timeout." or "Failed with exit code 1 after 5s. Last output: error message here"). Follow the **Runtime Timeout Fallback** procedure below, including `FAILURE_REASON` in the message.
 
 **Important**: Do NOT read output files before calling `collect-reviewer-results.sh`. Cursor buffers all stdout until exit — its output file is empty until the process finishes. The collection script handles all sentinel polling and validation internally.
 
