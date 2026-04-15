@@ -1,6 +1,6 @@
 {
   "name": "larch",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Multi-agent workflow automation for Claude Code: design, code review, implementation, and PR automation with collaborative reviewers (Claude subagents + Codex + Cursor).",
   "author": {
     "name": "Sergey Zhupanov",
