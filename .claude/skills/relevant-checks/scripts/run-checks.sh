@@ -24,7 +24,7 @@ run_post_checks() {
     if command -v agent-lint >/dev/null 2>&1; then
         echo ""
         echo "=== Running agent-lint ==="
-        agent-lint "$REPO_ROOT"
+        agent-lint --pedantic "$REPO_ROOT"
         return $?
     else
         echo ""

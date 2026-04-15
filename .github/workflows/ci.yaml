@@ -37,3 +37,4 @@ jobs:
       - uses: zhupanov/agent-lint@v2
         with:
           github-token: ${{ github.token }}
+          args: --pedantic
