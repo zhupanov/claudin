@@ -1,7 +1,7 @@
 ---
 name: fix-issue
 description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: triages, classifies complexity, and delegates to /implement."
-argument-hint: "[--debug] [--issue <number-or-url>]"
+argument-hint: "[--debug] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
@@ -14,7 +14,8 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 **Flags**: Parse flags from the start of `$ARGUMENTS`.
 
 - `--debug`: Set `debug_mode=true`. Forward `--debug` to `/implement` in Step 6. Default: `debug_mode=false`.
-- `--issue <number-or-url>`: Set `ISSUE_ARG` to the provided value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open and have `GO` as its last comment. Default: empty (auto-pick mode).
+- `--issue <number-or-url>`: **Deprecated** — recognized for backward compatibility. Prefer passing the issue number or URL as a positional argument (e.g., `/fix-issue 42`). When this flag is encountered, print: `**ℹ '--issue' is deprecated; pass the issue number or URL as a positional argument instead (e.g., /fix-issue 42).**`
+- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping `--debug` and `--issue`, treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open and have `GO` as its last comment. Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
 
 ## Progress Reporting
 
@@ -63,7 +64,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$FIX_ISSUE_TMPDIR/s
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/fetch-eligible-issue.sh [--issue "$ISSUE_ARG"]
 ```
 
-Only include `--issue "$ISSUE_ARG"` if `ISSUE_ARG` is non-empty (the user provided `--issue`).
+Only include `--issue "$ISSUE_ARG"` if `ISSUE_ARG` is non-empty (the user provided an issue number/URL via positional argument or the deprecated `--issue` flag).
 
 Handle exit codes:
 

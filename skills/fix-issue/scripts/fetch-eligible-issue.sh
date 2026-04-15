@@ -9,7 +9,8 @@
 # it is open and has "GO" as the last comment.
 #
 # Usage:
-#   fetch-eligible-issue.sh [--issue <number-or-url>]
+#   fetch-eligible-issue.sh [<number-or-url>]
+#   fetch-eligible-issue.sh [--issue <number-or-url>]  (deprecated)
 #
 # Output (KEY=value lines on stdout):
 #   ELIGIBLE=true|false
@@ -36,10 +37,14 @@ while [[ $# -gt 0 ]]; do
             fi
             ISSUE_ARG="$2"; shift 2
             ;;
-        *)
+        -*)
             echo "ELIGIBLE=false"
             echo "ERROR=Unknown option: $1"
             exit 2
+            ;;
+        *)
+            # Positional argument: issue number or URL
+            ISSUE_ARG="$1"; shift
             ;;
     esac
 done
