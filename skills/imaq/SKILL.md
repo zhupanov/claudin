@@ -1,7 +1,7 @@
 ---
 name: imaq
 description: "Use when implementing a feature quickly and autonomously with auto-merge. Shortcut for /implement --merge --auto --quick."
-argument-hint: "<feature-description>"
+argument-hint: "<arguments>"
 allowed-tools: Skill
 ---
 
