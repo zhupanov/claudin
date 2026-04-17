@@ -27,7 +27,7 @@ repos:
         types: [json]
 
   - repo: https://github.com/zhupanov/agent-lint
-    rev: v2.2.4
+    rev: v2.3.2
     hooks:
       - id: agent-lint
         args: [--pedantic]

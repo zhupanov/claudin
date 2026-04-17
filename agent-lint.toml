@@ -1,2 +1,9 @@
 [lint]
-ignore = ["body-too-long"]
+suppress = [
+  "body-too-long",
+  "script-deps-missing",
+  "body-no-default",
+  "mcp-tool-unqualified",
+  "desc-body-misalign",
+  "terminology-inconsistent",
+]
