@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: zhupanov/agent-lint@v2
+      - uses: zhupanov/agent-lint@v2.3.2
         with:
           github-token: ${{ github.token }}
           args: --pedantic
