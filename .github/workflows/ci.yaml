@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: agent-sh/agnix@v0
+      - uses: agent-sh/agnix@v0.17.0
         with:
           target: 'claude-code'
           config: '.agnix.toml'
