@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-04-16
+
+### Changed
+
+- Split `CLAUDE.md` into a thin `@AGENTS.md` include and a new `AGENTS.md` with terse agent-generic editing guidance
+- Upgraded agent-lint from v2.2.4 to v2.3.2 and aligned pre-commit, CI, and config syntax (`ignore` → `suppress`)
+
 ## [2.3.3] - 2026-04-15
 
 ### Added
