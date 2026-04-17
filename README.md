@@ -153,6 +153,7 @@ Larch uses [pre-commit](https://pre-commit.com/) as the single source of truth f
 | [markdownlint](https://github.com/igorshubovych/markdownlint-cli) | `.md` | Markdown style enforcement (config: `.markdownlint.json`) |
 | [jq](https://jqlang.github.io/jq/) | `.json` | JSON syntax validation |
 | [actionlint](https://github.com/rhysd/actionlint) | `.yml`, `.yaml` | GitHub Actions workflow validation |
+| [agnix](https://github.com/agent-sh/agnix) | `SKILL.md`, `CLAUDE.md`, agent configs | AI agent configuration linting (config: `.agnix.toml`) |
 
 ### Usage
 
@@ -171,6 +172,7 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 | `make markdownlint` | Run markdownlint only |
 | `make jsonlint` | Run JSON validation only |
 | `make actionlint` | Run actionlint only |
+| `make agnix` | Run agnix only |
 | `make setup` | Install pre-commit git hooks |
 
 ## Environment Variables

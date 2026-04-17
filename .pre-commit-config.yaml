@@ -36,3 +36,25 @@ repos:
     rev: v1.7.7
     hooks:
       - id: actionlint
+
+  - repo: local
+    hooks:
+      - id: agnix
+        name: Lint AI agent configuration files
+        entry: agnix .
+        language: node
+        additional_dependencies: ['agnix@0.17.0']
+        pass_filenames: false
+        files: |
+          (?x)^(
+            .*SKILL\.md|
+            .*CLAUDE\.md|
+            .*CLAUDE\.local\.md|
+            agents/.*\.md|
+            \.claude/agents/.*\.md|
+            \.claude/settings\.json|
+            \.claude/settings\.local\.json|
+            hooks/hooks\.json|
+            \.claude-plugin/.*\.json|
+            .*\.mcp\.json
+          )$

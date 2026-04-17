@@ -18,6 +18,7 @@ The following linters are configured in `.pre-commit-config.yaml`:
 - **Markdown files (`.md`)**: markdownlint (using `.markdownlint.json` config)
 - **JSON files (`.json`)**: jq validation
 - **GitHub Actions workflows (`.yml`, `.yaml`)**: actionlint
+- **AI agent configs (`SKILL.md`, `CLAUDE.md`, agent configs)**: agnix (using `.agnix.toml` config)
 
 After pre-commit linting succeeds, `run-checks.sh` additionally invokes `agent-lint` (if available on PATH) to catch structural regressions on the full repository. This is the same linter that CI's `agent-lint` job runs, so developers can catch structural breakage locally before pushing. If pre-commit fails, agent-lint is skipped — only run when basic linting passes.
 

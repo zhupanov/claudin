@@ -179,7 +179,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PWD/scripts/block-submodule-edit.sh"
+            "command": "$PWD/scripts/block-submodule-edit.sh",
+            "timeout": 10
           }
         ]
       },
@@ -188,7 +189,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$PWD/scripts/block-submodule-edit.sh"
+            "command": "$PWD/scripts/block-submodule-edit.sh",
+            "timeout": 10
           }
         ]
       }

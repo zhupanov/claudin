@@ -1,0 +1,17 @@
+# agnix configuration for larch Claude Code plugin
+# See: https://github.com/agent-sh/agnix
+
+tools = ["claude-code"]
+
+[rules]
+disabled_rules = [
+  # File-length rules — larch skills are intentionally long (orchestration prompts)
+  "AS-012",     # Skill content exceeds 500 lines
+  "CC-MEM-009", # File exceeds recommended token limit
+
+  # False positives for this repository
+  "XML-001",    # Angle brackets in argument-hint are CLI placeholder syntax, not XML
+  "CC-SK-008",  # 'Agent' is a valid Claude Code tool not yet in agnix's known-tool list
+  "XP-003",     # Hard-coded .claude/ paths are correct — this IS a Claude Code plugin repo
+  "CC-SK-007",  # Unrestricted Bash is intentional — all larch skills need full shell access
+]
