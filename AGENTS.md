@@ -8,16 +8,16 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 
 ## Editing rules
 
-- Never hand-edit `.claude-plugin/plugin.json` version. `/bump-version` owns that commit; `Bump version to X.Y.Z` is a reserved commit message.
+- Use `/bump-version` to change `.claude-plugin/plugin.json` version — it owns that commit; `Bump version to X.Y.Z` is a reserved commit message.
 - `agents/<name>.md` and `skills/shared/reviewer-templates.md` are two sides of the same contract. Never change one without the other.
-- Never disable or bypass `scripts/block-submodule-edit.sh`. If a hook blocks a write, investigate — don't work around it.
+- Always respect `scripts/block-submodule-edit.sh`. If a hook blocks a write, investigate and resolve the underlying issue.
 - After any change, run `/relevant-checks`.
 - Public `skills/*/SKILL.md` use `${CLAUDE_PLUGIN_ROOT}/…`; dev-only `.claude/skills/*/SKILL.md` use `$PWD/…`.
 - Update `SECURITY.md` when security-relevant behavior changes.
 
 ## Common editing tasks
 
-- **Changing a skill** → start at `skills/<name>/SKILL.md`, then trace every helper in `skills/<name>/scripts/`, `scripts/`, and `skills/shared/`. Behavior is often split between prompt and scripts.
+- **Changing a skill** → start at `skills/<name>/SKILL.md`, then trace every helper in `skills/<name>/scripts/`, `scripts/`, and `skills/shared/`. Behavior is split between prompt and scripts.
 - **Adding/modifying a reviewer archetype** → edit BOTH `agents/<name>.md` AND `skills/shared/reviewer-templates.md`.
 - **Changing a shared script** → edit `scripts/<name>.sh`, then grep for callers across `skills/`, `hooks/`, `.claude/settings.json`, `.github/workflows/`, and other scripts.
 - **Changing dev-only skills** → edit under `.claude/skills/bump-version/` or `.claude/skills/relevant-checks/`.
@@ -37,5 +37,5 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 
 - Shell scripts use `set -euo pipefail` by default. Comment when `-e` is intentionally omitted.
 - Follow recent commit history style. `Bump version to X.Y.Z` is reserved for `/bump-version`.
-- Do not run `gh pr create` manually — drive it through the skill.
+- Run `gh pr create` through the skill, not manually.
 - Slack env vars are optional; skills degrade gracefully when absent.

@@ -1,6 +1,6 @@
 ---
 name: bump-version
-description: Classify and apply a semantic version bump based on the current branch diff. Updates .claude-plugin/plugin.json and commits exactly one version-only commit. Invoked by /implement Step 8. Only inspects the public plugin surface (skills/**, agents/**) — changes under .claude/** default to PATCH.
+description: Use when applying a version bump after implementation. Classify and apply a semantic version bump based on the current branch diff. Updates .claude-plugin/plugin.json and commits exactly one version-only commit. Invoked by /implement Step 8. Only inspects the public plugin surface (skills/**, agents/**) — changes under .claude/** default to PATCH.
 allowed-tools: Bash, Read
 ---
 

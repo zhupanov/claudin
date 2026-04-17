@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/block-submodule-edit.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/block-submodule-edit.sh",
+            "timeout": 10
           }
         ]
       },
@@ -15,7 +16,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/block-submodule-edit.sh"
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/block-submodule-edit.sh",
+            "timeout": 10
           }
         ]
       }

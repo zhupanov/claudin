@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.5] - 2026-04-17
+
+### Added
+
+- Integrated agnix linter for AI agent configuration validation (pre-commit hook, Makefile target, CI job)
+- Created `.agnix.toml` config suppressing file-length rules and false positives for this plugin repo
+- Fixed all agnix warnings in `AGENTS.md` and `.claude/settings.json`
+- Added hook timeout to shipped `hooks/hooks.json` for consumer parity
+
 ## [2.3.4] - 2026-04-16
 
 ### Changed
