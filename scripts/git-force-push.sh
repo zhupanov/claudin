@@ -35,14 +35,14 @@ fi
 echo "BRANCH=$BRANCH"
 
 # First attempt.
-if git push --force-with-lease 2>&1; then
+if git push --force-with-lease; then
     echo "PUSHED=true"
     echo "STATUS=pushed"
     exit 0
 fi
 
 # Push failed. Refresh the tracking ref.
-git fetch origin "$BRANCH" 2>&1 || true
+git fetch origin "$BRANCH" 2>/dev/null || true
 
 # Compare local HEAD to origin/$BRANCH.
 LOCAL=$(git rev-parse HEAD)
@@ -58,7 +58,7 @@ fi
 # Local and remote diverge. Sleep 5s and retry once.
 "$SLEEP_SCRIPT_DIR/sleep-seconds.sh" 5 >/dev/null 2>&1 || sleep 5
 
-if git push --force-with-lease 2>&1; then
+if git push --force-with-lease; then
     echo "PUSHED=true"
     echo "STATUS=pushed"
     exit 0

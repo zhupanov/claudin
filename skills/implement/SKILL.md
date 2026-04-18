@@ -563,7 +563,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 - **Architecture Diagram**: Write "Quick mode — architecture diagram skipped."
 - **Code Flow Diagram**: Write "Quick mode — code flow diagram skipped."
 - **Final Design**: Use the inline implementation plan produced in Step 1 (not from `/design`).
-- **Version Bump Reasoning**: Populate from `$IMPLEMENT_TMPDIR/bump-version-reasoning.md` as in normal mode (the `/bump-version` skill writes this file when Step 8 runs, and this is mode-agnostic).
+- **Version Bump Reasoning**: Populate from `$BUMP_REASONING_FILE` (the absolute path parsed from `classify-bump.sh`'s `REASONING_FILE=<path>` stdout line in Step 8, identical to normal mode) if it exists and is non-empty, otherwise the standard fallback text from the normal-mode template.
 - **Rejected Plan Review Suggestions**: Write "Quick mode — no plan review was conducted."
 - **Plan Review Voting Tally**: Write "Quick mode — no plan review voting."
 - **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings from 1 Claude Code Reviewer subagent."
