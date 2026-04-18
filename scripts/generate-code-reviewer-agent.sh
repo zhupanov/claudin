@@ -56,34 +56,32 @@ tools:
 HEADER
 
 awk '
-  /<!-- BEGIN GENERATED_BODY -->/ { in_body = 1; next }
+  # Extract lines strictly between the BEGIN and END markers. The archetype
+  # body is wrapped in a bare ``` fence pair as the very first and very last
+  # lines inside the markers; drop those two structural lines directly by
+  # position, so nested fenced blocks inside the body (e.g., calibration
+  # examples, future code samples with language tags) are preserved
+  # untouched regardless of their count or syntax.
+  /<!-- BEGIN GENERATED_BODY -->/ { in_body = 1; skipped_open = 0; next }
   /<!-- END GENERATED_BODY -->/   { in_body = 0; next }
-  in_body { print }
-' "$TEMPLATE" \
-| awk '
-  # Strip only the outermost "```" fence pair that wraps the archetype body.
-  # The body legitimately contains nested fenced blocks (calibration examples),
-  # so we must NOT strip those — only the first and last top-level fence.
-  { lines[n++] = $0 }
+  in_body {
+    if (!skipped_open) { skipped_open = 1; next }
+    buf[bn++] = $0
+  }
   END {
-    first = -1
-    last = -1
-    for (i = 0; i < n; i++) {
-      if (lines[i] == "```") {
-        if (first == -1) first = i
-        last = i
-      }
-    }
-    if (first == -1 || first == last) {
-      print "ERROR: expected two outer fence lines in generated body" > "/dev/stderr"
+    if (bn == 0) {
+      print "ERROR: no content found between BEGIN/END GENERATED_BODY markers" > "/dev/stderr"
       exit 1
     }
-    for (i = 0; i < n; i++) {
-      if (i == first || i == last) continue
-      print lines[i]
+    # Drop the outer close fence (last line of the body region).
+    if (buf[bn-1] != "```") {
+      print "ERROR: expected outer close fence ``` as last line inside GENERATED_BODY markers; got: " buf[bn-1] > "/dev/stderr"
+      exit 1
     }
+    bn--
+    for (i = 0; i < bn; i++) print buf[i]
   }
-' \
+' "$TEMPLATE" \
 | awk -v rtv="$REVIEW_TARGET_VALUE" '
   # Substitute {REVIEW_TARGET}. Strip the {CONTEXT_BLOCK} line and, if followed
   # by a blank line, that blank line too, to avoid a stray blank in the output.

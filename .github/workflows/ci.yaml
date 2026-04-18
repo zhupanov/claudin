@@ -60,46 +60,78 @@ jobs:
       - name: Assert focus-area enum includes 'security' in canonical surfaces
         run: |
           set -euo pipefail
-          # Files where the five-tag enum must remain aligned. Voting-Protocol
-          # SKILL.md callers, shared template + generated agent, and user/dev
-          # docs that advertise the archetype. Negotiation-Protocol skills
-          # (loop-review, research) are intentionally excluded — their
-          # external-reviewer prose uses a different taxonomy and is tracked
-          # as a follow-up.
-          FILES=(
-            skills/review/SKILL.md
-            skills/design/SKILL.md
-            skills/implement/SKILL.md
+          # Files where the formal backticked enum lives. These are the
+          # authoritative declarations of the focus-area tag set.
+          BACKTICKED_FILES=(
             skills/shared/reviewer-templates.md
             agents/code-reviewer.md
             docs/review-agents.md
-            docs/agents.md
-            README.md
           )
+          # Files where the enum appears unquoted (slash-separated) inside
+          # Cursor/Codex prompt strings in the Voting-Protocol SKILL.md
+          # callers. These prompts are what external reviewers actually see,
+          # so a regression here silently weakens the review panel.
+          UNQUOTED_FILES=(
+            skills/review/SKILL.md
+            skills/design/SKILL.md
+            skills/implement/SKILL.md
+          )
+          # Note: README.md and docs/agents.md use natural prose
+          # ("code quality, risk/integration, correctness, architecture,
+          # security") that does not match a stable enum-like regex. They are
+          # maintained by hand during Phase 2 and are not mechanically
+          # checked here. Negotiation-Protocol skills (loop-review, research)
+          # are intentionally excluded — their external-reviewer prose uses a
+          # different taxonomy and is tracked as a focused follow-up.
           exit_code=0
-          for f in "${FILES[@]}"; do
+
+          # shellcheck disable=SC2016
+          # Backticked enum: literal backticks in the regex are intentional;
+          # the single-quotes around the pattern prevent the shell from
+          # parsing them as command substitution.
+          for f in "${BACKTICKED_FILES[@]}"; do
             if [[ ! -f "$f" ]]; then
               echo "::error file=$f::expected file is missing"
               exit_code=1
               continue
             fi
-            # Match the formal enum: backticked tags in order. Skip prose
-            # mentions (e.g., "code quality/risk-integration" without backticks)
-            # which are not enum declarations. Literal backticks in the regex
-            # are intentional; the single-quotes around the pattern are
-            # required to keep the shell from parsing them as command
-            # substitution.
-            # shellcheck disable=SC2016
             if grep -n '`code-quality`.*`risk-integration`.*`correctness`.*`architecture`' "$f" >/tmp/hits 2>/dev/null; then
               while IFS= read -r hit; do
                 line_no="${hit%%:*}"
                 line_text="${hit#*:}"
                 if ! printf '%s\n' "$line_text" | grep -q 'security'; then
-                  echo "::error file=$f,line=$line_no::focus-area enumeration does not include 'security': $line_text"
+                  echo "::error file=$f,line=$line_no::backticked focus-area enumeration does not include 'security': $line_text"
                   exit_code=1
                 fi
               done </tmp/hits
+            else
+              echo "::error file=$f::no backticked focus-area enumeration found (file should contain the canonical \`code-quality\`/\`risk-integration\`/... enum)"
+              exit_code=1
             fi
           done
+
+          # Unquoted slash-separated enum (as it appears inside SKILL.md
+          # prompt strings for Cursor/Codex).
+          for f in "${UNQUOTED_FILES[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error file=$f::expected file is missing"
+              exit_code=1
+              continue
+            fi
+            if grep -n 'code-quality / risk-integration / correctness / architecture' "$f" >/tmp/hits 2>/dev/null; then
+              while IFS= read -r hit; do
+                line_no="${hit%%:*}"
+                line_text="${hit#*:}"
+                if ! printf '%s\n' "$line_text" | grep -q 'security'; then
+                  echo "::error file=$f,line=$line_no::unquoted focus-area enumeration does not include 'security': $line_text"
+                  exit_code=1
+                fi
+              done </tmp/hits
+            else
+              echo "::error file=$f::no unquoted focus-area enumeration found (SKILL.md should contain the slash-separated enum in Cursor/Codex prompt strings)"
+              exit_code=1
+            fi
+          done
+
           rm -f /tmp/hits
           exit "$exit_code"
