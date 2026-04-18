@@ -1,13 +1,13 @@
 ---
 name: fix-issue
-description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: triages, classifies complexity, and delegates to /implement."
+description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues blocked by open dependencies, triages, classifies complexity, and delegates to /implement."
 argument-hint: "[--debug] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
 # Fix Issue
 
-Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, triages against the codebase, classifies complexity, and delegates to `/implement`.
+Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any whose GitHub issue-dependencies list includes an open blocker, triages the remaining candidate against the codebase, classifies complexity, and delegates to `/implement`.
 
 **Single-iteration design**: Each invocation handles at most one issue, then exits. The caller (cron, `/loop`, or manual invocation) is responsible for repeated execution.
 
@@ -15,7 +15,7 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 
 - `--debug`: Set `debug_mode=true`. Forward `--debug` to `/implement` in Step 6. Default: `debug_mode=false`.
 - `--issue <number-or-url>`: **Deprecated** — recognized for backward compatibility. Prefer passing the issue number or URL as a positional argument (e.g., `/fix-issue 42`). When this flag is encountered, print: `**ℹ '--issue' is deprecated; pass the issue number or URL as a positional argument instead (e.g., /fix-issue 42).**`
-- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping `--debug` and `--issue`, treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open and have `GO` as its last comment. Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
+- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping `--debug` and `--issue`, treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 1 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
 
 ## Progress Reporting
 
@@ -65,6 +65,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/fetch-eligible-issue.sh ["$ISSUE_
 ```
 
 Only include `"$ISSUE_ARG"` as a positional argument if `ISSUE_ARG` is non-empty (the user provided an issue number/URL via positional argument or the deprecated `--issue` flag).
+
+Candidates are required to be open, have `GO` as their last comment, not be locked by a prior `IN PROGRESS` comment, and **have no currently-open blocking dependencies** (per GitHub's native issue-dependencies feature, queried via `repos/{owner}/{repo}/issues/{N}/dependencies/blocked_by`). An issue whose listed blockers are all closed is eligible; an issue with even one open blocker is skipped in auto-pick mode and reported as ineligible in explicit `--issue` mode. If the dependencies endpoint is unavailable (e.g., 404, transient gh failure), the check degrades to the pre-existing GO-only behavior so API availability never hard-blocks the automation.
 
 Handle exit codes:
 
@@ -196,3 +198,4 @@ Print `✅ 9: cleanup — fix-issue complete! (<elapsed>)`
 
 - **Stale IN PROGRESS lock**: If the skill crashes after Step 2, the issue remains locked with `IN PROGRESS` as the last comment. Recovery: manually delete the `IN PROGRESS` comment and re-add `GO` to re-enable the issue for automated processing.
 - **Single-runner assumption**: The comment-based locking (Step 2) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
+- **Dependency check degrades silently on API failure**: The blocked-by check (Step 1) treats unreachable or erroring dependency-API responses as "no blockers known" to avoid hard-blocking the automation. If GitHub's issue-dependencies endpoint is returning 5xx or an unexpected payload, a blocked issue could temporarily be eligible. The GO sentinel still applies, so the blast radius is limited to whatever the reviewer intended to allow via `GO`.

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.7] - 2026-04-18
+
+### Changed
+
+- `/fix-issue` now skips candidates with currently-open blocking dependencies. After an issue passes the `GO` sentinel check, `fetch-eligible-issue.sh` queries GitHub's native issue-dependencies API (`repos/{owner}/{repo}/issues/{N}/dependencies/blocked_by`); if any blocker is still in the `open` state, auto-pick mode continues scanning and explicit `--issue` mode reports ineligible with the blocker list. The dependency lookup uses `gh api --paginate --jq` so results across multiple pages are merged correctly. API errors (404 on repos without the feature, 5xx, transient gh failures) degrade silently to the prior GO-only behavior so dependency-API availability never hard-blocks the automation; the degradation is documented under the skill's Known Limitations.
+
 ## [3.0.6] - 2026-04-18
 
 ### Changed

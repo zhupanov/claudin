@@ -2,11 +2,13 @@
 # fetch-eligible-issue.sh — Find an eligible issue approved for automated work.
 #
 # Without --issue: lists open issues, checks each for the "GO" sentinel as
-# the last comment, excludes issues locked with "IN PROGRESS", and emits
-# the first match (oldest first).
+# the last comment, excludes issues locked with "IN PROGRESS", excludes
+# issues blocked by other open issues (via GitHub's native issue dependencies),
+# and emits the first match (oldest first).
 #
 # With --issue: targets a specific issue (by number or GitHub URL), verifies
-# it is open and has "GO" as the last comment.
+# it is open, has "GO" as the last comment, and has no currently-open
+# blocking dependencies.
 #
 # Usage:
 #   fetch-eligible-issue.sh [<number-or-url>]
@@ -62,6 +64,32 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || {
     echo "ELIGIBLE=false"
     echo "ERROR=Failed to resolve repository name"
     exit 2
+}
+
+# ---------------------------------------------------------------------------
+# open_blockers <issue-number>
+#
+# Queries GitHub's native issue-dependencies API and prints a space-separated
+# list of open blocker issue numbers (e.g., "42 57") on stdout. Empty output
+# means no open blockers — the issue may proceed.
+#
+# API errors (404 on repos without the dependencies feature, transient gh
+# failures) are treated as "no blockers known": the function prints nothing
+# and returns 0. Rationale: do not let dependency-API availability become a
+# hard gate on the automation — if the feature isn't used or is unreachable,
+# fall back to pre-existing behavior (GO sentinel alone).
+# ---------------------------------------------------------------------------
+open_blockers() {
+    local num="$1"
+    local nums
+    # Use --paginate with --jq so the filter runs per page and outputs are concatenated
+    # (one number per line). Using --paginate without --jq returns one JSON array per
+    # page as separate documents, and `jq '.[] ...'` only consumes the first — missing
+    # blockers beyond the default page size.
+    nums=$(gh api --paginate "repos/${REPO}/issues/${num}/dependencies/blocked_by" \
+        --jq '.[] | select(.state == "open") | .number' 2>/dev/null) || return 0
+    # Collapse newline-separated numbers into a single space-separated line, trimming trailing whitespace.
+    echo "$nums" | tr '\n' ' ' | sed 's/[[:space:]]*$//'
 }
 
 # ---------------------------------------------------------------------------
@@ -124,6 +152,15 @@ if [[ -n "$ISSUE_ARG" ]]; then
         exit 2
     fi
 
+    BLOCKERS=$(open_blockers "$ISSUE_NUM")
+    if [ -n "$BLOCKERS" ]; then
+        # Format as comma-separated #N list for the error message
+        FORMATTED=$(echo "$BLOCKERS" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
+        echo "ELIGIBLE=false"
+        echo "ERROR=Issue #$ISSUE_NUM is blocked by open dependencies: $FORMATTED"
+        exit 2
+    fi
+
     echo "ELIGIBLE=true"
     echo "ISSUE_NUMBER=$ISSUE_NUM"
     echo "ISSUE_TITLE=$ISSUE_TITLE"
@@ -169,6 +206,13 @@ while IFS= read -r issue_row; do
 
     # Check if last comment is exactly GO (case-sensitive)
     if [ "$TRIMMED" = "GO" ]; then
+        BLOCKERS=$(open_blockers "$ISSUE_NUM")
+        if [ -n "$BLOCKERS" ]; then
+            # Blocked by at least one open dependency — log on stderr and keep scanning.
+            FORMATTED=$(echo "$BLOCKERS" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
+            echo "Skipping issue #$ISSUE_NUM: blocked by open dependencies ($FORMATTED)" >&2
+            continue
+        fi
         echo "ELIGIBLE=true"
         echo "ISSUE_NUMBER=$ISSUE_NUM"
         echo "ISSUE_TITLE=$ISSUE_TITLE"
