@@ -101,6 +101,7 @@ Parse the output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REP
 - `IMPLEMENT_TMPDIR` = `SESSION_TMPDIR`
 - If `SLACK_OK=false`, print: `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.**` Set a mental flag `slack_available=false`.
 - If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository name. CI monitoring (Steps 10, 12) and merge (Step 12b) will be skipped.**` Set a mental flag `repo_unavailable=true`.
+- Set mental flag `codex_available` from the probe output per the **Binary Check and Health Probe** mapping in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`: `codex_available=true` only if both `CODEX_AVAILABLE=true` and `CODEX_HEALTHY=true`; otherwise `codex_available=false`. Same logic for `cursor_available`. These flags are used by Step 5 quick-mode reviewer selection and flip to `false` at runtime when a reviewer times out (per the Runtime Timeout Fallback procedure).
 - If `CODEX_AVAILABLE=false`: print `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
 - Else if `CODEX_HEALTHY=false`: print `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
 - Same for Cursor. Only check `*_HEALTHY` when `*_AVAILABLE=true`.
@@ -331,7 +332,7 @@ Append rejected findings to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the s
 
 **5.7 — Implement accepted fixes**: Edit the affected files. Then invoke `/relevant-checks`. If checks fail, diagnose and fix, then re-invoke `/relevant-checks` until clean.
 
-**5.8 — Re-review gate**: If `/relevant-checks` reported no files modified in this round (accepted findings turned out to be no-ops after re-reading code), the loop is done — proceed to Step 6. Otherwise, significant changes were made: increment `round_num`. If `round_num <= 5`, loop back to 5.1. If `round_num > 5`, print:
+**5.8 — Re-review gate**: Observable signal is whether Step 5.7 actually edited any files in the working tree — the main agent knows this from its own Edit/Write tool usage during this round. If Step 5.7 made no file edits (accepted findings turned out to be no-ops after re-reading code), the loop is done — proceed to Step 6. Otherwise, significant changes were made: increment `round_num`. If `round_num <= 5`, loop back to 5.1. If `round_num > 5`, print:
 
 ```
 **⚠ 5: code review — quick mode hit 5-round cap without converging. Remaining findings from the last round are listed above. Proceeding.**
