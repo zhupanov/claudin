@@ -13,7 +13,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, save the remainder as `FEATURE_DESCRIPTION` — use this (not raw `$ARGUMENTS`) whenever the human-readable feature description is needed (e.g., PR body, design invocation, commit messages). **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
-- `--quick`: Set a mental flag `quick_mode=true`. Default: `quick_mode=false`. When `quick_mode=true`: Step 1 skips `/design` (this skill creates the branch and an inline plan directly), Step 5 skips `/review` (a single-reviewer loop of up to 5 rounds using the Cursor → Codex → Claude Code Reviewer subagent fallback chain — no voting panel), and Step 7a skips the Code Flow Diagram. All other steps (CI wait, Slack, cleanup) run normally. The `--merge` opt-in is independent of `--quick`.
+- `--quick`: Set a mental flag `quick_mode=true`. Default: `quick_mode=false`. When `quick_mode=true`: Step 1 skips `/design` (this skill creates the branch and an inline plan directly), Step 5 skips `/review` (a single-reviewer loop of up to 7 rounds using the Cursor → Codex → Claude Code Reviewer subagent fallback chain — no voting panel), and Step 7a skips the Code Flow Diagram. All other steps (CI wait, Slack, cleanup) run normally. The `--merge` opt-in is independent of `--quick`.
 - `--auto`: Set a mental flag `auto_mode=true`. Default: `auto_mode=false`. When `auto_mode=true`: (a) forward `--auto` to `/design` invocation in Step 1, suppressing `/design`'s interactive question checkpoints; (b) suppress this skill's own opportunistic questions in Step 2; (c) in Step 12, when merge conflicts require user input for uncertain resolutions, suppress `AskUserQuestion` and use best-effort resolution instead (bailing if confidence is too low). When `--quick` is also set and `/design` is skipped, `--auto` still suppresses Step 2 questions.
 - `--merge`: Set a mental flag `merge=true`. Default: `merge=false`. When `merge=true`, Steps 12–15 run (CI+rebase+merge loop, :merged: emoji, local cleanup, and main verification). When `merge=false`, these steps are skipped — the PR is created and the workflow stops after the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup.
 - `--no-merge`: **Deprecated** — recognized for backward compatibility but treated as a no-op (the new default already skips merge steps). When this flag is encountered, print: `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
@@ -270,9 +270,9 @@ If successful:
 
 ### Quick mode (`quick_mode=true`)
 
-Print: `> **🔶 5: code review — quick mode (single reviewer, Cursor → Codex → Claude fallback, up to 5 rounds)**`
+Print: `> **🔶 5: code review — quick mode (single reviewer, Cursor → Codex → Claude fallback, up to 7 rounds)**`
 
-Skip `/review`. Instead, run a single-reviewer loop with up to **5 rounds** of review + fix. There is no voting panel — one reviewer per round, main agent unilaterally accepts/rejects each finding.
+Skip `/review`. Instead, run a single-reviewer loop with up to **7 rounds** of review + fix. There is no voting panel — one reviewer per round, main agent unilaterally accepts/rejects each finding.
 
 **Reviewer selection**: At the start of each round, pick ONE reviewer from the following priority chain (re-evaluated each round so runtime failures cascade to the next tier per the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`):
 
@@ -332,13 +332,13 @@ Append rejected findings to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the s
 
 **5.7 — Implement accepted fixes**: Edit the affected files. Then invoke `/relevant-checks`. If checks fail, diagnose and fix, then re-invoke `/relevant-checks` until clean.
 
-**5.8 — Re-review gate**: Observable signal is whether Step 5.7 actually edited any files in the working tree — the main agent knows this from its own Edit/Write tool usage during this round. If Step 5.7 made no file edits (accepted findings turned out to be no-ops after re-reading code), the loop is done — proceed to Step 6. Otherwise, significant changes were made: increment `round_num`. If `round_num <= 5`, loop back to 5.1. If `round_num > 5`, print:
+**5.8 — Re-review gate**: Observable signal is whether Step 5.7 actually edited any files in the working tree — the main agent knows this from its own Edit/Write tool usage during this round. If Step 5.7 made no file edits (accepted findings turned out to be no-ops after re-reading code), the loop is done — proceed to Step 6. Otherwise, significant changes were made: increment `round_num`. If `round_num <= 7`, loop back to 5.1. If `round_num > 7`, print:
 
 ```
-**⚠ 5: code review — quick mode hit 5-round cap without converging. Remaining findings from the last round are listed above. Proceeding.**
+**⚠ 5: code review — quick mode hit 7-round cap without converging. Remaining findings from the last round are listed above. Proceeding.**
 ```
 
-Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`: `Step 5 — quick-mode review loop did not converge after 5 rounds.` Then proceed to Step 6.
+Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`: `Step 5 — quick-mode review loop did not converge after 7 rounds.` Then proceed to Step 6.
 
 ### Normal mode (`quick_mode=false`)
 
@@ -621,7 +621,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 - **Version Bump Reasoning**: Populate from `$BUMP_REASONING_FILE` (the absolute path parsed from `classify-bump.sh`'s `REASONING_FILE=<path>` stdout line in Step 8, identical to normal mode) if it exists and is non-empty, otherwise the standard fallback text from the normal-mode template.
 - **Rejected Plan Review Suggestions**: Write "Quick mode — no plan review was conducted."
 - **Plan Review Voting Tally**: Write "Quick mode — no plan review voting."
-- **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings across up to 5 single-reviewer rounds (Cursor → Codex → Claude fallback chain)."
+- **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings across up to 7 single-reviewer rounds (Cursor → Codex → Claude fallback chain)."
 - **Implementation Deviations**: Compare implementation to the inline plan (same as normal mode).
 - **Out-of-Scope Observations**: Write "Quick mode — no out-of-scope observations collected."
 - **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)", "OOS issues filed" to "N/A (quick mode)". Code review findings should reflect the quick review results.
