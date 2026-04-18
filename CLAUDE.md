@@ -1,1 +1,2 @@
 @AGENTS.md
+@KARPATHY_CLAUDE.md
