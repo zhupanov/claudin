@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2026-04-18
+
+### Fixed
+
+- `/implement` and `/bump-version` no longer touch `$PWD/.git/`. The classify-bump.sh reasoning-log default path moved from `$PWD/.git/bump-version-reasoning.md` to `${TMPDIR:-/tmp}/bump-version-reasoning.md`, and `/implement` Step 8 now parses the absolute path from `classify-bump.sh`'s `REASONING_FILE=<path>` stdout line instead of reconstructing it from `IMPLEMENT_TMPDIR`. Fixes a permission-prompt storm that occurred when the Skill tool invocation lost the env var and `/implement` fell back to copying the reasoning file out of `.git/`.
+
+### Added
+
+- Ten git wrapper scripts under `scripts/` that replace direct `git` commands in `skills/implement/SKILL.md`: `git-current-branch.sh`, `git-amend-add.sh`, `git-force-push.sh` (with internal fetch/compare/retry recovery), `git-sync-local-main.sh`, `git-rebase-skip.sh`, `git-conflict-files.sh`, `git-show-stage.sh`, `git-checkout-ours.sh`, `git-stage.sh`, and `git-push.sh`. Each is pre-approved by `settings.json`'s `Bash($PWD/scripts/*)` rule, so invoking them does not trigger per-command permission prompts. `skills/implement/SKILL.md` updated at every call site (Step 1 branch capture, Step 8a CHANGELOG amend, Rebase + Re-bump Sub-procedure steps 3/4a/5/6, Conflict Resolution Procedure Phase 1 + Phase 4 Exit 3, Step 10/12c CI fix handlers).
+
 ## [3.0.2] - 2026-04-18
 
 ### Changed
