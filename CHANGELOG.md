@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-04-18
+
+### Added
+
+- `KARPATHY_CLAUDE.md` at repo root — verbatim copy of Andrej Karpathy's coding guidelines (Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution).
+- `@KARPATHY_CLAUDE.md` include added to root `CLAUDE.md` after the existing `@AGENTS.md` include, loading the guidelines into developer context when working inside this repo.
+
 ## [3.0.0] - 2026-04-18
 
 ### Changed
