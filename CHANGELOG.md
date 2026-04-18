@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-04-18
+
+### Added
+
+- New `/issue` skill (`skills/issue/SKILL.md`) that creates a GitHub issue in the current repository from a free-form description. With the optional `--go` flag, it additionally posts a final `GO` comment on the new issue so it becomes immediately eligible for `/fix-issue` automation without manual approval. `skills/alias/SKILL.md` now reserves the `issue` name so project-level aliases cannot collide with the shipped skill. README install blurb, Skills summary row, and skills table updated to document `/issue`.
+
 ## [3.0.7] - 2026-04-18
 
 ### Changed
