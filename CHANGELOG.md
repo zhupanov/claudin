@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-04-18
+
+### Added
+
+- New `§5 Security` focus area in the Code Reviewer archetype (`skills/shared/reviewer-templates.md` + generated `agents/code-reviewer.md`) covering injection, authN/authZ, secret scanning (with regex hints: `.env`, `AWS_`, `PRIVATE_KEY`, `sk-`, `Authorization: Bearer`), crypto, deserialization, SSRF, path traversal, and dependency CVEs. Review findings may now be tagged with a new `security` focus-area value, extending the enum from 4 to 5 tags (all four prior tags remain valid).
+- New `## Adapt scope` section in the archetype instructing reviewers to tailor reviews to doc-only / test-only / revert / rename-only / large-diff / generated-code PRs, plus a security-elevation trigger for changes touching auth, secrets, shelling out, parsing, deserialization, permissions, network boundaries, cryptography, or untrusted input.
+- New `## Calibration examples` section with two synthetic few-shot examples (one well-formed `**Important**` finding with evidence, one false-positive suppression) using fake `example://` paths and an explicit "evidence for real findings must come ONLY from the provided review context" instruction.
+- New `scripts/generate-code-reviewer-agent.sh` bash generator that emits `agents/code-reviewer.md` from `skills/shared/reviewer-templates.md` (extracts body between `<!-- BEGIN/END GENERATED_BODY -->` markers, strips outer fence by position, substitutes `{REVIEW_TARGET}` = `"code, plans, or conflict resolutions"`, omits `{CONTEXT_BLOCK}`, and performs section-keyed replacement of the two `{OUTPUT_INSTRUCTION}` placeholders). Supports `--check` mode for CI drift detection.
+- New `agent-sync` CI job in `.github/workflows/ci.yaml` that runs the generator in `--check` mode and asserts that both the backticked enum (in template + agent + `docs/review-agents.md`) and the unquoted slash-separated enum (in voting-panel SKILL.md prompts) include `security`.
+
+### Changed
+
+- `{CONTEXT_BLOCK}` is now wrapped in namespaced `<reviewer_*>` XML tags (`<reviewer_diff>`, `<reviewer_plan>`, `<reviewer_feature_description>`, `<reviewer_file_list>`, `<reviewer_commits>`, `<reviewer_research_question>`, `<reviewer_research_findings>`, `<reviewer_conflict_context>`) with a prepended instruction sentence that the tags are literal input delimiters. Applied at every call site in `skills/review/SKILL.md`, `skills/design/SKILL.md`, `skills/implement/SKILL.md` (quick-mode + conflict-review), and `skills/research/SKILL.md`. The wrapping is a model-level prompt-injection mitigation, not a parser-enforced security boundary — see `docs/review-agents.md` and `SECURITY.md` for the residual-risk discussion.
+- `agents/code-reviewer.md` is now a **generated artifact** — hand edits are forbidden and CI enforces sync with `skills/shared/reviewer-templates.md`. `AGENTS.md` is updated to replace the previous "edit both files in lockstep" rule with "edit the template; regenerate the agent."
+- `skills/review/SKILL.md`, `skills/design/SKILL.md`, and `skills/implement/SKILL.md` inline Cursor/Codex prompts now include `(5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs` and enumerate all five focus-area tags for reviewers.
+- `docs/review-agents.md`, `docs/agents.md`, `README.md`, and `SECURITY.md` updated to document the new Security lane, the generator-enforced single source of truth, and the XML wrapping with its residual-risk framing.
+- `skills/loop-review/SKILL.md` and `skills/research/SKILL.md` external-reviewer prose is intentionally left on the 4-perspective taxonomy (Negotiation Protocol) in this release; editorial rebalancing to the 5-tag vocabulary is tracked as a focused follow-up. The Claude subagent lanes in those skills inherit the 5-tag archetype automatically via `subagent_type: code-reviewer`.
+
 ## [3.1.1] - 2026-04-18
 
 ### Changed
