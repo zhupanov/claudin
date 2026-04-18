@@ -81,11 +81,15 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || {
 # ---------------------------------------------------------------------------
 open_blockers() {
     local num="$1"
-    local json
-    json=$(gh api --paginate "repos/${REPO}/issues/${num}/dependencies/blocked_by" 2>/dev/null) || return 0
-    [ -z "$json" ] && return 0
-    # Keep only entries in the OPEN state; extract issue numbers on one line.
-    echo "$json" | jq -r '[.[] | select(.state == "open") | .number] | join(" ")' 2>/dev/null || true
+    local nums
+    # Use --paginate with --jq so the filter runs per page and outputs are concatenated
+    # (one number per line). Using --paginate without --jq returns one JSON array per
+    # page as separate documents, and `jq '.[] ...'` only consumes the first — missing
+    # blockers beyond the default page size.
+    nums=$(gh api --paginate "repos/${REPO}/issues/${num}/dependencies/blocked_by" \
+        --jq '.[] | select(.state == "open") | .number' 2>/dev/null) || return 0
+    # Collapse newline-separated numbers into a single space-separated line, trimming trailing whitespace.
+    echo "$nums" | tr '\n' ' ' | sed 's/[[:space:]]*$//'
 }
 
 # ---------------------------------------------------------------------------
