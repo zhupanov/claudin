@@ -204,9 +204,9 @@ Parse the structured output for each reviewer's `STATUS`, `REVIEWER_FILE`, and `
 
 ### 3d — Collect, negotiate, deduplicate, and classify findings
 
-**After ALL reviewers return** (2 Claude subagents AND any launched external reviewers), proceed:
+**After ALL reviewers return** (2 Claude Code Reviewer subagent lanes AND any launched external reviewers), proceed:
 
-**1. Collect** all findings from Claude subagents and validated external reviewer output.
+**1. Collect** all findings from both Claude Code Reviewer subagent lanes (broad + deep perspectives) and validated external reviewer output.
 
 **2. Negotiate** with external reviewers (if they produced findings):
 

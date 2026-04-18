@@ -66,8 +66,16 @@ Append the elapsed time in parentheses at the end of the line, using short form.
 
 For reviewer/agent status tables, include elapsed time immediately after each `✅` and `❌`. The timer for each entry starts when that agent/reviewer was launched.
 
+Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict review) use the 3-reviewer composition:
+
 ```
-📊 Reviewers: | General: ✅ 2m31s | Deep: ⏳ | Codex-G: ✅ 4m12s | Codex-D: ❌ 8m3s | Cursor: ⏳ |
+📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
+```
+
+Negotiation-Protocol skills (`/loop-review`, `/research`) keep the 5-lane composition:
+
+```
+📊 Reviewers: | Code-broad: ✅ 2m31s | Code-deep: ⏳ | Codex-G: ✅ 4m12s | Codex-D: ❌ 8m3s | Cursor: ⏳ |
 ```
 
 `⏳` (in-progress) and `⊘` (skipped/unavailable) do not include timing.

@@ -83,8 +83,8 @@ case "$TOOL" in
             case "$EFFORT" in
                 minimal|low|medium|high) ;;
                 *)
-                    echo "reviewer-model-args.sh: invalid codex effort '$EFFORT' (must be minimal|low|medium|high)" >&2
-                    exit 1
+                    echo "reviewer-model-args.sh: WARN invalid codex effort '$EFFORT' (must be minimal|low|medium|high); falling back to 'high'" >&2
+                    EFFORT="high"
                     ;;
             esac
             if [[ -n "$OUT" ]]; then

@@ -53,7 +53,7 @@ There are two related but distinct mechanisms for invoking this archetype:
 
 **Persistent agent definition** (`agents/code-reviewer.md`) — Standalone agent file with frontmatter specifying name, description, model, and allowed tools. Invoked via the Agent tool with `subagent_type: code-reviewer`.
 
-**Inline reviewer template** (`skills/shared/reviewer-templates.md`) — Parameterized prompt template that skills fill in with context-specific variables (`{REVIEW_TARGET}`, `{CONTEXT_BLOCK}`, `{OUTPUT_INSTRUCTION}`). External reviewers (Codex, Cursor) receive an inline rendering of the same checklist.
+**Inline reviewer template** (`skills/shared/reviewer-templates.md`) — Parameterized prompt template that skills fill in with context-specific variables (`{REVIEW_TARGET}`, `{CONTEXT_BLOCK}`, `{OUTPUT_INSTRUCTION}`). In the Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict review), external reviewers (Codex, Cursor) receive an inline rendering of the unified four-focus-area checklist with mandatory focus-area tagging. In the Negotiation-Protocol skills (`/loop-review`, `/research`), external reviewer prompts retain their pre-existing "4 review perspectives" wording and do not currently enforce focus-area tagging — those prompts are out of scope for the unified consolidation.
 
 The persistent agent and inline template are derived from the same source and kept in sync (per the `AGENTS.md` contract — both must change together).
 
