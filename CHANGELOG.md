@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.4] - 2026-04-18
+
+### Changed
+
+- `/implement --quick` code review now uses a single-reviewer loop with the Cursor → Codex → Claude Code Reviewer subagent fallback chain, re-reviewing up to 5 rounds when a round's fixes introduce significant changes. Previously, quick mode ran a single Claude subagent for one round with no re-review. The fallback chain re-evaluates per round so runtime timeouts cascade to the next tier. Step 0 now explicitly sets the `cursor_available`/`codex_available` mental flags consumed by the new Step 5 selection logic.
+
 ## [3.0.3] - 2026-04-18
 
 ### Fixed
