@@ -15,7 +15,7 @@ claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
 ```
 
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/alias`, `/im`, and `/imaq` slash commands become available in every Claude Code session.
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/im`, and `/imaq` slash commands become available in every Claude Code session.
 
 To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
 
@@ -41,7 +41,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/alias`, `/im`, `/imaq` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/im`, `/imaq` |
 | Agents | `code-reviewer` (unified archetype covering code quality, risk/integration, correctness, architecture) |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 
@@ -120,6 +120,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] [--debug] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (1 Claude Code Reviewer subagent, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
 | [`/loop-review`](skills/loop-review/SKILL.md) | `[--debug] [partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with 2 Claude Code Reviewer subagent lanes (broad + deep perspectives) + 2 Codex (broad + deep) + Cursor (5 total, if available), implementing improvements via `/implement`, and logging deferred suggestions. Uses the Negotiation Protocol. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). [(Diagram).](skills/loop-review/diagram.svg) |
 | [`/fix-issue`](skills/fix-issue/SKILL.md) | `[--debug] [<number-or-url>]` | Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement`. With a number or URL argument, targets a specific issue instead of auto-picking. Single-iteration design — the caller handles repetition. |
+| [`/issue`](skills/issue/SKILL.md) | `[--go] <issue description>` | Create a new GitHub issue in the current repository from a free-form description. With `--go`, also posts a final `GO` comment on the new issue so it becomes immediately eligible for `/fix-issue` automation. |
 | [`/alias`](skills/alias/SKILL.md) | `[--merge] <alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
 | [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
 

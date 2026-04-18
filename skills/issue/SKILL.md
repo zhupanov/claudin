@@ -25,7 +25,7 @@ The **title** is a concise one-line summary derived from `DESCRIPTION`:
 
 - Take `DESCRIPTION` up to the first newline (or the whole string if single-line).
 - Trim leading/trailing whitespace.
-- If the result is longer than 80 characters, truncate at the last word boundary ≤ 80 chars and append `…`.
+- If the result is longer than 80 characters: truncate at the last whitespace ≤ 80 chars and append `…`. If the first 80 characters contain no whitespace (e.g., a long token or URL), hard-cut at 80 characters and append `…`.
 - If after trimming the title is empty, abort with `**ERROR: Could not derive a title from the description.**`
 
 The **body** is the full original `DESCRIPTION` verbatim (including any multi-line content).
@@ -40,17 +40,23 @@ If the command fails or `REPO` is empty, print `**ERROR: Could not determine the
 
 ## Step 4 — Create the Issue
 
-Invoke `gh issue create` with the derived title and full body:
+Invoke `gh issue create` with the derived title and full body, targeting the verified repository explicitly so the command matches the repo confirmed in Step 3. Pass the title and body as proper shell variables (double-quoted), not interpolated literals — the user's free-form description may contain `"`, `$`, or backticks that would break naive inlining. For long or multi-line bodies, write the body to a temp file first and read it into a variable, or use a heredoc into a variable:
 
 ```bash
-gh issue create --title "<title>" --body "<body>"
+gh issue create -R "$REPO" --title "$TITLE" --body "$BODY"
 ```
 
-Pass `<body>` via a heredoc or a temp file if it contains characters that would be awkward to quote inline. Capture stdout — `gh` prints the new issue URL as the last line.
+Capture stdout.
 
 **On failure** (non-zero exit): print `**ERROR: Failed to create issue: <stderr excerpt>**` and abort.
 
-**On success**: Parse the issue number from the URL (format `https://github.com/OWNER/REPO/issues/N`).
+**On success**: Extract the issue URL — scan stdout for the last line matching the issue-URL pattern (`.*/issues/[0-9]+$`) rather than assuming a fixed line position. Then resolve the issue number host-agnostically (works for github.com and GitHub Enterprise):
+
+```bash
+ISSUE_NUMBER=$(gh issue view "$ISSUE_URL" --json number --jq '.number')
+```
+
+If this command fails (non-zero exit) or `ISSUE_NUMBER` is empty: the issue was created but its number could not be resolved. Print `**⚠ Issue created at $ISSUE_URL but could not resolve its number: <stderr excerpt>. Skipping --go comment (if requested).**` — then **skip Step 5 entirely** and go to Step 6 with the `go_mode=false` summary variant, using `$ISSUE_URL` as the only identifier.
 
 Save `ISSUE_URL` and `ISSUE_NUMBER`.
 
@@ -59,7 +65,7 @@ Save `ISSUE_URL` and `ISSUE_NUMBER`.
 Run this step only when `go_mode=true`.
 
 ```bash
-gh issue comment "$ISSUE_NUMBER" --body "GO"
+gh issue comment -R "$REPO" "$ISSUE_NUMBER" --body "GO"
 ```
 
 - On success: proceed to Step 6 — the final summary will note the GO comment was posted.
