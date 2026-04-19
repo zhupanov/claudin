@@ -148,7 +148,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent (subagent_type: `code-reviewer`) via the Agent tool instead. Use the unified Code Reviewer checklist with `{FILE_LIST}` substituted and `"Work at your maximum reasoning effort"` omitted (Claude uses session-default effort).
+**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent (subagent_type: `code-reviewer`) via the Agent tool instead. Use the unified Code Reviewer checklist. Bind `{FILE_LIST}` to the **current sub-slice** file list when sub-slicing; otherwise use the full slice file list. Drop the `"Work at your maximum reasoning effort"` suffix (Claude uses session-default effort).
 
 **Codex Reviewer (if `codex_available`):**
 
@@ -163,13 +163,13 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$L
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) with the same slice-review context, using `{FILE_LIST}` from the slice file list. Attribute as `Code`.
+**Codex fallback** (if `codex_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) with the same slice-review context. Bind `{FILE_LIST}` to the **current sub-slice** file list when sub-slicing (>50 files per slice), matching the always-on Claude lane's sub-slicing rule; otherwise use the full slice file list. Reserve `slice-N-files.txt` (the full slice) for actual external reviewers. Attribute as `Code`.
 
 **Claude Code Reviewer subagent (1 reviewer, always-on — launched last in the same parallel message, finishes fastest):**
 
-Invoke `subagent_type: code-reviewer` using the unified checklist from `skills/shared/reviewer-templates.md`. Prompt body:
+Invoke `subagent_type: code-reviewer` using the unified checklist from `skills/shared/reviewer-templates.md`. The `code-reviewer` archetype walks five focus areas: code quality, risk/integration, correctness, architecture, and security. Prompt body:
 
-> Review EXISTING code for this project. Files: {FILE_LIST}. Read each file. Walk the unified 4-focus-area checklist (code quality, risk/integration, correctness, architecture). Tag each finding with its focus area. Quality gate: for each finding, verify the proposed fix is justified by a concrete need and proportionate to the issue. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
+> Review EXISTING code for this project. Files: {FILE_LIST}. Read each file. Walk the unified 5-focus-area checklist (code quality, risk/integration, correctness, architecture, security). Tag each finding with its focus area. Quality gate: for each finding, verify the proposed fix is justified by a concrete need and proportionate to the issue. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
 
 **Collecting External Reviewer Results:**
 
@@ -189,7 +189,7 @@ Otherwise, invoke the collection script with only the launched paths:
 ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLLECT_ARGS[@]}"
 ```
 
-Parse the structured output for each reviewer's `STATUS`, `REVIEWER_FILE`, and `HEALTHY`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`: **immediately launch the matching single Claude Code Reviewer subagent fallback** for the current slice before proceeding to Step 3d (so this slice still has 3 lanes), then **flip that reviewer's availability flag to false** for all remaining slices (prevents repeated failures). Also append a detailed warning to `$LR_TMPDIR/warnings.md`.
+Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`: **immediately launch the matching single Claude Code Reviewer subagent fallback** for the current slice before proceeding to Step 3d (so this slice still has 3 lanes), then **flip that reviewer's availability flag to false** for all remaining slices (prevents repeated failures). Also append a detailed warning to `$LR_TMPDIR/warnings.md`.
 
 ### 3d — Collect, negotiate, deduplicate, and classify findings
 

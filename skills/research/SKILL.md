@@ -245,7 +245,7 @@ Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/share
 
 ### After all reviewers return
 
-**Process the Claude finding immediately** — do not wait for external reviewers before starting. The always-on Claude Code Reviewer subagent lane returns first; collect its findings right away. Also process any pre-launch Claude fallback lane findings (when Cursor or Codex was unavailable) at the same time.
+**Process Claude findings immediately** — do not wait for external reviewers before starting. The always-on Claude Code Reviewer subagent lane returns first; collect its findings right away. If Cursor or Codex was unavailable (or both), each pre-launch Claude subagent fallback lane returns findings via the Agent tool — collect and merge those at the same time. In the happy path there is one Claude stream (the always-on lane); in the degraded path there are 2 or 3 Claude streams — merge them all before external-reviewer collection.
 
 ### 2.4 — Collect and Validate External Reviewers
 
