@@ -178,10 +178,14 @@ done
 # ---------------------------------------------------------------------------
 BODY_CONTENT=""
 BODY_TMP=""
+ERR_TMP=""
 # shellcheck disable=SC2317  # reachable via EXIT trap; shellcheck can't see indirect invocation
 cleanup() {
     if [[ -n "${BODY_TMP:-}" ]] && [[ -f "$BODY_TMP" ]]; then
         rm -f "$BODY_TMP"
+    fi
+    if [[ -n "${ERR_TMP:-}" ]] && [[ -f "$ERR_TMP" ]]; then
+        rm -f "$ERR_TMP"
     fi
 }
 trap cleanup EXIT
@@ -237,8 +241,9 @@ done
 
 # Capture stdout and stderr separately so a stray stderr line (progress,
 # warning) on the success path cannot corrupt URL extraction below. ERR_TMP
-# holds stderr; ISSUE_URL holds stdout only. Both paths explicitly clean up
-# ERR_TMP before exiting.
+# holds stderr; ISSUE_URL holds stdout only. Cleanup happens via the EXIT
+# trap, so every exit path — including emit_redaction_failure — removes the
+# stderr temp file.
 ERR_TMP=$(mktemp)
 if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
     # gh issue create emits the URL on stdout. Extract the trailing number.
@@ -253,13 +258,11 @@ if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
         # emitted key=value line honors the one-line-per-record contract.
         REDACTED_OUTPUT=$(redact "$ISSUE_URL") || emit_redaction_failure
         REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
-        rm -f "$ERR_TMP"
         echo "ISSUE_FAILED=true"
         echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT_FLAT)"
         exit 2
     fi
     ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
-    rm -f "$ERR_TMP"
     echo "ISSUE_NUMBER=$ISSUE_NUM"
     echo "ISSUE_URL=$URL_LINE"
     echo "ISSUE_TITLE=$FINAL_TITLE"
@@ -269,7 +272,6 @@ else
     # (tokens in auth-failure messages, request bodies echoed by the API in
     # 4xx responses) before flattening/echoing.
     ERR_CONTENT=$(cat "$ERR_TMP")
-    rm -f "$ERR_TMP"
     REDACTED_ERR=$(redact "$ERR_CONTENT") || emit_redaction_failure
     ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
     echo "ISSUE_FAILED=true"

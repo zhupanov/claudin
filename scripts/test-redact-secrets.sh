@@ -219,6 +219,33 @@ fail_err_line=$(printf '%s\n' "$fail_out" | grep '^ISSUE_ERROR=' || true)
 assert_contains "$fail_err_line" '<REDACTED-TOKEN>' '[failure] ISSUE_ERROR has placeholder for stderr token'
 assert_not_contains "$fail_err_line" "$SK_TOKEN" '[failure] ISSUE_ERROR does not leak stderr token'
 
+# --- 3d: regression for #137 — gh exits 0 with URL on stdout AND noise on stderr ---
+# Before the fix, ISSUE_URL=$(gh ... 2>&1) merged stderr into the variable used
+# for URL extraction. A warning line on stderr could corrupt the regex match.
+# Post-fix: stderr is captured to a temp file and ignored on the success path,
+# so URL parsing still succeeds.
+STUB_NOISE_DIR="$TMPROOT/stub-success-with-stderr"
+mkdir -p "$STUB_NOISE_DIR"
+cat > "$STUB_NOISE_DIR/gh" <<'GHNOISE'
+#!/usr/bin/env bash
+if [[ "$1" == "label" ]]; then
+    exit 0
+fi
+if [[ "$1" == "repo" ]]; then
+    echo 'owner/repo'
+    exit 0
+fi
+# issue create path — emit a harmless warning on stderr and a valid URL on stdout.
+echo 'warning: experimental feature enabled' >&2
+echo 'https://github.com/owner/repo/issues/137'
+exit 0
+GHNOISE
+chmod +x "$STUB_NOISE_DIR/gh"
+noise_out=$(PATH="$STUB_NOISE_DIR:$PATH" bash "$CREATE_ONE" --title 'plain-title' --body-file "$BODY_FILE" --repo owner/repo 2>&1 || true)
+assert_contains "$noise_out" 'ISSUE_NUMBER=137' '[#137] URL parsed from stdout despite stderr noise'
+assert_contains "$noise_out" 'ISSUE_URL=https://github.com/owner/repo/issues/137' '[#137] ISSUE_URL exact match, no stderr contamination'
+assert_not_contains "$noise_out" 'warning: experimental feature enabled' '[#137] stderr noise not echoed via ISSUE_URL/ISSUE_NUMBER'
+
 echo ""
 echo "=== Section 4: Edge cases ==="
 
