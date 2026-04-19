@@ -9,7 +9,7 @@ At the start of each skill, a binary check determines which external tools are i
 - If **Codex** is not found, a warning is printed and the skill proceeds without it
 - If **Cursor** is not found, a warning is printed and the skill proceeds without it
 
-Skills gracefully degrade when external tools are unavailable. When Codex or Cursor is not found, Claude replacement subagents fill their slots to maintain per-skill lane counts across all phases. The counts are: 3 for plan/code review (1 Claude + 1 Codex + 1 Cursor) and `/research` (both phases); 5 for the `/design` sketch phase and `/loop-review` (Negotiation Protocol); 3 for voting panels. Voting uses a step-function threshold: 3 voters require 2+ YES votes, 2 voters require unanimous YES, and fewer than 2 eligible voters causes voting to be skipped with all findings accepted automatically.
+Skills gracefully degrade when external tools are unavailable. When Codex or Cursor is not found, Claude replacement subagents fill their slots to maintain per-skill lane counts across all phases. The counts are: 3 for plan/code review (1 Claude + 1 Codex + 1 Cursor), `/research` (both phases), and `/loop-review` (Negotiation Protocol, per slice); 5 for the `/design` sketch phase; 3 for voting panels. Voting uses a step-function threshold: 3 voters require 2+ YES votes, 2 voters require unanimous YES, and fewer than 2 eligible voters causes voting to be skipped with all findings accepted automatically.
 
 ## Launching External Reviewers
 

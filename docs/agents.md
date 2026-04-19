@@ -46,7 +46,7 @@ Larch uses several categories of agents:
 
 ### Review Agent
 
-The 1 persistent [Code Reviewer archetype](review-agents.md) — a unified reviewer covering code quality, risk/integration, correctness, architecture, and security. Defined in `agents/code-reviewer.md` (generated from `skills/shared/reviewer-templates.md` via `scripts/generate-code-reviewer-agent.sh`; discovered via `${CLAUDE_PLUGIN_ROOT}`) with model: sonnet (default) and Read/Grep/Glob tool access. In `/design` and `/review`, exactly one Claude Code Reviewer subagent runs alongside 1 Codex and 1 Cursor (3-reviewer panel). In `/loop-review`, two Claude Code Reviewer subagent lanes run with distinct "broad perspective" and "deep perspective" attributions under the Negotiation Protocol. In `/research`, Claude Code Reviewer subagents appear only as fallbacks when an external tool is unavailable — the happy path uses Codex deep + Codex broad + Cursor generic; Cursor-unavailable falls back to 1 generic Claude lane, Codex-unavailable falls back to 2 Claude lanes (deep + broad).
+The 1 persistent [Code Reviewer archetype](review-agents.md) — a unified reviewer covering code quality, risk/integration, correctness, architecture, and security. Defined in `agents/code-reviewer.md` (generated from `skills/shared/reviewer-templates.md` via `scripts/generate-code-reviewer-agent.sh`; discovered via `${CLAUDE_PLUGIN_ROOT}`) with model: sonnet (default) and Read/Grep/Glob tool access. In `/design`, `/review`, `/loop-review` (per slice), and `/research` (per validation phase), exactly one Claude Code Reviewer subagent runs alongside 1 Codex and 1 Cursor (3-reviewer panel). When Codex or Cursor is unavailable, a single Claude Code Reviewer subagent fallback fills the missing slot, preserving the 3-lane invariant.
 
 ### Sketch Agents
 
@@ -58,7 +58,7 @@ The 3 voters in the [voting process](voting-process.md) (Claude Code Reviewer su
 
 ### Research Agents
 
-The 3 research agents in `/research` (Claude inline + Cursor + Codex) that investigate a question under a single uniform brief, followed by 3 validation reviewer lanes (Codex deep + Codex broad + Cursor generic). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant in each phase when an external tool is unavailable. All are ephemeral.
+The 3 research agents in `/research` (Claude inline + Cursor + Codex) that investigate a question under a single uniform brief, followed by a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable. All are ephemeral.
 
 ## Context Isolation
 

@@ -20,7 +20,7 @@ FINDING_2: <reviewer attribution> — <finding description>
 ...
 ```
 
-Include the reviewer attribution (`Code`, `Codex`, or `Cursor` in `/design` and `/review`; `Code Reviewer (broad perspective)`, `Code Reviewer (deep perspective)`, `Codex-General`, `Codex-Deep-Analysis`, or `Cursor` in `/loop-review` under the Negotiation Protocol) so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it. `/research` uses the Negotiation Protocol and does not participate in voting.
+Include the reviewer attribution (`Code`, `Codex`, or `Cursor`) so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it. The same three-attribution shape applies across all reviewer panels: `/design` and `/review` (Voting Protocol), as well as `/loop-review` and `/research` (Negotiation Protocol). `/loop-review` and `/research` do not participate in voting — they use the Negotiation Protocol instead.
 
 ## Voter Output Format
 

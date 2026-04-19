@@ -1,13 +1,13 @@
 ---
 name: research
-description: "Use when read-only research is needed. 3 research agents then 3 validation reviewers produce findings summary, risk assessment, difficulty estimates, and feasibility verdict."
+description: "Use when read-only research is needed. 3 research agents then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) produce findings summary, risk assessment, difficulty estimates, and feasibility verdict."
 argument-hint: "[--debug] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
 
 # Research Skill
 
-Collaborative read-only research task using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) and 3 validation reviewer lanes (Codex deep + Codex broad + Cursor generic). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant in each phase when Cursor or Codex is unavailable. Produces a structured research report without modifying the repository.
+Collaborative read-only research task using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) and a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when Cursor or Codex is unavailable. Produces a structured research report without modifying the repository.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the research question. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, save the remainder as `RESEARCH_QUESTION`. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
@@ -183,15 +183,15 @@ Print: `✅ 1: research — synthesis complete, 3 agents (<elapsed>)`
 
 Print: `> **🔶 2: validation**`
 
-**IMPORTANT: Findings validation MUST ALWAYS run with 3 lanes: Codex deep + Codex broad + Cursor generic. When an external tool is unavailable, Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant — 2 Claude subagents (deep + broad) replace Codex, 1 Claude subagent (generic) replaces Cursor. Never skip or abbreviate this step regardless of how straightforward the findings appear. Reviewers validate against the actual codebase state, catching inaccuracies or omissions that the research phase may have missed.**
+**IMPORTANT: Findings validation MUST ALWAYS run with 3 lanes: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor. When Codex is unavailable, launch 1 Claude Code Reviewer subagent fallback in its place. When Cursor is unavailable, launch 1 Claude Code Reviewer subagent fallback in its place. Never skip or abbreviate this step regardless of how straightforward the findings appear. Reviewers validate against the actual codebase state, catching inaccuracies or omissions that the research phase may have missed.**
 
-Launch **all 3 lanes in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest first: Cursor (slowest), then both Codex instances, then any Claude subagent fallbacks (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
+Launch **all 3 lanes in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest first: Cursor (slowest), then Codex, then the Claude Code Reviewer subagent (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
 
 ### External Reviewer Setup (if `codex_available` or `cursor_available`)
 
 The research report is already written to `$RESEARCH_TMPDIR/research-report.txt` from Step 1.4, so both Codex and Cursor can read it.
 
-### Cursor Reviewer (generic) (if `cursor_available`)
+### Cursor Reviewer (if `cursor_available`)
 
 Run Cursor **first** in the parallel message (it takes the longest):
 
@@ -203,37 +203,26 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the research-validation variable bindings below. Attribute as `Code Reviewer (generic)`.
+**Cursor fallback** (if `cursor_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the research-validation variable bindings below. Attribute as `Code`.
 
-### Codex Reviewer (broad perspective) (if `codex_available`)
+### Codex Reviewer (if `codex_available`)
 
-Run Codex (broad perspective) **second** in the parallel message (output file name `codex-general-validation-output.txt` is kept for backward compatibility with existing call sites and collect scripts):
+Run Codex **second** in the parallel message (after Cursor):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-general-validation-output.txt" --timeout 1800 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-validation-output.txt" --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
-    --output-last-message "$RESEARCH_TMPDIR/codex-general-validation-output.txt" \
-    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    --output-last-message "$RESEARCH_TMPDIR/codex-validation-output.txt" \
+    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Combine 4 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Correctness: Are specific code references correct? Are there factual errors about the codebase? (3) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? (4) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-### Codex Reviewer (deep perspective) (if `codex_available`)
+**Codex fallback** (if `codex_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype with the research-validation variable bindings below. Attribute as `Code`.
 
-Run Codex (deep perspective) **third** in the parallel message (output file name `codex-deep-validation-output.txt` is kept for backward compatibility):
+### Claude Code Reviewer Subagent (always-on lane — launched **last** in the parallel message)
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
-    --output-last-message "$RESEARCH_TMPDIR/codex-deep-validation-output.txt" \
-    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Focus on 2 perspectives: (1) Correctness: Are specific code references correct? Are there factual errors about the codebase? (2) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
-```
-
-Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
-
-**Codex fallback** (if `codex_available` is false): Launch **2 Claude Code Reviewer subagents** via the Agent tool (`subagent_type: code-reviewer`), one for each perspective. Attribute as `Code Reviewer (broad perspective)` and `Code Reviewer (deep perspective)`. Add a per-lane instruction in each prompt: for the broad lane, `"Emphasize code quality + risk/integration concerns in your findings."`; for the deep lane, `"Emphasize correctness + architecture concerns in your findings."` Use the shared Code Reviewer archetype variable bindings below.
-
-### Claude Code Reviewer Subagent Variable Bindings (fallback lanes only)
+Launch the always-on Claude Code Reviewer subagent lane via the Agent tool (`subagent_type: code-reviewer`) in the same parallel message as Cursor and Codex above. It finishes fastest, so launch it last.
 
 Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filling in the variables for **research validation**:
 
@@ -256,7 +245,7 @@ Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/share
 
 ### After all reviewers return
 
-**If any Claude fallback lanes were launched** (Cursor unavailable, Codex unavailable, or both): Process their findings immediately — do not wait for external reviewers before starting. Collect and deduplicate Claude fallback findings first. In the happy path (both Cursor and Codex available) no Claude fallback lanes are launched and this substep is a no-op.
+**Process the Claude finding immediately** — do not wait for external reviewers before starting. The always-on Claude Code Reviewer subagent lane returns first; collect its findings right away. Also process any pre-launch Claude fallback lane findings (when Cursor or Codex was unavailable) at the same time.
 
 ### 2.4 — Collect and Validate External Reviewers
 
@@ -265,12 +254,12 @@ Build the argument list from only the externals that were actually launched:
 ```
 COLLECT_ARGS=()
 [[ "$cursor_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/cursor-validation-output.txt")
-[[ "$codex_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/codex-general-validation-output.txt" "$RESEARCH_TMPDIR/codex-deep-validation-output.txt")
+[[ "$codex_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/codex-validation-output.txt")
 ```
 
-**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty — all 3 lanes are Claude fallbacks), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. Merge the 3 Claude fallback findings and proceed to Finalize Validation.
+**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty — the 3 lanes are the always-on Claude lane plus 2 Claude fallback lanes), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. Merge the 3 Claude findings and proceed to Finalize Validation.
 
-Otherwise, after processing any Claude fallback findings, invoke the script with only the launched paths:
+Otherwise, after processing Claude findings, invoke the script with only the launched paths:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLLECT_ARGS[@]}"
@@ -279,16 +268,16 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLL
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
 1. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Read valid output files.
-2. **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the availability flag, then **immediately launch the matching Claude Code Reviewer subagent fallback(s)** and wait for them before negotiation — a Cursor-generic replacement, a Codex-broad replacement, a Codex-deep replacement, or a pair (both Codex lanes) — using the variable bindings defined above. This preserves the 3-lane invariant at negotiation time.
-3. Merge external reviewer findings (and any runtime-fallback Claude findings) into any pre-launch Claude fallback findings.
+2. **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the availability flag (`cursor_available` or `codex_available`), then **immediately launch the matching single Claude Code Reviewer subagent fallback** and wait for it before negotiation. This preserves the 3-lane invariant at negotiation time.
+3. Merge external reviewer findings (and any runtime-fallback Claude findings) into the always-on Claude lane findings and any pre-launch Claude fallback findings.
 
 ### Codex and Cursor Negotiation (in parallel)
 
-If any external reviewers produced findings, negotiate with each independently. With up to 2 Codex instances (broad + deep perspectives), negotiate with each separately using distinct prompt/output file paths (e.g., `codex-general-negotiation-prompt.txt` / `codex-general-negotiation-output.txt` and `codex-deep-negotiation-prompt.txt` / `codex-deep-negotiation-output.txt`). Run all negotiations **in parallel** when multiple external reviewers produced findings. Use the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$RESEARCH_TMPDIR` as the tmpdir.
+If any external reviewers produced findings, negotiate with each independently using the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, with `$RESEARCH_TMPDIR` as the tmpdir. Use `codex-negotiation-prompt.txt` / `codex-negotiation-output.txt` for the single Codex negotiation track and `cursor-negotiation-prompt.txt` / `cursor-negotiation-output.txt` for the Cursor negotiation track. Run both negotiations **in parallel** when both produced findings.
 
-**Note on negotiation prompt files**: `/research` does not have `Write` in its `allowed-tools` frontmatter. Create each negotiation prompt file via a Bash heredoc (e.g., `cat > "$RESEARCH_TMPDIR/codex-general-negotiation-prompt.txt" <<'EOF' ... EOF`) or pass the prompt to `run-negotiation-round.sh --prompt-file`. Use distinct prompt file paths per Codex instance so the parallel negotiations do not collide.
+**Note on negotiation prompt files**: `/research` does not have `Write` in its `allowed-tools` frontmatter. Create each negotiation prompt file via a Bash heredoc (e.g., `cat > "$RESEARCH_TMPDIR/codex-negotiation-prompt.txt" <<'EOF' ... EOF`) or pass the prompt to `run-negotiation-round.sh --prompt-file`.
 
-Merge accepted/rejected outcomes after all complete.
+Merge accepted/rejected outcomes after both complete.
 
 ### Finalize Validation
 
@@ -311,7 +300,7 @@ Print the final research report under a `## Research Report` header with the fol
 **Research question**: <RESEARCH_QUESTION>
 **Codebase context**: Branch `<CURRENT_BRANCH>`, commit `<HEAD_SHA>`
 **Research phase**: <N> agents (Cursor: ✅/❌, Codex: ✅/❌)
-**Validation phase**: <N> reviewers (Cursor: ✅/❌, Codex: ✅/❌)
+**Validation phase**: <N> reviewers (Code: ✅, Cursor: ✅/❌, Codex: ✅/❌)
 
 ### Findings Summary
 <synthesized and validated findings, organized by topic>

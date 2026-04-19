@@ -72,20 +72,19 @@ Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict revi
 📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-Negotiation-Protocol skill `/loop-review` uses a 5-lane composition:
+Negotiation-Protocol skills `/loop-review` and `/research` both use the same 3-lane composition (per slice in `/loop-review`; per phase in `/research` — Phase 1 research, Phase 2 validation):
 
 ```
-📊 Reviewers: | Code-broad: ✅ 2m31s | Code-deep: ⏳ | Codex-G: ✅ 4m12s | Codex-D: ❌ 8m3s | Cursor: ⏳ |
+📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-Negotiation-Protocol skill `/research` uses a 3-lane composition in each phase (Phase 1 research; Phase 2 validation):
+For `/research` Phase 1, the status table shows `Agents` (not `Reviewers`) since that phase is research rather than review:
 
 ```
 📊 Agents: | Claude: ✅ 2m31s | Cursor: ⏳ | Codex: ✅ 3m5s |
-📊 Reviewers: | Codex-G: ✅ 2m31s | Codex-D: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-Claude fallback lanes appear in place of an unavailable external (e.g., `Code (generic)` for Cursor, or `Code-broad`/`Code-deep` for Codex).
+When an external is unavailable, a single Claude fallback lane appears in its slot (attributed as `Code`).
 
 `⏳` (in-progress) and `⊘` (skipped/unavailable) do not include timing.
 

@@ -84,9 +84,9 @@ External reviewers (Codex, Cursor) produce single-list output — their entire o
 | `/review` | Code review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Voting Protocol) |
 | `/implement` | Phase 3 conflict review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total) |
 | `/implement` (quick mode) | Simplified review | 1 Claude Code Reviewer subagent (no external reviewers, no voting) |
-| `/loop-review` | Slice review | 2 Claude Code Reviewer subagent lanes (broad + deep perspectives) + 2 Codex (broad + deep) + Cursor (5 total, Negotiation Protocol) |
-| `/research` | Validation | Codex (broad) + Codex (deep) + Cursor (generic) — 3 total, Negotiation Protocol; Claude Code Reviewer subagent fallbacks (2 for Codex, 1 for Cursor) preserve the 3-lane invariant |
+| `/loop-review` | Slice review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Negotiation Protocol) |
+| `/research` | Validation | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Negotiation Protocol); Claude Code Reviewer subagent fallbacks (1 per unavailable external) preserve the 3-lane invariant |
 
-**Note A**: `/loop-review` retains a 5-lane composition under the Negotiation Protocol; `/research` uses 3 lanes under the same protocol. Lane count is independent of protocol choice — the Negotiation Protocol supports any per-reviewer independent negotiation count. In `/loop-review`, the two Claude lanes invoke the same unified archetype with per-lane emphasis on code quality/risk-integration (broad) vs correctness/architecture (deep), preserving distinct finding streams.
+**Note A**: Both `/loop-review` and `/research` use a 3-lane composition under the Negotiation Protocol, matching the `/design` and `/review` shape. Lane count is independent of protocol choice — the Negotiation Protocol supports any per-reviewer independent negotiation count. Every panel in this repo now shares the same 3-attribution shape (`Code`, `Codex`, `Cursor`), with a single Claude Code Reviewer subagent fallback per unavailable external preserving the 3-lane invariant.
 
 **Claude fallback for externals**: When Cursor or Codex is unavailable in the 3-reviewer skills, a Claude Code Reviewer subagent is launched in its place so the total reviewer count remains 3.
