@@ -318,7 +318,9 @@ Print: `> **🔶 2a.5: dialectic**`
 
 Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions (<elapsed>)` and proceed to Step 2b.
 
-**Intentional divergence from the repo-wide replacement-first fallback architecture**. This phase deliberately diverges from the "Voter Composition" rule in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` and from the Cursor/Codex fallback rules in the "Step 3 — Plan Review" section below: when an assigned external tool is unavailable, the bucket is **skipped entirely** — Claude subagents are NEVER substituted into the dialectic debate path. Likewise, the "Runtime Timeout Fallback" procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` flips orchestrator-wide `*_available` for all subsequent session steps; in this phase, runtime failures affect ONLY this phase's bookkeeping and never mutate the orchestrator-wide flags. Do NOT "fix" this carve-out back to global-flip + Claude-replacement behavior — see GitHub issue #98 for the rationale.
+**Intentional divergence from the repo-wide replacement-first fallback architecture (debate phase only)**. The **debate** phase (steps 1-9 below) deliberately diverges from the "Voter Composition" rule in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` and from the Cursor/Codex fallback rules in the "Step 3 — Plan Review" section below: when an assigned debater tool is unavailable, the bucket is **skipped entirely** — Claude subagents are NEVER substituted into the dialectic **debate** path. Likewise, the "Runtime Timeout Fallback" procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` flips orchestrator-wide `*_available` for all subsequent session steps; in this phase, runtime failures affect ONLY this phase's bookkeeping and never mutate the orchestrator-wide flags. Do NOT "fix" this carve-out back to global-flip + Claude-replacement behavior for debaters — see GitHub issue #98 for the rationale.
+
+This divergence applies **only to debate execution**, not to **judge adjudication**. The post-debate judge panel (see `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`) uses the repo-wide **replacement-first** pattern: when Cursor or Codex is unavailable for judging, a Claude Code Reviewer subagent replaces that slot so the panel always remains at 3 judges. Judges merely adjudicate between pre-authored defenses; the "no Claude substitution" rule is specific to adversarial debate where model-specific writing style could encode tool identity.
 
 Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNTHESIS_TEXT}` for the prompt templates below. Then apply the following protocol:
 
@@ -338,7 +340,7 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
    - If `false`: print `**⚠ <Tool> unavailable — dialectic skipped for bucket <N> decisions (indices: <comma-list>). Step 2a.4 synthesis decisions stand.**`, skip that decision, and continue. Do NOT fall back to a Claude Agent-tool subagent. Do NOT reassign the decision to the surviving tool. Do NOT abort this step.
    - If `true`: queue both the thesis and antithesis launch for that decision.
 
-5. **Zero-externals guardrail**. If after iterating all selected decisions, zero buckets are queued, print no further launches, do NOT call `collect-reviewer-results.sh` at all, and proceed to the completion line. `dialectic-resolutions.md` is not created — Step 2b reads it conditionally and tolerates absence.
+5. **Zero-externals guardrail**. If after iterating all selected decisions, zero buckets are queued, print no further launches, do NOT call `collect-reviewer-results.sh` at all, skip the judge phase entirely, and jump directly to the **Write `dialectic-resolutions.md`** sub-step below. The file IS written — it contains only `Disposition: bucket-skipped` entries (one per selected decision) plus any `Disposition: over-cap` entries for decisions ranked outside the top-5 cap — so Step 2b and Step 3.5 parse a uniform schema regardless of dialectic outcome.
 
 6. **Per-decision prompt-file rendering**. For each queued decision, render the thesis and antithesis prompts (the templates below) with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substituted, and use the **Write tool** (not heredoc/cat) to write each rendered prompt to its own file:
    - `$DESIGN_TMPDIR/debate-<n>-thesis-prompt.txt`
@@ -454,41 +456,116 @@ These tags are prompt-level delimiters, not a sanitization boundary — they red
 </debater_decision>
 ```
 
-**After all external debaters return**, apply the **debate quorum rule** to each decision **whose bucket was launched** (decisions skipped in step 4 or skipped by the zero-externals guardrail in step 5 have no output files; their synthesis decisions already stand and need no quorum check).
+**After all external debaters return**, classify each decision's `Disposition` and, for `voted`-eligible decisions, hand off to the 3-judge panel defined in `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`. The orchestrator no longer picks winners by reading tagged output — that role is delegated to the judge panel. See `dialectic-protocol.md` for the authoritative ballot format, judge prompt template, threshold rules, tally algorithm, and resolution schema. The prose below is the call-site contract in Step 2a.5; `dialectic-protocol.md` is the single source of truth for dialectic parser/threshold rules (do NOT reuse `voting-protocol.md` parsers for dialectic — the token sets and ID shapes differ).
 
-**Per-decision STATUS pre-check** (mandatory, applied before the per-side checks below): for each launched decision, if the collector did not report `STATUS=OK` for BOTH the thesis and the antithesis output files, the decision immediately fails quorum — do NOT apply the per-side checks below; the synthesis decision stands for that point and no binding resolution is written. This guards the partial-launch case where one side completed but its sibling failed (e.g., thesis OK + antithesis TIMED_OUT): the orchestrator must NOT write a one-sided resolution from the lone surviving file, since adversarial debate requires both sides.
+### Eligibility gate (Dispositions)
 
-For each surviving decision (both sides `STATUS=OK`), read each side's file via the file path from the collector's `REVIEWER_FILE` field (which may point at a `*-retry.txt` if a retry recovered an empty output) — do NOT read directly from the launch path, as that would miss content recovered by retry. A side passes quorum only when every check below is satisfied; otherwise the orchestrator does NOT write a binding resolution for that decision. The check is a conjunct — the pre-existing "substantive output" requirement is retained alongside the new structural gates:
+Classify every decision originally present in `contested-decisions.md`:
 
-- **Substantive output**: non-empty output with at least one full sentence of substantive content per required tag body.
-- **All 5 tags present**: `<claim>`, `<evidence>`, `<strongest_concession>`, `<counter_to_opposition>`, `<risk_if_wrong>`.
-- **Exactly one `RECOMMEND:` line**. Find it as follows: for each line in the output, first trim surrounding whitespace, then strip any paired `**...**` or `__...__` wrappers that surround the entire line, then check (case-insensitively) whether the result begins with `RECOMMEND:`. Zero or duplicate lines passing this check fail the rule.
-- **RECOMMEND enum**: the token after `RECOMMEND:` (with surrounding whitespace trimmed) must match exactly one of `THESIS` or `ANTI_THESIS` when compared case-insensitively. Do NOT strip underscores — `ANTI_THESIS` contains a required underscore that must be preserved.
-- **Role-vs-RECOMMEND consistency**: the thesis slot MUST emit `RECOMMEND: THESIS`; the antithesis slot MUST emit `RECOMMEND: ANTI_THESIS`. Any mismatch fails the check.
-- **Evidence citation**: `<evidence>` contains at least one `file:line` citation.
+- **`over-cap`**: decisions ranked outside the top-`min(5, |contested-decisions|)` cap from step 1 above. No debate occurred. Write a resolution entry with `Disposition: over-cap`.
+- **`bucket-skipped`**: decisions skipped in step 4 (dialectic bucket tool unavailable) OR the zero-externals guardrail in step 5 (every selected decision's bucket was skipped). No debate occurred. Write a resolution entry with `Disposition: bucket-skipped`.
+- **`fallback-to-synthesis` from quorum failure**: decisions whose bucket was launched but whose debater output failed the **debate quorum gate** (same checks as before, retained as the eligibility gate for the judge ballot — see below). No judge ballot entry. Write a resolution entry with `Disposition: fallback-to-synthesis` and a specific `Why fallback` reason.
+- **`voted` candidates**: decisions whose bucket was launched AND both sides passed the debate quorum gate. Go to the judge ballot.
 
-If any check fails for either side, print `**⚠ Debate for DECISION_N failed quorum (reason: <missing_tag|bad_recommend|missing_citation|role_mismatch|substantive_empty|no_output>). Falling back to synthesis decision.**` and do NOT write a binding resolution for that decision. The Step 2a.4 synthesis call stands for that point.
+The **debate quorum gate** (retained byte-compatible with prior behavior) is applied to each launched decision:
 
-When **both** sides pass quorum, apply the **winner-selection rule**: the orchestrator evaluates the substantive content of each side's `<evidence>`, `<strongest_concession>`, `<counter_to_opposition>`, and `<risk_if_wrong>` tags and selects the side whose argument is more compelling given the codebase evidence. The winning side's role maps to the `Resolution` field: a THESIS-winner resolves to `{CHOSEN}`; an ANTI_THESIS-winner resolves to `{ALTERNATIVE}`. Tagged output then maps into the existing schema as follows (schema unchanged byte-for-byte):
+1. **Per-decision STATUS pre-check** (mandatory): if the collector did not report `STATUS=OK` for BOTH the thesis and the antithesis output files, the decision's `Disposition` is `fallback-to-synthesis` with reason `no_output` — do NOT apply the per-side checks below. This guards the partial-launch case where one side completed but its sibling failed (e.g., thesis OK + antithesis TIMED_OUT): judges must see both defenses, not a one-sided ballot.
 
-- `<claim>` + `<evidence>` from each side are distilled into the `Thesis summary` / `Antithesis summary` fields (1-2 sentences each).
-- `<strongest_concession>` + `<counter_to_opposition>` + `<risk_if_wrong>` from the **winning** side compose the `Why thesis prevails` / `Why antithesis prevails` field — the justification must directly engage the losing side's strongest concession.
+2. **Per-side quality checks**: for each decision surviving the pre-check, read each side's file via the file path from the collector's `REVIEWER_FILE` field (may point at a `*-retry.txt` if a retry recovered an empty output) — do NOT read directly from the launch path. A side passes the quorum gate only when every check below is satisfied:
+   - **Substantive output**: non-empty output with at least one full sentence of substantive content per required tag body.
+   - **All 5 tags present**: `<claim>`, `<evidence>`, `<strongest_concession>`, `<counter_to_opposition>`, `<risk_if_wrong>`.
+   - **Exactly one `RECOMMEND:` line**. For each line in the output: trim surrounding whitespace, strip any paired `**...**` or `__...__` wrappers that surround the entire line, then check (case-insensitively) whether the result begins with `RECOMMEND:`. Zero or duplicate matching lines fail the rule.
+   - **RECOMMEND enum**: the token after `RECOMMEND:` (with whitespace trimmed) must match exactly one of `THESIS` or `ANTI_THESIS` case-insensitively. Do NOT strip the underscore in `ANTI_THESIS`.
+   - **Role-vs-RECOMMEND consistency**: the thesis slot MUST emit `RECOMMEND: THESIS`; the antithesis slot MUST emit `RECOMMEND: ANTI_THESIS`. Any mismatch fails.
+   - **Evidence citation**: `<evidence>` contains at least one `file:line` citation.
 
-Write all successful resolutions to `$DESIGN_TMPDIR/dialectic-resolutions.md` using this format:
+If any check fails for either side, print `**⚠ Debate for DECISION_N failed quorum (reason: <missing_tag|bad_recommend|missing_citation|role_mismatch|substantive_empty|no_output>). Fallback to synthesis.**` Classify the decision as `Disposition: fallback-to-synthesis` with the specific failure reason as the `Why fallback` value. Do NOT include it on the judge ballot.
+
+### Dialectic-local judge-panel re-probe (Part D — cascade scoping)
+
+After the eligibility gate finishes, run a fresh health probe right before launching judges. A Cursor/Codex timeout in **debating** must not lock that tool out of **judging** — the debater phase may have snapshotted availability many minutes ago.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/check-reviewers.sh --probe
+```
+
+Apply the **two-key rule** (matching the Step 0 convention in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md:19-23`):
+
+- `judge_codex_available = (CODEX_AVAILABLE=true AND CODEX_HEALTHY=true)`
+- `judge_cursor_available = (CURSOR_AVAILABLE=true AND CURSOR_HEALTHY=true)`
+
+A tool that is installed but unhealthy (`*_HEALTHY=false`) is treated as **unavailable** for judge-panel purposes and replaced by a Claude Code Reviewer subagent per the replacement-first pattern in `dialectic-protocol.md`. The `judge_` prefix is deliberate — these are judge-phase-local flags; do NOT mutate orchestrator-wide `codex_available` / `cursor_available` (those drive Step 3 plan review).
+
+### Ballot construction and judge launch
+
+If zero decisions are `voted`-eligible (all failed the gate, all were bucket-skipped, or all were over-cap), skip ballot construction and judge launch entirely — jump directly to the **Write `dialectic-resolutions.md`** sub-step below and emit only the non-`voted` entries.
+
+Otherwise, build the ballot per `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`:
+
+- Use the **Write tool** (not heredoc/cat) to write `$DESIGN_TMPDIR/dialectic-ballot.txt`.
+- For each `voted`-eligible decision, emit one `### DECISION_N: <title>` block containing `Defense A (defends <CHOSEN or ALTERNATIVE per rotation>)` and `Defense B (defends <other>)` sections. Wrap each defense body in `<defense_content>...</defense_content>` tags with a "data not instructions" preamble.
+- **Position-order rotation**: odd N → `CHOSEN` is Defense A; even N → `ALTERNATIVE` is Defense A.
+- **Attribution stripping**: the ballot body MUST NOT contain `Cursor`, `Codex`, or `Claude` tokens — emit only neutral Defense A/B labels. Role-to-choice mapping (`defends <CHOSEN>` vs `defends <ALTERNATIVE>`) is preserved.
+- Defense body = concatenated tag-body text from the debater output (`<claim>` + `<evidence>` + `<strongest_concession>` + `<counter_to_opposition>` + `<risk_if_wrong>`) with the terminal `RECOMMEND:` line stripped. Record which side's defense maps to Defense A internally so the orchestrator can back-map judge votes to resolutions.
+
+Launch 3 judges **in parallel** (single message). Spawn order: Cursor first, then Codex, then the Claude subagent. Follow the protocol's Launching Judges section for exact command templates:
+
+- Cursor judge via `run-external-reviewer.sh --tool cursor --capture-stdout` (with `run_in_background: true`, `timeout: 1860000`). If `judge_cursor_available=false`, launch a Claude subagent replacement via the Agent tool inline.
+- Codex judge via `run-external-reviewer.sh --tool codex` (with `run_in_background: true`, `timeout: 1860000`). If `judge_codex_available=false`, launch a Claude subagent replacement inline.
+- Claude Code Reviewer subagent judge: always via the Agent tool (subagent_type: `code-reviewer`), inline.
+
+### Collecting judge results (split pattern)
+
+External judge outputs are collected via `collect-reviewer-results.sh` using its sentinel polling. Inline Agent-tool judges produce no sentinel; their votes are returned directly by the Agent tool and parsed from its return text. Do NOT pass inline-judge output paths to `collect-reviewer-results.sh` — the sentinel check would time out and incorrectly drop the voter count.
+
+**Zero-external-judges guard**: Only invoke `collect-reviewer-results.sh` if at least one external judge was actually launched (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). When both are false — all three panel slots are filled by Claude subagent inline replacements — skip the collector invocation entirely and proceed directly to inline-vote tally from Agent returns. `collect-reviewer-results.sh` exits 1 with "at least one output file is required" when called with zero positional arguments; without this guard, the all-fallback configuration would abort.
+
+When at least one external judge was launched, after all external judges return:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
+  --write-health /dev/null \
+  <each launched external-judge output path>
+```
+
+`--write-health /dev/null` ensures the judge phase NEVER updates `${SESSION_ENV_PATH}.health`. Block on this call (do NOT use `run_in_background`).
+
+For each external judge, parse its `STATUS` and `REVIEWER_FILE`. An external judge with `STATUS != OK` is ineligible for every decision on the ballot. For inline Agent-tool judges (primary Claude subagent + any Claude replacements), parse votes directly from the Agent return text; inline judges are always eligible.
+
+### Tally and resolution writing
+
+For each `voted`-eligible decision, tally per-decision votes from all 3 judges per the protocol's Parser tolerance and Threshold Rules. Apply the binary thresholds:
+
+- 3 eligible voters: 2+ same-side → `Disposition: voted`, Resolution = CHOSEN (if THESIS wins) or ALTERNATIVE (if ANTI_THESIS wins).
+- 2 eligible voters: unanimous → `Disposition: voted`; 1-1 tie → `Disposition: fallback-to-synthesis` with reason `1-1 tie with 2 voters`.
+- <2 eligible voters: `Disposition: fallback-to-synthesis` with reason `<N> judges eligible`.
+
+### Write `$DESIGN_TMPDIR/dialectic-resolutions.md`
+
+Write one resolution entry per decision originally present in `contested-decisions.md` (including `over-cap`, `bucket-skipped`, and `fallback-to-synthesis` entries), using the schema from `dialectic-protocol.md`:
 
 ```markdown
-### DECISION_1: <title>
-**Resolution**: <the final binding decision — must be one of the two options: either the chosen or the alternative>
-**Thesis summary**: <1-2 sentence summary of the thesis agent's key argument>
-**Antithesis summary**: <1-2 sentence summary of the antithesis agent's key argument>
-**Why thesis prevails** / **Why antithesis prevails**: <explicit justification that directly addresses the losing side's strongest argument — must not dismiss the counterargument without engaging it>
+### DECISION_N: <title>
+**Resolution**: <CHOSEN or ALTERNATIVE — CHOSEN is the default for non-voted dispositions>
+**Disposition**: voted | fallback-to-synthesis | bucket-skipped | over-cap
+**Vote tally**: THESIS=<N>, ANTI_THESIS=<M>
+**Thesis summary**: <1-2 sentence summary from THESIS-role defense text, or (no debate — bucket skipped) / (no debate — ranked outside cap) placeholder>
+**Antithesis summary**: <1-2 sentence summary from ANTI_THESIS-role defense text, or placeholder>
+**Why thesis prevails** or **Why antithesis prevails** or **Why fallback** or **Why skipped** or **Why over-cap**: <justification per disposition, following the field-rules in dialectic-protocol.md>
 ```
+
+Field rules per disposition:
+
+- **`voted`**: Include `Vote tally`. Use `**Why thesis prevails**` or `**Why antithesis prevails**` (which side won); distill from the winning judges' rationale lines and engage the losing side's strongest concession from the tag-body text.
+- **`fallback-to-synthesis`**: Omit `Vote tally`. Use `**Why fallback**: <reason>`.
+- **`bucket-skipped`**: Omit `Vote tally`. Use `**Why skipped**: <Tool> unavailable — bucket <N> decisions skipped at Step 2a.5 step 4`. Summary placeholders: `(no debate — bucket skipped)`.
+- **`over-cap`**: Omit `Vote tally`. Use `**Why over-cap**: decision ranked <N>, outside top-5 dialectic selection cap`. Summary placeholders: `(no debate — ranked outside cap)`.
 
 Print resolutions under a `## Dialectic Resolutions` header.
 
-**Scope**: Dialectic resolutions are **binding for Step 2b plan generation only**. They may be superseded later by accepted Step 3 review findings. The finalized plan (after Step 3 review) remains the sole canonical output.
+**Scope**: Dialectic resolutions are **binding for Step 2b plan generation only** for entries with `Disposition: voted`. All other dispositions mean synthesis stands for that point. Even `voted` entries may be superseded by accepted Step 3 review findings. The finalized plan (after Step 3 review) remains the sole canonical output.
 
-Print: `✅ 2a.5: dialectic — <N> decisions resolved (<elapsed>)` (where N is the count of decisions that passed the quorum rule).
+Print: `✅ 2a.5: dialectic — <V> voted, <F> fallback, <S> bucket-skipped, <O> over-cap (<elapsed>)` where V/F/S/O are per-disposition counts (omit a count if zero — e.g., `<V> voted, <F> fallback`).
 
 ## Step 2b — Design the Implementation Plan
 
@@ -498,7 +575,14 @@ Read `$DESIGN_TMPDIR/approach-synthesis.txt` from Step 2a and incorporate the sy
 
 Also read `$DESIGN_TMPDIR/discussion-round1.md` if it exists and is non-empty. Incorporate the scope boundaries and hard constraints established during the design discussion into the plan — these define what is in-scope, what must not break, and what the user explicitly does not want.
 
-Also read `$DESIGN_TMPDIR/dialectic-resolutions.md` if it exists and is non-empty. For each resolved decision, the plan **must** follow the resolution direction and explicitly note how the antithesis concern was addressed. These resolutions are binding for Step 2b — do not override them. (Note: Step 3 plan review may subsequently revise the plan based on accepted review findings, which supersede dialectic resolutions.)
+Also read `$DESIGN_TMPDIR/dialectic-resolutions.md` if it exists and is non-empty. Parse the structured fields defined in `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md` (Resolution, Disposition, Vote tally, Thesis summary, Antithesis summary, Why field). **Branch on `Disposition`**:
+
+- **`Disposition: voted`**: the plan **must** follow the `Resolution` direction and explicitly note how the antithesis concern (from `Antithesis summary`) was addressed, referencing the `Why thesis prevails` / `Why antithesis prevails` justification. These resolutions are binding for Step 2b — do not override them.
+- **`Disposition: fallback-to-synthesis`**: the synthesis decision stands (Resolution is the synthesis choice = `CHOSEN`). Note the `Why fallback` reason briefly (judge panel tie, quorum failure, etc.) but do NOT fabricate antithesis-engagement prose — no antithesis was heard with sufficient rigor to engage.
+- **`Disposition: bucket-skipped`**: the synthesis decision stands. Note that debate was skipped (`Why skipped` reason) but do NOT fabricate antithesis-engagement prose — no debate occurred.
+- **`Disposition: over-cap`**: the synthesis decision stands. Note that this decision was outside the dialectic cap (`Why over-cap` reason) but do NOT fabricate antithesis-engagement prose.
+
+(Note: Step 3 plan review may subsequently revise the plan based on accepted review findings, which supersede dialectic resolutions.)
 
 Produce a plan that includes:
 
@@ -674,7 +758,11 @@ Also reference the revised (or original) implementation plan from Step 3's outpu
 Identify decisions in the implementation plan that meet any of these criteria:
 1. **Not covered in Round 1** — decisions that emerged from the plan design, not from the original feature description.
 2. **Challenged by reviewers** — decisions that appear in `accepted-plan-findings.md` (reviewers found them suboptimal and the plan was revised).
-3. **Still contested** — decisions from `contested-decisions.md` where the dialectic resolution was close or the antithesis had strong arguments.
+3. **Still contested** — decisions whose `dialectic-resolutions.md` entry matches any of the following (per the protocol in `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`):
+   - `Disposition: voted` AND `Vote tally` shows a close 2-1 split (the minority 1 vote signals substantive disagreement).
+   - `Disposition: fallback-to-synthesis` (the dialectic layer could not resolve).
+   - `Disposition: bucket-skipped` (no debate occurred — tool was unavailable).
+   - `Disposition: over-cap` (no debate occurred — decision ranked outside the top-5 dialectic cap).
 
 Walk each uncovered branch one question at a time via sequential `AskUserQuestion` calls, providing a **recommended answer** for each question. If a question can be answered by exploring the codebase, do so and report the finding instead of asking the user.
 
@@ -682,7 +770,7 @@ Unlike Round 1, Round 2 MAY ask about architectural decisions and implementation
 
 ### Short-circuit
 
-If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions from `contested-decisions.md` have a close or inconclusive dialectic resolution, print `⏩ 3.5: discussion r2 — no additional decisions require discussion (<elapsed>)` and proceed to Step 3a.
+If all plan decisions are already covered by Round 1, no reviewer findings challenged them, and no decisions in `dialectic-resolutions.md` match the still-contested criteria above (no close 2-1 voted splits, no fallback-to-synthesis, no bucket-skipped, no over-cap entries), print `⏩ 3.5: discussion r2 — no additional decisions require discussion (<elapsed>)` and proceed to Step 3a.
 
 ### Output
 

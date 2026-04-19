@@ -36,7 +36,8 @@ The handling of unavailable external tools differs across workflow phases:
 | **Plan review** (`/design`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
 | **Code review** (`/review`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
 | **Voting** | Claude replacement voters used — always 3 voters. 3 voters: 2+ YES to accept; 2 voters: unanimous YES; <2 voters: voting skipped, all findings accepted |
-| **Dialectic debate** (`/design`) | **No Claude substitution** — when the assigned external tool (Cursor for odd-indexed decisions, Codex for even-indexed) is unavailable, that decision's bucket is skipped entirely and the Step 2a.4 synthesis decision stands. Intentional divergence from the rules above; see Step 2a.5 in `skills/design/SKILL.md` |
+| **Dialectic debate** (`/design`) | **No Claude substitution for debaters** — when the assigned external tool (Cursor for odd-indexed decisions, Codex for even-indexed) is unavailable, that decision's debater bucket is skipped entirely and a `Disposition: bucket-skipped` resolution is written (synthesis decision stands). Intentional divergence from the rules above for debate execution only; see Step 2a.5 in `skills/design/SKILL.md` |
+| **Dialectic judge panel** (`/design`) | **Claude replacements keep the panel at 3** — the post-debate 3-judge panel (Claude Code Reviewer subagent + Codex + Cursor) follows the repo-wide replacement-first pattern. When an external judge tool is unhealthy, a Claude Code Reviewer subagent replaces that slot. Judges merely adjudicate between pre-authored defenses — the no-Claude rule applies to adversarial debate execution only, not to adjudication. See `skills/shared/dialectic-protocol.md` |
 
 ## How It Works
 
@@ -97,7 +98,7 @@ flowchart TD
    - Notes **Innovation/Exploration** alternatives sourced from Codex slot 1 that are worth preserving as options
    - Lists contested decisions in a structured format for the dialectic debate phase
 
-4. **Dialectic debate** (`/design` only) — If the synthesis identifies contested decisions (points where sketches genuinely diverged), up to 5 (in priority order) are submitted to structured thesis/antithesis debates run on Cursor and Codex via deterministic per-decision bucketing. For each contested decision, a thesis agent defends the synthesis choice and an antithesis agent argues for the strongest alternative. Both run in parallel with codebase access. The orchestrator then writes binding resolutions that must explicitly address the antithesis arguments. This step is skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below for details.
+4. **Dialectic debate and adjudication** (`/design` only) — If the synthesis identifies contested decisions (points where sketches genuinely diverged), up to 5 (in priority order) are submitted to structured thesis/antithesis debates run on Cursor and Codex via deterministic per-decision bucketing. For each contested decision, a thesis agent defends the synthesis choice and an antithesis agent argues for the strongest alternative. Both run in parallel with codebase access. Successful debates are then forwarded to a **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unavailable) that casts `THESIS` / `ANTI_THESIS` votes on each decision. The orchestrator writes resolutions as directed by the panel, recording `Disposition: voted | fallback-to-synthesis | bucket-skipped | over-cap` per decision. This step is skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below for details; the adjudication protocol is defined in `skills/shared/dialectic-protocol.md`.
 
 5. **Full plan** — The synthesis and any dialectic resolutions inform the complete implementation plan, which is then submitted to the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) for validation.
 
@@ -105,7 +106,7 @@ flowchart TD
 
 > **Note**: This phase applies only to `/design`. `/research` does not include a dialectic debate step.
 
-The dialectic debate phase adds reasoning depth on contested points without replacing the breadth-of-perspectives from the sketch phase. It addresses a specific weakness in the convergence step: when the synthesis identifies divergence points, the orchestrator would otherwise unilaterally resolve them — exactly where confirmation bias can creep in.
+The dialectic debate phase adds reasoning depth on contested points without replacing the breadth-of-perspectives from the sketch phase. It addresses a specific weakness in the convergence step: when the synthesis identifies divergence points, the orchestrator would otherwise unilaterally resolve them — exactly where confirmation bias can creep in. Since Phase 3, adjudication between the two defenses is delegated to a 3-judge panel rather than the orchestrator, further decorrelating the adjudication signal from the agent that produced the synthesis.
 
 ### When It Runs
 
@@ -118,9 +119,9 @@ For each contested decision (up to 5, prioritized by impact):
 1. A **thesis agent** defends the approach chosen by the synthesis, arguing why it's the right call given the codebase and requirements
 2. An **antithesis agent** attacks that choice, arguing for the strongest alternative, poking at hidden assumptions, and surfacing risks the synthesis glossed over
 
-Both agents run in parallel and produce 1-2 focused paragraphs. A **quorum rule** requires both sides to report `STATUS=OK` from the collector and produce substantive structured output before a binding resolution is written — if either side's status check or content check fails, the debate falls back to the original synthesis decision.
+Both agents run in parallel and produce tagged structured output. An **eligibility gate** requires both sides to report `STATUS=OK` from the collector and pass structural quality checks (5 required tags, single `RECOMMEND:` line, role-vs-RECOMMEND consistency, evidence citation) before the decision is forwarded to the judge ballot. If either side fails the gate, the decision's `Disposition` is `fallback-to-synthesis` and the synthesis decision stands for that point.
 
-The orchestrator then writes a resolution for each contested point that must explicitly address the antithesis arguments. It can still pick the original choice, but now it must justify against the strongest counterargument.
+After the eligibility gate, successful debates go to a **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unhealthy — replacement-first, panel always at 3). The panel reads an attribution-stripped ballot (Defense A / Defense B with deterministic position-order rotation across decisions) and casts one binary vote per decision: `THESIS` (the side defending the synthesis choice wins) or `ANTI_THESIS` (the alternative wins). The orchestrator writes resolutions as directed by the panel's vote tally: 3 judges → majority 2+ wins; 2 judges → unanimous required (1-1 tie → `fallback-to-synthesis`); <2 judges → `fallback-to-synthesis`. See `skills/shared/dialectic-protocol.md` for the authoritative protocol.
 
 ### Scope of Resolutions
 

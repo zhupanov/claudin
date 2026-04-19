@@ -56,7 +56,7 @@ Every line that marks the **end** of a step or work item must include elapsed ti
 Append the elapsed time in parentheses at the end of the line, using short form. The timer starts when the step logically began (its `🔶` start line, or entry into the step if no `🔶` line exists).
 
 ```
-✅ 2a.5: dialectic — 3 decisions resolved (1m42s)
+✅ 2a.5: dialectic — 2 voted, 1 fallback (1m42s)
 ⏩ 6: checks (2) — skipped, no review changes (1s)
 ⏭️ 12: CI+merge loop — skipped (--merge not set) (0s)
 ⚠ 7a: code flow — generation failed, proceeding without diagram (12s)
@@ -132,7 +132,7 @@ Standalone `/design` (no `--step-prefix`):
 > **🔶 2a: sketches**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 > **🔶 2a.5: dialectic**
-✅ 2a.5: dialectic — 3 decisions resolved (1m42s)
+✅ 2a.5: dialectic — 2 voted, 1 fallback (1m42s)
 ```
 
 `/design` called from `/implement` with `--step-prefix "1.::design plan"`:
@@ -141,7 +141,7 @@ Standalone `/design` (no `--step-prefix`):
 > **🔶 1.2a: design plan | sketches**
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 > **🔶 1.2a.5: design plan | dialectic**
-✅ 1.2a.5: design plan | dialectic — 3 decisions resolved (1m42s)
+✅ 1.2a.5: design plan | dialectic — 2 voted, 1 fallback (1m42s)
 ```
 
 `/review` called from `/implement` with `--step-prefix "5.::code review"`:
