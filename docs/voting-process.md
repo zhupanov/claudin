@@ -110,6 +110,29 @@ Only Claude subagent reviewers produce OOS observations (via their dual-list out
 
 - **Voting Protocol** is used by `/design` and `/review` — see this document
 - **Negotiation Protocol** is used by `/research` and `/loop-review` — up to N rounds of back-and-forth with external reviewers, where Claude makes the final call
-- The key difference: voting uses a democratic panel with threshold rules; negotiation uses bilateral dialogue with Claude as arbiter
+- **Dialectic Protocol** is used by `/design` Step 2a.5 only — see [Relationship to Dialectic Protocol](#relationship-to-dialectic-protocol) below
+- The key difference: voting uses a democratic panel with threshold rules; negotiation uses bilateral dialogue with Claude as arbiter; dialectic adjudicates binary debater defenses
 
 See [Point Competition](point-competition.md) for how voting outcomes translate to reviewer scores.
+
+## Relationship to Dialectic Protocol
+
+`/design` Step 2a.5 runs a separate protocol — **dialectic adjudication** — to resolve contested design decisions. This protocol is **structurally parallel to voting-protocol but semantically independent**. The canonical specification lives in [`skills/shared/dialectic-protocol.md`](../skills/shared/dialectic-protocol.md).
+
+### Do not reuse voting-protocol parsers, thresholds, or scoring for dialectic
+
+Maintainers extending Step 2a.5 MUST NOT reuse this document's ballot parser, threshold tables, or scoring rules for dialectic. The two protocols differ on every surface:
+
+| Surface | Voting Protocol | Dialectic Protocol |
+|---|---|---|
+| Ballot ID prefix | `FINDING_N` (and `OOS_N` for out-of-scope) | `DECISION_N` |
+| Vote tokens | `YES` / `NO` / `EXONERATE` | `THESIS` / `ANTI_THESIS` (binary — no third option) |
+| Accept threshold (3 voters) | 2+ YES | 2+ same-side |
+| Scoring | Reviewer competition scoreboard (+1 / 0 / -1) | **No scoring** (dialectic is not a competition) |
+| OOS semantics | In-scope vs `[OUT_OF_SCOPE]` prefix; asymmetric reward-only for OOS | No OOS concept — every decision is binding or synthesis-falls-back |
+
+### Mechanical "no Claude debaters" rule (debate execution only)
+
+The dialectic protocol diverges from the repo-wide "replacement-first" fallback architecture **for the debate phase only**: when an assigned external debater tool (Cursor for odd-indexed decisions, Codex for even) is unavailable, the bucket is **skipped entirely** and a `Disposition: bucket-skipped` resolution is written — Claude Code Reviewer subagents are **never** substituted into the debate path. This is intentional (see GitHub issue #98 for the rationale): debaters produce adversarial arguments where model-specific writing style could encode tool identity and bias the downstream judge panel.
+
+The **judge panel** (post-debate adjudication, always 3 slots) uses the repo-wide replacement-first pattern normally: when Cursor or Codex is unhealthy, a Claude Code Reviewer subagent replaces that slot so the panel always remains at 3. Judges only adjudicate between pre-authored defenses; the "no Claude substitution" rule is specific to adversarial debate, not to adjudication.

@@ -1,0 +1,14 @@
+# fallback-quorum-failure manifest
+# Covers: Parser tolerance (5-required-tags gate failure);
+#         Disposition Enum fallback-to-synthesis with reason=missing_tag.
+#
+# D2's thesis debater file deliberately omits the <evidence> tag; the
+# real orchestrator would classify D2 as fallback-to-synthesis and exclude
+# it from the ballot. The smoke test's own debater structural check would
+# fail hard on this; skip it here since the broken debater is
+# intentional documentation of the failure mode.
+skip_debater_validation=true
+
+DECISION_1 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_2 expected_disposition=fallback-to-synthesis
+DECISION_3 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0

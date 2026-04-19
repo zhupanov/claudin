@@ -1,0 +1,2 @@
+DECISION_1: THESIS — Defense A is stronger on decision 1.
+DECISION_2: THESIS — Defense B (CHOSEN) is stronger on decision 2.

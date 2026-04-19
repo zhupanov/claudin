@@ -1,0 +1,17 @@
+## Dialectic Ballot
+
+### DECISION_1: Normal debated decision
+
+Defense A (defends CHOSEN):
+<defense_content>Chosen.</defense_content>
+
+Defense B (defends ALTERNATIVE):
+<defense_content>Alternative.</defense_content>
+
+### DECISION_3: Normal debated decision
+
+Defense A (defends CHOSEN):
+<defense_content>Chosen.</defense_content>
+
+Defense B (defends ALTERNATIVE):
+<defense_content>Alternative.</defense_content>

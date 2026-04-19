@@ -1,0 +1,12 @@
+# parser-tolerance manifest
+# Covers: Parser tolerance § (em-dash OR hyphen rationale separator;
+#         duplicate DECISION_N line → first valid + warning;
+#         missing DECISION_N line → per-decision abstention only, not
+#         whole-output ineligibility).
+#
+# D2 has 2 eligible voters (claude abstains on D2 only, not whole output);
+# both voted THESIS → unanimous → voted.
+
+DECISION_1 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_2 expected_disposition=voted expected_tally=THESIS=2,ANTI_THESIS=0
+DECISION_3 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0

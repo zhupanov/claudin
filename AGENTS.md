@@ -23,6 +23,7 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 - **Changing a shared script** → edit `scripts/<name>.sh`, then grep for callers across `skills/`, `hooks/`, `.claude/settings.json`, `.github/workflows/`, and other scripts.
 - **Changing dev-only skills** → edit under `.claude/skills/bump-version/` or `.claude/skills/relevant-checks/`.
 - **Docs or scripts only** → classified as PATCH.
+- **Dialectic smoke test** → `scripts/dialectic-smoke-test.sh` is an offline fixture-driven regression guard for `/design` Step 2a.5. Fixtures live under `tests/fixtures/dialectic/` (a non-runtime path — everything outside the named runtime surface is supplementary). Run locally with `bash scripts/dialectic-smoke-test.sh` or via `make smoke-dialectic`; CI runs it in the `smoke-dialectic` job. When changing `skills/shared/dialectic-protocol.md` Parser tolerance or Threshold Rules sections, update the smoke test and/or fixtures in the same PR.
 
 ## Canonical sources
 

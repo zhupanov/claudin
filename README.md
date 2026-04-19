@@ -102,6 +102,7 @@ These tools enhance the workflow but are not required. When unavailable, Claude 
 ## Features
 
 - **Multi-agent design planning** — 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches before a full implementation plan is written, preventing anchoring bias
+- **Dialectic adjudication** — Contested design decisions from the sketch phase are resolved by a 3-judge binary panel (Claude Code Reviewer subagent + Codex + Cursor) after a thesis/antithesis debate run on external Cursor/Codex. Ballots are attribution-stripped with deterministic position rotation to cancel judge bias.
 - **Voting-based review resolution** — A 3-agent voting panel (YES/NO/EXONERATE) adjudicates review findings for both plan review and code review
 - **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
 - **End-to-end automation** — From feature design through PR creation, initial CI wait, and Slack announcement in a single command. With `--merge`, also runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification
@@ -114,7 +115,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 
 | Command | Arguments | Description |
 |---|---|---|
-| [`/design`](skills/design/SKILL.md) | `[--auto] [--debug] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches, then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the plan. `--auto` suppresses all interactive question checkpoints. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/design/diagram.svg) |
+| [`/design`](skills/design/SKILL.md) | `[--auto] [--debug] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/design/diagram.svg) |
 | [`/research`](skills/research/SKILL.md) | `[--debug] <research question or topic>` | Collaborative read-only research using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable. Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo. [(Diagram).](skills/research/diagram.svg) |
 | [`/review`](skills/review/SKILL.md) | `[--debug]` | Code review current branch changes with a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
 | [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge] [--debug] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (1 Claude Code Reviewer subagent, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
@@ -179,6 +180,7 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 | `make actionlint` | Run actionlint only |
 | `make agnix` | Run agnix only |
 | `make setup` | Install pre-commit git hooks |
+| `make smoke-dialectic` | Run the offline fixture-driven smoke test for `/design` Step 2a.5 (dialectic parser + tally + structural-invariant guard). Exercises `scripts/dialectic-smoke-test.sh` against `tests/fixtures/dialectic/`. |
 
 ## Environment Variables
 

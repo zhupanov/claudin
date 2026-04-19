@@ -1,0 +1,11 @@
+<claim>Thesis claim for decision 3: the chosen synthesis option is correct.</claim>
+
+<evidence>Supporting reference: see skills/shared/dialectic-protocol.md:83 for parser rules that govern how this decision's resolution will be applied downstream.</evidence>
+
+<strongest_concession>Opposing side has a legitimate point about alternative complexity trade-offs on this specific decision.</strongest_concession>
+
+<counter_to_opposition>That concern is mitigated by co-versioning with the normative rules in the protocol document.</counter_to_opposition>
+
+<risk_if_wrong>Risk: downstream consumers parse a mis-labelled resolution and miscalibrate Step 2b's antithesis engagement.</risk_if_wrong>
+
+RECOMMEND: THESIS

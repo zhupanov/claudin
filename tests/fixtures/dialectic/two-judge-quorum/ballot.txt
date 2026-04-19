@@ -1,0 +1,25 @@
+## Dialectic Ballot
+
+### DECISION_1: Two-voter unanimous case
+
+Defense A (defends CHOSEN=option-a):
+<defense_content>
+Chosen arguments.
+</defense_content>
+
+Defense B (defends ALTERNATIVE=option-b):
+<defense_content>
+Alternative arguments.
+</defense_content>
+
+### DECISION_2: Two-voter 1-1 tie case
+
+Defense A (defends ALTERNATIVE=option-y):
+<defense_content>
+Alternative arguments.
+</defense_content>
+
+Defense B (defends CHOSEN=option-x):
+<defense_content>
+Chosen arguments.
+</defense_content>

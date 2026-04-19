@@ -1,0 +1,11 @@
+<claim>Antithesis claim for decision 1: the alternative option achieves the same goal with less complexity.</claim>
+
+<evidence>Supporting reference: see skills/shared/dialectic-protocol.md:97 for the threshold matrix that defines how binary votes tally.</evidence>
+
+<strongest_concession>The chosen option's defender has a legitimate point that precedent favors it in adjacent code areas.</strongest_concession>
+
+<counter_to_opposition>Precedent is not decisive when proportionality argues for a smaller change set under current requirements.</counter_to_opposition>
+
+<risk_if_wrong>Risk: ship unjustified complexity that never pays off and adds permanent maintenance surface.</risk_if_wrong>
+
+RECOMMEND: ANTI_THESIS

@@ -1,0 +1,25 @@
+## Dialectic Ballot
+
+### DECISION_1: parser tolerance case 1
+
+Defense A (defends CHOSEN):
+<defense_content>Chosen.</defense_content>
+
+Defense B (defends ALTERNATIVE):
+<defense_content>Alternative.</defense_content>
+
+### DECISION_2: parser tolerance case 2
+
+Defense A (defends ALTERNATIVE):
+<defense_content>Alternative.</defense_content>
+
+Defense B (defends CHOSEN):
+<defense_content>Chosen.</defense_content>
+
+### DECISION_3: parser tolerance case 3
+
+Defense A (defends CHOSEN):
+<defense_content>Chosen.</defense_content>
+
+Defense B (defends ALTERNATIVE):
+<defense_content>Alternative.</defense_content>

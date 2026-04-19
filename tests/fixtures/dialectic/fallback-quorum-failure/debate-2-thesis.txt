@@ -1,0 +1,9 @@
+<claim>Thesis claim for decision 2, but missing the evidence tag on purpose.</claim>
+
+<strongest_concession>Opposing side has a legitimate point.</strongest_concession>
+
+<counter_to_opposition>But the counter is stronger.</counter_to_opposition>
+
+<risk_if_wrong>Fixture risk.</risk_if_wrong>
+
+RECOMMEND: THESIS

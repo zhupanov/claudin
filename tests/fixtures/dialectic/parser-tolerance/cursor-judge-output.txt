@@ -1,0 +1,3 @@
+DECISION_1: THESIS - rationale using hyphen separator (ASCII dash, no em-dash).
+DECISION_2: THESIS — normal rationale.
+DECISION_3: THESIS — normal rationale.
