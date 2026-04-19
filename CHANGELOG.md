@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.10] - 2026-04-19
+
+### Fixed
+
+- `skills/issue/scripts/parse-input.sh` no longer silently swallows an author-intended new item into an in-progress OOS body. When a plain `### <title>` line appears inside an OOS Description that has not yet seen a closing structured field (Reviewer / Vote tally / Phase), the parser now defers the absorb decision via a pending-heading state (`PENDING_HEADING` / `PENDING_BODY`). Resolution happens at the first disambiguating signal: Reviewer/Vote tally/Phase fires → `resolve_pending_foldback` merges pending content back into `CURRENT_BODY` (preserves the #129 `### Notes` subheading-absorption behavior byte-for-byte); `### OOS_N:` line or EOF arrives → `resolve_pending_split` emits the current OOS as MALFORMED with its non-empty body, then emits the pending heading + body as a new generic item. `emit_item` gains a `force_malformed` parameter so a MALFORMED item can carry a populated BODY. `flush_item` clears pending state alongside the other per-item resets. `skills/issue/SKILL.md` line 75 now describes the expanded MALFORMED trigger per unanimous dialectic vote. `test-parse-input.sh` rewrites case 6 from "documented absorb limitation" to the #138 contract and adds three regression locks: case 13 (multi-subheading OOS accumulation before Reviewer), case 14 (EOF split), case 15 (mid-stream `### OOS_N:` split). 83 → 121 assertions, all pass. Closes #138.
+
 ## [3.4.9] - 2026-04-19
 
 ### Fixed
