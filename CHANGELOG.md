@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.3] - 2026-04-19
+
+### Fixed
+
+- Restored shell-layer secret redaction as defense-in-depth for `/issue` → `gh issue create` (closes #128). `skills/issue/scripts/create-one.sh` now pipes both the issue title (after `redact` + `emit_redaction_failure` split so ISSUE_FAILED/ISSUE_ERROR emissions reach the parent's stdout under command substitution) and the body (at a single structural choke point after all body-assembly paths converge) through the new `scripts/redact-secrets.sh` filter before invoking `gh`, and also redacts captured `gh` stderr on the failure-echo path so auth-failure output with embedded tokens cannot leak. The filter ports the six token families from the deleted `scripts/create-oos-issues.sh:redact_secrets()` — Anthropic/OpenAI `sk-*`, GitHub PATs (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`), AWS long-term `AKIA…`, Slack `xox[baprs]-…`, generic JWT, PEM private keys — but fixes two latent bugs in the original: PEM handling now uses `awk` (not line-oriented `sed` that silently missed multi-line blocks) and the BEGIN/END markers tolerate leading whitespace and markdown `>` blockquote prefixes so indented/quoted keys are still redacted. Unterminated PEM blocks (BEGIN without END) fail-closed and emit a visible `[content truncated — unterminated PEM block…]` marker plus a stderr WARN for operator log visibility (previously the tail was dropped silently). Helper failure fail-closes with a new exit code 3 and `ISSUE_ERROR=redaction:…`. New `scripts/test-redact-secrets.sh` with 45 assertions (unit per family, idempotency, dry-run, end-to-end via stub `gh` covering both success and failure paths, indented/blockquoted PEM, unterminated PEM, missing helper, zero-URL multi-line output) is wired into `make lint` via a new `test-redact` prerequisite so the regression barrier runs on every local and CI invocation. `SECURITY.md` gains an outbound-redaction subsection documenting covered families and explicit non-coverage (AWS STS `ASIA…`, payment provider live keys, opaque bearer tokens, DB connection strings, private hostnames, PII).
+
 ## [3.4.2] - 2026-04-19
 
 ### Fixed

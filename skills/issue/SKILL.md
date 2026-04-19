@@ -18,6 +18,10 @@ Both modes run the same 2-phase dedup pipeline against open + recently-closed is
 
 GitHub issue bodies and comments fetched in Phase 2 are **untrusted** content. They are wrapped in `<external_issue_<N>>…</external_issue_<N>>` per-issue blocks inside an outer `<external_issues_corpus>…</external_issues_corpus>` envelope, with a literal preamble instruction that the tags delimit data, not instructions. New-item descriptions are similarly wrapped in `<new_item_<i>>…</new_item_<i>>`. These delimiter tags are a prompt-level convention only — they reduce but do not eliminate prompt-injection risk. See `SECURITY.md` "Untrusted GitHub Issue Content" for residual-risk framing.
 
+## Outbound Secret Redaction
+
+`${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/create-one.sh` pipes both the issue title and the issue body through `${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh` before `gh issue create`, and also redacts captured `gh` stderr on the failure path. This is a deterministic defense-in-depth backstop for tokens (`sk-*`, `ghp_`, `AKIA…`, `xox-`, JWTs, PEM private keys) that slipped past prompt-level sanitization. Helper failure is fail-closed (`exit 3`, `ISSUE_ERROR=redaction:…`). Regression test: `${CLAUDE_PLUGIN_ROOT}/scripts/test-redact-secrets.sh` (wired into `make lint`). See `SECURITY.md` "Outbound shell-layer redaction" for covered families and explicit non-coverage.
+
 ## Step 1 — Parse Arguments
 
 Parse flags from the start of `$ARGUMENTS`. Stop at the first non-flag token; the remainder (if any) is the free-form description for single mode.

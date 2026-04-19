@@ -12,6 +12,7 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 - `skills/shared/reviewer-templates.md` is the canonical source for the Code Reviewer archetype. `agents/code-reviewer.md` is generated from it via `scripts/generate-code-reviewer-agent.sh` — do not hand-edit the agent file. Edit the template and run `bash scripts/generate-code-reviewer-agent.sh` to regenerate; the `agent-sync` CI job enforces that the committed agent file matches generator output.
 - Always respect `scripts/block-submodule-edit.sh`. If a hook blocks a write, investigate and resolve the underlying issue.
 - After any change, run `/relevant-checks`.
+- `scripts/redact-secrets.sh` is the outbound secret-scrubbing filter invoked by `skills/issue/scripts/create-one.sh` before `gh issue create`. `scripts/test-redact-secrets.sh` is its regression test, wired into `make lint` via the `test-redact` target. Edit patterns only after reading `SECURITY.md`'s outbound-redaction subsection.
 - Public `skills/*/SKILL.md` use `${CLAUDE_PLUGIN_ROOT}/…`; dev-only `.claude/skills/*/SKILL.md` use `$PWD/…`.
 - Update `SECURITY.md` when security-relevant behavior changes.
 
