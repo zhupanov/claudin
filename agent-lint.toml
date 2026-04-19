@@ -14,6 +14,19 @@ suppress = [
 # `make lint` (test-sessionstart target). Agent-lint's dead-script rule
 # only recognizes structured references from SKILL.md/hooks.json/ci.yaml,
 # so we exclude the test path explicitly.
+#
+# scripts/audit-edit-write.sh and scripts/test-audit-edit-write.sh are the
+# dev-only opt-in PostToolUse audit hook pair — structurally referenced from
+# Makefile (test target), docs/dev-hook-audit.md (enable snippet), AGENTS.md,
+# and SECURITY.md, but NOT from hooks/hooks.json or .claude/settings.json by
+# design (issue #155: contributors opt in locally via gitignored
+# .claude/settings.local.json). agent-lint's G004/dead-script rule only scans
+# SKILL.md / CLAUDE.md / hooks.json / settings.json for invocation refs and
+# does not follow CLAUDE.md @-imports or Makefile targets, so these two
+# scripts would be false-flagged. Excluded here rather than force-registered
+# to preserve the dev-only opt-in contract.
 exclude = [
   "scripts/test-sessionstart-health.sh",
+  "scripts/audit-edit-write.sh",
+  "scripts/test-audit-edit-write.sh",
 ]
