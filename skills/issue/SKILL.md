@@ -70,6 +70,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/parse-input.sh --input-file "$INPUT_F
 
 Parse the output for `ITEMS_TOTAL=<N>` and per-item `ITEM_<i>_TITLE`, `ITEM_<i>_BODY` (base64-encoded), optional `ITEM_<i>_REVIEWER`, `ITEM_<i>_PHASE`, `ITEM_<i>_VOTE_TALLY`, and `ITEM_<i>_MALFORMED=true` for items without a description.
 
+Parser regression coverage lives in `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-parse-input.sh` (self-contained; run manually via `bash ${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-parse-input.sh` — not wired into automated CI).
+
 Malformed items are pre-counted into the final `ISSUES_FAILED` — they never reach Phase 1/2 or create. For each malformed item, emit on stdout at the end of the run:
 - `ISSUE_<i>_FAILED=true`
 - `ISSUE_<i>_TITLE=<title>`

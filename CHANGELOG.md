@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.2] - 2026-04-19
+
+### Fixed
+
+- `skills/issue/scripts/parse-input.sh` now tracks an explicit per-item `CURRENT_MODE` (`oos` / `generic` / empty) to prevent two bugs where OOS and generic item parsing conflated structure. (a) A markdown subheading like `### Notes` inside an OOS item's Description body no longer triggers a premature `flush_item`; the new generic-heading branch absorbs the line as body continuation when `CURRENT_MODE=oos` AND `IN_BODY=true`, so OOS descriptions may contain `### …` subheadings. (b) Bullet lines `- **Description**:`, `- **Reviewer**:`, `- **Vote tally**:`, and `- **Phase**:` inside a generic item's body are no longer parsed as OOS metadata; the four OOS field branches now fire only when `CURRENT_MODE=oos`, so in generic items those bullets fall through to the `IN_BODY` continuation branch and remain verbatim in `ITEM_<i>_BODY`. `flush_item` resets `CURRENT_MODE` so per-item mode never leaks across items. The top-of-file grammar comment is rewritten to document mode transitions, the `###` absorption rule inside OOS descriptions, and the documented boundary limitation (an incomplete OOS item — Description only, no trailing Reviewer/Vote tally/Phase — followed by a `### …` line absorbs the following line as continuation; feed well-formed 4-field OOS inputs to terminate the body explicitly). New self-contained regression harness at `skills/issue/scripts/test-parse-input.sh` with 8 cases covering both bug reproducers, three well-formed baselines (OOS, generic, mixed complete OOS + generic), a back-to-back complete OOS case (the primary `/implement` Step 9a.1 production shape), a back-to-back generic case, and an executable contract for the documented incomplete-OOS absorption behavior — 52 assertions, all passing. Harness uses a portable `b64_decode()` helper (`-d` / `-D` fallback for macOS BSD base64) and invokes the parser via `bash "$PARSER"` so the exec bit is not required. Not wired into automated CI (deferred as out-of-scope per plan and code review voting); developers run it manually via `bash ${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-parse-input.sh`. Fixes #129.
+
 ## [3.4.1] - 2026-04-18
 
 ### Changed
