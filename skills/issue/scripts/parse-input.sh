@@ -187,7 +187,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
             IN_BODY=true
             CURRENT_MODE="generic"
         fi
-    elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Description\*\*:[[:space:]]+(.+)$ ]]; then
+    elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Description\*\*:[[:space:]]*(.*)$ ]]; then
+        # Accept empty inline value — the body may come entirely from continuation
+        # lines (e.g. `- **Description**:` alone on its line with `  content` on
+        # the next line). IN_BODY=true ensures those continuations are captured
+        # by the fallback branch below.
         CURRENT_BODY="${BASH_REMATCH[1]}"
         IN_BODY=true
     elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Reviewer\*\*:[[:space:]]+(.+)$ ]]; then
