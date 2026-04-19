@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.5] - 2026-04-19
+
+### Changed
+
+- Phase 4 cleanup for the dialectic debate overhaul: docs (`docs/voting-process.md`, `docs/agents.md`, `docs/external-reviewers.md`, `docs/workflow-lifecycle.md`, `README.md`) refreshed to reflect Phase 1-3 behavior — the 5-decision dialectic cap, external Cursor/Codex debaters with same-tool bucketing, bucket-skipped (no Claude substitution) debate semantics, 3-judge replacement-first panel, attribution-stripped ballot with position-order rotation, and the four-valued Disposition enum (`voted`, `fallback-to-synthesis`, `bucket-skipped`, `over-cap`). `docs/external-reviewers.md` gains an explicit Dialectic-specific behavior section cross-referencing `skills/shared/dialectic-protocol.md`. `docs/voting-process.md` gains a Relationship to Dialectic Protocol section that states semantic independence and the mechanical "no Claude debaters" rule (debate execution only, not judge adjudication).
+- `skills/design/diagram.svg` redrawn: Step 2a.5 Dialectic Debate node expanded into a visual subgraph (contested decisions → bucketed Cursor/Codex debater pairs → attribution-stripped ballot → 3-judge panel → resolutions), and the stale plan-review label `(2 Claude + 2 Codex + Cursor)` corrected to `(1 Claude + 1 Codex + 1 Cursor)`.
+- New offline regression guard: `scripts/dialectic-smoke-test.sh` is a bash-3.2-compatible fixture-driven parser/tally/structural-invariant validator. Loads fixtures from `tests/fixtures/dialectic/` (new top-level non-runtime tree), parses debater + ballot + judge artifacts, computes per-decision dispositions via the protocol's `Threshold Rules` matrix, and compares against a per-fixture `expected.txt` manifest. Six fixture variants cover: happy-path-5-decisions, two-judge-quorum (unanimous + 1-1 tie rows), bucket-skipped, over-cap, fallback-quorum-failure, and parser-tolerance (em-dash-or-hyphen separator, duplicate DECISION_N first-valid-wins, per-decision abstention). Validates ballot anonymity case-insensitively (`Cursor`/`Codex`/`Claude` must not appear anywhere in the body) and enforces a protocol drift guard that greps `skills/shared/dialectic-protocol.md` for the stable `Recognize exactly these four Disposition values` anchor and the four canonical values. `bucket-skipped` / `over-cap` dispositions require explicit structural absence (no debate-N files, no `DECISION_N:` in any judge file, no `### DECISION_N:` ballot heading) in addition to the 0/0 fallback tally, so a broken fixture cannot masquerade as correct coverage. Wired into the build as `make smoke-dialectic` and a dedicated `smoke-dialectic` CI job.
+
 ## [3.4.4] - 2026-04-19
 
 ### Fixed
