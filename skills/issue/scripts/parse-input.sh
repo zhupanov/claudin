@@ -148,16 +148,22 @@ flush_item() {
 }
 
 # Parse line-by-line. Support both OOS (`### OOS_N: title`) and generic
-# (`### <title>` followed by body text) formats, distinguished by CURRENT_MODE:
+# (`### <title>` followed by body text) formats, distinguished by CURRENT_MODE.
+# Both `### ` branches apply a symmetric mode-guard: a heading that falls
+# inside another item's active body is absorbed as body continuation rather
+# than flushing the current item.
 #
 #   * An `### OOS_N: title` line sets CURRENT_MODE=oos; the four structured
 #     bullets (Description / Reviewer / Vote tally / Phase) are parsed as
 #     metadata only while CURRENT_MODE=oos. In generic items those same
-#     bullets are preserved verbatim as body text.
+#     bullets are preserved verbatim as body text. UNLESS we are inside a
+#     generic body (CURRENT_MODE=generic AND IN_BODY=true), in which case the
+#     line is absorbed as body continuation (fix for issue #132 — a generic
+#     item's body may contain the literal string `### OOS_N: ...` as prose).
 #   * A plain `### <title>` line sets CURRENT_MODE=generic — UNLESS we are
 #     inside an OOS description (CURRENT_MODE=oos AND IN_BODY=true), in which
 #     case the line is absorbed as body continuation (so OOS descriptions may
-#     contain subheadings like `### Notes`).
+#     contain subheadings like `### Notes`; fix for bug a in issue #129).
 #   * Well-formed OOS items close their body when a Reviewer / Vote tally /
 #     Phase field fires (all set IN_BODY=false), so a following `### <title>`
 #     correctly starts a new item. An incomplete OOS item that has only a
@@ -168,12 +174,34 @@ flush_item() {
 #     items.
 while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" =~ ^\#\#\#[[:space:]]+OOS_[0-9]+:[[:space:]]+(.+)$ ]]; then
-        # OOS-format heading. Body comes from the `**Description**:` field that
-        # follows, not from continuation lines under the heading.
-        flush_item
-        CURRENT_TITLE="${BASH_REMATCH[1]}"
-        IN_BODY=false
-        CURRENT_MODE="oos"
+        # OOS-format heading — or a literal `### OOS_N: ...` line inside a
+        # generic item's body. Inside an active generic body with at least one
+        # meaningful (non-whitespace) body line already accumulated, absorb as
+        # body continuation rather than flushing (fix for issue #132).
+        # Symmetric to the mode-guard on the plain `### <title>` branch below.
+        # The meaningful-body check (`${CURRENT_BODY//[[:space:]]/}` — strip
+        # all whitespace, test non-empty) aligns semantics with the
+        # OOS→generic direction (where IN_BODY=true is set by
+        # `**Description**:`, which also populates CURRENT_BODY with non-
+        # whitespace content): do not absorb when the generic heading had
+        # only blank or whitespace-only lines yet — that malformed case
+        # flushes and lets the OOS line start a new OOS item, matching
+        # pre-#132 behavior for those degenerate inputs. Avoid `=~` here
+        # because it would clobber the outer OOS-heading regex's
+        # BASH_REMATCH[1] capture before the `else` branch reads it.
+        if [[ "$CURRENT_MODE" == "generic" && "$IN_BODY" == true && -n "${CURRENT_BODY//[[:space:]]/}" ]]; then
+            # CURRENT_BODY has at least one non-whitespace character (outer
+            # guard), hence is non-empty — the empty-body branch used by
+            # other append sites is unreachable here.
+            CURRENT_BODY+=$'\n'"$line"
+        else
+            # OOS body comes from the `**Description**:` field that follows,
+            # not from continuation lines under the heading.
+            flush_item
+            CURRENT_TITLE="${BASH_REMATCH[1]}"
+            IN_BODY=false
+            CURRENT_MODE="oos"
+        fi
     elif [[ "$line" =~ ^\#\#\#[[:space:]]+(.+)$ ]]; then
         # Generic heading — or a markdown subheading inside an OOS description.
         # Inside an active OOS body, absorb as body continuation rather than
