@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-04-18
+
+### Changed
+
+- Strengthened `/implement` Step 2 prompt with six research-backed edits to `skills/implement/SKILL.md`: (1) quick-mode inline plan schema at SKILL.md:185 now requires testing strategy and failure modes to match `/design`'s output; (2) new root-cause-discipline bullet in Step 2; (3) new incremental-`/relevant-checks` bullet in Step 2; (4) mode-aware Step 2 lead-in sentence; (5) auto-mode clause at SKILL.md:230 now instructs the agent to log mid-coding interpretations under the "Implementation Deviations" PR-body section; (6) TDD bullet tail now includes a concrete non-TDD verification fallback. Closes #96.
+
 ## [3.3.0] - 2026-04-18
 
 ### Added
