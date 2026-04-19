@@ -169,15 +169,23 @@ fi
 
 # ---------------------------------------------------------------------------
 # Auto-pick mode (no --issue): scan open issues oldest-first
+#
+# Use `gh api --paginate` so there is no fixed cap — `gh issue list --limit N`
+# has no "unlimited" sentinel (0 and -1 are rejected), and a hardcoded ceiling
+# silently starves older issues once a repo exceeds it. The REST issues
+# endpoint returns PRs alongside issues; filter them with
+# `select(.pull_request == null)` since `gh issue list` does this implicitly.
 # ---------------------------------------------------------------------------
-ISSUES_JSON=$(gh issue list --state open --json number,title --limit 100 2>/dev/null) || {
+ISSUES_JSONL=$(gh api --paginate "repos/${REPO}/issues?state=open&per_page=100" \
+    --jq '.[] | select(.pull_request == null) | {number, title}' 2>/dev/null) || {
     echo "ELIGIBLE=false"
     echo "ERROR=Failed to list issues"
     exit 2
 }
 
-# Sort by number ascending (oldest first) and iterate
-SORTED=$(echo "$ISSUES_JSON" | jq -c 'sort_by(.number) | .[]')
+# Sort by number ascending (oldest first) and iterate. `-s` slurps the JSONL
+# stream emitted by `--jq '.[]'` into an array so we can sort it.
+SORTED=$(echo "$ISSUES_JSONL" | jq -s -c 'sort_by(.number) | .[]')
 
 if [ -z "$SORTED" ]; then
     echo "ELIGIBLE=false"

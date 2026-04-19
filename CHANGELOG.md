@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.4] - 2026-04-18
+
+### Fixed
+
+- `/fix-issue` auto-pick mode no longer silently caps candidate scanning at the first 100 open issues. `skills/fix-issue/scripts/fetch-eligible-issue.sh` now calls `gh api --paginate repos/{owner}/{repo}/issues?state=open&per_page=100`, filtering PRs out with `select(.pull_request == null)` and slurping the JSONL stream with `jq -s` before the oldest-first sort. Matches the pagination pattern already used by `open_blockers` and the comment fetchers in the same file. Fixes #110.
+
 ## [3.3.3] - 2026-04-18
 
 ### Fixed
