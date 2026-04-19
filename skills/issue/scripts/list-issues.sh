@@ -128,14 +128,28 @@ RAW=$(gh api --paginate "repos/${REPO}/issues?state=all&per_page=100" 2>/dev/nul
 #
 # Titles may contain tabs or newlines; strip them so TSV stays one issue per
 # line with 4 fields.
-# shellcheck disable=SC2016  # $cutoff is a jq variable passed via --arg, not a shell variable
-JQ_FILTER='.[] | select(.pull_request == null) | select(.state == "open" or (.state == "closed" and .closed_at != null and (.closed_at[:10] >= $cutoff))) | [(.number|tostring), (.title | gsub("\t"; " ") | gsub("\n"; " ") | gsub("\r"; " ")), .state, .html_url] | @tsv'
-
-TSV=$(echo "$RAW" | jq -r --arg cutoff "${CUTOFF_DATE:-0000-00-00}" "$JQ_FILTER" 2>/dev/null) || {
-    echo "LIST_STATUS=failed"
-    echo "WARN: jq failed to parse gh api output" >&2
-    exit 0
-}
+#
+# When CLOSED_WINDOW_DAYS=0 the caller is asking for open issues only — skip the
+# closed-issue branch in jq entirely rather than falling back to a sentinel
+# cutoff (the original 0000-00-00 fallback was >= every real date and silently
+# included all closed issues).
+if [[ "$CLOSED_WINDOW_DAYS" -eq 0 ]]; then
+    # shellcheck disable=SC2016  # jq filter, not shell expansion
+    JQ_FILTER='.[] | select(.pull_request == null) | select(.state == "open") | [(.number|tostring), (.title | gsub("\t"; " ") | gsub("\n"; " ") | gsub("\r"; " ")), .state, .html_url] | @tsv'
+    TSV=$(echo "$RAW" | jq -r "$JQ_FILTER" 2>/dev/null) || {
+        echo "LIST_STATUS=failed"
+        echo "WARN: jq failed to parse gh api output" >&2
+        exit 0
+    }
+else
+    # shellcheck disable=SC2016  # $cutoff is a jq variable passed via --arg, not a shell variable
+    JQ_FILTER='.[] | select(.pull_request == null) | select(.state == "open" or (.state == "closed" and .closed_at != null and (.closed_at[:10] >= $cutoff))) | [(.number|tostring), (.title | gsub("\t"; " ") | gsub("\n"; " ") | gsub("\r"; " ")), .state, .html_url] | @tsv'
+    TSV=$(echo "$RAW" | jq -r --arg cutoff "$CUTOFF_DATE" "$JQ_FILTER" 2>/dev/null) || {
+        echo "LIST_STATUS=failed"
+        echo "WARN: jq failed to parse gh api output" >&2
+        exit 0
+    }
+fi
 
 echo "LIST_STATUS=ok"
 if [[ -n "$TSV" ]]; then

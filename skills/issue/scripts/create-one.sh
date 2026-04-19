@@ -159,6 +159,7 @@ fi
 if [[ "$DRY_RUN" == true ]]; then
     echo "DRY_RUN=true"
     echo "DRY_RUN_TITLE=$FINAL_TITLE"
+    echo "ISSUE_TITLE=$FINAL_TITLE"
     if [[ ${#VALID_LABELS[@]} -gt 0 ]]; then
         DRY_LABELS_JOINED=$(IFS=,; echo "${VALID_LABELS[*]}")
         echo "DRY_RUN_LABELS=$DRY_LABELS_JOINED"
@@ -195,6 +196,7 @@ if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
     ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
     echo "ISSUE_NUMBER=$ISSUE_NUM"
     echo "ISSUE_URL=$URL_LINE"
+    echo "ISSUE_TITLE=$FINAL_TITLE"
     exit 0
 else
     # ISSUE_URL here actually holds stderr content because of 2>&1.

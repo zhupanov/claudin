@@ -121,7 +121,15 @@ Parse stdout for `FETCH_STATUS_<N>=ok|failed`. Drop any `failed` numbers from th
 
 ## Step 6 — Create Surviving Items
 
-Iterate `i = 1..ITEMS_TOTAL` in input-file order:
+**Single-mode duplicate + `--go` pre-flight** (runs before the iteration below): if `MODE=single` AND `--go` is set AND the sole item resolved to `DUPLICATE` (either `DUPLICATE_OF=<N>` or `DUPLICATE_OF_ITEM=<j>`), abort with:
+
+```
+**ERROR: this looks like a duplicate of #<N> (<url>). Re-run without --go to confirm, or manually comment GO on #<N> if appropriate.**
+```
+
+Exit non-zero. No issue is created and no GO comment is posted. `<N>` and `<url>` are the resolved target identifiers from Phase 2's verdict (for intra-run matches, use the earlier item's resolved number/URL; for snapshot matches, use the Phase 1 snapshot URL).
+
+Otherwise, iterate `i = 1..ITEMS_TOTAL` in input-file order:
 
 - If `ITEM_<i>_VERDICT=DUPLICATE` with `DUPLICATE_OF=<N>`: emit
   - `ISSUE_<i>_DUPLICATE=true`
@@ -140,12 +148,6 @@ Iterate `i = 1..ITEMS_TOTAL` in input-file order:
   If `j` itself resolved to a duplicate (of another issue or earlier item), follow the chain: `i` points at the same ultimate target. (Chains are rare in practice but this rule makes the output deterministic.)
 
 - Else (`CREATE`): write `ITEM_<i>_BODY` (base64-decoded) to a temp file, then:
-
-  **Single-mode duplicate + `--go` check** (single mode only, at the start of Step 6 before the iteration): if `MODE=single` and the sole item resolved to `DUPLICATE` and `--go` is set, abort with:
-  ```
-  **ERROR: this looks like a duplicate of #<N> (<url>). Re-run without --go to confirm, or manually comment GO on #<N> if appropriate.**
-  ```
-  No issue is created.
 
   Build create-one.sh args:
   ```
@@ -171,24 +173,24 @@ Iterate `i = 1..ITEMS_TOTAL` in input-file order:
   <decoded body>
 
   ---
-  *This issue was automatically created by the larch `/implement` workflow from an out-of-scope observation that received majority YES votes during review.*
+  *This issue was automatically created by the larch `/implement` workflow from an out-of-scope observation surfaced during the workflow.*
   ```
   Write that assembled body to the temp file, then call create-one.sh with `--body-file`.
 
-  Parse create-one.sh output:
-  - On `ISSUE_NUMBER=<N>` + `ISSUE_URL=<url>`: emit
+  Parse create-one.sh output (all fields come from the helper's stdout):
+  - On `ISSUE_NUMBER=<N>` + `ISSUE_URL=<url>` + `ISSUE_TITLE=<final-title>`: emit
     - `ISSUE_<i>_NUMBER=<N>`
     - `ISSUE_<i>_URL=<url>`
-    - `ISSUE_<i>_TITLE=<final-title>` (the create-one.sh-applied title, including prefix)
+    - `ISSUE_<i>_TITLE=<final-title>` — taken directly from `ISSUE_TITLE=…` in create-one.sh's output, which applies the `--title-prefix` with `[OOS]` double-prefix normalization. Do not reimplement title-prefix logic in prompt text.
     - Increment `ISSUES_CREATED`. Append the created issue to an in-memory snapshot so later intra-run dedup iterations can also reference it if the LLM Phase 2 missed an equivalence.
   - On `ISSUE_FAILED=true` + `ISSUE_ERROR=<msg>`: emit
     - `ISSUE_<i>_FAILED=true`
-    - `ISSUE_<i>_TITLE=<input-title>`
+    - `ISSUE_<i>_TITLE=<input-title>` (the pre-prefix title from the input item — helper did not apply the prefix on failure)
     - Append a warning to stderr: `**⚠ /issue: create failed for item <i>: <msg>**`
     - Increment `ISSUES_FAILED`.
-  - On `DRY_RUN=true` (when `--dry-run` was passed): emit
+  - On `DRY_RUN=true` + `ISSUE_TITLE=<final-title>` (when `--dry-run` was passed): emit
     - `ISSUE_<i>_DRY_RUN=true`
-    - `ISSUE_<i>_TITLE=<dry-run-title>`
+    - `ISSUE_<i>_TITLE=<final-title>` — from create-one.sh's `ISSUE_TITLE=…` line.
     - Increment `ISSUES_CREATED` (conceptually — dry-run counts as a successful create for contract-completeness).
 
 ## Step 7 — Emit Aggregate Counters and Final Output

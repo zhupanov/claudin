@@ -71,7 +71,6 @@ CURRENT_REVIEWER=""
 CURRENT_VOTE=""
 CURRENT_PHASE=""
 IN_BODY=false
-MODE="oos"  # oos or generic — auto-detected per item from the Description field
 
 b64() {
     # Portable single-line base64 (no wrapping). macOS `base64` wraps at 76 chars
@@ -140,15 +139,16 @@ flush_item() {
 # the `### ` line until the next `### ` is the body.
 while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" =~ ^\#\#\#[[:space:]]+OOS_[0-9]+:[[:space:]]+(.+)$ ]]; then
+        # OOS-format heading. Body comes from the `**Description**:` field that
+        # follows, not from continuation lines under the heading.
         flush_item
         CURRENT_TITLE="${BASH_REMATCH[1]}"
-        MODE="oos"
         IN_BODY=false
     elif [[ "$line" =~ ^\#\#\#[[:space:]]+(.+)$ ]]; then
-        # Generic title.
+        # Generic heading. Lines that follow (until the next `### ` or a
+        # structured `- **X**:` field) form the body directly.
         flush_item
         CURRENT_TITLE="${BASH_REMATCH[1]}"
-        MODE="generic"
         IN_BODY=true
     elif [[ "$line" =~ ^-[[:space:]]+\*\*Description\*\*:[[:space:]]+(.+)$ ]]; then
         CURRENT_BODY="${BASH_REMATCH[1]}"
@@ -163,19 +163,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         CURRENT_PHASE="${BASH_REMATCH[1]}"
         IN_BODY=false
     elif [[ "$IN_BODY" == true ]]; then
-        # Continuation line. Preserve blank lines only in generic mode (OOS
-        # mode stops at the next structured field or blank line between
-        # items).
-        if [[ "$MODE" == "oos" ]]; then
-            if [[ -n "${line// }" ]]; then
-                CURRENT_BODY+=$'\n'"$line"
-            fi
+        # Continuation line. Preserve blank lines in BOTH modes — multi-paragraph
+        # descriptions need them. Structured field markers (Reviewer:, Vote
+        # tally:, Phase:, next ### OOS_N: header) already set IN_BODY=false
+        # above, so blank lines inside a Description cannot bleed past the next
+        # field. This matches the behavior fix applied to the deleted
+        # scripts/create-oos-issues.sh (see CHANGELOG 3.3.10).
+        if [[ -n "$CURRENT_BODY" ]]; then
+            CURRENT_BODY+=$'\n'"$line"
         else
-            if [[ -n "$CURRENT_BODY" ]]; then
-                CURRENT_BODY+=$'\n'"$line"
-            else
-                CURRENT_BODY="$line"
-            fi
+            CURRENT_BODY="$line"
         fi
     fi
 done < "$INPUT_FILE"
