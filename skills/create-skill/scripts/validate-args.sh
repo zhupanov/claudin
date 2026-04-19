@@ -85,6 +85,7 @@ LARCH_RESERVED=(
   im
   imaq
   implement
+  issue
   loop-review
   relevant-checks
   research

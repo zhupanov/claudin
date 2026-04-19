@@ -54,7 +54,9 @@ done
 
 for arg in NAME DESCRIPTION TARGET_DIR LOCAL_TOKEN PLUGIN_TOKEN; do
   if [[ -z "${!arg}" ]]; then
-    echo "ERROR=Missing required argument --${arg,,}" >&2
+    # Lowercase via tr — portable to bash 3.2 (macOS default).
+    arg_flag="$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+    echo "ERROR=Missing required argument --${arg_flag}" >&2
     exit 1
   fi
 done
@@ -73,8 +75,24 @@ fi
 mkdir "$TARGET_DIR/scripts"
 : > "$TARGET_DIR/scripts/.gitkeep"
 
-# --- YAML-escape the description (always double-quoted, inner " → \") ---
-ESCAPED_DESC="${DESCRIPTION//\"/\\\"}"
+# --- YAML-escape the description. YAML double-quoted scalars interpret
+# backslash as an escape character, so both \ and " must be escaped.
+# Order matters: escape backslashes FIRST, then escape double quotes.
+ESCAPED_DESC="${DESCRIPTION//\\/\\\\}"
+ESCAPED_DESC="${ESCAPED_DESC//\"/\\\"}"
+
+# --- Derive the full skill-relative path (e.g. `.claude/skills/foo` or
+# `skills/foo`) so the generated SKILL.md reminders point to the ACTUAL
+# scripts/ directory, not just the leaf name. In consumer mode the layout
+# under $PWD is `.claude/skills/<name>`; in plugin mode under
+# ${CLAUDE_PLUGIN_ROOT} it is `skills/<name>`.
+NAME_LEAF="$(basename "$TARGET_DIR")"
+# shellcheck disable=SC2016  # the literal strings $PWD / ${CLAUDE_PLUGIN_ROOT} are the token values we intentionally compare against
+if [[ "$LOCAL_TOKEN" == '$PWD' ]]; then
+  SKILL_REL=".claude/skills/${NAME_LEAF}"
+else
+  SKILL_REL="skills/${NAME_LEAF}"
+fi
 
 # --- Render SKILL.md ---
 
@@ -97,7 +115,7 @@ ${DESCRIPTION}
 
 <!--
   TODO (author): replace this scaffold with the real skill.
-  Every operational step below MUST invoke a .sh under ${LOCAL_TOKEN}/${TARGET_DIR##*/}/scripts/.
+  Every operational step below MUST invoke a .sh under ${LOCAL_TOKEN}/${SKILL_REL}/scripts/.
   Do NOT place raw bash commands in this SKILL.md — wrap every command in a script.
   Shared scripts (used by two or more skills) should live under ${PLUGIN_TOKEN}/scripts/ instead.
 -->
@@ -121,11 +139,11 @@ Step Name Registry:
 
 ## Step 0 — Setup
 
-<!-- TODO: invoke ${LOCAL_TOKEN}/${TARGET_DIR##*/}/scripts/setup.sh -->
+<!-- TODO: invoke ${LOCAL_TOKEN}/${SKILL_REL}/scripts/setup.sh -->
 
 ## Step 1 — TODO
 
-<!-- TODO: invoke ${LOCAL_TOKEN}/${TARGET_DIR##*/}/scripts/step1.sh -->
+<!-- TODO: invoke ${LOCAL_TOKEN}/${SKILL_REL}/scripts/step1.sh -->
 
 ## Step N — Cleanup
 
@@ -137,7 +155,7 @@ ${DESCRIPTION}
 
 <!--
   TODO (author): replace this scaffold with the real skill.
-  Every operational step you add MUST invoke a .sh under ${LOCAL_TOKEN}/${TARGET_DIR##*/}/scripts/.
+  Every operational step you add MUST invoke a .sh under ${LOCAL_TOKEN}/${SKILL_REL}/scripts/.
   Do NOT place raw bash commands in this SKILL.md — wrap every command in a script.
   Shared scripts (used by two or more skills) should live under ${PLUGIN_TOKEN}/scripts/ instead.
 -->
