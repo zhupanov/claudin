@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.5] - 2026-04-19
+
+### Added
+
+- Skill-scoped PreToolUse deny hook for `/research`: `skills/research/SKILL.md` frontmatter now declares a `hooks:` block that registers a PreToolUse deny on `Edit|Write|NotebookEdit` matchers, executing the new `${CLAUDE_PLUGIN_ROOT}/scripts/deny-edit-write.sh`. The hook emits a fixed `hookSpecificOutput` JSON deny envelope and always exits 0 — when `jq` is on PATH it composes the JSON via `jq -cn`, otherwise it falls back to a byte-identical static `printf` (matches the precedent in `scripts/block-submodule-edit.sh`). This is a defense-in-depth second mechanical layer; the `allowed-tools` frontmatter omitting `Edit`/`Write`/`Skill` remains the primary mechanical control because hook JSON `permissionDecision` semantics may vary by Claude Code version. External Codex/Cursor reviewers and Bash-mediated writes from `/research` itself remain prompt-enforced — the issue text and SECURITY.md document this gap. `scripts/test-deny-edit-write.sh` is the 7-assertion regression harness (exit code, valid JSON, hookEventName, permissionDecision, permissionDecisionReason non-empty, idempotency, and `env -i PATH=$STUB_DIR` byte-identity check across the jq and printf branches), wired into `make lint` via the new `test-deny-edit-write` target. `agent-lint.toml` excludes the test script (Makefile-only reference, matches the `test-sessionstart-health.sh` precedent); the hook script itself is structurally referenced from the SKILL.md `hooks:` block. `SECURITY.md`, `AGENTS.md`, and `README.md` updated per repo convention. Closes #154.
+
 ## [4.0.4] - 2026-04-19
 
 ### Changed

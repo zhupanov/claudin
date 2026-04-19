@@ -183,6 +183,7 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 | `make setup` | Install pre-commit git hooks |
 | `make smoke-dialectic` | Run the offline fixture-driven smoke test for `/design` Step 2a.5 (dialectic parser + tally + structural-invariant guard). Exercises `scripts/dialectic-smoke-test.sh` against `tests/fixtures/dialectic/`. |
 | `make test-block-submodule` | Run the regression harness for `scripts/block-submodule-edit.sh` (the PreToolUse hook that denies edits inside submodules). Exercises `scripts/test-block-submodule-edit.sh` end-to-end against a temporary superproject + submodule fixture. |
+| `make test-deny-edit-write` | Run the regression harness for `scripts/deny-edit-write.sh` (the skill-scoped PreToolUse deny hook registered by `/research` that denies `Edit`/`Write`/`NotebookEdit`). Exercises `scripts/test-deny-edit-write.sh` and asserts the emitted `hookSpecificOutput` JSON deny envelope shape. |
 
 ## Environment Variables
 

@@ -25,8 +25,16 @@ suppress = [
 # does not follow CLAUDE.md @-imports or Makefile targets, so these two
 # scripts would be false-flagged. Excluded here rather than force-registered
 # to preserve the dev-only opt-in contract.
+#
+# scripts/test-deny-edit-write.sh is the regression harness for
+# scripts/deny-edit-write.sh (the skill-scoped PreToolUse deny hook for
+# /research). The hook script itself IS structurally referenced from
+# skills/research/SKILL.md's hooks: frontmatter and is therefore not
+# excluded; the test script is referenced only from Makefile, matching the
+# same Makefile-only pattern as the test-sessionstart-health.sh entry above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
   "scripts/test-audit-edit-write.sh",
+  "scripts/test-deny-edit-write.sh",
 ]

@@ -3,6 +3,13 @@ name: research
 description: "Use when read-only research is needed. 3 research agents then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) produce findings summary, risk assessment, difficulty estimates, and feasibility verdict."
 argument-hint: "[--debug] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write|NotebookEdit"
+      hooks:
+        - type: command
+          command: "${CLAUDE_PLUGIN_ROOT}/scripts/deny-edit-write.sh"
+          timeout: 5
 ---
 
 # Research Skill
