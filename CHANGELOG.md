@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.7] - 2026-04-18
+
+### Changed
+
+- `/design` Step 2a.5 dialectic debater prompts rewritten per research-backed best practices (Anthropic prompt-engineering docs, multi-agent-debate literature, Karpathy guidance). Each debater template now opens with a narrow role-with-stakes preamble; requires a steelman clause before arguing; demands `file:line` evidence grounding via Read/Grep/Glob at argument time; emits structured tagged output (`<claim>`, `<evidence>`, `<strongest_concession>`, `<counter_to_opposition>`, `<risk_if_wrong>`) with a terminal `RECOMMEND: THESIS|ANTI_THESIS` token; enforces a 250-word prose cap; names anti-patterns to avoid (sycophancy, consensus collapse, vagueness, straw-manning, speculative future-proofing); and tells debaters to "assume the opponent will read your argument." The antithesis template additionally carries the sharpened proportionality instruction. Both templates wrap `{SYNTHESIS_TEXT}` and `{DECISION_BLOCK}` in namespaced `<debater_synthesis>` / `<debater_decision>` delimiters (mirrors the existing `<reviewer_*>` convention) with a split three-clause instruction that preserves required output-tag emission while blocking copy-through from the reference blocks. The orchestrator quorum rule in Step 2a.5 now gates binding resolution on presence of all 5 tags, normalized `RECOMMEND:` line detection (trim + strip `**...**` / `__...__` wrappers before prefix match), case-insensitive enum check with underscore preservation, role-vs-RECOMMEND consistency, a `file:line` citation in `<evidence>`, and retained substantive-output predicate — all as a conjunct. A new winner-selection rule picks the side whose argument is more compelling; resolution maps THESIS→{CHOSEN}, ANTI_THESIS→{ALTERNATIVE}. Fallback warnings are reason-coded. `dialectic-resolutions.md` schema, `skills/shared/voting-protocol.md`, scripts, and all downstream consumers are unchanged. Closes #97.
+
 ## [3.3.6] - 2026-04-18
 
 ### Changed
