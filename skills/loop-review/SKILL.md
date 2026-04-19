@@ -298,7 +298,9 @@ Per-slice breakdown:
 Filter in GitHub: `is:issue is:open label:loop-review`
 ```
 
-If `W > 0`, print the **full verbatim contents** of `$LR_TMPDIR/security-findings.md` inline in the summary output (the session tmpdir is removed by Step 5, so this is the only durable copy surfaced to the operator). Wrap it under a clearly-labeled block:
+Counter sources: `X`/`Y`/`Z` from the `$LR_TMPDIR/issue-count.txt` / `issue-dedup-count.txt` / `issue-failed-count.txt` files updated after each flush (Step 3f's "Update counters" instruction). `W` is derived at summary time by counting `####` HOLD-LOCAL headings in `$LR_TMPDIR/security-findings.md`, and `V` by counting lines in `$LR_TMPDIR/warnings.md` that start with the per-drop format `- Slice <name>:` (the format written by Step 3f for DROPPED nits). Per-slice totals are accumulated as the slice loop runs.
+
+If `$LR_TMPDIR/security-findings.md` is non-empty (use `[ -s "$LR_TMPDIR/security-findings.md" ]` via a Bash tool call to decide — do NOT gate on the mental counter `W` above, which is only a display value), print the **full verbatim contents** of the file inline in the summary output (the session tmpdir is removed by Step 5, so this is the only durable copy surfaced to the operator). Wrap it under a clearly-labeled block:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
