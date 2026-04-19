@@ -7,3 +7,13 @@ suppress = [
   "desc-body-misalign",
   "terminology-inconsistent",
 ]
+
+# scripts/test-sessionstart-health.sh is the regression test for the
+# SessionStart hook (scripts/sessionstart-health.sh). It is a plugin-level
+# infrastructure test — not owned by any SKILL.md — and is invoked via
+# `make lint` (test-sessionstart target). Agent-lint's dead-script rule
+# only recognizes structured references from SKILL.md/hooks.json/ci.yaml,
+# so we exclude the test path explicitly.
+exclude = [
+  "scripts/test-sessionstart-health.sh",
+]

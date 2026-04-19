@@ -14,6 +14,7 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 - After any change, run `/relevant-checks`.
 - `scripts/redact-secrets.sh` is the outbound secret-scrubbing filter invoked by `skills/issue/scripts/create-one.sh` before `gh issue create`. `scripts/test-redact-secrets.sh` is its regression test, wired into `make lint` via the `test-redact` target. Edit patterns only after reading `SECURITY.md`'s outbound-redaction subsection.
 - `skills/issue/scripts/parse-input.sh` parses `/issue` batch-mode input. `skills/issue/scripts/test-parse-input.sh` is its regression harness, wired into `make lint` via the `test-parse-input` target so parser regressions cannot ship undetected.
+- `${CLAUDE_PLUGIN_ROOT}/scripts/sessionstart-health.sh` is the SessionStart preflight hook that probes `jq` and `git` on `PATH` at session start and injects an advisory into session context when either is missing. `${CLAUDE_PLUGIN_ROOT}/scripts/test-sessionstart-health.sh` is its regression test, wired into `make lint` via the `test-sessionstart` target (run manually via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/test-sessionstart-health.sh`). The hook MUST always exit 0 (SessionStart is non-blocking by spec) and the `additionalContext` string MUST remain fixed ASCII literals — see the invariant comment in the script.
 - Public `skills/*/SKILL.md` use `${CLAUDE_PLUGIN_ROOT}/…`; dev-only `.claude/skills/*/SKILL.md` use `$PWD/…`.
 - Update `SECURITY.md` when security-relevant behavior changes.
 
