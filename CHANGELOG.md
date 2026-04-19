@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-04-19
+
+### Changed
+
+- **BREAKING**: `/loop-review` now files GitHub issues via `/issue` instead of creating PRs via `/implement`. Every actionable finding becomes a deduplicated issue labeled `loop-review` (reusing `/issue`'s 2-phase LLM dedup against open + recently-closed issues). The IMPLEMENT/DEFER classification collapses into a single FILE gate; `LOOP_REVIEW_DEFERRED.md` is no longer created, maintained, or committed (legacy files in consumer repos are left untouched). `--debug` propagation to downstream skills is dropped (`/issue` has no such flag). Step Name Registry rewritten: Step 4 "Final Deferred Commit" removed; Step 3 renamed from "implement/defer" to "review + file issues". Downstream tooling that parsed loop-review's output expecting PR URLs, merge status, CI results, or the deferred-doc file will break — switch to the `label:loop-review` GitHub filter. Closes #148.
+- Security-tagged findings are held locally in `$LR_TMPDIR/security-findings.md` (never auto-filed as public GitHub issues, per SECURITY.md's vulnerability-disclosure policy). Step 4 final summary prints the full contents of that file inline in the transcript so operators see them before Step 5 cleanup removes the tmpdir. All three reviewer lanes (Claude Code Reviewer subagent, Cursor, Codex) are now prompted with the same 5-focus-area taxonomy (including `security`) with EXACT-label tagging required, so security findings route consistently regardless of reviewer.
+- `/loop-review` Step 0c adds a preflight check that the `loop-review` GitHub label exists in the target repo. Missing label → warning appended to `warnings.md` and surfaced in the final summary (issues are still filed, just unlabeled). Previously `/issue` emitted the label-drop warning only on stderr, which loop-review's stdout-only flush parser never saw.
+- Partial `/issue` failures no longer silently drop loop-review findings. After each flush, loop-review parses per-item `ITEM_<i>_*` stdout lines and retains only unresolved entries (failed or missing) in `findings-accumulated.md` for the next flush.
+- Tracking files in `skills/loop-review/scripts/init-session-files.sh` renamed: `deferred-accumulated.md`, `pr-count.txt`, `impl-count.txt`, `defer-count.txt` removed; `findings-accumulated.md`, `security-findings.md`, `issue-count.txt`, `issue-dedup-count.txt`, `issue-failed-count.txt` added.
+- `SECURITY.md` documents the new hold-local policy for security-tagged findings in `/loop-review`.
+- `docs/workflow-lifecycle.md` updated: mermaid edge now shows `/loop-review → /issue`; `/loop-review --debug` documented as local-only (no downstream propagation).
+- `README.md` Features bullet and `/loop-review` skill-table row reworded from PR-creation to issue-filing.
+- `skills/loop-review/diagram.svg` regenerated to match the new flow (review → classify → FILE gate → HOLD LOCAL / DROP / accumulate → `/issue` flush).
+- `skills/issue/scripts/test-parse-input.sh` gains Case 16 (10 assertions) guarding the exact generic batch shape loop-review commits to. 121 → 133 assertions, all pass.
+
 ## [3.4.10] - 2026-04-19
 
 ### Fixed
