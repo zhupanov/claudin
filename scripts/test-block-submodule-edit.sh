@@ -150,7 +150,8 @@ git -C "$SUPER" commit -m 'add submodule sub' >/dev/null
 
 # Create a nested standalone repo (NOT registered as a submodule of super).
 # This exercises the hook's `rev-parse --show-superproject-working-tree` check:
-# a bare nested .git with no superproject pointer must be allowed, not denied.
+# a nested working tree with its own `.git` but no superproject pointer must
+# be allowed, not denied.
 mkdir -p "$NESTED"
 git -c init.defaultBranch=main init "$NESTED" >/dev/null
 echo 'n' > "$NESTED/file.txt"
@@ -164,9 +165,9 @@ ln -s "$SUPER/README.md" "$SUPER/symlink-file"
 # Non-repo directory outside any git repo. Case 9 runs the hook from here.
 mkdir -p "$NONREPO"
 
-# JSON payload builder. Uses jq if available (reliable escaping); falls back
-# to a hand-rolled literal when jq is not on PATH (relevant only for case 7's
-# restricted-PATH setup, which runs earlier steps with the real PATH intact).
+# JSON payload builder. Assembles a single-line literal sufficient for the
+# ASCII-only absolute paths this fixture produces. Extend with jq escaping if
+# future cases ever feed paths containing `"`, `\`, or newlines.
 json_payload() {
     local file_path="$1"
     printf '{"tool_input":{"file_path":"%s"}}' "$file_path"
@@ -241,10 +242,15 @@ assert_empty "$HOOK_STDOUT" "[case 6] stdout empty"
 
 # --- Case 7: Fail-closed — missing jq on PATH ------------------------------
 # Build a minimal bin dir with symlinks to the external commands the hook
-# invokes before the `command -v jq` check: `cat` (reads stdin) and `git`
-# + `dirname` (used after the jq gate). Deliberately omit `jq`. Preflight
-# confirms jq is not resolvable and cat/git/dirname are, so case 7 exercises
-# the missing-jq branch and not a different fail-closed path.
+# needs to start and exercise the missing-jq branch:
+#   - `bash` (the shebang's `env bash` must resolve the interpreter on PATH)
+#   - `cat` (the hook's first operation is `INPUT=$(cat)`, before the jq gate)
+#   - `git` / `dirname` (not exercised when jq is absent — the hook blocks at
+#     the jq check — but included so the mini-bin stays realistic should the
+#     hook's pre-jq prologue grow in a future refactor).
+# `jq` is deliberately omitted. The preflight below confirms `jq` is not
+# resolvable under the restricted PATH, so case 7 exercises the intended
+# missing-jq branch and not a different fail-closed path.
 echo ""
 echo "=== 7: Fail-closed — missing jq ==="
 MINI_BIN="$TMPROOT/mini-bin"
