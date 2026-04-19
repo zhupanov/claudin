@@ -17,14 +17,14 @@ If a deduplicated finding was proposed by multiple reviewers (merged during dedu
 
 ## Out-of-Scope Scoring
 
-Out-of-scope (OOS) observations use the **same symmetric scoring** as in-scope findings. Both classes of proposals carry the same risk/reward profile, creating two identical competitions running in parallel on the same ballot.
+Out-of-scope (OOS) observations use **asymmetric reward-only scoring** — accepted OOS earns +1 (the same upside as in-scope findings), but unanimously-rejected OOS carries no penalty. This deliberate asymmetry encourages reviewers to surface observations freely, since a dismissed observation costs nothing. Accepted OOS still requires 2+ YES votes, so the acceptance threshold filters out noise.
 
 | OOS Vote Result | Points | Description |
 |---|---|---|
 | **OOS Accepted** (2+ YES) | +1 | Reviewer surfaced an issue worth tracking as a GitHub issue |
 | **OOS Neutral** (exactly 1 YES) | 0 | Insufficient support, but not dismissed |
 | **OOS Exonerated** (0 YES, 1+ EXONERATE) | 0 | Legitimate observation, but not worth filing an issue |
-| **OOS Rejected** (0 YES, 0 EXONERATE) | -1 | Observation was unanimously dismissed by the panel |
+| **OOS Rejected** (0 YES, 0 EXONERATE) | 0 | No penalty — reviewers are encouraged to surface observations freely |
 
 ## OOS Issue Filing
 

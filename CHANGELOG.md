@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.6] - 2026-04-18
+
+### Changed
+
+- OOS (out-of-scope observation) scoring is now asymmetric (reward-only): accepted OOS items (2+ YES votes) still earn +1 point and file a GitHub issue, but unanimously-rejected OOS now scores 0 instead of -1. Aligns scoring with the reviewer-side instruction to "surface OOS freely" so reviewers are never penalized when voters dismiss an observation in good faith. Updates the canonical scoring table in `skills/shared/voting-protocol.md`, both narrative mirrors (`docs/point-competition.md`, `docs/voting-process.md`), and both runtime reviewer Competition notices (`skills/design/SKILL.md`, `skills/review/SKILL.md`). Also qualifies the EXONERATE "spares a penalty" wording across those files — penalty-sparing now applies only to in-scope findings. Adds a one-sentence OOS quality-gate hint to the voter prompt template so voters can distinguish file-worthy from dismissible observations. Fixes #102.
+
 ## [3.3.5] - 2026-04-18
 
 ### Changed

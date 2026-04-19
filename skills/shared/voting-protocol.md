@@ -4,7 +4,7 @@ Shared voting protocol for adjudicating review findings. Used by `/design` (plan
 
 ## Overview
 
-After reviewers submit findings and findings are deduplicated, a 3-agent voting panel votes YES/NO/EXONERATE on each finding. Findings with 2+ YES votes are accepted; others are not implemented. Original reviewers earn competition points based on how their findings perform in voting. EXONERATE is a third option meaning "legitimate concern, but not worth implementing in this PR" — it spares the proposing reviewer from losing a point.
+After reviewers submit findings and findings are deduplicated, a 3-agent voting panel votes YES/NO/EXONERATE on each finding. Findings with 2+ YES votes are accepted; others are not implemented. Original reviewers earn competition points based on how their findings perform in voting. EXONERATE is a third option meaning "legitimate concern, but not worth implementing in this PR" — it spares the proposing reviewer from losing a point on in-scope findings. (OOS observations use asymmetric reward-only scoring — see [OOS Scoring](#oos-scoring) below — so OOS rejection carries no penalty regardless.)
 
 ## Ballot Format
 
@@ -13,7 +13,7 @@ Before sending to voters, assign each deduplicated finding a stable sequential I
 ```
 ## Findings Ballot
 
-Vote YES, NO, or EXONERATE on each finding. A finding should receive YES if it is correct, important, and worth implementing. Vote NO if the finding is incorrect, trivial, or would cause more harm than good. Vote EXONERATE if the finding raises a legitimate concern worth noting, but is not worth implementing in this PR — this spares the proposing reviewer from a penalty.
+Vote YES, NO, or EXONERATE on each finding. A finding should receive YES if it is correct, important, and worth implementing. Vote NO if the finding is incorrect, trivial, or would cause more harm than good. Vote EXONERATE if the finding raises a legitimate concern worth noting, but is not worth implementing in this PR — this spares the proposing reviewer from a penalty on in-scope findings (OOS items use reward-only scoring — rejection carries no penalty regardless).
 
 FINDING_1: <reviewer attribution> — <finding description>
 FINDING_2: <reviewer attribution> — <finding description>
@@ -70,11 +70,11 @@ Customize the `{VOTER_ROLE}` and `{REVIEW_CONTEXT}` per skill:
 You are a {VOTER_ROLE} participating in a voting panel. You will be presented with a list of proposed changes to {REVIEW_CONTEXT}. For each finding, vote YES, NO, or EXONERATE:
 - **YES**: The finding is correct, important, and worth implementing.
 - **NO**: The finding is incorrect, trivial, duplicative, or would cause more harm than good.
-- **EXONERATE**: The finding raises a legitimate concern worth noting, but is not worth implementing in this PR. This spares the proposing reviewer from a penalty.
+- **EXONERATE**: The finding raises a legitimate concern worth noting, but is not worth implementing in this PR. This spares the proposing reviewer from a penalty on in-scope findings.
 
 Be scrupulous — only vote YES for findings that genuinely improve the {REVIEW_CONTEXT}. Use EXONERATE when a concern is valid but not actionable now.
 
-**For items prefixed with `[OUT_OF_SCOPE]`:** These are pre-existing issues beyond this PR's scope. Vote YES if the observation deserves a GitHub issue for future tracking. Vote NO if it is not worth tracking. Vote EXONERATE if the concern is legitimate but not worth filing a GitHub issue. OOS items are never implemented in this PR — YES means "file an issue," not "implement now."
+**For items prefixed with `[OUT_OF_SCOPE]`:** These are pre-existing issues beyond this PR's scope. Vote YES if the observation deserves a GitHub issue for future tracking. Vote NO if it is not worth tracking. Vote EXONERATE if the concern is legitimate but not worth filing a GitHub issue. OOS items are never implemented in this PR — YES means "file an issue," not "implement now." Vote YES only when the observation is concrete and important enough to justify a durable GitHub issue (typical signals: specific file:line or a reproducible failure mode); use EXONERATE for legitimate concerns that are not issue-worthy, and NO for trivial or incorrect observations.
 
 {BALLOT}
 
@@ -192,14 +192,14 @@ If an OOS item receives 2+ YES votes, it is **accepted** and will be filed as a 
 
 ### OOS Scoring
 
-Out-of-scope items use the **same symmetric scoring** as in-scope findings:
+Out-of-scope items use **asymmetric reward-only scoring** — accepted OOS earns +1, and all other outcomes score 0 so reviewers are never penalized for surfacing observations in good faith:
 
 | OOS Vote Result | Points | Description |
 |---|---|---|
 | OOS accepted (2+ YES) | +1 | Reviewer surfaced an issue worth tracking |
 | OOS neutral (exactly 1 YES) | 0 | Insufficient support, but not dismissed |
 | OOS exonerated (0 YES, 1+ EXONERATE) | 0 | Legitimate observation, but not worth an issue |
-| OOS rejected (0 YES, 0 EXONERATE) | -1 | Observation was unanimously dismissed |
+| OOS rejected (0 YES, 0 EXONERATE) | 0 | No penalty — reviewers are encouraged to surface observations freely |
 
 ### OOS Scoreboard
 

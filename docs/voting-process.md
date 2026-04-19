@@ -10,7 +10,7 @@ After reviewers submit findings and findings are deduplicated, a **3-agent votin
 |---|---|
 | **YES** | The finding is correct, important, and worth implementing. |
 | **NO** | The finding is incorrect, trivial, or would cause more harm than good. |
-| **EXONERATE** | The finding raises a legitimate concern, but is not worth implementing in this PR. Spares the proposing reviewer from losing a point. |
+| **EXONERATE** | The finding raises a legitimate concern, but is not worth implementing in this PR. Spares the proposing reviewer from losing a point on in-scope findings (OOS rejection carries no penalty regardless — see [Out-of-Scope Observations](#out-of-scope-observations)). |
 
 ## Threshold Rules
 
@@ -102,7 +102,7 @@ Reviewers may surface **out-of-scope (OOS) observations** — pre-existing issue
 - If an OOS item receives 2+ YES votes, it is **accepted** and filed as a GitHub issue by `/implement`
 - Non-accepted OOS items are collected and reported in the PR body for future attention
 - **OOS items are never implemented in the current PR** — accepted items result in issue creation only
-- OOS scoring uses the same symmetric -1/0/+1 rules as in-scope findings (see [Point Competition](point-competition.md))
+- OOS scoring is asymmetric: accepted OOS earns +1 (like in-scope findings), but rejected or exonerated OOS scores 0 — no penalty (see [Point Competition](point-competition.md)). The mermaid chart above's `REJECT → SCORE` path applies -1 only to in-scope findings; rejected OOS routes through the same `SCORE` node but contributes 0 points.
 
 Only Claude subagent reviewers produce OOS observations (via their dual-list output format). External reviewers (Codex, Cursor) produce single-list output treated entirely as in-scope.
 
