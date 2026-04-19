@@ -144,6 +144,48 @@ Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issu
 - `CI Issues` — CI failures, transient retries, or infrastructure problems
 - `Warnings` — `⚠` warnings printed during execution that do not fall under another category (e.g., version bump skipped, design-phase omissions, missing configuration). Do NOT duplicate warnings already logged under a more specific category.
 
+### Mandatory dual-write for `Pre-existing Code Issues`
+
+Whenever the main agent appends an entry to the `Pre-existing Code Issues` category in `execution-issues.md`, it MUST also append a corresponding `### OOS_N:` block to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` so that Step 9a.1 can file it as a GitHub issue. This dual-write is unconditional — it runs in every mode (`--quick`, `--auto`, `--merge`, `--debug`, `--no-merge`, or any future flag) and is the source of truth that converges main-agent-discovered pre-existing bugs into the same accepted-OOS pipeline as reviewer-surfaced OOS items from `/design` and `/review`.
+
+**Schema** (matches the format consumed by `${CLAUDE_PLUGIN_ROOT}/scripts/create-oos-issues.sh`):
+
+```markdown
+### OOS_<N>: <short title — one line>
+- **Description**: <file path and line number(s)>; <what is wrong>; <concrete reproduction context — how the bug was triggered or observed>; <suggested fix — one or more options>. May span multiple non-blank lines.
+- **Reviewer**: Main agent
+- **Vote tally**: N/A — auto-filed per policy
+- **Phase**: implement
+```
+
+`<N>` is a per-session sequential index — start at 1 and increment for each new entry the main agent appends to `oos-accepted-main-agent.md`. To **correct** an existing entry (e.g., refine the description after additional investigation), use **in-place replacement**: locate the existing `### OOS_<N>:` block by its `<N>` and overwrite the entire block in place, preserving the same `<N>`. Do NOT append a new block in the correction case — that would create a duplicate. The dedup guard below applies only to **new** entries the agent intends to append, not to corrections.
+
+**MUST: dedup before append (new entries only).** Before appending a new `### OOS_N:` block, scan the existing `oos-accepted-main-agent.md` for a block whose title matches the new title case-insensitively (after stripping leading/trailing whitespace). If a match is found, do NOT append — the same finding has already been recorded. This prevents duplicate entries when the same pre-existing bug is discovered at multiple steps. `create-oos-issues.sh` provides a second backstop via normalized-title dedup against already-open GitHub issues, but that backstop is exact-match after lowercasing — small wording variations slip through, so the in-file dedup MUST run first.
+
+**MUST: sanitize the description before append.** Do not paste raw log output into the Description field. Redact the following before writing to `oos-accepted-main-agent.md`:
+- Secrets, API keys, OAuth tokens, JWT tokens, passwords, certificates → replace with `<REDACTED-TOKEN>`.
+- Internal hostnames, internal URLs, private IP addresses → replace with `<INTERNAL-URL>`.
+- Personally identifiable information (emails, names, account IDs in a way that links to a real user) → replace with `<REDACTED-PII>`.
+
+The Description field is forwarded verbatim into a public GitHub issue body by `create-oos-issues.sh`, so any sensitive content leaks to the public issue tracker. When in doubt, paraphrase the reproduction context instead of copying log lines.
+
+**Example dual-write**:
+
+```markdown
+# In execution-issues.md
+### Pre-existing Code Issues
+- **Step 5**: scripts/drop-bump-commit.sh Guard 4 sort-order mismatch — see #117 (already filed).
+
+# In oos-accepted-main-agent.md (only if the bug is not already tracked)
+### OOS_1: drop-bump-commit.sh Guard 4 compares sorted vs. unsorted file lists
+- **Description**: scripts/drop-bump-commit.sh:42-58. Guard 4 reads `git diff --name-only HEAD~1` (which returns files in path order) and compares against the literal string `.claude-plugin/plugin.json`, but the comparison logic accidentally sorts one side and not the other, causing Guard 4 to refuse the drop whenever the bump commit touches more than one file in path order. Reproduces by attempting to drop a bump commit that also includes a CHANGELOG.md update. Suggested fix: either (a) sort both sides before comparing, or (b) replace the string comparison with `printf '%s\n' "${files[@]}" | grep -Fxq .claude-plugin/plugin.json`.
+- **Reviewer**: Main agent
+- **Vote tally**: N/A — auto-filed per policy
+- **Phase**: implement
+```
+
+If `oos-accepted-main-agent.md` does not yet exist, create it with the new entry. If `repo_unavailable=true`, still append to the file (Step 9a.1 will skip filing) — note that `$IMPLEMENT_TMPDIR` is removed at Step 18 cleanup, so the only persistent audit trail in the repo-unavailable case is the corresponding `Pre-existing Code Issues` entry in `execution-issues.md` that gets written into the PR body's `<details><summary>Execution Issues</summary>` block. The PR body's "Accepted OOS (GitHub issues filed)" subsection will explicitly say "Skipped — repo unavailable" in this case (see Step 9a.1's `repo_unavailable=true` branch).
+
 ## Step 1 — Ensure Design Plan Exists
 
 First, determine the user's branch prefix by running the branch check script:
@@ -321,7 +363,7 @@ Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read 
 
 **5.3.a — Runtime failure handling** (Cursor/Codex only): If `collect-reviewer-results.sh` reports `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `external-reviewers.md`: flip the corresponding `cursor_available` / `codex_available` flag to `false` for the remainder of the session, log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `External Reviewer Issues`, and **retry this round** (jump back to 5.2 to re-select the reviewer). Do NOT increment `round_num` — a failed external reviewer is not a counted round.
 
-**5.4 — Check for no findings**: If the reviewer reports no findings (`NO_ISSUES_FOUND`, "No issues found.", or a Claude subagent dual-list output with zero in-scope findings), the loop is done — proceed to Step 6. Claude subagent OOS observations are discarded in quick mode (Step 9a.1 is skipped in quick mode).
+**5.4 — Check for no findings**: If the reviewer reports no findings (`NO_ISSUES_FOUND`, "No issues found.", or a Claude subagent dual-list output with zero in-scope findings), the loop is done — proceed to Step 6. In quick mode, reviewer-surfaced OOS observations are NOT mirrored to `oos-accepted-main-agent.md` — the dual-write defined in the Execution Issues Tracking section applies only to entries the main agent classifies as `Pre-existing Code Issues`. Reviewer-surfaced OOS in quick mode remains unfiled by design (the rationale being that quick mode has no voting panel to vet reviewer OOS suggestions before they are auto-filed). Step 9a.1 still runs in quick mode for any main-agent-surfaced OOS items in `oos-accepted-main-agent.md`.
 
 **5.5 — Main agent evaluates findings**: For each reviewer finding, unilaterally accept or reject:
 - **Accept** findings that identify genuine bugs, logic errors, security issues, or clearly important improvements.
@@ -582,7 +624,7 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 <details><summary>Out-of-Scope Observations</summary>
 
 **Accepted OOS (GitHub issues filed):**
-<If Step 9a.1 created issues, list each with its issue link: "- #<NUMBER>: <title> (<reviewer attribution>)". If no OOS items were accepted, write "No OOS items were accepted for issue filing.">
+<If Step 9a.1 created issues, list each with its issue link: "- #<NUMBER>: <title> (<reviewer attribution>)". Reviewer attribution may be `Code`, `Cursor`, `Codex`, or `Main agent` — the latter for items sourced from the dual-write to oos-accepted-main-agent.md per the Execution Issues Tracking → Mandatory dual-write rule. If no OOS items were accepted, write "No OOS items were accepted for issue filing.">
 
 **Non-accepted OOS observations:**
 <Non-accepted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-accepted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available.">
@@ -625,27 +667,30 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 - **Plan Review Voting Tally**: Write "Quick mode — no plan review voting."
 - **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings across up to 7 single-reviewer rounds (Cursor → Codex → Claude fallback chain)."
 - **Implementation Deviations**: Compare implementation to the inline plan (same as normal mode).
-- **Out-of-Scope Observations**: Write "Quick mode — no out-of-scope observations collected."
-- **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)", "OOS issues filed" to "N/A (quick mode)". Code review findings should reflect the quick review results.
+- **Out-of-Scope Observations**:
+  - **Accepted OOS (GitHub issues filed)**: Populate from Step 9a.1's main-agent-surfaced items in `oos-accepted-main-agent.md`. If Step 9a.1 filed no issues (no main-agent OOS findings), write "No OOS items were accepted for issue filing."
+  - **Non-accepted OOS observations**: Write "Quick mode — no reviewer voting panel. Main-agent OOS items (if any) are auto-filed per policy; see Accepted OOS above."
+- **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)". For "OOS issues filed", do NOT hardcode `N/A (quick mode)` — Step 9a.1 runs in quick mode now and writes the actual count to this cell per its sub-step 7b. The cell will be `<N> created, <M> deduplicated`, `0`, or `N/A (repo unavailable)` depending on the Step 9a.1 outcome. Code review findings should reflect the quick review results.
 
 ### 9a.1 — Create OOS GitHub Issues
 
-**If `quick_mode=true`**: Print `⏩ 9a.1: OOS issues — skipped (quick mode) (<elapsed>)` and proceed to Step 9b.
+**This step runs unconditionally regardless of mode (`--quick`, `--auto`, `--merge`, `--debug`, `--no-merge`, or any future flag).** The only legitimate hard-skip is `repo_unavailable=true` — without a reachable repo there is no way to file issues.
 
-**If `repo_unavailable=true`**: Print `⏩ 9a.1: OOS issues — skipped (repo unavailable) (<elapsed>)` and proceed to Step 9b. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`.
+**If `repo_unavailable=true`**: Print `⏩ 9a.1: OOS issues — skipped (repo unavailable) (<elapsed>)`. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`. Update `$IMPLEMENT_TMPDIR/pr-body.md`: replace the "Accepted OOS (GitHub issues filed)" placeholder with `Skipped — repo unavailable; OOS items remain in execution-issues.md only.` and set the `| OOS issues filed |` Run Statistics cell to `N/A (repo unavailable)`. Then proceed to Step 9b.
 
 Read the OOS artifact files:
 - `$IMPLEMENT_TMPDIR/oos-accepted-design.md` (from `/design` plan review)
 - `$IMPLEMENT_TMPDIR/oos-accepted-review.md` (from `/review` code review)
+- `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` (from main-agent dual-write per the Execution Issues Tracking → Mandatory dual-write rule)
 
-**If neither file exists or both are empty**: Print `⏩ 9a.1: OOS issues — no accepted OOS items (<elapsed>)` and proceed to Step 9b.
+**If none of the three artifacts exist or all are empty**: Print `⏩ 9a.1: OOS issues — no accepted OOS items (<elapsed>)`. Update `$IMPLEMENT_TMPDIR/pr-body.md`: replace the "Accepted OOS (GitHub issues filed)" placeholder with `No OOS items were accepted for issue filing.` and set the `| OOS issues filed |` Run Statistics cell to `0`. Then proceed to Step 9b.
 
-**If at least one file has content**:
+**If at least one of the three artifacts has content**:
 
-**Idempotency**: If `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation entirely — read the existing file to get previously created issue URLs and proceed to Step 9b.
+**Idempotency**: If `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation entirely. Read the existing file to recover previously created issue URLs (`ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE`/`ISSUE_N_DUPLICATE*` lines) and the previous tally (`ISSUES_CREATED`/`ISSUES_FAILED`/`ISSUES_DEDUPLICATED`). Update `$IMPLEMENT_TMPDIR/pr-body.md` from those values exactly as steps 7 and 7b would (replace the "Accepted OOS" placeholder with the recovered issue links and set the `| OOS issues filed |` Run Statistics cell from the recovered counts). Then proceed to Step 9b.
 
-1. Read and parse all accepted OOS items from both files.
-2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in both design and review (matching by normalized title similarity), keep one entry noting both phases.
+1. Read and parse all accepted OOS items from all three files.
+2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in two or more of {design, review, implement} (matching by exact normalized title — case-insensitive, `[oos]`-prefix-stripped, whitespace-collapsed; same algorithm as `create-oos-issues.sh`'s `normalize_title()` helper), keep one entry whose Description text notes the contributing phases (e.g., append " (also surfaced during design review)" to the description). Do NOT modify the schema fields — Reviewer and Phase remain single-valued; the merged provenance lives in the Description prose.
 3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for the creation script.
 4. Invoke the creation script:
    ```bash
@@ -653,7 +698,8 @@ Read the OOS artifact files:
    ```
 5. Parse the structured output for `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_DUPLICATE`/`ISSUE_N_DUPLICATE_OF_NUMBER`/`ISSUE_N_DUPLICATE_OF_URL` pairs.
 6. If `ISSUES_FAILED > 0`: Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — create-oos-issues.sh failed to create <N> of <total> OOS issues.`
-7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links. For deduplicated items, link to the existing issue instead: `"- #<EXISTING_NUMBER>: <title> (deduplicated — already tracked) (<reviewer attribution>)"`.
+7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links. For deduplicated items, link to the existing issue instead: `"- #<EXISTING_NUMBER>: <title> (deduplicated — already tracked) (<reviewer attribution>)"`. Reviewer attribution may be `Code`, `Cursor`, `Codex`, or `Main agent` depending on the source; use the value from the contributing artifact's `Reviewer:` field.
+7b. **Update Run Statistics OOS issues filed cell**. After step 7's "Accepted OOS" placeholder replacement, also rewrite the `| OOS issues filed |` row in the Run Statistics table inside `$IMPLEMENT_TMPDIR/pr-body.md` to `<ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated` (e.g., `3 created, 1 deduplicated`). The early-exit branches above (`repo_unavailable=true`, all-empty, idempotent rerun) already update this cell themselves and never reach step 7b — this sub-step only handles the create-script branch. This applies to both quick and normal mode — the Quick-mode PR body guidance no longer overrides this cell.
 
 8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as a sentinel for idempotency. Include the `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and all `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE`/`ISSUE_N_DUPLICATE*` lines from the script output.
 
