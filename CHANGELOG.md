@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.3] - 2026-04-19
+
+### Added
+
+- `scripts/test-block-submodule-edit.sh` regression harness for `scripts/block-submodule-edit.sh` (the PreToolUse hook that denies edits to files inside submodules), covering 11 cases: allow (superproject, nested non-submodule repo, symlink, non-repo cwd, out-of-repo file_path), deny (submodule file, ancestor-walk into new subdir, non-absolute path, bad JSON, missing jq), and a known-failing bypass case (cwd inside submodule) whose tri-state fingerprint logic auto-flips to PASS when #150 lands. Wired into `make lint` via the new `test-block-submodule` target. `AGENTS.md` and `README.md` document the harness. `scripts/block-submodule-edit.sh` gains a header comment pointing at the test. Closes #149.
+
 ## [4.0.2] - 2026-04-19
 
 ### Added
