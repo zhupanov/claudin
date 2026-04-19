@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.3] - 2026-04-18
+
+### Fixed
+
+- `docs/review-agents.md` Quality gate paragraph now faithfully summarizes the canonical uniform gate from `skills/shared/reviewer-templates.md` (applies to both In-Scope and Out-of-Scope findings; three-part check of justification, proportionality, and concrete evidence; plus an OOS-specific requirement of a concrete failure mode or breakage path). Previously the doc described the pre-Phase-1 behavior (in-scope only, OOS exempt), directly contradicting reviewer behavior. Closes #103.
+
 ## [3.3.2] - 2026-04-18
 
 ### Fixed
