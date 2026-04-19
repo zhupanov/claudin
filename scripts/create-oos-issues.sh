@@ -84,6 +84,29 @@ normalize_title() {
     printf '%s\n' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/^\[oos\]\s*//' | tr -s '[:space:]' ' ' | sed 's/^ *//;s/ *$//'
 }
 
+# Defense-in-depth secret/PII redaction. Catches common token patterns that
+# might slip past prompt-level sanitization in skills/implement/SKILL.md
+# (Mandatory dual-write rule). Patterns are conservative — false positives
+# (over-redaction) are preferred to leaking real secrets into public issues.
+# Returns the redacted string on stdout. Pre-existing reviewer-voted OOS
+# items also flow through here, so the rules apply uniformly.
+redact_secrets() {
+    local text="$1"
+    # Anthropic / OpenAI sk-* keys
+    text=$(printf '%s' "$text" | sed -E 's/sk-(ant-)?[A-Za-z0-9_-]{20,}/<REDACTED-TOKEN>/g')
+    # GitHub PATs and fine-grained tokens
+    text=$(printf '%s' "$text" | sed -E 's/(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}/<REDACTED-TOKEN>/g')
+    # AWS access key IDs
+    text=$(printf '%s' "$text" | sed -E 's/AKIA[0-9A-Z]{16}/<REDACTED-TOKEN>/g')
+    # Slack tokens (xoxb, xoxa, xoxp, xoxs)
+    text=$(printf '%s' "$text" | sed -E 's/xox[baprs]-[A-Za-z0-9-]{10,}/<REDACTED-TOKEN>/g')
+    # Generic JWT (header.payload.signature, base64url segments separated by dots)
+    text=$(printf '%s' "$text" | sed -E 's/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/<REDACTED-TOKEN>/g')
+    # PEM private key blocks
+    text=$(printf '%s' "$text" | sed -E 's/-----BEGIN [A-Z ]*PRIVATE KEY-----.*-----END [A-Z ]*PRIVATE KEY-----/<REDACTED-PRIVATE-KEY>/g')
+    printf '%s' "$text"
+}
+
 # Check if a title is a duplicate of an existing open issue.
 # Returns 0 (match found) and prints "NUMBER<tab>URL" of the match, or returns 1 (no match).
 check_duplicate() {
@@ -142,6 +165,12 @@ create_issue() {
         echo "ISSUE_${ITEM_INDEX}_TITLE=$title"
         return
     fi
+
+    # Defense-in-depth: redact common secret/credential patterns from the
+    # description before it lands in a public GitHub issue body. Prompt-level
+    # sanitization in skills/implement/SKILL.md is the primary line of defense;
+    # this is the deterministic backstop for missed patterns.
+    description=$(redact_secrets "$description")
 
     # Write issue body to temp file (avoids shell quoting issues)
     local body_file
