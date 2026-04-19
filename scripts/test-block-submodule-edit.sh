@@ -4,7 +4,10 @@
 # Black-box contract test of the PreToolUse hook via stdin JSON + controlled
 # cwd/PATH. Each case synthesizes a payload of shape
 #   {"tool_input":{"file_path":"<abs>"}}
-# pipes it to the hook, and asserts on exit code + stable stdout substrings.
+# pipes it to the hook, and asserts on exit code plus the deny channel shape:
+# deny cases expect exit 0 + parseable hookSpecificOutput JSON (hookEventName,
+# permissionDecision, permissionDecisionReason) via assert_deny_json; allow
+# cases expect exit 0 + empty stdout.
 #
 # Fixture (built once at top):
 #   $TMPROOT/bare.git   — local bare repo used as submodule origin
@@ -113,6 +116,15 @@ assert_empty() {
 # PATH (case 7) — PATH override is scoped to the hook subprocess.
 assert_deny_json() {
     local stdout="$1" expected_reason="$2" label_prefix="$3"
+    # Guard against caller bugs: assert_contains with an empty needle is
+    # vacuously true in bash, so an empty expected_reason would silently skip
+    # the reason check. Fail loudly instead.
+    if [[ -z "$expected_reason" ]]; then
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("$label_prefix assert_deny_json called with empty expected_reason")
+        echo "  FAIL: $label_prefix assert_deny_json called with empty expected_reason" >&2
+        return
+    fi
     local event_name decision reason
     event_name=$(printf '%s' "$stdout" | jq -r '.hookSpecificOutput.hookEventName // empty' 2>/dev/null || true)
     decision=$(printf '%s' "$stdout" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null || true)
@@ -243,7 +255,7 @@ elif (( legacy_match )); then
 else
     FAIL=$((FAIL + 1))
     FAILED_TESTS+=("[case 3] bypass — unexpected state: RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")")
-    echo "  HARD FAIL: [case 3] bypass — neither post-fix (2,\"submodule\") nor legacy (0,\"\") fingerprint matched; RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")" >&2
+    echo "  HARD FAIL: [case 3] bypass — neither post-fix (0, deny JSON with reason containing \"submodule\") nor legacy (0, empty stdout) fingerprint matched; RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")" >&2
 fi
 
 # --- Case 4: Deny — new file in new subdir under submodule (ancestor walk) -
@@ -273,10 +285,11 @@ assert_empty "$HOOK_STDOUT" "[case 6] stdout empty"
 # Build a minimal bin dir with symlinks to the external commands the hook
 # needs to start and exercise the missing-jq branch:
 #   - `bash` (the shebang's `env bash` must resolve the interpreter on PATH)
-#   - `cat` (the hook's first operation is `INPUT=$(cat)`, before the jq gate)
-#   - `git` / `dirname` (not exercised when jq is absent — the hook blocks at
-#     the jq check — but included so the mini-bin stays realistic should the
-#     hook's pre-jq prologue grow in a future refactor).
+#   - `cat` / `git` / `dirname` (not exercised when jq is absent — the hook's
+#     jq probe now runs before any stdin read or git lookup, so the missing-jq
+#     branch emits a static deny JSON and exits before reaching them — but
+#     included so the mini-bin stays realistic should the pre-jq prologue grow
+#     in a future refactor).
 # `jq` is deliberately omitted. The preflight below confirms `jq` is not
 # resolvable under the restricted PATH, so case 7 exercises the intended
 # missing-jq branch and not a different fail-closed path.
@@ -285,8 +298,10 @@ echo "=== 7: Fail-closed — missing jq ==="
 MINI_BIN="$TMPROOT/mini-bin"
 mkdir -p "$MINI_BIN"
 # The hook's shebang `#!/usr/bin/env bash` needs `env` to find `bash` on PATH.
-# Include all external commands the hook can reach before the jq gate, plus
-# the shell interpreter env resolves for the shebang.
+# The hook's jq probe now runs first and the missing-jq branch exits before
+# any other external command. The tools below (cat/git/dirname) are therefore
+# unreachable on today's missing-jq path and kept only to keep the mini-bin
+# realistic if the pre-jq prologue grows in a future refactor.
 for tool in bash cat git dirname; do
     real=$(command -v "$tool" 2>/dev/null || true)
     if [[ -z "$real" ]]; then

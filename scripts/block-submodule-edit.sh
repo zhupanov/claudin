@@ -19,6 +19,9 @@
 set -uo pipefail
 
 # See: https://docs.anthropic.com/en/docs/claude-code/hooks
+# If jq fails at runtime (broken install, I/O error, etc.), emit a static deny
+# JSON fallback so a failed jq never degrades to exit 0 + empty stdout, which
+# the runtime would interpret as allow — weakening the submodule-edit policy.
 block() {
   jq -cn --arg reason "$1" '{
     hookSpecificOutput: {
@@ -26,7 +29,7 @@ block() {
       permissionDecision: "deny",
       permissionDecisionReason: $reason
     }
-  }'
+  }' || printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"submodule edit guard: deny (jq runtime failure)"}}'
   exit 0
 }
 
