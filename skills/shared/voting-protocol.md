@@ -213,10 +213,10 @@ The scoreboard includes additional columns for OOS items:
 
 OOS items are **not** written to `rejected-findings.md`. They follow a separate pipeline:
 
-- **Accepted OOS items** (2+ YES): Written to an artifact file (`oos-accepted-design.md` or `oos-accepted-review.md`) in `$IMPLEMENT_TMPDIR` during the voting phase. `/implement` Step 9a.1 reads these files, deduplicates across phases, and creates GitHub issues via `scripts/create-oos-issues.sh`.
+- **Accepted OOS items** (2+ YES): Written to an artifact file (`oos-accepted-design.md` or `oos-accepted-review.md`) in `$IMPLEMENT_TMPDIR` during the voting phase. `/implement` Step 9a.1 reads these files together with `oos-accepted-main-agent.md` (a third artifact emitted by the main agent at discovery time when it logs `Pre-existing Code Issues` to `execution-issues.md` — see `/implement` SKILL.md → "Mandatory dual-write for Pre-existing Code Issues"), deduplicates across phases, and creates GitHub issues via `scripts/create-oos-issues.sh`. All three artifacts share the same `### OOS_N:` schema (Description, Reviewer, Vote tally, Phase). Main-agent items use Reviewer=`Main agent`, Vote tally=`N/A — auto-filed per policy`, Phase=`implement`.
 - **Non-accepted OOS items**: Collected and reported in a dedicated `<details><summary>Out-of-Scope Observations</summary>` section in the PR body for future reference.
 
-External reviewers (Codex, Cursor) use single-list prompts and do not produce OOS items — their entire output is treated as in-scope findings. Only Claude subagent reviewers (which use the dual-list templates from `reviewer-templates.md`) produce OOS items.
+External reviewers (Codex, Cursor) use single-list prompts and do not produce OOS items — their entire output is treated as in-scope findings. Only Claude subagent reviewers (which use the dual-list templates from `reviewer-templates.md`) produce OOS items via voting; the main agent's dual-write path produces OOS items without voting.
 
 ## Zero Accepted Findings
 

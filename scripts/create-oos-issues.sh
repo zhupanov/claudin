@@ -18,7 +18,7 @@
 #     <continuation lines are appended until the next field>
 #   - **Reviewer**: <attribution>
 #   - **Vote tally**: <YES/NO/EXONERATE counts>
-#   - **Phase**: design|review
+#   - **Phase**: design|review|implement
 #
 # Outputs (key=value to stdout):
 #   ISSUES_CREATED=<N>
@@ -158,7 +158,7 @@ create_issue() {
 $description
 
 ---
-*This issue was automatically created by the larch \`/implement\` workflow from an out-of-scope observation that received majority YES votes during review.*
+*This issue was automatically created by the larch \`/implement\` workflow from an out-of-scope observation surfaced during the workflow.*
 BODY_EOF
 
     local issue_url
