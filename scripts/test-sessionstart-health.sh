@@ -3,9 +3,10 @@
 #
 # Four cases, each run with a controlled PATH that contains only stub scripts
 # for the tools we want "present" in that case — no real /usr/bin/jq or
-# /usr/bin/git leaks in. The script-under-test is invoked via absolute
-# /bin/bash so its `#!/usr/bin/env bash` shebang never triggers PATH lookup
-# for bash itself.
+# /usr/bin/git leaks in. The script-under-test is invoked via an absolute
+# bash path (resolved once before `env -i` from the ambient PATH, so this
+# works on Nix-style layouts where bash is not at /bin/bash) so its
+# `#!/usr/bin/env bash` shebang never triggers PATH lookup for bash itself.
 #
 #   Case 1: jq + git both present        → exit 0, empty stdout
 #   Case 2: jq missing, git present      → exit 0, JSON mentions jq
@@ -30,6 +31,14 @@ fi
 
 if ! command -v jq >/dev/null 2>&1; then
     echo "FAIL: harness jq not on PATH; cannot validate JSON output" >&2
+    exit 1
+fi
+
+# Resolve bash from ambient PATH once, before env -i scrubs the environment.
+# This lets the harness run on Nix-style layouts where bash is not at /bin/bash.
+BASH_BIN=$(command -v bash)
+if [[ -z "$BASH_BIN" || ! -x "$BASH_BIN" ]]; then
+    echo "FAIL: could not resolve bash on ambient PATH" >&2
     exit 1
 fi
 
@@ -106,15 +115,15 @@ build_stub_dir() {
     done
 }
 
-# Run the script under test with a stub-only PATH. Absolute /bin/bash bypasses
-# the shebang's PATH-lookup of `env` and `bash`, so the only executables the
-# script can see are the stubs in $stub_dir.
+# Run the script under test with a stub-only PATH. The pre-resolved $BASH_BIN
+# bypasses the shebang's PATH-lookup of `env` and `bash`, so the only
+# executables the script can see are the stubs in $stub_dir.
 run_under_stubs() {
     local stub_dir="$1"
     local out_file="$2"
     local err_file="$3"
     local rc=0
-    env -i PATH="$stub_dir" /bin/bash "$SCRIPT" < /dev/null > "$out_file" 2> "$err_file" || rc=$?
+    env -i PATH="$stub_dir" "$BASH_BIN" "$SCRIPT" < /dev/null > "$out_file" 2> "$err_file" || rc=$?
     printf '%s\n' "$rc"
 }
 
