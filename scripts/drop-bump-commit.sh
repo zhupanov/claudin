@@ -58,8 +58,11 @@ fi
 # apply-bump.sh stages .claude-plugin/plugin.json. Step 8a of /implement may
 # additionally amend CHANGELOG.md into the same commit. Both are acceptable.
 CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | sort)
+# ALLOWED_* constants must match `sort`'s ASCII byte ordering (LC_COLLATE=C semantics):
+# '.' (0x2E) sorts before 'C' (0x43), so '.claude-plugin/plugin.json' comes before 'CHANGELOG.md'.
+# Do NOT reorder alphabetically by filename — that would break the match against the sorted input.
 ALLOWED_ONE=".claude-plugin/plugin.json"
-ALLOWED_TWO=$'CHANGELOG.md\n.claude-plugin/plugin.json'
+ALLOWED_TWO=$'.claude-plugin/plugin.json\nCHANGELOG.md'
 if [[ "$CHANGED_FILES" != "$ALLOWED_ONE" && "$CHANGED_FILES" != "$ALLOWED_TWO" ]]; then
     echo "WARN: HEAD subject matches bump pattern but commit touches unexpected files (changed: $CHANGED_FILES); refusing to drop" >&2
     echo "DROPPED=false"
