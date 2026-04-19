@@ -38,7 +38,7 @@ flowchart TD
         QUESTIONS --> DISCUSS1[Design discussion round 1]
         DISCUSS1 --> SKETCHES[5-agent collaborative sketches]
         SKETCHES --> SYNTHESIS[Approach synthesis]
-        SYNTHESIS --> DIALECTIC[Dialectic debate on contested decisions]
+        SYNTHESIS --> DIALECTIC[Dialectic: debate + 3-judge adjudication on contested decisions]
         DIALECTIC --> PLAN[Write implementation plan]
         PLAN --> PLAN_REVIEW[Plan review: 3 reviewers]
         PLAN_REVIEW --> VOTE1[Voting panel adjudicates findings]
