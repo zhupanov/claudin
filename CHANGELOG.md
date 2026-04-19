@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-04-19
+
+### Added
+
+- New `SessionStart` hook `scripts/sessionstart-health.sh` probes `jq` and `git` on `PATH` at session start/resume/clear/compact and injects a spec-compliant `hookSpecificOutput.additionalContext` advisory when either is missing. Non-blocking (always exits 0) and silent on the happy path — converts the existing reactive-block-at-first-edit pattern in `scripts/block-submodule-edit.sh` into a proactive session-start advisory. JSON is emitted via `printf` only (no `jq` dependency inside the hook) so the warning reaches Claude's session context even when `jq` itself is missing. Regression test `scripts/test-sessionstart-health.sh` covers 4 cases (both present, jq missing, git missing, both missing) using a stub-only PATH via `env -i PATH="$STUB_DIR" "$BASH_BIN"` for strict isolation. Wired into `make lint` via the new `test-sessionstart` target. README.md feature matrix updated; AGENTS.md editing rules updated with the fixed-ASCII-literal invariant. Closes #153.
+
 ## [4.0.0] - 2026-04-19
 
 ### Changed
