@@ -2,9 +2,12 @@
 # test-parse-input.sh — Regression tests for parse-input.sh.
 #
 # Covers the two Issue #129 bugs (OOS subheading absorption, generic body
-# with OOS-shaped bullets) plus baseline and boundary cases. Not wired into
-# any automated test runner; shellcheck (via pre-commit) lints this file
-# automatically. Run manually:
+# with OOS-shaped bullets), the Issue #131 bug (OOS `- **Description**:` with
+# empty inline value), the Issue #132 bug (nested `### OOS_N:` inside a
+# generic body should be absorbed, not flushed), and baseline and boundary
+# cases including the #132-review-surfaced bodyless-generic + nested-OOS edge
+# case. Not wired into any automated test runner; shellcheck (via pre-commit)
+# lints this file automatically. Run manually:
 #
 #   bash skills/issue/scripts/test-parse-input.sh
 #
@@ -288,6 +291,89 @@ assert_eq "case 9 phase" "design" "$(get_value ITEM_1_PHASE "$out9")"
 expected9=$'  First continuation line.\n\n  Third line after blank.'
 assert_eq "case 9 body captures multi-line continuation" "$expected9" "$(get_body 1 "$out9")"
 assert_absent "case 9 not MALFORMED" "ITEM_1_MALFORMED" "$out9"
+
+# ---------------------------------------------------------------------------
+# Test case 10 — Issue #132: generic item whose body contains `### OOS_N: ...`
+# as literal prose. The OOS heading branch must honor the same mode-guard as
+# the plain `### <title>` branch — inside an active generic body, absorb the
+# line as body continuation rather than flushing and starting a new OOS item.
+# ---------------------------------------------------------------------------
+echo "Case 10: generic body contains literal ### OOS_N: ... prose (issue #132)"
+cat > "$TMPDIR_TEST/case10.md" <<'EOF'
+### Regular issue with nested OOS-shaped heading
+Preceding body text.
+### OOS_42: nested example
+Trailing body text after the nested heading.
+EOF
+out10=$(run_parser "$TMPDIR_TEST/case10.md")
+assert_eq "case 10 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out10")"
+assert_eq "case 10 title" "Regular issue with nested OOS-shaped heading" "$(get_value ITEM_1_TITLE "$out10")"
+expected10=$'Preceding body text.\n### OOS_42: nested example\nTrailing body text after the nested heading.'
+assert_eq "case 10 body absorbs nested OOS_N heading" "$expected10" "$(get_body 1 "$out10")"
+assert_absent "case 10 no ITEM_2_TITLE" "ITEM_2_TITLE" "$out10"
+assert_absent "case 10 no ITEM_1_REVIEWER" "ITEM_1_REVIEWER" "$out10"
+assert_absent "case 10 no ITEM_1_VOTE_TALLY" "ITEM_1_VOTE_TALLY" "$out10"
+assert_absent "case 10 no ITEM_1_PHASE" "ITEM_1_PHASE" "$out10"
+
+# ---------------------------------------------------------------------------
+# Test case 11 — Edge case surfaced during #132 review: a generic title with
+# NO body lines, immediately followed by `### OOS_N: ...`. The generic branch
+# sets IN_BODY=true eagerly (before any body content), so a naive mode-guard
+# would absorb the OOS line into the still-empty generic body. The refined
+# guard requires CURRENT_BODY non-empty, so this degenerate input flushes the
+# malformed generic item and lets the OOS line start a new OOS item —
+# matching pre-#132 behavior for this shape and keeping the #132 absorb path
+# symmetric with the OOS→generic direction (where IN_BODY=true always
+# implies non-empty CURRENT_BODY via the Description field).
+# ---------------------------------------------------------------------------
+echo "Case 11: generic title with no body, immediately followed by ### OOS_N:"
+cat > "$TMPDIR_TEST/case11.md" <<'EOF'
+### Bodyless generic title
+### OOS_1: Real OOS item
+- **Description**: Real OOS description.
+- **Reviewer**: Codex
+- **Vote tally**: YES=3
+- **Phase**: review
+EOF
+out11=$(run_parser "$TMPDIR_TEST/case11.md")
+assert_eq "case 11 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out11")"
+assert_eq "case 11 item 1 title" "Bodyless generic title" "$(get_value ITEM_1_TITLE "$out11")"
+assert_eq "case 11 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out11")"
+assert_eq "case 11 item 2 title" "Real OOS item" "$(get_value ITEM_2_TITLE "$out11")"
+assert_eq "case 11 item 2 body" "Real OOS description." "$(get_body 2 "$out11")"
+assert_eq "case 11 item 2 reviewer" "Codex" "$(get_value ITEM_2_REVIEWER "$out11")"
+assert_eq "case 11 item 2 vote tally" "YES=3" "$(get_value ITEM_2_VOTE_TALLY "$out11")"
+assert_eq "case 11 item 2 phase" "review" "$(get_value ITEM_2_PHASE "$out11")"
+
+# ---------------------------------------------------------------------------
+# Test case 12 — Edge case surfaced during #132 review round 5: a generic
+# title followed ONLY by whitespace-only continuation lines, then `### OOS_N:`.
+# The absorb guard requires at least one non-whitespace character in
+# CURRENT_BODY, so whitespace-only prefixes do not qualify as "meaningful
+# body." The guard fails and the OOS line starts a real OOS item via the
+# else branch — matching pre-#132 behavior for this degenerate input shape.
+# Note: ITEM_1 is NOT flagged MALFORMED — `emit_item` uses the stricter
+# `[[ -z "$body" ]]` predicate, so a whitespace-only body is emitted as a
+# normal item with a whitespace-only body. The asymmetry is deliberate: the
+# absorb rule wants "meaningful content" while the MALFORMED rule only
+# rejects truly-empty titles-without-bodies (mirrors case 11's missing-body
+# shape). Case 12 therefore asserts the two-item split but explicitly
+# locks in ITEM_1 being emitted (with whitespace body, no MALFORMED flag).
+# ---------------------------------------------------------------------------
+echo "Case 12: generic title with only whitespace body, then ### OOS_N:"
+# Use printf to ensure the middle line contains only spaces without the
+# HEREDOC truncating trailing whitespace.
+printf '### Whitespace-only body generic\n   \n### OOS_1: Real OOS item\n- **Description**: Real OOS description.\n- **Reviewer**: Cursor\n- **Vote tally**: YES=2\n- **Phase**: design\n' > "$TMPDIR_TEST/case12.md"
+out12=$(run_parser "$TMPDIR_TEST/case12.md")
+assert_eq "case 12 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out12")"
+assert_eq "case 12 item 1 title" "Whitespace-only body generic" "$(get_value ITEM_1_TITLE "$out12")"
+assert_absent "case 12 item 1 not malformed" "ITEM_1_MALFORMED" "$out12"
+assert_eq "case 12 item 1 body is whitespace" "   " "$(get_body 1 "$out12")"
+assert_eq "case 12 item 2 title" "Real OOS item" "$(get_value ITEM_2_TITLE "$out12")"
+assert_eq "case 12 item 2 body" "Real OOS description." "$(get_body 2 "$out12")"
+assert_eq "case 12 item 2 reviewer" "Cursor" "$(get_value ITEM_2_REVIEWER "$out12")"
+assert_eq "case 12 item 2 vote tally" "YES=2" "$(get_value ITEM_2_VOTE_TALLY "$out12")"
+assert_eq "case 12 item 2 phase" "design" "$(get_value ITEM_2_PHASE "$out12")"
 
 # ---------------------------------------------------------------------------
 echo ""
