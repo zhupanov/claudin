@@ -3,8 +3,10 @@
 # of the current superproject.
 #
 # Stdin: JSON with tool_input.file_path (absolute path)
-# Exit 0: allow the operation
-# Exit 2: block the operation (stdout is the reason shown to Claude)
+# Always exits 0. To block, emits Anthropic's documented PreToolUse deny shape
+# on stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse",
+# "permissionDecision":"deny","permissionDecisionReason":"<why>"}}.
+# To allow, emits no output. See Anthropic's Hooks reference for the spec.
 #
 # Behavior:
 # - Fails CLOSED on stdin / JSON parse failure
@@ -16,18 +18,33 @@
 
 set -uo pipefail
 
+# See: https://docs.anthropic.com/en/docs/claude-code/hooks
+# If jq fails at runtime (broken install, I/O error, etc.), emit a static deny
+# JSON fallback so a failed jq never degrades to exit 0 + empty stdout, which
+# the runtime would interpret as allow — weakening the submodule-edit policy.
 block() {
-  printf '%s\n' "$1"
-  exit 2
+  jq -cn --arg reason "$1" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: $reason
+    }
+  }' || printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"submodule edit guard: deny (jq runtime failure)"}}'
+  exit 0
 }
+
+# jq is required to produce the deny JSON via block(). Check it first so every
+# block() call below can assume jq is available. For the missing-jq case, emit
+# a static JSON literal directly (no jq needed for a fixed string).
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"submodule edit guard: jq is required but not installed; install jq and retry"}}'
+  exit 0
+fi
 
 # --- Read stdin ---
 INPUT=$(cat) || block "submodule edit guard: failed to read stdin, blocking as precaution"
 
 # --- Extract file_path from JSON ---
-if ! command -v jq >/dev/null 2>&1; then
-  block "submodule edit guard: jq is required but not installed; install jq and retry"
-fi
 FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null) \
   || block "submodule edit guard: failed to parse tool input, blocking as precaution"
 

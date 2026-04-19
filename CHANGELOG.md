@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.4] - 2026-04-19
+
+### Changed
+
+- `scripts/block-submodule-edit.sh` deny channel now uses Anthropic's documented `hookSpecificOutput` JSON shape (`hookEventName=PreToolUse`, `permissionDecision=deny`, `permissionDecisionReason=<why>`) emitted on stdout with exit 0, replacing the prior exit-2 + stdout-reason behavior that directly contradicted the PreToolUse spec (where exit 2 routes stderr, not stdout, to Claude). `block()` is hardened with a static-JSON fallback for rare `jq` runtime failures so a broken `jq` never degrades to exit 0 + empty stdout (which the runtime interprets as allow, silently weakening the submodule-edit policy). The `jq` availability probe moves ahead of every `block()` call and emits a hardcoded deny JSON literal on the missing-`jq` path. `scripts/test-block-submodule-edit.sh` gains an `assert_deny_json` helper (with an empty-needle guard) and rewrites every deny-case assertion to parse stdout with `jq` and check all three fields; case 3's tri-state fingerprint is updated to match the new contract; case-7 mini-bin comments are rewritten to reflect the jq-first probe ordering. Closes #151.
+
 ## [4.0.3] - 2026-04-19
 
 ### Added

@@ -4,7 +4,10 @@
 # Black-box contract test of the PreToolUse hook via stdin JSON + controlled
 # cwd/PATH. Each case synthesizes a payload of shape
 #   {"tool_input":{"file_path":"<abs>"}}
-# pipes it to the hook, and asserts on exit code + stable stdout substrings.
+# pipes it to the hook, and asserts on exit code plus the deny channel shape:
+# deny cases expect exit 0 + parseable hookSpecificOutput JSON (hookEventName,
+# permissionDecision, permissionDecisionReason) via assert_deny_json; allow
+# cases expect exit 0 + empty stdout.
 #
 # Fixture (built once at top):
 #   $TMPROOT/bare.git   — local bare repo used as submodule origin
@@ -14,10 +17,16 @@
 #     symlink-file      — symlink → super/README.md
 #   $TMPROOT/nonrepo    — ordinary directory outside any git repo
 #
-# Bypass case (#3) uses tri-state fingerprint matching: post-fix (exit 2 +
-# stdout contains "submodule") → PASS; legacy-buggy (exit 0 + empty stdout) →
-# KNOWN-FAIL, increments EXPECTED_FAIL (non-fatal); anything else → HARD FAIL.
-# When issue #150 lands and removes the bypass, the case auto-flips to PASS.
+# Deny channel: the hook always exits 0 and emits Anthropic's hookSpecificOutput
+# JSON deny shape on stdout when blocking. Assertions use assert_deny_json to
+# parse stdout with jq and check the three fields (hookEventName,
+# permissionDecision, permissionDecisionReason).
+#
+# Bypass case (#3) uses tri-state fingerprint matching: post-fix (exit 0 +
+# parseable deny JSON whose reason mentions "submodule") → PASS; legacy-buggy
+# (exit 0 + empty stdout) → KNOWN-FAIL, increments EXPECTED_FAIL (non-fatal);
+# anything else → HARD FAIL. When issue #150 lands and removes the bypass,
+# the case auto-flips to PASS.
 #
 # Scope note: NotebookEdit and Bash-mediated mutations are outside the current
 # hook matcher's scope (PreToolUse on Edit/Write only) — no assertion here.
@@ -96,6 +105,33 @@ assert_empty() {
         FAILED_TESTS+=("$label (expected empty, got $(printf '%q' "${haystack:0:200}"))")
         echo "  FAIL: $label (expected empty, got $(printf '%q' "${haystack:0:200}"))" >&2
     fi
+}
+
+# assert_deny_json <stdout> <expected-reason-substring> <label-prefix>
+# Parses stdout as JSON and asserts Anthropic's PreToolUse deny shape:
+#   .hookSpecificOutput.hookEventName == "PreToolUse"
+#   .hookSpecificOutput.permissionDecision == "deny"
+#   .hookSpecificOutput.permissionDecisionReason contains <expected-reason-substring>
+# The harness still has jq on PATH even when the hook was run under a restricted
+# PATH (case 7) — PATH override is scoped to the hook subprocess.
+assert_deny_json() {
+    local stdout="$1" expected_reason="$2" label_prefix="$3"
+    # Guard against caller bugs: assert_contains with an empty needle is
+    # vacuously true in bash, so an empty expected_reason would silently skip
+    # the reason check. Fail loudly instead.
+    if [[ -z "$expected_reason" ]]; then
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("$label_prefix assert_deny_json called with empty expected_reason")
+        echo "  FAIL: $label_prefix assert_deny_json called with empty expected_reason" >&2
+        return
+    fi
+    local event_name decision reason
+    event_name=$(printf '%s' "$stdout" | jq -r '.hookSpecificOutput.hookEventName // empty' 2>/dev/null || true)
+    decision=$(printf '%s' "$stdout" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null || true)
+    reason=$(printf '%s' "$stdout" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
+    assert_eq "$label_prefix hookEventName" "PreToolUse" "$event_name"
+    assert_eq "$label_prefix permissionDecision" "deny" "$decision"
+    assert_contains "$reason" "$expected_reason" "$label_prefix permissionDecisionReason mentions $expected_reason"
 }
 
 # run_hook <cwd> <stdin_bytes> [<path_override>]
@@ -186,20 +222,25 @@ assert_empty "$HOOK_STDOUT" "[case 1] stdout empty"
 echo ""
 echo "=== 2: Deny submodule file ==="
 run_hook "$SUPER" "$(json_payload "$SUB/any.txt")"
-assert_eq "[case 2] exit code" 2 "$RC"
-assert_contains "$HOOK_STDOUT" "submodule" "[case 2] stdout mentions submodule"
-assert_contains "$HOOK_STDOUT" "sub" "[case 2] stdout names submodule path"
+assert_eq "[case 2] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "submodule" "[case 2]"
+# Submodule path name also surfaces in the reason — verify via a jq read.
+case2_reason=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
+assert_contains "$case2_reason" "sub" "[case 2] reason names submodule path"
 
 # --- Case 3: Bypass (known-failing until #150) — cwd inside submodule ------
-# Tri-state fingerprint: post-fix (RC=2, stdout contains "submodule") → PASS.
-# Legacy-buggy (RC=0, empty stdout) → KNOWN-FAIL, non-fatal, EXPECTED_FAIL++.
-# Anything else → HARD FAIL. Auto-flips to PASS when #150 lands correctly.
+# Tri-state fingerprint: post-fix (RC=0, parseable deny JSON whose reason
+# mentions "submodule") → PASS. Legacy-buggy (RC=0, empty stdout) → KNOWN-FAIL,
+# non-fatal, EXPECTED_FAIL++. Anything else → HARD FAIL. Auto-flips to PASS
+# when #150 lands correctly.
 echo ""
 echo "=== 3: Bypass — cwd inside submodule (known-failing until #150) ==="
 run_hook "$SUB" "$(json_payload "$SUB/any.txt")"
 post_fix_match=0
 legacy_match=0
-if [[ $RC -eq 2 && "$HOOK_STDOUT" == *"submodule"* ]]; then
+case3_reason=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
+case3_decision=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null || true)
+if [[ $RC -eq 0 && "$case3_decision" == "deny" && "$case3_reason" == *"submodule"* ]]; then
     post_fix_match=1
 fi
 if [[ $RC -eq 0 && -z "$HOOK_STDOUT" ]]; then
@@ -214,15 +255,15 @@ elif (( legacy_match )); then
 else
     FAIL=$((FAIL + 1))
     FAILED_TESTS+=("[case 3] bypass — unexpected state: RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")")
-    echo "  HARD FAIL: [case 3] bypass — neither post-fix (2,\"submodule\") nor legacy (0,\"\") fingerprint matched; RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")" >&2
+    echo "  HARD FAIL: [case 3] bypass — neither post-fix (0, deny JSON with reason containing \"submodule\") nor legacy (0, empty stdout) fingerprint matched; RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")" >&2
 fi
 
 # --- Case 4: Deny — new file in new subdir under submodule (ancestor walk) -
 echo ""
 echo "=== 4: Deny new file under submodule (ancestor walk) ==="
 run_hook "$SUPER" "$(json_payload "$SUB/does/not/exist/x.txt")"
-assert_eq "[case 4] exit code" 2 "$RC"
-assert_contains "$HOOK_STDOUT" "submodule" "[case 4] stdout mentions submodule"
+assert_eq "[case 4] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "submodule" "[case 4]"
 
 # --- Case 5: Allow — nested non-submodule repo -----------------------------
 # Nested repo has a .git but no submodule pointer; the hook's
@@ -244,10 +285,11 @@ assert_empty "$HOOK_STDOUT" "[case 6] stdout empty"
 # Build a minimal bin dir with symlinks to the external commands the hook
 # needs to start and exercise the missing-jq branch:
 #   - `bash` (the shebang's `env bash` must resolve the interpreter on PATH)
-#   - `cat` (the hook's first operation is `INPUT=$(cat)`, before the jq gate)
-#   - `git` / `dirname` (not exercised when jq is absent — the hook blocks at
-#     the jq check — but included so the mini-bin stays realistic should the
-#     hook's pre-jq prologue grow in a future refactor).
+#   - `cat` / `git` / `dirname` (not exercised when jq is absent — the hook's
+#     jq probe now runs before any stdin read or git lookup, so the missing-jq
+#     branch emits a static deny JSON and exits before reaching them — but
+#     included so the mini-bin stays realistic should the pre-jq prologue grow
+#     in a future refactor).
 # `jq` is deliberately omitted. The preflight below confirms `jq` is not
 # resolvable under the restricted PATH, so case 7 exercises the intended
 # missing-jq branch and not a different fail-closed path.
@@ -256,8 +298,10 @@ echo "=== 7: Fail-closed — missing jq ==="
 MINI_BIN="$TMPROOT/mini-bin"
 mkdir -p "$MINI_BIN"
 # The hook's shebang `#!/usr/bin/env bash` needs `env` to find `bash` on PATH.
-# Include all external commands the hook can reach before the jq gate, plus
-# the shell interpreter env resolves for the shebang.
+# The hook's jq probe now runs first and the missing-jq branch exits before
+# any other external command. The tools below (cat/git/dirname) are therefore
+# unreachable on today's missing-jq path and kept only to keep the mini-bin
+# realistic if the pre-jq prologue grows in a future refactor.
 for tool in bash cat git dirname; do
     real=$(command -v "$tool" 2>/dev/null || true)
     if [[ -z "$real" ]]; then
@@ -273,8 +317,8 @@ if (( mini_bin_ok )); then
         echo "  SKIP: [case 7] jq still resolvable under restricted PATH (unexpected shell builtin?)" >&2
     else
         run_hook "$SUPER" "$(json_payload "$SUPER/README.md")" "$MINI_BIN"
-        assert_eq "[case 7] exit code" 2 "$RC"
-        assert_contains "$HOOK_STDOUT" "jq" "[case 7] stdout mentions jq"
+        assert_eq "[case 7] exit code" 0 "$RC"
+        assert_deny_json "$HOOK_STDOUT" "jq" "[case 7]"
     fi
 fi
 
@@ -282,9 +326,9 @@ fi
 echo ""
 echo "=== 8: Fail-closed — bad JSON stdin ==="
 run_hook "$SUPER" "this is not json at all"
-assert_eq "[case 8] exit code" 2 "$RC"
-# Parser failure message includes "blocking as precaution"; substring check.
-assert_contains "$HOOK_STDOUT" "blocking" "[case 8] stdout indicates fail-closed"
+assert_eq "[case 8] exit code" 0 "$RC"
+# Parser failure reason includes "blocking as precaution"; substring check.
+assert_deny_json "$HOOK_STDOUT" "blocking" "[case 8]"
 
 # --- Case 9: Fail-open — cwd outside any git repo --------------------------
 # Hook's `git rev-parse --show-toplevel` returns empty when the *caller* is
@@ -309,8 +353,8 @@ assert_empty "$HOOK_STDOUT" "[case 9b] stdout empty"
 echo ""
 echo "=== 10: Fail-closed — non-absolute file_path ==="
 run_hook "$SUPER" '{"tool_input":{"file_path":"relative/path.txt"}}'
-assert_eq "[case 10] exit code" 2 "$RC"
-assert_contains "$HOOK_STDOUT" "absolute" "[case 10] stdout mentions non-absolute path"
+assert_eq "[case 10] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "absolute" "[case 10]"
 
 # --- Summary --------------------------------------------------------------
 echo ""
