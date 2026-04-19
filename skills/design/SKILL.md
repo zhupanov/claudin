@@ -318,7 +318,72 @@ Print: `> **🔶 2a.5: dialectic**`
 
 Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions (<elapsed>)` and proceed to Step 2b.
 
-Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNTHESIS_TEXT}` for the agent prompts below. Select up to the first 3 decisions from the file (they are already in priority order from Step 2a.4). For each selected decision, launch a **thesis agent** and an **antithesis agent** as Claude subagents via the Agent tool. **All thesis+antithesis pairs across all decisions must be issued in a single Agent fan-out message** (up to 6 Agent tool calls in one message) to maximize parallelism.
+**Intentional divergence from the repo-wide replacement-first fallback architecture**. This phase deliberately diverges from the "Voter Composition" rule in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` and from the Cursor/Codex fallback rules in the "Step 3 — Plan Review" section below: when an assigned external tool is unavailable, the bucket is **skipped entirely** — Claude subagents are NEVER substituted into the dialectic debate path. Likewise, the "Runtime Timeout Fallback" procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` flips orchestrator-wide `*_available` for all subsequent session steps; in this phase, runtime failures affect ONLY this phase's bookkeeping and never mutate the orchestrator-wide flags. Do NOT "fix" this carve-out back to global-flip + Claude-replacement behavior — see GitHub issue #98 for the rationale.
+
+Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNTHESIS_TEXT}` for the prompt templates below. Then apply the following protocol:
+
+1. **Cap = `min(5, |contested-decisions|)`** — select that many decisions from the file (they are already in priority order from Step 2a.4).
+
+2. **Initialize dialectic-scoped shadow flags** at the top of this step:
+   - `dialectic_codex_available = codex_available` (snapshot at entry)
+   - `dialectic_cursor_available = cursor_available` (snapshot at entry)
+   The orchestrator-wide `codex_available` / `cursor_available` flags are NEVER mutated during this step. This preserves Step 3's plan-review panel integrity by construction (Option B).
+
+3. **Deterministic per-decision bucket assignment** (1-based indexing):
+   - Decision 1, 3, 5 → **Cursor** bucket (uses `dialectic_cursor_available`).
+   - Decision 2, 4 → **Codex** bucket (uses `dialectic_codex_available`).
+   - Both thesis and antithesis for a single decision use the same tool (bucket homogeneity).
+
+4. **Per-bucket pre-launch availability check**. For each selected decision, check the assigned tool's `dialectic_*_available` flag:
+   - If `false`: print `**⚠ <Tool> unavailable — dialectic skipped for bucket <N> decisions (indices: <comma-list>). Step 2a.4 synthesis decisions stand.**`, skip that decision, and continue. Do NOT fall back to a Claude Agent-tool subagent. Do NOT reassign the decision to the surviving tool. Do NOT abort this step.
+   - If `true`: queue both the thesis and antithesis launch for that decision.
+
+5. **Zero-externals guardrail**. If after iterating all selected decisions, zero buckets are queued, print no further launches, do NOT call `collect-reviewer-results.sh` at all, and proceed to the completion line. `dialectic-resolutions.md` is not created — Step 2b reads it conditionally and tolerates absence.
+
+6. **Per-decision prompt-file rendering**. For each queued decision, render the thesis and antithesis prompts (the templates below) with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substituted, and use the **Write tool** (not heredoc/cat) to write each rendered prompt to its own file:
+   - `$DESIGN_TMPDIR/debate-<n>-thesis-prompt.txt`
+   - `$DESIGN_TMPDIR/debate-<n>-antithesis-prompt.txt`
+   File-based prompt delivery eliminates shell-quoting hazards from synthesis/decision content that may contain `"`, `$()`, backticks, or newlines.
+
+7. **Parallel launch** — issue all queued launches in a **single Bash message** (up to 10 background calls: 5 decisions × 2 sides). Per-decision output filenames embed the assigned tool name so the collector's basename heuristic correctly attributes results:
+   - Cursor buckets write to `$DESIGN_TMPDIR/debate-<n>-cursor-thesis.txt` and `…-cursor-antithesis.txt`.
+   - Codex buckets write to `$DESIGN_TMPDIR/debate-<n>-codex-thesis.txt` and `…-codex-antithesis.txt`.
+
+   Each Cursor launch (use `run_in_background: true` and `timeout: 1860000`). Pass a short bootstrap prompt that references the per-decision prompt file by path; the tool reads the file via its own filesystem access. This mirrors the voting pattern below ("Read the ballot from $DESIGN_TMPDIR/ballot.txt") and avoids `$(cat ...)` in the launch shell — which would trigger Claude Code permission prompts that break autonomous execution:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
+     --output "$DESIGN_TMPDIR/debate-<n>-cursor-<thesis|antithesis>.txt" \
+     --timeout 1800 --capture-stdout -- \
+     cursor agent -p --force --trust \
+       $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
+       --workspace "$PWD" \
+       "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
+   ```
+
+   Each Codex launch (use `run_in_background: true` and `timeout: 1860000`). Same file-path-reference pattern:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex \
+     --output "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
+     --timeout 1800 -- \
+     codex exec --full-auto -C "$PWD" \
+       $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+       --output-last-message "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
+       "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
+   ```
+
+   The trailing `Work at your maximum reasoning effort level.` is appended at the bash-launch level (NOT in the templated prompt body) because `${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh --with-effort` is documented as a no-op for Cursor (Cursor has no dedicated reasoning-effort flag — the convention is the prompt-level suffix). Codex receives the same suffix for symmetry.
+
+8. **Collect** with health bookkeeping disabled (Option B enforcement):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
+     --write-health /dev/null \
+     <each launched output path>
+   ```
+   `--write-health /dev/null` ensures both the read path (collect-reviewer-results.sh checks `-f "$WRITE_HEALTH"`, which is false for character devices like `/dev/null`) and the write path (explicit `!= "/dev/null"` guard) skip — the dialectic phase NEVER updates the cross-skill `${SESSION_ENV_PATH}.health` file. Block on this call (do NOT use `run_in_background`).
+
+9. **Per-bucket runtime failure handling**. For any reviewer with `STATUS != OK`, print `**⚠ <Tool> dialectic debate (decision <n>, <thesis|antithesis>) failed: <FAILURE_REASON>. Bucket truncated; synthesis decision stands.**` Do NOT flip any flag. The mandatory STATUS pre-check at the top of the "debate quorum rule" below catches the partial-launch case (thesis or antithesis non-OK → decision immediately fails quorum → synthesis decision stands).
+
+The thesis/antithesis prompt template bodies below are byte-identical to Phase 1. Only the delivery channel (external CLI via `run-external-reviewer.sh` rather than the Agent tool) and the call-site effort suffix change.
 
 **Thesis agent prompt template**:
 ```
@@ -389,7 +454,11 @@ These tags are prompt-level delimiters, not a sanitization boundary — they red
 </debater_decision>
 ```
 
-**After all agents return**, apply the **debate quorum rule** for each decision. A side passes quorum only when every check below is satisfied; otherwise the orchestrator does NOT write a binding resolution for that decision. The check is a conjunct — the pre-existing "substantive output" requirement is retained alongside the new structural gates:
+**After all external debaters return**, apply the **debate quorum rule** to each decision **whose bucket was launched** (decisions skipped in step 4 or skipped by the zero-externals guardrail in step 5 have no output files; their synthesis decisions already stand and need no quorum check).
+
+**Per-decision STATUS pre-check** (mandatory, applied before the per-side checks below): for each launched decision, if the collector did not report `STATUS=OK` for BOTH the thesis and the antithesis output files, the decision immediately fails quorum — do NOT apply the per-side checks below; the synthesis decision stands for that point and no binding resolution is written. This guards the partial-launch case where one side completed but its sibling failed (e.g., thesis OK + antithesis TIMED_OUT): the orchestrator must NOT write a one-sided resolution from the lone surviving file, since adversarial debate requires both sides.
+
+For each surviving decision (both sides `STATUS=OK`), read each side's file via the file path from the collector's `REVIEWER_FILE` field (which may point at a `*-retry.txt` if a retry recovered an empty output) — do NOT read directly from the launch path, as that would miss content recovered by retry. A side passes quorum only when every check below is satisfied; otherwise the orchestrator does NOT write a binding resolution for that decision. The check is a conjunct — the pre-existing "substantive output" requirement is retained alongside the new structural gates:
 
 - **Substantive output**: non-empty output with at least one full sentence of substantive content per required tag body.
 - **All 5 tags present**: `<claim>`, `<evidence>`, `<strongest_concession>`, `<counter_to_opposition>`, `<risk_if_wrong>`.

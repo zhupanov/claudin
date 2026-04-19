@@ -36,6 +36,7 @@ The handling of unavailable external tools differs across workflow phases:
 | **Plan review** (`/design`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
 | **Code review** (`/review`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
 | **Voting** | Claude replacement voters used — always 3 voters. 3 voters: 2+ YES to accept; 2 voters: unanimous YES; <2 voters: voting skipped, all findings accepted |
+| **Dialectic debate** (`/design`) | **No Claude substitution** — when the assigned external tool (Cursor for odd-indexed decisions, Codex for even-indexed) is unavailable, that decision's bucket is skipped entirely and the Step 2a.4 synthesis decision stands. Intentional divergence from the rules above; see Step 2a.5 in `skills/design/SKILL.md` |
 
 ## How It Works
 
@@ -61,7 +62,7 @@ flowchart TD
 
     SYNTHESIS --> CHECK{Contested\ndecisions?}
     CHECK -->|None| PLAN[Full implementation plan]
-    CHECK -->|1-3 found| DIALECTIC
+    CHECK -->|1-5 found| DIALECTIC
 
     subgraph DIALECTIC["Dialectic Debate (/design only)"]
         direction LR
@@ -96,7 +97,7 @@ flowchart TD
    - Notes **Innovation/Exploration** alternatives sourced from Codex slot 1 that are worth preserving as options
    - Lists contested decisions in a structured format for the dialectic debate phase
 
-4. **Dialectic debate** (`/design` only) — If the synthesis identifies contested decisions (points where sketches genuinely diverged), the top 2-3 are submitted to structured thesis/antithesis debates. For each contested decision, a thesis agent defends the synthesis choice and an antithesis agent argues for the strongest alternative. Both run in parallel with codebase access. The orchestrator then writes binding resolutions that must explicitly address the antithesis arguments. This step is skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below for details.
+4. **Dialectic debate** (`/design` only) — If the synthesis identifies contested decisions (points where sketches genuinely diverged), up to 5 (in priority order) are submitted to structured thesis/antithesis debates run on Cursor and Codex via deterministic per-decision bucketing. For each contested decision, a thesis agent defends the synthesis choice and an antithesis agent argues for the strongest alternative. Both run in parallel with codebase access. The orchestrator then writes binding resolutions that must explicitly address the antithesis arguments. This step is skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below for details.
 
 5. **Full plan** — The synthesis and any dialectic resolutions inform the complete implementation plan, which is then submitted to the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) for validation.
 
@@ -112,12 +113,12 @@ The dialectic debate runs only when the synthesis in Step 2a.4 identifies genuin
 
 ### How It Works
 
-For each contested decision (up to 3, prioritized by impact):
+For each contested decision (up to 5, prioritized by impact):
 
 1. A **thesis agent** defends the approach chosen by the synthesis, arguing why it's the right call given the codebase and requirements
 2. An **antithesis agent** attacks that choice, arguing for the strongest alternative, poking at hidden assumptions, and surfacing risks the synthesis glossed over
 
-Both agents run in parallel and produce 1-2 focused paragraphs. A **quorum rule** requires both sides to produce substantive output before a binding resolution is written — if either side fails, the debate falls back to the original synthesis decision.
+Both agents run in parallel and produce 1-2 focused paragraphs. A **quorum rule** requires both sides to report `STATUS=OK` from the collector and produce substantive structured output before a binding resolution is written — if either side's status check or content check fails, the debate falls back to the original synthesis decision.
 
 The orchestrator then writes a resolution for each contested point that must explicitly address the antithesis arguments. It can still pick the original choice, but now it must justify against the strongest counterargument.
 

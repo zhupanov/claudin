@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.11] - 2026-04-18
+
+### Changed
+
+- `/design` Step 2a.5 (dialectic debate) now runs each contested decision's thesis+antithesis on **external Cursor or Codex** instead of the previous Claude Agent-tool subagent fan-out (`skills/design/SKILL.md`). Cap raised from 3 to 5 (`min(5, |contested-decisions|)`); deterministic per-decision bucketing assigns odd-indexed decisions (1, 3, 5) to Cursor and even-indexed (2, 4) to Codex, with both sides of each decision sharing the assigned tool. When the assigned tool is unavailable, the bucket is **skipped entirely** and the Step 2a.4 synthesis decision stands — Claude subagents are never substituted into the dialectic debate path (intentional divergence from the repo-wide replacement-first fallback architecture; see `skills/shared/voting-protocol.md` and Step 3 fallbacks). Option B for the unhealthy-status cascade: dialectic-scoped shadow flags (`dialectic_codex_available`, `dialectic_cursor_available`) snapshot the orchestrator-wide `*_available` at entry; orchestrator-wide flags are never mutated, and the dialectic `collect-reviewer-results.sh` call uses `--write-health /dev/null` so Step 3 plan-review panel integrity is preserved by construction. Per-decision rendered prompts are written to files under `$DESIGN_TMPDIR` and referenced by path in the launch prompt (mirrors the voting-protocol pattern, avoids `cat`-based shell patterns that trigger Claude Code permission prompts). The quorum rule now has a mandatory STATUS pre-check that immediately fails any decision where either side returned `STATUS != OK` from the collector, preventing one-sided binding resolutions from partial-launch cases. Phase 1's tagged-output prompt template bodies, debate quorum rule, winner-selection rule, and `dialectic-resolutions.md` schema are preserved byte-for-byte. `docs/collaborative-sketches.md` is updated with the new cap (3→5), tool-routing description, and a new "Dialectic debate" row in the "Fallback Behavior by Phase" table that documents the no-Claude-substitution rule. Closes #98.
+
 ## [3.3.10] - 2026-04-18
 
 ### Fixed
