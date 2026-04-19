@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.9] - 2026-04-19
+
+### Fixed
+
+- `skills/issue/scripts/create-one.sh` no longer merges `gh` stderr into the success-path variable used for URL extraction. Previously `ISSUE_URL=$(gh … 2>&1)` captured both stdout and stderr into one variable, and the downstream `grep -oE 'https?://…/issues/N'` parsed the combined blob; any future stderr line (progress or warning) on success could corrupt the extraction. The fix redirects stderr to a dedicated temp file (`ERR_TMP`) so `ISSUE_URL` holds only stdout on the success branch, and the failure branch reads `ERR_TMP` for the error message still piped through `redact`/flatten/`head -c 500`. `ERR_TMP` is registered in the existing `cleanup()` EXIT trap alongside `BODY_TMP`, so every exit path — including `emit_redaction_failure` on the no-URL branch — removes the stderr temp file, closing a potential durable-disk exposure for token-bearing error text. `scripts/test-redact-secrets.sh` grows a new section 3d case that stubs `gh` to emit a URL on stdout and a warning on stderr, asserting `ISSUE_NUMBER=137` is still extracted and stderr noise does not leak into `ISSUE_URL`. Closes #137.
+
 ## [3.4.8] - 2026-04-19
 
 ### Changed

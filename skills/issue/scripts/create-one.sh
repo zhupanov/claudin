@@ -178,10 +178,14 @@ done
 # ---------------------------------------------------------------------------
 BODY_CONTENT=""
 BODY_TMP=""
+ERR_TMP=""
 # shellcheck disable=SC2317  # reachable via EXIT trap; shellcheck can't see indirect invocation
 cleanup() {
     if [[ -n "${BODY_TMP:-}" ]] && [[ -f "$BODY_TMP" ]]; then
         rm -f "$BODY_TMP"
+    fi
+    if [[ -n "${ERR_TMP:-}" ]] && [[ -f "$ERR_TMP" ]]; then
+        rm -f "$ERR_TMP"
     fi
 }
 trap cleanup EXIT
@@ -235,7 +239,13 @@ for L in "${VALID_LABELS[@]+"${VALID_LABELS[@]}"}"; do
     GH_ARGS+=(--label "$L")
 done
 
-if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
+# Capture stdout and stderr separately so a stray stderr line (progress,
+# warning) on the success path cannot corrupt URL extraction below. ERR_TMP
+# holds stderr; ISSUE_URL holds stdout only. Cleanup happens via the EXIT
+# trap, so every exit path — including emit_redaction_failure — removes the
+# stderr temp file.
+ERR_TMP=$(mktemp)
+if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
     # gh issue create emits the URL on stdout. Extract the trailing number.
     # `|| true` keeps the no-URL branch reachable under `set -euo pipefail`
     # when grep finds no match; without it pipefail would abort the script
@@ -258,10 +268,11 @@ if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
     echo "ISSUE_TITLE=$FINAL_TITLE"
     exit 0
 else
-    # ISSUE_URL here actually holds stderr content because of 2>&1.
-    # Redact secondary leak surface (tokens in auth-failure messages, request
-    # bodies echoed by the API in 4xx responses) before flattening/echoing.
-    REDACTED_ERR=$(redact "$ISSUE_URL") || emit_redaction_failure
+    # Read stderr from the temp file and redact secondary leak surface
+    # (tokens in auth-failure messages, request bodies echoed by the API in
+    # 4xx responses) before flattening/echoing.
+    ERR_CONTENT=$(cat "$ERR_TMP")
+    REDACTED_ERR=$(redact "$ERR_CONTENT") || emit_redaction_failure
     ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
     echo "ISSUE_FAILED=true"
     echo "ISSUE_ERROR=$ERR_FLAT"
