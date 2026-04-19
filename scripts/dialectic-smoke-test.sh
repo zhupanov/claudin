@@ -155,11 +155,14 @@ validate_debater() {
 }
 
 # validate_ballot_anonymity <ballot_file> <fixture_name>
+# Per skills/shared/dialectic-protocol.md "Attribution stripping" section, tool
+# names must not appear anywhere in the ballot body. Check case-insensitively
+# to catch mixed-case leaks (CURSOR, claude, Codex, etc.).
 validate_ballot_anonymity() {
     local file=$1 fixture=$2 leak=0 term
     for term in 'Cursor' 'Codex' 'Claude'; do
-        if grep -Fq "$term" "$file"; then
-            fail "$fixture: ballot $(basename "$file") contains attribution leak '$term' (must not appear anywhere in ballot body)"
+        if grep -Fiq "$term" "$file"; then
+            fail "$fixture: ballot $(basename "$file") contains attribution leak '$term' (case-insensitive — must not appear anywhere in ballot body)"
             leak=1
         fi
     done
@@ -203,12 +206,14 @@ parse_judge_file() {
         n="${BASH_REMATCH[1]}"
         rest="${stripped#*:}"
         rest=$(trim "$rest")
+        # Per dialectic-protocol.md Parser tolerance (step 5), the vote line
+        # format is `DECISION_N: TOKEN <separator> <rationale>` where
+        # <separator> is em-dash `—` or ASCII hyphen `-`. A bare token with no
+        # separator is not a valid vote line — treat as abstention.
         tok=""
         if [[ "$rest" =~ ^([A-Za-z_]+)[[:space:]]*—[[:space:]]* ]]; then
             tok="${BASH_REMATCH[1]}"
         elif [[ "$rest" =~ ^([A-Za-z_]+)[[:space:]]+-[[:space:]]* ]]; then
-            tok="${BASH_REMATCH[1]}"
-        elif [[ "$rest" =~ ^([A-Za-z_]+)$ ]]; then
             tok="${BASH_REMATCH[1]}"
         else
             continue
@@ -362,8 +367,35 @@ run_fixture() {
                 [[ "$act_disp" == "voted" ]] && match=1
                 ;;
             bucket-skipped|over-cap)
+                # For bucket-skipped / over-cap the orchestrator decides the
+                # disposition before any judge votes exist. The parser-visible
+                # representation is 0/0 fallback-to-synthesis (no eligible
+                # voters for this decision). Assert the structural conditions
+                # that distinguish a genuine bucket-skipped / over-cap from a
+                # broken fixture that happens to produce 0/0:
+                #   - no debate-<n>-thesis.txt or debate-<n>-antithesis.txt
+                #   - no DECISION_<n> line in any judge output
+                #   - no DECISION_<n>: heading in ballot.txt
+                # Any of these being present means the decision was actually
+                # debated / voted and the manifest is wrong (or vice versa).
                 if [[ "$act_disp" == "fallback-to-synthesis" && "$act_t" == "0" && "$act_a" == "0" ]]; then
-                    match=1
+                    local struct_ok=1
+                    if [[ -f "$fixture_dir/debate-${n}-thesis.txt" || -f "$fixture_dir/debate-${n}-antithesis.txt" ]]; then
+                        fail "$fixture DECISION_$n: '$exp_disp' expected but debate-${n}-*.txt files exist (should be absent)"
+                        struct_ok=0
+                    fi
+                    local jf
+                    for jf in "$cursor_file" "$codex_file" "$claude_file"; do
+                        if [[ -f "$jf" ]] && grep -Eiq "^[[:space:]]*(\*\*|__)?[[:space:]]*DECISION_${n}:" "$jf"; then
+                            fail "$fixture DECISION_$n: '$exp_disp' expected but $(basename "$jf") contains a DECISION_${n}: line (should be absent)"
+                            struct_ok=0
+                        fi
+                    done
+                    if [[ -f "$ballot" ]] && grep -Eq "^###[[:space:]]+DECISION_${n}:" "$ballot"; then
+                        fail "$fixture DECISION_$n: '$exp_disp' expected but ballot.txt contains a DECISION_${n} heading (should be absent)"
+                        struct_ok=0
+                    fi
+                    [[ $struct_ok -eq 1 ]] && match=1
                 fi
                 ;;
             fallback-to-synthesis)
