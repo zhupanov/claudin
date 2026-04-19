@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.6] - 2026-04-19
+
+### Fixed
+
+- `skills/issue/scripts/parse-input.sh` applies the symmetric mode-guard to the OOS heading branch so that a literal `### OOS_N: ...` line inside a generic item's body is absorbed as body continuation rather than flushing the generic item and starting a new OOS item. Before this fix, the OOS-heading regex fired unconditionally — the #129 mode-guard only covered the plain `### <title>` branch, so pasting a nested OOS-shaped heading into a generic issue body silently split the item and mis-classified the body below. The new guard uses `CURRENT_MODE=generic && IN_BODY=true` plus a meaningful-body check (`${CURRENT_BODY//[[:space:]]/}` non-empty) to align semantics with the OOS→generic direction, where `IN_BODY=true` is always paired with non-whitespace content populated by `**Description**:`. Parameter expansion (not `=~`) is used so the outer OOS-heading regex's `BASH_REMATCH[1]` capture is not clobbered before the `else` branch reads it. `test-parse-input.sh` grows three cases: case 10 (nested `### OOS_42: nested example` inside real body prose — the #132 reproducer), case 11 (bodyless generic title immediately followed by a real OOS item — the degenerate split case), and case 12 (whitespace-only body followed by a real OOS item — the meaningful-body guard at work); 7 new assertions pass alongside the existing 76. In-branch comment documents the asymmetry rationale, the `BASH_REMATCH` clobbering caveat, and the deliberate difference between the absorb predicate (meaningful body) and `emit_item`'s MALFORMED predicate (`[[ -z "$body" ]]`). Fixes #132.
+
 ## [3.4.5] - 2026-04-19
 
 ### Changed
