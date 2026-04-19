@@ -44,8 +44,36 @@
 #   0 — success (issue created OR --dry-run emitted preview)
 #   1 — arg or usage error
 #   2 — gh create failure (ISSUE_FAILED=true already emitted on stdout)
+#   3 — redaction helper failure (ISSUE_FAILED=true with ISSUE_ERROR=redaction:…)
+#
+# Defense-in-depth: TITLE and BODY_CONTENT are piped through
+# scripts/redact-secrets.sh before being passed to gh. This scrubs a fixed
+# set of token families (sk-*, ghp_, AKIA, xox, JWT, PEM) as a deterministic
+# backstop to prompt-level sanitization. See SECURITY.md.
 
 set -euo pipefail
+
+# Resolve the repo-root path to scripts/redact-secrets.sh. This file sits at
+# skills/issue/scripts/create-one.sh, so the repo root is three levels up.
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
+REDACT_HELPER="$REPO_ROOT/scripts/redact-secrets.sh"
+
+# redact_or_fail <text> → prints redacted text on stdout, or emits
+# ISSUE_FAILED/ISSUE_ERROR and exits 3 on helper failure. The helper is
+# required — there is no fallback to un-redacted content, per the
+# defense-in-depth fail-closed design.
+redact_or_fail() {
+    local text="$1"
+    local result
+    if result=$(printf '%s' "$text" | "$REDACT_HELPER" 2>/dev/null); then
+        printf '%s' "$result"
+    else
+        echo "ISSUE_FAILED=true"
+        echo "ISSUE_ERROR=redaction: helper $REDACT_HELPER failed or missing"
+        exit 3
+    fi
+}
 
 TITLE=""
 TITLE_PREFIX=""
@@ -78,6 +106,11 @@ if [[ -z "$TITLE" ]]; then
     usage
     exit 1
 fi
+
+# Redact TITLE before [OOS] double-prefix normalization so the normalization
+# operates on scrubbed content and downstream FINAL_TITLE / DRY_RUN_TITLE /
+# ISSUE_TITLE are uniformly redacted.
+TITLE=$(redact_or_fail "$TITLE")
 
 # Resolve repo if not provided.
 if [[ -z "$REPO" ]]; then
@@ -153,6 +186,14 @@ if [[ -n "$BODY_FILE" ]]; then
     BODY_CONTENT=$(cat "$BODY_FILE")
 fi
 
+# Single structural choke point: redact BODY_CONTENT after all body-assembly
+# paths converge, before dry-run branching or gh invocation. Any future body
+# source added above the fi must still go through this point — that is the
+# invariant this placement encodes.
+if [[ -n "$BODY_CONTENT" ]]; then
+    BODY_CONTENT=$(redact_or_fail "$BODY_CONTENT")
+fi
+
 # ---------------------------------------------------------------------------
 # Dry-run path.
 # ---------------------------------------------------------------------------
@@ -189,8 +230,12 @@ if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
     # gh issue create emits the URL on stdout. Extract the trailing number.
     URL_LINE=$(echo "$ISSUE_URL" | grep -oE 'https?://[^[:space:]]+/issues/[0-9]+' | tail -1)
     if [[ -z "$URL_LINE" ]]; then
+        # gh's output on this branch may include body fragments echoed by the
+        # API on a rejected request — redact through the same helper before
+        # surfacing to stdout.
+        REDACTED_OUTPUT=$(redact_or_fail "$ISSUE_URL")
         echo "ISSUE_FAILED=true"
-        echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $ISSUE_URL)"
+        echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT)"
         exit 2
     fi
     ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
@@ -200,8 +245,10 @@ if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
     exit 0
 else
     # ISSUE_URL here actually holds stderr content because of 2>&1.
-    # Flatten to one line.
-    ERR_FLAT=$(echo "$ISSUE_URL" | tr '\n' ' ' | head -c 500)
+    # Redact secondary leak surface (tokens in auth-failure messages, request
+    # bodies echoed by the API in 4xx responses) before flattening/echoing.
+    REDACTED_ERR=$(redact_or_fail "$ISSUE_URL")
+    ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
     echo "ISSUE_FAILED=true"
     echo "ISSUE_ERROR=$ERR_FLAT"
     exit 2
