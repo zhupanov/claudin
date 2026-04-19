@@ -518,7 +518,9 @@ Launch 3 judges **in parallel** (single message). Spawn order: Cursor first, the
 
 External judge outputs are collected via `collect-reviewer-results.sh` using its sentinel polling. Inline Agent-tool judges produce no sentinel; their votes are returned directly by the Agent tool and parsed from its return text. Do NOT pass inline-judge output paths to `collect-reviewer-results.sh` — the sentinel check would time out and incorrectly drop the voter count.
 
-After all external judges return:
+**Zero-external-judges guard**: Only invoke `collect-reviewer-results.sh` if at least one external judge was actually launched (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). When both are false — all three panel slots are filled by Claude subagent inline replacements — skip the collector invocation entirely and proceed directly to inline-vote tally from Agent returns. `collect-reviewer-results.sh` exits 1 with "at least one output file is required" when called with zero positional arguments; without this guard, the all-fallback configuration would abort.
+
+When at least one external judge was launched, after all external judges return:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \

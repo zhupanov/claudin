@@ -197,7 +197,9 @@ External judges and inline Claude judges use different collection paths. This sp
 
 1. **Inline judges (Claude subagent + any Claude replacements)**: vote text is returned in the Agent tool's return value. Parse per-decision vote lines directly from the returned text. Inline judges are always eligible (local execution does not fail in the `collect-reviewer-results.sh` sense).
 
-2. **External judges (Cursor, Codex)**: after all launches return, collect with health bookkeeping disabled:
+2. **External judges (Cursor, Codex)**: **Only perform this step if at least one external judge was actually launched** (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). If zero external judges were launched — all three slots were filled by Claude subagent inline replacements — skip this step entirely and proceed to step 3 below. This guard is required because `collect-reviewer-results.sh` exits with `"at least one output file is required"` when called with no positional arguments, which would abort the all-fallback configuration that the replacement-first rule is designed to support.
+
+   When at least one external judge was launched, after all launches return, collect with health bookkeeping disabled:
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
