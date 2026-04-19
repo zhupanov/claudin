@@ -56,7 +56,7 @@ Capture stdout.
 ISSUE_NUMBER=$(gh issue view "$ISSUE_URL" --json number --jq '.number')
 ```
 
-If this command fails (non-zero exit) or `ISSUE_NUMBER` is empty: the issue was created but its number could not be resolved. Print `**⚠ Issue created at $ISSUE_URL but could not resolve its number: <stderr excerpt>. Skipping --go comment (if requested).**` — then **skip Step 5 entirely** and go to Step 6 with the `go_mode=false` summary variant, using `$ISSUE_URL` as the only identifier.
+If this command fails (non-zero exit) or `ISSUE_NUMBER` is empty: the issue was created but its number could not be resolved. Print `**⚠ Issue created at $ISSUE_URL but could not resolve its number: <stderr excerpt>. Skipping --go comment (if requested).**` — then **skip Step 5 entirely** and go to Step 6 with the URL-only summary variant, using `$ISSUE_URL` as the only identifier.
 
 Save `ISSUE_URL` and `ISSUE_NUMBER`.
 
@@ -75,6 +75,7 @@ gh issue comment -R "$REPO" "$ISSUE_NUMBER" --body "GO"
 
 Print a final summary on a single line:
 
+- If `ISSUE_NUMBER` is empty (Step 4 resolution-failure path): `✅ Created issue — <ISSUE_URL>`
 - If `go_mode=true` and the GO comment succeeded: `✅ Created issue #<ISSUE_NUMBER> with GO comment — <ISSUE_URL>`
 - If `go_mode=true` and the GO comment failed: `**⚠ Created issue #<ISSUE_NUMBER> — <ISSUE_URL> (GO comment failed; add it manually to approve for /fix-issue)**`
 - If `go_mode=false`: `✅ Created issue #<ISSUE_NUMBER> — <ISSUE_URL>`
