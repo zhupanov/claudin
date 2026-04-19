@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.5] - 2026-04-18
+
+### Changed
+
+- Collapsed `/research` Step 2 (Findings Validation) and `/loop-review` Step 3c (Slice Review) from their dual-Codex / 5-reviewer panels to the canonical 3-reviewer panel used by `/design`, `/review`, and `/implement`: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor. `/loop-review` additionally gains a same-slice Runtime Timeout Fallback so a failed external is replaced in-slice (not just in future slices), and switches its collect call to the same dynamic `COLLECT_ARGS=()` pattern `/research` uses so unavailable externals no longer cause sentinel-wait timeouts. Output files consolidate to `codex-validation-output.txt` (research) and `codex-output-slice-N.txt` (loop-review); negotiation files become `codex-negotiation-*.txt` / `cursor-negotiation-*.txt`. Shared docs updated so every reviewer panel in the repo shares the `Code` / `Codex` / `Cursor` attribution shape. Closes #85.
+
 ## [3.3.4] - 2026-04-18
 
 ### Fixed

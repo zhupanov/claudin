@@ -35,7 +35,7 @@
 
   <!-- Step 2: Validation Review (parallel) -->
   <rect x="65" y="320" width="310" height="40" rx="4" fill="#17A2B8" stroke="#17A2B8" stroke-width="3"/>
-  <text x="220" y="340">Validation (Codex deep + Codex broad + Cursor)</text>
+  <text x="220" y="340">Validation (Claude + Codex + Cursor)</text>
   <line x1="220" y1="360" x2="220" y2="390"/>
 
   <!-- Negotiate & Finalize -->
