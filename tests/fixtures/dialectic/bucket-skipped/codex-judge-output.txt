@@ -1,0 +1,2 @@
+DECISION_1: THESIS — D1 rationale.
+DECISION_3: ANTI_THESIS — D3 rationale.

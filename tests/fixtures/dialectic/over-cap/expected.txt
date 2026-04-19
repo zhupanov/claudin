@@ -1,0 +1,12 @@
+# over-cap manifest
+# Covers: Disposition Enum over-cap; top-min(5, N) cap enforcement.
+# D6 exists in contested-decisions.md (conceptually) but is absent from the
+# ballot and has no debater files; smoke test treats 0/0 no-vote state as
+# equivalent to over-cap.
+
+DECISION_1 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_2 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_3 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_4 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_5 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_6 expected_disposition=over-cap

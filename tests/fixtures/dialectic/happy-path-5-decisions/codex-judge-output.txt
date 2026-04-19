@@ -1,0 +1,5 @@
+DECISION_1: THESIS — Concrete evidence citation sways the vote on decision 1.
+DECISION_2: THESIS — Aligned with repo convention on decision 2.
+DECISION_3: ANTI_THESIS — Proportionality argument prevails on decision 3.
+DECISION_4: THESIS — Smaller change set wins on decision 4.
+DECISION_5: THESIS — Maintainability argument edges out on decision 5.

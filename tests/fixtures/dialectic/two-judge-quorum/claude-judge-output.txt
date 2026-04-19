@@ -1,0 +1,2 @@
+DECISION_1: THESIS — Strong evidence on decision 1.
+DECISION_2: ANTI_THESIS — Alternative is more proportional on decision 2.

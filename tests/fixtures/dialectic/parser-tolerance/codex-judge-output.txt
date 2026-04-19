@@ -1,0 +1,4 @@
+DECISION_1: THESIS — first valid rationale.
+DECISION_1: ANTI_THESIS — duplicate line that must be IGNORED (first valid wins).
+DECISION_2: THESIS — normal.
+DECISION_3: THESIS — normal.

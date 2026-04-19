@@ -135,3 +135,13 @@ jobs:
 
           rm -f /tmp/hits
           exit "$exit_code"
+
+  smoke-dialectic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run dialectic smoke test
+        # Invokes scripts/dialectic-smoke-test.sh directly; the `make smoke-dialectic`
+        # target is equivalent and exists for local developer convenience.
+        run: bash scripts/dialectic-smoke-test.sh

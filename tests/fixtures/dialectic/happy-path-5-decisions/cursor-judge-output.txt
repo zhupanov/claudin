@@ -1,0 +1,5 @@
+DECISION_1: THESIS — Defense A's evidence is stronger on decision 1.
+DECISION_2: THESIS — Defense B's proportionality argument wins on decision 2.
+DECISION_3: ANTI_THESIS — Defense B's counter-example is more concrete on decision 3.
+DECISION_4: THESIS — Defense B's incremental approach wins on decision 4.
+DECISION_5: ANTI_THESIS — Defense B's complexity argument is decisive on decision 5.

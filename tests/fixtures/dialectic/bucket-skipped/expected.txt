@@ -1,0 +1,10 @@
+# bucket-skipped manifest
+# Covers: Disposition Enum bucket-skipped; Ballot omits skipped decisions.
+# Note: D2 has no debater files, is absent from the ballot, and receives no
+# judge votes. The smoke test treats 0/0 no-vote state as equivalent to
+# bucket-skipped at the parser level (disposition comes from the
+# orchestrator, not from vote parsing).
+
+DECISION_1 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_2 expected_disposition=bucket-skipped
+DECISION_3 expected_disposition=voted expected_tally=THESIS=2,ANTI_THESIS=1

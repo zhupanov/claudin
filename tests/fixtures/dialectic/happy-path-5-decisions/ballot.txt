@@ -1,0 +1,63 @@
+## Dialectic Ballot
+
+You are a judge on a 3-panel adjudicating contested design decisions. For each DECISION_N below, read both Defense A and Defense B, then cast exactly one binary vote: THESIS or ANTI_THESIS. Vote on every decision.
+
+### DECISION_1: Sample decision 1
+
+Defense A (defends CHOSEN=option-a):
+<defense_content>
+Arguments for option-a on decision 1.
+</defense_content>
+
+Defense B (defends ALTERNATIVE=option-b):
+<defense_content>
+Arguments for option-b on decision 1.
+</defense_content>
+
+### DECISION_2: Sample decision 2
+
+Defense A (defends ALTERNATIVE=option-y):
+<defense_content>
+Arguments for option-y on decision 2.
+</defense_content>
+
+Defense B (defends CHOSEN=option-x):
+<defense_content>
+Arguments for option-x on decision 2.
+</defense_content>
+
+### DECISION_3: Sample decision 3
+
+Defense A (defends CHOSEN=option-p):
+<defense_content>
+Arguments for option-p on decision 3.
+</defense_content>
+
+Defense B (defends ALTERNATIVE=option-q):
+<defense_content>
+Arguments for option-q on decision 3.
+</defense_content>
+
+### DECISION_4: Sample decision 4
+
+Defense A (defends ALTERNATIVE=option-n):
+<defense_content>
+Arguments for option-n on decision 4.
+</defense_content>
+
+Defense B (defends CHOSEN=option-m):
+<defense_content>
+Arguments for option-m on decision 4.
+</defense_content>
+
+### DECISION_5: Sample decision 5
+
+Defense A (defends CHOSEN=option-s):
+<defense_content>
+Arguments for option-s on decision 5.
+</defense_content>
+
+Defense B (defends ALTERNATIVE=option-t):
+<defense_content>
+Arguments for option-t on decision 5.
+</defense_content>

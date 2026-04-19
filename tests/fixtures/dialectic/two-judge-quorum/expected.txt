@@ -1,0 +1,6 @@
+# two-judge-quorum manifest
+# Covers: Parser tolerance (STATUS=ERROR whole-output ineligibility);
+#         Threshold Rules (2 voters unanimous → voted; 2 voters 1-1 tie → fallback)
+
+DECISION_1 expected_disposition=voted expected_tally=THESIS=2,ANTI_THESIS=0
+DECISION_2 expected_disposition=fallback-to-synthesis expected_tally=THESIS=1,ANTI_THESIS=1

@@ -9,7 +9,9 @@ At the start of each skill, a binary check determines which external tools are i
 - If **Codex** is not found, a warning is printed and the skill proceeds without it
 - If **Cursor** is not found, a warning is printed and the skill proceeds without it
 
-Skills gracefully degrade when external tools are unavailable. When Codex or Cursor is not found, Claude replacement subagents fill their slots to maintain per-skill lane counts across all phases. The counts are: 3 for plan/code review (1 Claude + 1 Codex + 1 Cursor), `/research` (both phases), and `/loop-review` (Negotiation Protocol, per slice); 5 for the `/design` sketch phase; 3 for voting panels. Voting uses a step-function threshold: 3 voters require 2+ YES votes, 2 voters require unanimous YES, and fewer than 2 eligible voters causes voting to be skipped with all findings accepted automatically.
+Skills gracefully degrade when external tools are unavailable. When Codex or Cursor is not found, Claude replacement subagents fill their slots to maintain per-skill lane counts across most phases. The counts are: 3 for plan/code review (1 Claude + 1 Codex + 1 Cursor), `/research` (both phases), and `/loop-review` (Negotiation Protocol, per slice); 5 for the `/design` sketch phase; 3 for voting panels and for the `/design` dialectic judge panel. Voting uses a step-function threshold: 3 voters require 2+ YES votes, 2 voters require unanimous YES, and fewer than 2 eligible voters causes voting to be skipped with all findings accepted automatically.
+
+**Exception: dialectic debate buckets (`/design` Step 2a.5) do NOT use replacement-first.** When the assigned external tool (Cursor for odd-indexed decisions, Codex for even) is unavailable, the bucket is **skipped entirely** and a `Disposition: bucket-skipped` resolution is written — Claude subagents are never substituted into the debate path. This carve-out applies only to the **debate execution phase** of dialectic; the post-debate **judge panel** uses replacement-first normally. See [Dialectic-specific behavior](#dialectic-specific-behavior) below and `skills/shared/dialectic-protocol.md` for the full rationale.
 
 ## Launching External Reviewers
 
@@ -61,10 +63,26 @@ External reviewers have configurable timeouts (typically 600-900 seconds). If a 
 
 External reviewers participate in multiple phases:
 
-| Phase | Role | Skills |
-|---|---|---|
-| [Collaborative sketches](collaborative-sketches.md) | Propose architectural approaches | `/design` |
-| Plan review | Review implementation plans | `/design` |
-| Code review | Review code changes | `/review` |
-| [Voting](voting-process.md) | Vote on findings | `/design`, `/review` |
-| Negotiation | Multi-round dispute resolution | `/research`, `/loop-review` |
+| Phase | Role | Skills | Fallback behavior |
+|---|---|---|---|
+| [Collaborative sketches](collaborative-sketches.md) | Propose architectural approaches | `/design` | Replacement-first (Claude subagent fills slot) |
+| Plan review | Review implementation plans | `/design` | Replacement-first |
+| Code review | Review code changes | `/review` | Replacement-first |
+| [Voting](voting-process.md) | Vote on findings | `/design`, `/review` | Replacement-first |
+| Negotiation | Multi-round dispute resolution | `/research`, `/loop-review` | Replacement-first |
+| **Dialectic debate** (`/design` Step 2a.5) | Defend / attack contested decisions | `/design` | **Bucket skipped — no Claude substitution** |
+| Dialectic judge panel (`/design` Step 2a.5) | Adjudicate between pre-authored defenses | `/design` | Replacement-first (panel stays at 3) |
+
+## Dialectic-specific behavior
+
+`/design` Step 2a.5 runs a **dialectic debate + judge panel** phase whose fallback semantics differ from every other reviewer phase. Both the debate phase and the judge panel are specified in detail at `skills/shared/dialectic-protocol.md`; the integration points with the shared external-reviewer infrastructure are:
+
+1. **Debaters never fall back to Claude** (carve-out): Cursor runs both sides of odd-indexed decisions; Codex runs both sides of even-indexed decisions; if the assigned tool is unavailable at launch time, the bucket is skipped and a `Disposition: bucket-skipped` resolution is written — the synthesis decision stands for that point. This is intentional divergence (see GitHub issue #98): debater outputs are adversarial prose whose style can leak tool identity; substituting a Claude subagent into the debate path would bias the downstream judge panel.
+2. **Dialectic-scoped shadow flags**: the dialectic phase uses `dialectic_codex_available` / `dialectic_cursor_available` flags snapshotted at entry. These flags are **never written back** to the orchestrator-wide `codex_available` / `cursor_available` flags. A Cursor or Codex timeout during a dialectic debate therefore does not lock that tool out of Step 3 plan review.
+3. **`--write-health /dev/null`**: every `collect-reviewer-results.sh` invocation in the dialectic phase (both debate collection and judge collection) passes `--write-health /dev/null` so the dialectic phase **never updates** `${SESSION_ENV_PATH}.health`. Debate-time failures stay scoped to this phase.
+4. **Judge panel uses replacement-first**: when Cursor or Codex is unhealthy at judge launch time, a Claude Code Reviewer subagent replaces that slot so the panel is always 3 judges. Judges adjudicate between pre-authored defenses and don't write adversarial prose, so the debater carve-out doesn't apply here.
+5. **Judge-phase health re-probe**: `scripts/check-reviewers.sh --probe` is run synchronously immediately before launching judges. Debate-time failures must not lock a tool out of the judge role — judgment happens minutes after debate, and tool state can recover.
+
+### Regression guard
+
+`scripts/dialectic-smoke-test.sh` is the offline regression guard for the dialectic parser, tally rules, and structural invariants documented in `skills/shared/dialectic-protocol.md`. Fixtures live under `tests/fixtures/dialectic/`. Run locally via `make smoke-dialectic`; CI runs the same command in the `smoke-dialectic` job. When changing the protocol's Parser tolerance or Threshold Rules sections, update the smoke test and/or fixtures in the same PR.

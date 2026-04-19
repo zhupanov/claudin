@@ -1,0 +1,8 @@
+# happy-path-5-decisions manifest
+# Covers: Parser tolerance, Threshold Rules (3 voters → 2+ majority), Attribution stripping
+
+DECISION_1 expected_disposition=voted expected_tally=THESIS=3,ANTI_THESIS=0
+DECISION_2 expected_disposition=voted expected_tally=THESIS=2,ANTI_THESIS=1
+DECISION_3 expected_disposition=voted expected_tally=THESIS=0,ANTI_THESIS=3
+DECISION_4 expected_disposition=voted expected_tally=THESIS=2,ANTI_THESIS=1
+DECISION_5 expected_disposition=voted expected_tally=THESIS=1,ANTI_THESIS=2
