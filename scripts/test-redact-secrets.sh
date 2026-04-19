@@ -219,6 +219,89 @@ assert_contains "$fail_err_line" '<REDACTED-TOKEN>' '[failure] ISSUE_ERROR has p
 assert_not_contains "$fail_err_line" "$SK_TOKEN" '[failure] ISSUE_ERROR does not leak stderr token'
 
 echo ""
+echo "=== Section 4: Edge cases ==="
+
+# --- 4a: indented / blockquoted PEM blocks (F4) ---
+# Blockquote-prefixed PEM block (common in markdown issue bodies).
+INDENTED_BODY="prefix line
+> -----BEGIN RSA PRIVATE KEY-----
+> MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Q
+> -----END RSA PRIVATE KEY-----
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAA
+    -----END OPENSSH PRIVATE KEY-----
+suffix line"
+indented_out=$(printf '%s' "$INDENTED_BODY" | "$HELPER")
+assert_contains "$indented_out" '<REDACTED-PRIVATE-KEY>' '[edge] blockquote PEM → placeholder'
+assert_not_contains "$indented_out" 'MIIBOgIBAAJB' '[edge] blockquote PEM → RSA key material absent'
+assert_not_contains "$indented_out" 'b3BlbnNzaC1rZXktdjEA' '[edge] indented PEM → OPENSSH key material absent'
+assert_contains "$indented_out" 'prefix line' '[edge] non-PEM prefix passes through'
+assert_contains "$indented_out" 'suffix line' '[edge] non-PEM suffix passes through'
+
+# --- 4b: unterminated PEM block (F3) ---
+UNTERMINATED_BODY="opening text
+-----BEGIN RSA PRIVATE KEY-----
+MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Q
+KUpRKfFLfRYC9AIKjbJTWit+CqvjWYzvQwECAwEAAQJAIJLixBy2qpFoS4DSmoEm
+tail-that-should-not-silently-survive"
+unterm_out=$(printf '%s\n' "$UNTERMINATED_BODY" | "$HELPER" 2>/dev/null)
+assert_contains "$unterm_out" '<REDACTED-PRIVATE-KEY>' '[edge] unterminated PEM → placeholder'
+assert_contains "$unterm_out" 'opening text' '[edge] unterminated PEM → pre-BEGIN text preserved'
+assert_not_contains "$unterm_out" 'MIIBOgIBAAJB' '[edge] unterminated PEM → key material absent'
+assert_contains "$unterm_out" 'content truncated' '[edge] unterminated PEM → truncation marker emitted'
+# The malicious or malformed tail must NOT survive.
+assert_not_contains "$unterm_out" 'tail-that-should-not-silently-survive' '[edge] unterminated PEM → tail dropped'
+
+# --- 4c: redact helper missing (F1) — fail-closed with ISSUE_FAILED/ERROR on stdout ---
+MISSING_DIR="$TMPROOT/stub-missing-helper"
+mkdir -p "$MISSING_DIR"
+# Create a broken helper wrapper by using a PATH with a sh-breaking placeholder.
+# Simpler: move the real helper out of reach by running create-one.sh with a
+# bogus SCRIPT_DIR layout. Since create-one.sh resolves REPO_ROOT via
+# BASH_SOURCE, we copy create-one.sh to a sibling tree without redact-secrets.sh.
+FAKE_TREE="$TMPROOT/fake-tree"
+mkdir -p "$FAKE_TREE/skills/issue/scripts" "$FAKE_TREE/scripts"
+cp "$CREATE_ONE" "$FAKE_TREE/skills/issue/scripts/create-one.sh"
+# Intentionally do NOT create $FAKE_TREE/scripts/redact-secrets.sh.
+chmod +x "$FAKE_TREE/skills/issue/scripts/create-one.sh"
+missing_out=$(bash "$FAKE_TREE/skills/issue/scripts/create-one.sh" --title 'a-title' --body-file "$BODY_FILE" --repo owner/repo --dry-run 2>&1 || true)
+assert_contains "$missing_out" 'ISSUE_FAILED=true' '[edge] missing helper → ISSUE_FAILED=true on stdout'
+assert_contains "$missing_out" 'ISSUE_ERROR=redaction:' '[edge] missing helper → ISSUE_ERROR=redaction: prefix on stdout'
+
+# --- 4d: gh emits zero-URL multi-line output (F5) — no-URL branch flattens ---
+ZERO_URL_DIR="$TMPROOT/stub-zero-url"
+mkdir -p "$ZERO_URL_DIR"
+cat > "$ZERO_URL_DIR/gh" <<'GHZERO'
+#!/usr/bin/env bash
+if [[ "$1" == "label" ]]; then
+    exit 0
+fi
+if [[ "$1" == "repo" ]]; then
+    echo 'owner/repo'
+    exit 0
+fi
+# issue create path — emit multi-line output with no URL, exit 0.
+printf 'line one\nline two with sk-ant-abcdefghijklmnopqrstuvwxyz01\nline three\n'
+exit 0
+GHZERO
+chmod +x "$ZERO_URL_DIR/gh"
+zero_out=$(PATH="$ZERO_URL_DIR:$PATH" bash "$CREATE_ONE" --title 'plain-title' --body-file "$BODY_FILE" --repo owner/repo 2>&1 || true)
+# Must emit a single-line ISSUE_ERROR (no raw newlines).
+zero_err_lines=$(printf '%s\n' "$zero_out" | grep -c '^ISSUE_ERROR=' || true)
+if [[ "$zero_err_lines" == "1" ]]; then
+    PASS=$((PASS + 1))
+    echo "  ok: [edge] no-URL branch emits single-line ISSUE_ERROR (count=$zero_err_lines)"
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("[edge] no-URL branch emitted $zero_err_lines ISSUE_ERROR lines (expected 1)")
+    echo "  FAIL: [edge] no-URL branch emits single-line ISSUE_ERROR (count=$zero_err_lines)" >&2
+    echo "       zero_out: $zero_out" >&2
+fi
+zero_err_line=$(printf '%s\n' "$zero_out" | grep '^ISSUE_ERROR=' || true)
+assert_contains "$zero_err_line" '<REDACTED-TOKEN>' '[edge] no-URL branch redacts stderr token'
+assert_not_contains "$zero_err_line" 'sk-ant-abcdefghijklmnopqrstuvwxyz01' '[edge] no-URL branch does not leak sk-ant'
+
+echo ""
 echo "=== Summary ==="
 echo "Passed: $PASS"
 echo "Failed: $FAIL"

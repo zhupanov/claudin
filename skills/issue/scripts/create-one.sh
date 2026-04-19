@@ -59,20 +59,29 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 REDACT_HELPER="$REPO_ROOT/scripts/redact-secrets.sh"
 
-# redact_or_fail <text> → prints redacted text on stdout, or emits
-# ISSUE_FAILED/ISSUE_ERROR and exits 3 on helper failure. The helper is
-# required — there is no fallback to un-redacted content, per the
-# defense-in-depth fail-closed design.
-redact_or_fail() {
-    local text="$1"
-    local result
-    if result=$(printf '%s' "$text" | "$REDACT_HELPER" 2>/dev/null); then
-        printf '%s' "$result"
-    else
-        echo "ISSUE_FAILED=true"
-        echo "ISSUE_ERROR=redaction: helper $REDACT_HELPER failed or missing"
-        exit 3
-    fi
+# redact <text> — prints redacted text on stdout, returns the helper's
+# exit code. Callers MUST invoke this via command substitution combined
+# with `|| emit_redaction_failure`, because inside command substitution any
+# stdout emission is captured into the assigning variable rather than the
+# parent's stdout. emit_redaction_failure runs in the parent's process so
+# its ISSUE_FAILED/ISSUE_ERROR echoes actually reach the machine-readable
+# stdout contract documented in the header above.
+redact() {
+    # Do NOT swallow stderr: redact-secrets.sh emits a WARN on stderr when
+    # an unterminated PEM block forces fail-closed truncation, and that
+    # signal is the only log-visibility mechanism for that condition.
+    printf '%s' "$1" | "$REDACT_HELPER"
+}
+
+# emit_redaction_failure — runs outside command substitution (via `|| ...`)
+# so its echo lines reach the parent's stdout for callers parsing
+# ^ISSUE_FAILED=/^ISSUE_ERROR= on stdout, then exits 3. The helper is
+# required: there is no fallback to un-redacted content per the fail-closed
+# defense-in-depth design.
+emit_redaction_failure() {
+    echo "ISSUE_FAILED=true"
+    echo "ISSUE_ERROR=redaction: helper $REDACT_HELPER failed or missing"
+    exit 3
 }
 
 TITLE=""
@@ -110,7 +119,7 @@ fi
 # Redact TITLE before [OOS] double-prefix normalization so the normalization
 # operates on scrubbed content and downstream FINAL_TITLE / DRY_RUN_TITLE /
 # ISSUE_TITLE are uniformly redacted.
-TITLE=$(redact_or_fail "$TITLE")
+TITLE=$(redact "$TITLE") || emit_redaction_failure
 
 # Resolve repo if not provided.
 if [[ -z "$REPO" ]]; then
@@ -191,7 +200,7 @@ fi
 # source added above the fi must still go through this point — that is the
 # invariant this placement encodes.
 if [[ -n "$BODY_CONTENT" ]]; then
-    BODY_CONTENT=$(redact_or_fail "$BODY_CONTENT")
+    BODY_CONTENT=$(redact "$BODY_CONTENT") || emit_redaction_failure
 fi
 
 # ---------------------------------------------------------------------------
@@ -228,14 +237,19 @@ done
 
 if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
     # gh issue create emits the URL on stdout. Extract the trailing number.
-    URL_LINE=$(echo "$ISSUE_URL" | grep -oE 'https?://[^[:space:]]+/issues/[0-9]+' | tail -1)
+    # `|| true` keeps the no-URL branch reachable under `set -euo pipefail`
+    # when grep finds no match; without it pipefail would abort the script
+    # before the defensive `[[ -z "$URL_LINE" ]]` check below.
+    URL_LINE=$(echo "$ISSUE_URL" | grep -oE 'https?://[^[:space:]]+/issues/[0-9]+' | tail -1 || true)
     if [[ -z "$URL_LINE" ]]; then
         # gh's output on this branch may include body fragments echoed by the
         # API on a rejected request — redact through the same helper before
-        # surfacing to stdout.
-        REDACTED_OUTPUT=$(redact_or_fail "$ISSUE_URL")
+        # surfacing to stdout. Flatten to a single line / 500 chars so the
+        # emitted key=value line honors the one-line-per-record contract.
+        REDACTED_OUTPUT=$(redact "$ISSUE_URL") || emit_redaction_failure
+        REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
         echo "ISSUE_FAILED=true"
-        echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT)"
+        echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT_FLAT)"
         exit 2
     fi
     ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
@@ -247,7 +261,7 @@ else
     # ISSUE_URL here actually holds stderr content because of 2>&1.
     # Redact secondary leak surface (tokens in auth-failure messages, request
     # bodies echoed by the API in 4xx responses) before flattening/echoing.
-    REDACTED_ERR=$(redact_or_fail "$ISSUE_URL")
+    REDACTED_ERR=$(redact "$ISSUE_URL") || emit_redaction_failure
     ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
     echo "ISSUE_FAILED=true"
     echo "ISSUE_ERROR=$ERR_FLAT"

@@ -14,7 +14,12 @@
 #   - AWS long-term access key IDs (AKIA[0-9A-Z]{16})
 #   - Slack tokens (xoxb-, xoxa-, xoxp-, xoxr-, xoxs-)
 #   - Generic JWT (eyJ…header.payload.signature)
-#   - PEM-encoded private key blocks → <REDACTED-PRIVATE-KEY> (multi-line)
+#   - PEM-encoded private key blocks → <REDACTED-PRIVATE-KEY> (multi-line,
+#     tolerates leading whitespace and markdown blockquote prefixes on the
+#     BEGIN/END markers). If a BEGIN marker appears without a matching END
+#     before EOF, the tail of the body is dropped (fail-closed) and a
+#     visible `[content truncated — unterminated PEM block…]` marker is
+#     emitted on stdout plus a WARN line on stderr.
 #
 # Explicit non-coverage (not matched; operators must treat this as partial
 # defense-in-depth, not comprehensive secret detection):
@@ -57,16 +62,31 @@ sed -E \
     -e 's/xox[baprs]-[A-Za-z0-9-]{10,}/<REDACTED-TOKEN>/g' \
     -e 's/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/<REDACTED-TOKEN>/g' \
     | awk '
-        /^-----BEGIN [A-Z ]*PRIVATE KEY-----/ {
+        # Allow leading whitespace and markdown blockquote prefixes (> ) so
+        # PEM blocks wrapped in `    -----BEGIN ...` (code-block indent) or
+        # `> -----BEGIN ...` (blockquote) are still matched. The prefix
+        # characters are dropped from the emitted placeholder.
+        /^[[:space:]>]*-----BEGIN [A-Z ]*PRIVATE KEY-----/ {
             print "<REDACTED-PRIVATE-KEY>"
             in_pem = 1
             next
         }
         in_pem {
-            if (/^-----END [A-Z ]*PRIVATE KEY-----/) {
+            if (/^[[:space:]>]*-----END [A-Z ]*PRIVATE KEY-----/) {
                 in_pem = 0
             }
             next
         }
         { print }
+        # Fail-closed: on EOF while still inside a PEM block (a BEGIN line
+        # without matching END), the tail after BEGIN has already been
+        # swallowed to avoid leaking key material. Emit a visible marker so
+        # the truncation is not silent and issue authors notice the body is
+        # incomplete. Also signal to stderr for log visibility.
+        END {
+            if (in_pem) {
+                print "[content truncated — unterminated PEM block; tail of body dropped for safety]"
+                print "WARN: redact-secrets.sh: unterminated PEM block; body tail dropped" > "/dev/stderr"
+            }
+        }
     '
