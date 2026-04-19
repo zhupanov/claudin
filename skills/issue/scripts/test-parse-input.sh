@@ -193,13 +193,16 @@ assert_eq "case 5 item 2 body" "Generic body text." "$(get_body 2 "$out5")"
 assert_absent "case 5 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out5"
 
 # ---------------------------------------------------------------------------
-# Test case 6 — Documented absorb behavior: incomplete OOS (Description only,
-# no trailing structured fields) followed by a `### ` line. Per design, the
-# trailing `### ` is absorbed as body continuation because IN_BODY=true and
-# CURRENT_MODE=oos. This is a known limitation of the incomplete-OOS shape
-# and is documented in the parser header.
+# Test case 6 — Issue #138: incomplete OOS (Description only, no trailing
+# structured fields) followed by a `### <title>` line and a generic body at
+# EOF. The pending-heading state defers the absorb decision; when EOF arrives
+# without any structured field (Reviewer / Vote tally / Phase) closing the
+# OOS, the current OOS is flushed as MALFORMED (with its non-empty body) and
+# the pending heading + pending body are emitted as a new generic item. This
+# preserves the author's intended second item instead of silently swallowing
+# it into the OOS body (the pre-#138 behavior).
 # ---------------------------------------------------------------------------
-echo "Case 6: incomplete OOS absorbs following ### line (documented behavior)"
+echo "Case 6: incomplete OOS splits cleanly at EOF (issue #138 fix)"
 cat > "$TMPDIR_TEST/case6.md" <<'EOF'
 ### OOS_1: Incomplete OOS
 - **Description**: Short description with no trailing fields.
@@ -207,10 +210,16 @@ cat > "$TMPDIR_TEST/case6.md" <<'EOF'
 Would-be body.
 EOF
 out6=$(run_parser "$TMPDIR_TEST/case6.md")
-assert_eq "case 6 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out6")"
-assert_eq "case 6 title" "Incomplete OOS" "$(get_value ITEM_1_TITLE "$out6")"
-expected6=$'Short description with no trailing fields.\n### Would-be generic item\nWould-be body.'
-assert_eq "case 6 body absorbs the would-be-generic heading + body" "$expected6" "$(get_body 1 "$out6")"
+assert_eq "case 6 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out6")"
+assert_eq "case 6 item 1 title" "Incomplete OOS" "$(get_value ITEM_1_TITLE "$out6")"
+assert_eq "case 6 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out6")"
+assert_eq "case 6 item 1 body preserves description" "Short description with no trailing fields." "$(get_body 1 "$out6")"
+assert_eq "case 6 item 2 title" "Would-be generic item" "$(get_value ITEM_2_TITLE "$out6")"
+assert_eq "case 6 item 2 body" "Would-be body." "$(get_body 2 "$out6")"
+assert_absent "case 6 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out6"
+assert_absent "case 6 item 2 has no vote tally" "ITEM_2_VOTE_TALLY" "$out6"
+assert_absent "case 6 item 2 has no phase" "ITEM_2_PHASE" "$out6"
+assert_absent "case 6 item 2 not malformed" "ITEM_2_MALFORMED" "$out6"
 
 # ---------------------------------------------------------------------------
 # Test case 7 — Back-to-back generic items. Tests that flush_item correctly
@@ -375,6 +384,105 @@ assert_eq "case 12 item 2 body" "Real OOS description." "$(get_body 2 "$out12")"
 assert_eq "case 12 item 2 reviewer" "Cursor" "$(get_value ITEM_2_REVIEWER "$out12")"
 assert_eq "case 12 item 2 vote tally" "YES=2" "$(get_value ITEM_2_VOTE_TALLY "$out12")"
 assert_eq "case 12 item 2 phase" "design" "$(get_value ITEM_2_PHASE "$out12")"
+
+# ---------------------------------------------------------------------------
+# Test case 13 — Issue #138 regression lock + multi-subheading support:
+# OOS with two sequential `### <subheading>` lines inside its Description,
+# then a full structured-field close. Under the pending-heading scheme, the
+# first `### Subheading 1` starts pending state; `Para 2.` accumulates into
+# PENDING_BODY; `### Subheading 2` arrives while pending-active → it appends
+# to PENDING_BODY (does NOT trigger rule-2 resolution — only `### OOS_N:` or
+# EOF trigger that). `Para 3.` accumulates too. When `- **Reviewer**:` fires,
+# rule-1 fold-back merges PENDING_HEADING + PENDING_BODY back into
+# CURRENT_BODY before the field assignment. Locks in both (a) the #129
+# subheading-absorption fix and (b) multi-subheading accumulation.
+# ---------------------------------------------------------------------------
+echo "Case 13: OOS with multiple subheadings before structured close (issue #138)"
+cat > "$TMPDIR_TEST/case13.md" <<'EOF'
+### OOS_1: Example with multiple subheadings
+- **Description**: Para 1.
+### Subheading 1
+Para 2.
+### Subheading 2
+Para 3.
+- **Reviewer**: Codex
+- **Vote tally**: YES=3, NO=0
+- **Phase**: review
+EOF
+out13=$(run_parser "$TMPDIR_TEST/case13.md")
+assert_eq "case 13 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out13")"
+assert_eq "case 13 title" "Example with multiple subheadings" "$(get_value ITEM_1_TITLE "$out13")"
+expected13=$'Para 1.\n### Subheading 1\nPara 2.\n### Subheading 2\nPara 3.'
+assert_eq "case 13 body absorbs both subheadings and all paragraphs" "$expected13" "$(get_body 1 "$out13")"
+assert_eq "case 13 reviewer" "Codex" "$(get_value ITEM_1_REVIEWER "$out13")"
+assert_eq "case 13 vote tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out13")"
+assert_eq "case 13 phase" "review" "$(get_value ITEM_1_PHASE "$out13")"
+assert_absent "case 13 not malformed" "ITEM_1_MALFORMED" "$out13"
+
+# ---------------------------------------------------------------------------
+# Test case 14 — Issue #138 EOF resolution: incomplete OOS + ambiguous heading
+# + body at EOF with no trailing structured field. Similar to case 6 but
+# checks the EOF resolution path in isolation (no following OOS_N: to force
+# resolution; only EOF). The pending-heading and pending-body both populate;
+# EOF in flush_item emits current OOS as MALFORMED (with its non-empty body)
+# then emits pending pair as a new generic item.
+# ---------------------------------------------------------------------------
+echo "Case 14: incomplete OOS at EOF with pending body (issue #138 EOF path)"
+cat > "$TMPDIR_TEST/case14.md" <<'EOF'
+### OOS_1: Incomplete OOS at EOF
+- **Description**: Only a description.
+### Notes with no closing fields
+Some body text.
+EOF
+out14=$(run_parser "$TMPDIR_TEST/case14.md")
+assert_eq "case 14 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out14")"
+assert_eq "case 14 item 1 title" "Incomplete OOS at EOF" "$(get_value ITEM_1_TITLE "$out14")"
+assert_eq "case 14 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out14")"
+assert_eq "case 14 item 1 body" "Only a description." "$(get_body 1 "$out14")"
+assert_eq "case 14 item 2 title" "Notes with no closing fields" "$(get_value ITEM_2_TITLE "$out14")"
+assert_eq "case 14 item 2 body" "Some body text." "$(get_body 2 "$out14")"
+assert_absent "case 14 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out14"
+assert_absent "case 14 item 2 has no vote tally" "ITEM_2_VOTE_TALLY" "$out14"
+assert_absent "case 14 item 2 has no phase" "ITEM_2_PHASE" "$out14"
+assert_absent "case 14 item 2 not malformed" "ITEM_2_MALFORMED" "$out14"
+
+# ---------------------------------------------------------------------------
+# Test case 15 — Issue #138 mid-stream OOS_N resolution: incomplete OOS +
+# ambiguous heading + pending body + a new `### OOS_N:` heading + its full
+# structured-field tail. The `### OOS_2:` line arrives while pending-active
+# → rule-2 split fires in the OOS heading branch preamble: flush current
+# OOS_1 as MALFORMED, emit pending pair as generic, then process
+# `### OOS_2:` normally as a new OOS item. Result: three items total —
+# OOS_1 (MALFORMED), a generic item from the pending pair, and a well-formed
+# OOS_2.
+# ---------------------------------------------------------------------------
+echo "Case 15: incomplete OOS + pending generic + next OOS_N (issue #138 mid-stream)"
+cat > "$TMPDIR_TEST/case15.md" <<'EOF'
+### OOS_1: Incomplete first OOS
+- **Description**: Only a description.
+### Notes pending
+Some pending body.
+### OOS_2: Well-formed second OOS
+- **Description**: Second body.
+- **Reviewer**: Cursor
+- **Vote tally**: YES=2
+- **Phase**: design
+EOF
+out15=$(run_parser "$TMPDIR_TEST/case15.md")
+assert_eq "case 15 items total" "ITEMS_TOTAL=3" "$(grep '^ITEMS_TOTAL=' <<< "$out15")"
+assert_eq "case 15 item 1 title" "Incomplete first OOS" "$(get_value ITEM_1_TITLE "$out15")"
+assert_eq "case 15 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out15")"
+assert_eq "case 15 item 1 body" "Only a description." "$(get_body 1 "$out15")"
+assert_eq "case 15 item 2 title" "Notes pending" "$(get_value ITEM_2_TITLE "$out15")"
+assert_eq "case 15 item 2 body" "Some pending body." "$(get_body 2 "$out15")"
+assert_absent "case 15 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out15"
+assert_absent "case 15 item 2 not malformed" "ITEM_2_MALFORMED" "$out15"
+assert_eq "case 15 item 3 title" "Well-formed second OOS" "$(get_value ITEM_3_TITLE "$out15")"
+assert_eq "case 15 item 3 body" "Second body." "$(get_body 3 "$out15")"
+assert_eq "case 15 item 3 reviewer" "Cursor" "$(get_value ITEM_3_REVIEWER "$out15")"
+assert_eq "case 15 item 3 vote tally" "YES=2" "$(get_value ITEM_3_VOTE_TALLY "$out15")"
+assert_eq "case 15 item 3 phase" "design" "$(get_value ITEM_3_PHASE "$out15")"
+assert_absent "case 15 item 3 not malformed" "ITEM_3_MALFORMED" "$out15"
 
 # ---------------------------------------------------------------------------
 echo ""

@@ -32,7 +32,15 @@
 #   ITEM_<i>_REVIEWER=<attribution>              (OOS only)
 #   ITEM_<i>_PHASE=<design|review>               (OOS only)
 #   ITEM_<i>_VOTE_TALLY=<counts>                 (OOS only)
-#   ITEM_<i>_MALFORMED=true                      (title without body — will fail)
+#   ITEM_<i>_MALFORMED=true                      (item cannot be emitted cleanly:
+#                                                 either title-without-body, or
+#                                                 an incomplete OOS item whose
+#                                                 body was terminated by an
+#                                                 ambiguous boundary heading
+#                                                 with no structured-field
+#                                                 close — see issue #138. In
+#                                                 the latter case BODY is also
+#                                                 emitted alongside MALFORMED.)
 #
 # The BODY is base64-encoded (single line, no wrapping) so multi-line content
 # does not collide with the one-key-per-line contract.
@@ -63,18 +71,33 @@ fi
 
 # ---------------------------------------------------------------------------
 # Parser state — mirrors create-oos-issues.sh:185-222's flush_item + while loop.
-# Key invariant: an item is emitted only when it has BOTH a title and a body/
-# description. A title alone → ITEM_<i>_MALFORMED=true (the caller / SKILL
-# treats this as an early-failed item that contributes to ISSUES_FAILED).
+# Key invariant: a normally-emitted item has BOTH a title and a body. A title
+# alone → ITEM_<i>_MALFORMED=true. An incomplete OOS item (see issue #138
+# below) is flushed as MALFORMED with its non-empty body via emit_item's
+# `force_malformed` parameter. Both cases feed ISSUES_FAILED in the caller.
 #
 # CURRENT_MODE tracks whether the in-progress item is OOS-shaped or generic-
 # shaped. Structured OOS field branches (`- **Description**:`, `- **Reviewer**:`,
 # `- **Vote tally**:`, `- **Phase**:`) fire only when CURRENT_MODE=oos; in
-# generic items those lines are plain body text. A `### <title>` line inside
-# an OOS item's description body (CURRENT_MODE=oos AND IN_BODY=true) is
-# absorbed as body continuation rather than starting a new item, so OOS
-# descriptions may contain markdown subheadings. `flush_item` resets
+# generic items those lines are plain body text. `flush_item` resets
 # CURRENT_MODE alongside the other per-item state.
+#
+# Pending-heading state (issue #138): PENDING_HEADING + PENDING_BODY defer
+# the absorb-vs-split decision for a plain `### <title>` line that appears
+# inside an OOS Description before any of Reviewer / Vote tally / Phase has
+# fired. The line could be either a body subheading (#129 case 1) or the
+# intended start of a new item (the #138 bug). Which one is resolved by
+# what comes next:
+#   * Any of Reviewer / Vote tally / Phase fires → fold PENDING_HEADING +
+#     PENDING_BODY back into CURRENT_BODY (rule 1 — subheading case).
+#   * A `### OOS_N:` line or EOF arrives → emit current OOS as MALFORMED
+#     with its existing body, then emit the pending pair as a new generic
+#     item (rule 2 — new-item case).
+#   * Another plain `### <title>` line arrives while pending-active → append
+#     to PENDING_BODY; do NOT trigger rule 2. Only `### OOS_N:` or EOF splits
+#     (required so case 13's multi-subheading OOS still absorbs correctly).
+# PENDING_HEADING is non-empty iff the pending state is active; PENDING_BODY
+# accumulates continuation lines while pending-active.
 # ---------------------------------------------------------------------------
 ITEM_INDEX=0
 CURRENT_TITLE=""
@@ -84,6 +107,8 @@ CURRENT_VOTE=""
 CURRENT_PHASE=""
 IN_BODY=false
 CURRENT_MODE=""
+PENDING_HEADING=""
+PENDING_BODY=""
 
 b64() {
     # Portable single-line base64 (no wrapping). macOS `base64` wraps at 76 chars
@@ -101,6 +126,10 @@ emit_item() {
     local reviewer="$3"
     local vote="$4"
     local phase="$5"
+    # force_malformed (6th arg): when "true", emit BODY + MALFORMED=true
+    # together (the issue #138 incomplete-OOS path). Empty / falsy keeps the
+    # legacy behavior: MALFORMED only when body is empty.
+    local force_malformed="${6:-}"
 
     ITEM_INDEX=$((ITEM_INDEX + 1))
 
@@ -123,6 +152,15 @@ emit_item() {
 
     echo "ITEM_${ITEM_INDEX}_TITLE=$title"
     echo "ITEM_${ITEM_INDEX}_BODY=$b64_body"
+    if [[ "$force_malformed" == "true" ]]; then
+        # Issue #138: incomplete OOS flushed mid-stream. Body is non-empty
+        # (has the Description text), but the item is structurally malformed
+        # because Reviewer / Vote tally / Phase never fired before the
+        # ambiguous boundary heading arrived. The caller downstream counts it
+        # under ISSUES_FAILED and does not create a GitHub issue for it — the
+        # description survives only in stdout / stderr diagnostics.
+        echo "ITEM_${ITEM_INDEX}_MALFORMED=true"
+    fi
     if [[ -n "$reviewer" ]]; then
         echo "ITEM_${ITEM_INDEX}_REVIEWER=$reviewer"
     fi
@@ -131,6 +169,79 @@ emit_item() {
     fi
     if [[ -n "$phase" ]]; then
         echo "ITEM_${ITEM_INDEX}_PHASE=$phase"
+    fi
+}
+
+# resolve_pending_foldback — rule 1 resolution (issue #138).
+#
+# Called as the FIRST action of each structured-field branch (Description,
+# Reviewer, Vote tally, Phase) before any BASH_REMATCH usage or state
+# mutation. No-ops when PENDING_HEADING is empty. When pending-active, merges
+# PENDING_HEADING + PENDING_BODY back into CURRENT_BODY (preserving the #129
+# subheading-in-OOS-description behavior), then clears the pending state.
+#
+# Uses the conditional-append pattern so an empty CURRENT_BODY (the #131
+# case 9 shape: empty inline Description) does not acquire a spurious
+# leading newline.
+resolve_pending_foldback() {
+    if [[ -z "$PENDING_HEADING" ]]; then
+        return
+    fi
+    if [[ -n "$CURRENT_BODY" ]]; then
+        CURRENT_BODY+=$'\n'"$PENDING_HEADING"
+    else
+        CURRENT_BODY="$PENDING_HEADING"
+    fi
+    if [[ -n "$PENDING_BODY" ]]; then
+        CURRENT_BODY+=$'\n'"$PENDING_BODY"
+    fi
+    PENDING_HEADING=""
+    PENDING_BODY=""
+}
+
+# resolve_pending_split — rule 2 resolution (issue #138).
+#
+# Called as the FIRST action of the `### OOS_N:` heading branch (as a
+# preamble to the existing #132 mode-guard) and from the terminal flush_item
+# at EOF. No-ops when PENDING_HEADING is empty. When pending-active: emits
+# the current OOS as MALFORMED (preserving its non-empty body), then emits
+# the pending pair as a new generic item with no OOS metadata. After this
+# call, the caller's remaining per-item state (CURRENT_TITLE, CURRENT_BODY,
+# etc.) is reset — safe to start a new item inline.
+resolve_pending_split() {
+    if [[ -z "$PENDING_HEADING" ]]; then
+        return
+    fi
+    # Capture pending state before flush_item clears it.
+    local pending_title_line="$PENDING_HEADING"
+    local pending_body="$PENDING_BODY"
+
+    # Save current item's state, clear pending so flush_item does not re-enter
+    # any pending-aware path, then emit current as MALFORMED.
+    PENDING_HEADING=""
+    PENDING_BODY=""
+    if [[ -n "$CURRENT_TITLE" ]]; then
+        emit_item "$CURRENT_TITLE" "$CURRENT_BODY" "$CURRENT_REVIEWER" \
+            "$CURRENT_VOTE" "$CURRENT_PHASE" "true"
+    fi
+    # Reset per-item state (same fields flush_item clears).
+    CURRENT_TITLE=""
+    CURRENT_BODY=""
+    CURRENT_REVIEWER=""
+    CURRENT_VOTE=""
+    CURRENT_PHASE=""
+    IN_BODY=false
+    CURRENT_MODE=""
+
+    # Extract the pending heading's title from the raw stashed line. Re-match
+    # the raw line against the plain-heading regex to get the title.
+    local pending_title=""
+    if [[ "$pending_title_line" =~ ^\#\#\#[[:space:]]+(.+)$ ]]; then
+        pending_title="${BASH_REMATCH[1]}"
+    fi
+    # Emit pending pair as a generic item (no OOS fields).
+    if [[ -n "$pending_title" ]]; then
+        emit_item "$pending_title" "$pending_body" "" "" "" ""
     fi
 }
 
@@ -145,76 +256,135 @@ flush_item() {
     CURRENT_PHASE=""
     IN_BODY=false
     CURRENT_MODE=""
+    # Issue #138: clear pending state alongside per-item resets so pending
+    # content cannot leak across items. resolve_pending_split (called by the
+    # OOS heading preamble and the terminal EOF path) must run BEFORE
+    # flush_item in those call sites, since flush_item silently drops any
+    # pending state.
+    PENDING_HEADING=""
+    PENDING_BODY=""
 }
 
 # Parse line-by-line. Support both OOS (`### OOS_N: title`) and generic
 # (`### <title>` followed by body text) formats, distinguished by CURRENT_MODE.
-# Both `### ` branches apply a symmetric mode-guard: a heading that falls
-# inside another item's active body is absorbed as body continuation rather
-# than flushing the current item.
+# Three guards coexist, each scoped to a different branch / trigger:
 #
-#   * An `### OOS_N: title` line sets CURRENT_MODE=oos; the four structured
-#     bullets (Description / Reviewer / Vote tally / Phase) are parsed as
-#     metadata only while CURRENT_MODE=oos. In generic items those same
-#     bullets are preserved verbatim as body text. UNLESS we are inside a
-#     generic body (CURRENT_MODE=generic AND IN_BODY=true), in which case the
-#     line is absorbed as body continuation (fix for issue #132 — a generic
-#     item's body may contain the literal string `### OOS_N: ...` as prose).
-#   * A plain `### <title>` line sets CURRENT_MODE=generic — UNLESS we are
-#     inside an OOS description (CURRENT_MODE=oos AND IN_BODY=true), in which
-#     case the line is absorbed as body continuation (so OOS descriptions may
-#     contain subheadings like `### Notes`; fix for bug a in issue #129).
-#   * Well-formed OOS items close their body when a Reviewer / Vote tally /
-#     Phase field fires (all set IN_BODY=false), so a following `### <title>`
-#     correctly starts a new item. An incomplete OOS item that has only a
-#     Description (no trailing structured fields) leaves IN_BODY=true, so a
-#     following `### <title>` is absorbed as continuation — by design. Feed
-#     well-formed OOS inputs (all 4 fields) to terminate the body explicitly.
-#   * flush_item resets CURRENT_MODE so per-item mode does not leak across
-#     items.
+#   * Issue #129: a plain `### <subheading>` line inside an OOS Description
+#     (CURRENT_MODE=oos AND IN_BODY=true) must not flush the OOS — it is a
+#     body subheading (e.g., `### Notes`). Handled by the pending-heading
+#     state below: the line enters PENDING_HEADING on first sight and is
+#     folded back into CURRENT_BODY when the next structured field fires.
+#
+#   * Issue #132: a `### OOS_N: ...` line inside an active generic body
+#     (CURRENT_MODE=generic AND IN_BODY=true with meaningful CURRENT_BODY) is
+#     absorbed as body continuation rather than flushing. Symmetric mode-
+#     guard on the OOS-heading branch, unchanged from PR #140.
+#
+#   * Issue #138: a plain `### <title>` line inside an OOS Description is
+#     ambiguous — it could be a body subheading (#129) or the author's
+#     intended start of a new generic item after an incomplete OOS. The
+#     pending-heading state defers the decision: PENDING_HEADING stashes the
+#     line, PENDING_BODY accumulates subsequent continuation lines (and
+#     additional plain `### <subheading>` lines, so case 13 multi-subheading
+#     still works). Resolution:
+#       - Reviewer / Vote tally / Phase fires (any of these) →
+#         resolve_pending_foldback absorbs pending content into CURRENT_BODY
+#         (rule 1, preserves #129).
+#       - `### OOS_N:` line arrives OR EOF is reached → resolve_pending_split
+#         emits the current OOS as MALFORMED with its body, then emits
+#         PENDING_HEADING + PENDING_BODY as a new generic item (rule 2).
+#       - Another plain `### <title>` arrives while pending-active → append
+#         to PENDING_BODY (does NOT trigger rule 2 — only `### OOS_N:` or
+#         EOF splits).
+#
+# Well-formed OOS items (all 4 fields) close via Phase → IN_BODY=false →
+# a subsequent `### <title>` correctly starts a new item without entering
+# pending state. flush_item resets CURRENT_MODE and pending state alongside
+# the other per-item state. resolve_pending_split runs BEFORE flush_item in
+# split-path call sites since flush_item silently clears pending.
+#
+#   ┌─────────────────────────────┬──────────────────┬───────────────────┐
+#   │ Trigger line                │ Pending-active?  │ Action            │
+#   ├─────────────────────────────┼──────────────────┼───────────────────┤
+#   │ `### OOS_N:` (plain)        │ no               │ flush + new OOS   │
+#   │ `### OOS_N:` (gen body)     │ no               │ absorb (#132)     │
+#   │ `### OOS_N:` (plain)        │ yes              │ split + new OOS   │
+#   │ plain `### <title>` (new)   │ no, mode=oos,    │ start pending     │
+#   │                             │   IN_BODY=true   │                   │
+#   │ plain `### <title>` (new)   │ no, mode!=oos or │ flush + new gen   │
+#   │                             │   IN_BODY=false  │                   │
+#   │ plain `### <title>` (new)   │ yes              │ append to pending │
+#   │ Description / Reviewer /    │ yes              │ fold-back then    │
+#   │   Vote tally / Phase        │                  │   process field   │
+#   │ Description / Reviewer /    │ no               │ process field     │
+#   │   Vote tally / Phase        │                  │                   │
+#   │ continuation (IN_BODY=true) │ yes              │ append to pending │
+#   │ continuation (IN_BODY=true) │ no               │ append to body    │
+#   │ EOF                         │ yes              │ split             │
+#   │ EOF                         │ no               │ flush             │
+#   └─────────────────────────────┴──────────────────┴───────────────────┘
 while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" =~ ^\#\#\#[[:space:]]+OOS_[0-9]+:[[:space:]]+(.+)$ ]]; then
         # OOS-format heading — or a literal `### OOS_N: ...` line inside a
-        # generic item's body. Inside an active generic body with at least one
-        # meaningful (non-whitespace) body line already accumulated, absorb as
-        # body continuation rather than flushing (fix for issue #132).
-        # Symmetric to the mode-guard on the plain `### <title>` branch below.
-        # The meaningful-body check (`${CURRENT_BODY//[[:space:]]/}` — strip
-        # all whitespace, test non-empty) aligns semantics with the
-        # OOS→generic direction (where IN_BODY=true is set by
-        # `**Description**:`, which also populates CURRENT_BODY with non-
-        # whitespace content): do not absorb when the generic heading had
-        # only blank or whitespace-only lines yet — that malformed case
-        # flushes and lets the OOS line start a new OOS item, matching
-        # pre-#132 behavior for those degenerate inputs. Avoid `=~` here
-        # because it would clobber the outer OOS-heading regex's
-        # BASH_REMATCH[1] capture before the `else` branch reads it.
+        # generic item's body (issue #132 case), or the resolution point for
+        # an active pending-heading state (issue #138 rule 2).
+        #
+        # Priority order:
+        #   1. #132 guard: inside an active generic body with meaningful
+        #      content, absorb as continuation (unchanged from PR #140).
+        #   2. #138 pending-split: if pending is active, emit current OOS as
+        #      MALFORMED + pending pair as generic, then process the OOS_N:
+        #      line as a fresh OOS heading.
+        #   3. Default: flush current item + start a new OOS item.
+        #
+        # The #132 guard clause must run first because a generic body with a
+        # nested `### OOS_42:` is the exact case case 10 locks in, and the
+        # pending-heading state is gated on CURRENT_MODE=oos (so the two
+        # paths are disjoint by mode — but explicit ordering is safer).
+        #
+        # Save BASH_REMATCH[1] into a local before calling
+        # resolve_pending_split (which re-runs `=~` internally and would
+        # otherwise clobber the capture).
         if [[ "$CURRENT_MODE" == "generic" && "$IN_BODY" == true && -n "${CURRENT_BODY//[[:space:]]/}" ]]; then
-            # CURRENT_BODY has at least one non-whitespace character (outer
-            # guard), hence is non-empty — the empty-body branch used by
-            # other append sites is unreachable here.
             CURRENT_BODY+=$'\n'"$line"
         else
-            # OOS body comes from the `**Description**:` field that follows,
-            # not from continuation lines under the heading.
+            new_oos_title="${BASH_REMATCH[1]}"
+            # Rule 2 preamble (issue #138): if pending-active, split before
+            # starting the new OOS item. No-ops when pending is empty.
+            resolve_pending_split
             flush_item
-            CURRENT_TITLE="${BASH_REMATCH[1]}"
+            CURRENT_TITLE="$new_oos_title"
             IN_BODY=false
             CURRENT_MODE="oos"
         fi
     elif [[ "$line" =~ ^\#\#\#[[:space:]]+(.+)$ ]]; then
-        # Generic heading — or a markdown subheading inside an OOS description.
-        # Inside an active OOS body, absorb as body continuation rather than
-        # flushing (fix for bug a in issue #129).
+        # Plain `### <title>` heading. Three paths depending on mode and
+        # pending state:
+        #
+        #   1. CURRENT_MODE=oos AND IN_BODY=true AND pending empty → this is
+        #      the #138 ambiguous case: stash the raw line in PENDING_HEADING
+        #      and keep accumulating via the continuation branch.
+        #   2. CURRENT_MODE=oos AND IN_BODY=true AND pending already active →
+        #      another plain `### <subheading>` arriving while pending-active.
+        #      Per case 13, append to PENDING_BODY (do NOT trigger rule 2).
+        #   3. Otherwise → flush current item and start a new generic item.
         if [[ "$CURRENT_MODE" == "oos" && "$IN_BODY" == true ]]; then
-            if [[ -n "$CURRENT_BODY" ]]; then
-                CURRENT_BODY+=$'\n'"$line"
+            if [[ -z "$PENDING_HEADING" ]]; then
+                # Path 1: first ambiguous heading — start pending state.
+                PENDING_HEADING="$line"
             else
-                CURRENT_BODY="$line"
+                # Path 2: additional heading while pending-active — accumulate.
+                if [[ -n "$PENDING_BODY" ]]; then
+                    PENDING_BODY+=$'\n'"$line"
+                else
+                    PENDING_BODY="$line"
+                fi
             fi
         else
+            # Path 3: normal flush + new generic item.
+            new_title="${BASH_REMATCH[1]}"
             flush_item
-            CURRENT_TITLE="${BASH_REMATCH[1]}"
+            CURRENT_TITLE="$new_title"
             IN_BODY=true
             CURRENT_MODE="generic"
         fi
@@ -223,16 +393,31 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         # lines (e.g. `- **Description**:` alone on its line with `  content` on
         # the next line). IN_BODY=true ensures those continuations are captured
         # by the fallback branch below.
-        CURRENT_BODY="${BASH_REMATCH[1]}"
+        #
+        # Description should not fire while pending-active (no `- **Description**:`
+        # can follow an in-progress OOS item before Reviewer/Vote/Phase closes
+        # it), but resolve_pending_foldback is idempotent — safe to call.
+        # Capture BASH_REMATCH[1] first since resolve_pending_foldback does
+        # not run `=~` itself but the pattern of saving captures before any
+        # helper keeps future edits safe.
+        description_inline="${BASH_REMATCH[1]}"
+        resolve_pending_foldback
+        CURRENT_BODY="$description_inline"
         IN_BODY=true
     elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Reviewer\*\*:[[:space:]]+(.+)$ ]]; then
-        CURRENT_REVIEWER="${BASH_REMATCH[1]}"
+        reviewer_value="${BASH_REMATCH[1]}"
+        resolve_pending_foldback
+        CURRENT_REVIEWER="$reviewer_value"
         IN_BODY=false
     elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Vote\ tally\*\*:[[:space:]]+(.+)$ ]]; then
-        CURRENT_VOTE="${BASH_REMATCH[1]}"
+        vote_value="${BASH_REMATCH[1]}"
+        resolve_pending_foldback
+        CURRENT_VOTE="$vote_value"
         IN_BODY=false
     elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Phase\*\*:[[:space:]]+(.+)$ ]]; then
-        CURRENT_PHASE="${BASH_REMATCH[1]}"
+        phase_value="${BASH_REMATCH[1]}"
+        resolve_pending_foldback
+        CURRENT_PHASE="$phase_value"
         IN_BODY=false
     elif [[ "$IN_BODY" == true ]]; then
         # Continuation line. Preserve blank lines in BOTH modes — multi-paragraph
@@ -243,14 +428,29 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         # here and are preserved as ordinary body text (fix for bug b in #129).
         # This matches the behavior fix applied to the deleted
         # scripts/create-oos-issues.sh (see CHANGELOG 3.3.10).
-        if [[ -n "$CURRENT_BODY" ]]; then
-            CURRENT_BODY+=$'\n'"$line"
+        #
+        # Issue #138: while pending-active, route continuation lines to
+        # PENDING_BODY so they resolve together with the stashed heading.
+        if [[ -n "$PENDING_HEADING" ]]; then
+            if [[ -n "$PENDING_BODY" ]]; then
+                PENDING_BODY+=$'\n'"$line"
+            else
+                PENDING_BODY="$line"
+            fi
         else
-            CURRENT_BODY="$line"
+            if [[ -n "$CURRENT_BODY" ]]; then
+                CURRENT_BODY+=$'\n'"$line"
+            else
+                CURRENT_BODY="$line"
+            fi
         fi
     fi
 done < "$INPUT_FILE"
 
+# EOF rule-2 resolution (issue #138): if a pending-heading state is still
+# active, split the current OOS (MALFORMED) and emit the pending pair as a
+# generic item before the terminal flush_item runs.
+resolve_pending_split
 flush_item
 
 echo "ITEMS_TOTAL=$ITEM_INDEX"

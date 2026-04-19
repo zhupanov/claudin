@@ -72,7 +72,7 @@ Invoke the parser:
 ${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/parse-input.sh --input-file "$INPUT_FILE"
 ```
 
-Parse the output for `ITEMS_TOTAL=<N>` and per-item `ITEM_<i>_TITLE`, `ITEM_<i>_BODY` (base64-encoded), optional `ITEM_<i>_REVIEWER`, `ITEM_<i>_PHASE`, `ITEM_<i>_VOTE_TALLY`, and `ITEM_<i>_MALFORMED=true` for items without a description.
+Parse the output for `ITEMS_TOTAL=<N>` and per-item `ITEM_<i>_TITLE`, `ITEM_<i>_BODY` (base64-encoded), optional `ITEM_<i>_REVIEWER`, `ITEM_<i>_PHASE`, `ITEM_<i>_VOTE_TALLY`, and `ITEM_<i>_MALFORMED=true` for items that cannot be emitted cleanly — either a title without a body, or (issue #138) an incomplete OOS item whose body was terminated by an ambiguous boundary heading with no structured-field close. The latter shape emits `ITEM_<i>_BODY` alongside `ITEM_<i>_MALFORMED=true`, but per the rule below malformed items never reach Phase 1/2 or create — the description survives only in stdout / stderr diagnostics.
 
 Parser regression coverage lives in `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-parse-input.sh` (self-contained; run manually via `bash ${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-parse-input.sh`, and wired into `make lint` via the `test-parse-input` target so the harness runs in CI on every PR).
 
