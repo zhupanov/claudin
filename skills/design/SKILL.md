@@ -456,7 +456,7 @@ Invoke via Agent tool with subagent_type: `code-reviewer`. The agent file's chec
 
 Additionally, append the following competition context to each reviewer's prompt (Claude subagent and external reviewers):
 
-> **Competition notice**: Your findings will be voted on by a 3-agent panel (Claude Code Reviewer subagent, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations use the same scoring as in-scope findings: OOS items that receive 2+ YES votes earn +1 point and will be filed as GitHub issues. OOS items with 0 YES and 0 EXONERATE cost -1 point. OOS items with exactly 1 YES or with 1+ EXONERATE earn 0 points.
+> **Competition notice**: Your findings will be voted on by a 3-agent panel (Claude Code Reviewer subagent, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations use **asymmetric scoring** — accepted OOS items (2+ YES) earn +1 point and are filed as GitHub issues; all other OOS outcomes (including unanimous rejection) score 0. Surface OOS observations freely — they carry reward but no penalty.
 
 ### Collecting External Reviewer Results
 
@@ -490,7 +490,7 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 **Tally votes**: Apply the threshold rules from the Voting Protocol based on eligible voters per finding (2+ YES with 3 voters, unanimous 2/2 with 2 voters, skip if <2 eligible). Print the vote breakdown per finding.
 
-**Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol's scoring rules (+1 for accepted, 0 for neutral/exonerated, -1 for rejected — see `voting-protocol.md` for the full outcome matrix). Print the scoreboard table.
+**Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol's scoring rules (+1 for accepted, 0 for neutral/exonerated, -1 for rejected in-scope findings; OOS items use asymmetric reward-only scoring — +1 for accepted, 0 for all other OOS outcomes including rejection. See `voting-protocol.md` for the full outcome matrix). Print the scoreboard table.
 
 ### Finalize Plan Review
 
