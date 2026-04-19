@@ -15,8 +15,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PARSER="$SCRIPT_DIR/parse-input.sh"
 
-if [[ ! -x "$PARSER" ]]; then
-    echo "ERROR: parser not found or not executable: $PARSER" >&2
+if [[ ! -f "$PARSER" ]]; then
+    echo "ERROR: parser not found: $PARSER" >&2
     exit 1
 fi
 
@@ -77,7 +77,7 @@ get_body() {
 
 run_parser() {
     local input_file="$1"
-    "$PARSER" --input-file "$input_file"
+    bash "$PARSER" --input-file "$input_file"
 }
 
 # ---------------------------------------------------------------------------
@@ -227,6 +227,37 @@ assert_eq "case 7 item 2 title" "Second generic" "$(get_value ITEM_2_TITLE "$out
 assert_eq "case 7 item 2 body" "Body of second." "$(get_body 2 "$out7")"
 assert_absent "case 7 item 1 no reviewer" "ITEM_1_REVIEWER" "$out7"
 assert_absent "case 7 item 2 no reviewer" "ITEM_2_REVIEWER" "$out7"
+
+# ---------------------------------------------------------------------------
+# Test case 8 — Back-to-back complete OOS items (primary /implement Step 9a.1
+# production shape). Sanity check that flush_item correctly resets CURRENT_MODE
+# and per-item OOS fields between sequential OOS items.
+# ---------------------------------------------------------------------------
+echo "Case 8: back-to-back complete OOS items"
+cat > "$TMPDIR_TEST/case8.md" <<'EOF'
+### OOS_1: First OOS item
+- **Description**: Body of first OOS.
+- **Reviewer**: Codex
+- **Vote tally**: YES=3, NO=0
+- **Phase**: review
+### OOS_2: Second OOS item
+- **Description**: Body of second OOS.
+- **Reviewer**: Cursor
+- **Vote tally**: YES=2, NO=1
+- **Phase**: design
+EOF
+out8=$(run_parser "$TMPDIR_TEST/case8.md")
+assert_eq "case 8 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out8")"
+assert_eq "case 8 item 1 title" "First OOS item" "$(get_value ITEM_1_TITLE "$out8")"
+assert_eq "case 8 item 1 body" "Body of first OOS." "$(get_body 1 "$out8")"
+assert_eq "case 8 item 1 reviewer" "Codex" "$(get_value ITEM_1_REVIEWER "$out8")"
+assert_eq "case 8 item 1 vote tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out8")"
+assert_eq "case 8 item 1 phase" "review" "$(get_value ITEM_1_PHASE "$out8")"
+assert_eq "case 8 item 2 title" "Second OOS item" "$(get_value ITEM_2_TITLE "$out8")"
+assert_eq "case 8 item 2 body" "Body of second OOS." "$(get_body 2 "$out8")"
+assert_eq "case 8 item 2 reviewer" "Cursor" "$(get_value ITEM_2_REVIEWER "$out8")"
+assert_eq "case 8 item 2 vote tally" "YES=2, NO=1" "$(get_value ITEM_2_VOTE_TALLY "$out8")"
+assert_eq "case 8 item 2 phase" "design" "$(get_value ITEM_2_PHASE "$out8")"
 
 # ---------------------------------------------------------------------------
 echo ""
