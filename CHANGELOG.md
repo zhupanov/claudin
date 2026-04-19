@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.7] - 2026-04-19
+
+### Fixed
+
+- `scripts/test-redact-secrets.sh` no longer triggers GitHub secret-scanning's `sk-ant-*` heuristic as a false positive. The synthetic `SK_TOKEN` fixture on line 33 previously appeared as a contiguous `sk-ant-abcdefghijklmnopqrstuvwxyz0123456789ABCD` substring that GitHub's scanner flagged as an OpenAI API key (alert #1). The fix splits the `sk-ant-` prefix in the source via adjacent single-quoted bash strings (`'sk-''ant-…'`), which concatenate at runtime to the identical 47-character test value but contain no contiguous `sk-ant-` substring in the repo source. Three other sites in the same file that also contained contiguous `sk-ant-*` substrings (`dry_title_raw` literal on line 137, the `GHZERO` heredoc stub's `printf` on line 285, and the `assert_not_contains` needle on line 303) are likewise rewritten to build their token-shaped values from the canonical `SK_TOKEN` fixture via `${SK_TOKEN}` and `${SK_TOKEN:0:35}` expansions; the `GHZERO` heredoc is switched from quoted (`<<'GHZERO'`) to unquoted (`<<GHZERO`) with `\$1` escaping to allow the expansion. All 45 assertions still pass with byte-identical runtime values.
+
 ## [3.4.6] - 2026-04-19
 
 ### Fixed
