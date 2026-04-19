@@ -148,7 +148,7 @@ Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issu
 
 Whenever the main agent appends an entry to the `Pre-existing Code Issues` category in `execution-issues.md`, it MUST also append a corresponding `### OOS_N:` block to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` so that Step 9a.1 can file it as a GitHub issue. This dual-write is unconditional — it runs in every mode (`--quick`, `--auto`, `--merge`, `--debug`, `--no-merge`, or any future flag) and is the source of truth that converges main-agent-discovered pre-existing bugs into the same accepted-OOS pipeline as reviewer-surfaced OOS items from `/design` and `/review`.
 
-**Schema** (matches the format consumed by `${CLAUDE_PLUGIN_ROOT}/scripts/create-oos-issues.sh`):
+**Schema** (matches the format consumed by `/issue`'s batch-mode parser at `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/parse-input.sh`):
 
 ```markdown
 ### OOS_<N>: <short title — one line>
@@ -160,14 +160,14 @@ Whenever the main agent appends an entry to the `Pre-existing Code Issues` categ
 
 `<N>` is a per-session sequential index — start at 1 and increment for each new entry the main agent appends to `oos-accepted-main-agent.md`. To **correct** an existing entry (e.g., refine the description after additional investigation), use **in-place replacement**: locate the existing `### OOS_<N>:` block by its `<N>` and overwrite the entire block in place, preserving the same `<N>`. Do NOT append a new block in the correction case — that would create a duplicate. The dedup guard below applies only to **new** entries the agent intends to append, not to corrections.
 
-**MUST: dedup before append (new entries only).** Before appending a new `### OOS_N:` block, scan the existing `oos-accepted-main-agent.md` for a block whose title matches the new title case-insensitively (after stripping leading/trailing whitespace). If a match is found, do NOT append — the same finding has already been recorded. This prevents duplicate entries when the same pre-existing bug is discovered at multiple steps. `create-oos-issues.sh` provides a second backstop via normalized-title dedup against already-open GitHub issues, but that backstop is exact-match after lowercasing — small wording variations slip through, so the in-file dedup MUST run first.
+**MUST: dedup before append (new entries only).** Before appending a new `### OOS_N:` block, scan the existing `oos-accepted-main-agent.md` for a block whose title matches the new title case-insensitively (after stripping leading/trailing whitespace). If a match is found, do NOT append — the same finding has already been recorded. This prevents duplicate entries when the same pre-existing bug is discovered at multiple steps. `/issue` provides a second backstop via LLM-based semantic duplicate detection against existing open + recently-closed GitHub issues (Phase 1 title triage + Phase 2 body/comment filter), which is more robust than exact normalized-title matching but not deterministic — the in-file dedup MUST run first for byte-exact duplicates.
 
 **MUST: sanitize the description before append.** Do not paste raw log output into the Description field. Redact the following before writing to `oos-accepted-main-agent.md`:
 - Secrets, API keys, OAuth tokens, JWT tokens, passwords, certificates → replace with `<REDACTED-TOKEN>`.
 - Internal hostnames, internal URLs, private IP addresses → replace with `<INTERNAL-URL>`.
 - Personally identifiable information (emails, names, account IDs in a way that links to a real user) → replace with `<REDACTED-PII>`.
 
-The Description field is forwarded verbatim into a public GitHub issue body by `create-oos-issues.sh`, so any sensitive content leaks to the public issue tracker. When in doubt, paraphrase the reproduction context instead of copying log lines.
+The Description field is forwarded verbatim into a public GitHub issue body by `/issue` (batch mode → `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/create-one.sh`), so any sensitive content leaks to the public issue tracker. When in doubt, paraphrase the reproduction context instead of copying log lines.
 
 **Example dual-write**:
 
@@ -690,14 +690,16 @@ Read the OOS artifact files:
 **Idempotency**: If `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation entirely. Read the existing file to recover previously created issue URLs (`ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_TITLE`/`ISSUE_N_DUPLICATE*` lines) and the previous tally (`ISSUES_CREATED`/`ISSUES_FAILED`/`ISSUES_DEDUPLICATED`). Update `$IMPLEMENT_TMPDIR/pr-body.md` from those values exactly as steps 7 and 7b would (replace the "Accepted OOS" placeholder with the recovered issue links and set the `| OOS issues filed |` Run Statistics cell from the recovered counts). Then proceed to Step 9b.
 
 1. Read and parse all accepted OOS items from all three files.
-2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in two or more of {design, review, implement} (matching by exact normalized title — case-insensitive, `[oos]`-prefix-stripped, whitespace-collapsed; same algorithm as `create-oos-issues.sh`'s `normalize_title()` helper), keep one entry whose Description text notes the contributing phases (e.g., append " (also surfaced during design review)" to the description). Do NOT modify the schema fields — Reviewer and Phase remain single-valued; the merged provenance lives in the Description prose.
-3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for the creation script.
-4. Invoke the creation script:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/create-oos-issues.sh --input-file "$IMPLEMENT_TMPDIR/oos-items.md" --repo $REPO
+2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in two or more of {design, review, implement} (matching by exact normalized title — case-insensitive, `[oos]`-prefix-stripped, whitespace-collapsed), keep one entry whose Description text notes the contributing phases (e.g., append " (also surfaced during design review)" to the description). Do NOT modify the schema fields — Reviewer and Phase remain single-valued; the merged provenance lives in the Description prose. This cross-phase merge runs **before** calling `/issue` so the batch mode sees one canonical item per observation.
+3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for `/issue` batch mode. Preserve the OOS markdown format — `/issue`'s parser reads it directly.
+4. Invoke `/issue` in batch mode via the Skill tool:
    ```
-5. Parse the structured output for `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL`/`ISSUE_N_DUPLICATE`/`ISSUE_N_DUPLICATE_OF_NUMBER`/`ISSUE_N_DUPLICATE_OF_URL` pairs.
-6. If `ISSUES_FAILED > 0`: Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — create-oos-issues.sh failed to create <N> of <total> OOS issues.`
+   Skill tool → skill: "issue"
+                args: --input-file $IMPLEMENT_TMPDIR/oos-items.md --title-prefix "[OOS]" --label out-of-scope --repo $REPO
+   ```
+   `/issue` runs 2-phase LLM-based semantic duplicate detection against open + recently-closed issues (default 90-day closed window), then creates surviving items via `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/create-one.sh` (which preserves the label-probe guard, OOS body template, and `[OOS]` double-prefix normalization).
+5. Parse `/issue`'s **stdout** for any line matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$`: `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and per-issue `ISSUE_N_NUMBER` / `ISSUE_N_URL` / `ISSUE_N_TITLE` / `ISSUE_N_DUPLICATE` / `ISSUE_N_DUPLICATE_OF_NUMBER` / `ISSUE_N_DUPLICATE_OF_URL` / `ISSUE_N_FAILED=true`. `/issue` writes only machine lines to stdout; warnings go to stderr.
+6. If `ISSUES_FAILED > 0`: Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — /issue batch mode failed to create <N> of <total> OOS issues.`
 7. Save the issue URLs for embedding in the PR body's "Out-of-Scope Observations" section (already prepared in Step 9a). Update the `$IMPLEMENT_TMPDIR/pr-body.md` file to replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links. For deduplicated items, link to the existing issue instead: `"- #<EXISTING_NUMBER>: <title> (deduplicated — already tracked) (<reviewer attribution>)"`. Reviewer attribution may be `Code`, `Cursor`, `Codex`, or `Main agent` depending on the source; use the value from the contributing artifact's `Reviewer:` field.
 7b. **Update Run Statistics OOS issues filed cell**. After step 7's "Accepted OOS" placeholder replacement, also rewrite the `| OOS issues filed |` row in the Run Statistics table inside `$IMPLEMENT_TMPDIR/pr-body.md` to `<ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated` (e.g., `3 created, 1 deduplicated`). The early-exit branches above (`repo_unavailable=true`, all-empty, idempotent rerun) already update this cell themselves and never reach step 7b — this sub-step only handles the create-script branch. This applies to both quick and normal mode — the Quick-mode PR body guidance no longer overrides this cell.
 
