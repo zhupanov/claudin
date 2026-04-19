@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.8] - 2026-04-18
+
+### Fixed
+
+- `scripts/drop-bump-commit.sh` Guard 4 `ALLOWED_TWO` constant reordered to match `sort`'s ASCII byte ordering (`.claude-plugin/plugin.json` before `CHANGELOG.md`, since `.`=0x2E < `C`=0x43), so the two-file bump+CHANGELOG shape produced by `/implement` Step 8a now matches and the `DROPPED=true` happy path is reachable. Previously the constant's letter-before-dot order meant Guard 4 always rejected two-file bump commits, forcing `/implement`'s Rebase + Re-bump Sub-procedure down the expensive `rebase-push.sh` + Phase 1–4 conflict fallback every time `main` advanced during the CI+merge loop. Also pins the `sort` invocation to `LC_ALL=C` so the documented ASCII-order invariant is enforced rather than assumed, adds a comment on the `ALLOWED_*` constants warning future editors not to "fix" the order back to alphabetical-by-filename, and updates the file header's Guard 4 bullet to state the real contract (`plugin.json`, optionally together with `CHANGELOG.md`). Fixes #117.
+
 ## [3.3.7] - 2026-04-18
 
 ### Changed
