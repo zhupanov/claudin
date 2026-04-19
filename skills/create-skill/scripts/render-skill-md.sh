@@ -87,12 +87,18 @@ ESCAPED_DESC="${ESCAPED_DESC//\"/\\\"}"
 # under $PWD is `.claude/skills/<name>`; in plugin mode under
 # ${CLAUDE_PLUGIN_ROOT} it is `skills/<name>`.
 NAME_LEAF="$(basename "$TARGET_DIR")"
-# shellcheck disable=SC2016  # the literal strings $PWD / ${CLAUDE_PLUGIN_ROOT} are the token values we intentionally compare against
-if [[ "$LOCAL_TOKEN" == '$PWD' ]]; then
-  SKILL_REL=".claude/skills/${NAME_LEAF}"
-else
-  SKILL_REL="skills/${NAME_LEAF}"
-fi
+# Derive from TARGET_DIR rather than LOCAL_TOKEN — robust regardless of
+# whether the caller passes $PWD or an expanded absolute path. Consumer
+# scaffolds live under `.../.claude/skills/<name>`; plugin scaffolds under
+# `.../skills/<name>`.
+case "$TARGET_DIR" in
+  */.claude/skills/*) SKILL_REL=".claude/skills/${NAME_LEAF}" ;;
+  */skills/*)         SKILL_REL="skills/${NAME_LEAF}" ;;
+  *)
+    echo "ERROR=Unable to derive skill-relative path from --target-dir=$TARGET_DIR (expected it to contain /.claude/skills/ or /skills/)." >&2
+    exit 1
+    ;;
+esac
 
 # --- Render SKILL.md ---
 
