@@ -13,7 +13,7 @@ Before sending to voters, assign each deduplicated finding a stable sequential I
 ```
 ## Findings Ballot
 
-Vote YES, NO, or EXONERATE on each finding. A finding should receive YES if it is correct, important, and worth implementing. Vote NO if the finding is incorrect, trivial, or would cause more harm than good. Vote EXONERATE if the finding raises a legitimate concern worth noting, but is not worth implementing in this PR — this spares the proposing reviewer from a penalty on in-scope findings (OOS rejection carries no penalty regardless — see OOS Scoring below).
+Vote YES, NO, or EXONERATE on each finding. A finding should receive YES if it is correct, important, and worth implementing. Vote NO if the finding is incorrect, trivial, or would cause more harm than good. Vote EXONERATE if the finding raises a legitimate concern worth noting, but is not worth implementing in this PR — this spares the proposing reviewer from a penalty on in-scope findings (OOS items use reward-only scoring — rejection carries no penalty regardless).
 
 FINDING_1: <reviewer attribution> — <finding description>
 FINDING_2: <reviewer attribution> — <finding description>
