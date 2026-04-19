@@ -485,6 +485,47 @@ assert_eq "case 15 item 3 phase" "design" "$(get_value ITEM_3_PHASE "$out15")"
 assert_absent "case 15 item 3 not malformed" "ITEM_3_MALFORMED" "$out15"
 
 # ---------------------------------------------------------------------------
+# Case 16 (loop-review generic batch shape): guards the exact batch format
+# produced by /loop-review Step 3f. A single `### <title>` heading followed by
+# a structured body (Slice / File / Reviewer / Focus area / Problem /
+# Suggested fix) must parse to one well-formed generic item — no OOS fields,
+# no MALFORMED, body preserved verbatim with the structured labels intact.
+# This catches drift if parse-input.sh's generic-fallback path is ever
+# tightened in a way that would reject the shape loop-review commits to.
+# ---------------------------------------------------------------------------
+echo "Case 16: loop-review generic batch format (single finding)"
+cat > "$TMPDIR_TEST/case16.md" <<'EOF'
+### Unused import in helper breaks strict mode
+
+**Slice**: scripts
+**File**: scripts/foo.sh:42
+**Reviewer**: Cursor
+**Focus area**: code-quality
+
+**Problem**: `set -u` unset-variable check is disabled for this helper even though every caller sets it.
+
+**Suggested fix**: Add `set -u` at the top of the script so the unset-variable check matches callers.
+EOF
+out16=$(run_parser "$TMPDIR_TEST/case16.md")
+assert_eq "case 16 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out16")"
+assert_eq "case 16 item 1 title" "Unused import in helper breaks strict mode" "$(get_value ITEM_1_TITLE "$out16")"
+assert_absent "case 16 item 1 not malformed" "ITEM_1_MALFORMED" "$out16"
+assert_absent "case 16 item 1 no reviewer field" "ITEM_1_REVIEWER" "$out16"
+assert_absent "case 16 item 1 no phase field" "ITEM_1_PHASE" "$out16"
+assert_absent "case 16 item 1 no vote field" "ITEM_1_VOTE_TALLY" "$out16"
+body16=$(get_body 1 "$out16")
+# Body must preserve the structured labels verbatim so /issue posts them into
+# the GitHub issue body as-is.
+[[ "$body16" == *"**Slice**: scripts"* ]] || { echo "  FAIL: case 16 body missing Slice line"; exit 1; }
+[[ "$body16" == *"**File**: scripts/foo.sh:42"* ]] || { echo "  FAIL: case 16 body missing File line"; exit 1; }
+[[ "$body16" == *"**Reviewer**: Cursor"* ]] || { echo "  FAIL: case 16 body missing Reviewer line"; exit 1; }
+[[ "$body16" == *"**Focus area**: code-quality"* ]] || { echo "  FAIL: case 16 body missing Focus area line"; exit 1; }
+[[ "$body16" == *"**Problem**:"* ]] || { echo "  FAIL: case 16 body missing Problem line"; exit 1; }
+[[ "$body16" == *"**Suggested fix**:"* ]] || { echo "  FAIL: case 16 body missing Suggested fix line"; exit 1; }
+PASS_COUNT=$((PASS_COUNT + 6))
+echo "  PASS: case 16 body preserves 6 structured labels"
+
+# ---------------------------------------------------------------------------
 echo ""
 echo "Summary: $PASS_COUNT passed, $FAIL_COUNT failed"
 if [[ "$FAIL_COUNT" -gt 0 ]]; then

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # init-session-files.sh — Initialize loop-review tracking files.
 #
-# Creates the deferred-accumulated.md, warnings.md, and counter files
-# (pr-count.txt, impl-count.txt, defer-count.txt) in the session tmpdir.
+# Creates the findings-accumulated.md (batch input for /issue),
+# security-findings.md (locally held, never auto-filed per SECURITY.md),
+# warnings.md, and issue counter files in the session tmpdir.
 #
 # Usage:
 #   init-session-files.sh --dir <tmpdir-path>
@@ -40,10 +41,11 @@ if [[ ! -d "$DIR" ]]; then
     exit 1
 fi
 
-touch "$DIR/deferred-accumulated.md"
+touch "$DIR/findings-accumulated.md"
+touch "$DIR/security-findings.md"
 touch "$DIR/warnings.md"
-echo "0" > "$DIR/pr-count.txt"
-echo "0" > "$DIR/impl-count.txt"
-echo "0" > "$DIR/defer-count.txt"
+echo "0" > "$DIR/issue-count.txt"
+echo "0" > "$DIR/issue-dedup-count.txt"
+echo "0" > "$DIR/issue-failed-count.txt"
 
 echo "INITIALIZED=true"

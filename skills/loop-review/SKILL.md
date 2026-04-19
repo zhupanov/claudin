@@ -1,26 +1,26 @@
 ---
 name: loop-review
-description: "Use when a comprehensive quality sweep or systematic code review is needed. Partitions the repo into slices, reviews each with a 3-reviewer panel, implements fixes via /implement, and logs deferred suggestions."
+description: "Use when a comprehensive quality sweep or systematic code review is needed. Partitions the repo into slices, reviews each with a 3-reviewer panel, and files deduplicated GitHub issues via /issue for every actionable finding."
 argument-hint: "[--debug] [partition criteria]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
 # Loop Review
 
-Systematically review the entire codebase by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor), implementing improvements via `/implement`, and tracking deferred suggestions in a checked-in document.
+Systematically review the entire codebase by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor), and filing every actionable finding as a deduplicated GitHub issue via `/issue`. Security-tagged findings are held locally (per SECURITY.md) instead of auto-filed.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as partition criteria. Flags may appear in any order; stop at the first non-flag token. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
-- `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`. When `debug_mode=true`, propagate `--debug` to all `/implement` invocations.
+- `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`. `--debug` controls only loop-review's own verbosity; it is NOT propagated downstream. `/issue` does not expose a `--debug` flag, and `/implement` is no longer invoked by loop-review.
 
-**This skill runs fully autonomously** — never ask for user confirmation. Make all implement/defer decisions based on the classification criteria in Step 3d. All sub-skills (`/implement`, `/review`, `/design`, `/relevant-checks`) also run autonomously. **Always pass `--auto --merge` when invoking `/implement`** (plus `--debug` if `debug_mode=true`) — `--auto` suppresses interactive question checkpoints in `/design`, and `--merge` opts into the CI+rebase+merge loop that loop-review's batched flow depends on (without `--merge`, `/implement` stops after PR creation and would break loop-review's merge-and-return-to-main expectation).
+**This skill runs fully autonomously** — never ask for user confirmation. Make all FILE/drop decisions based on the classification criteria in Step 3d. All sub-skills (`/issue`, `/review`, `/design`, `/relevant-checks`) also run autonomously. `/issue` is invoked in batch mode (`--input-file`) with `--label loop-review` so findings are discoverable via label filter in the issue tracker. **The `loop-review` label must be pre-created in the target repository** — `/issue`'s helper silently drops unknown labels with a stderr warning; loop-review surfaces that warning in the final summary but does not create the label itself.
 
 ## Progress Reporting
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `> **🔶 3: implement/defer — slice: scripts/...**`
-- Print a **completion line** when done: e.g., `✅ 3: implement/defer — 3 findings implemented, 1 deferred (5m22s)`
+- Print a **start line** when entering a step: e.g., `> **🔶 3: file issues — slice: scripts/...**`
+- Print a **completion line** when done: e.g., `✅ 3: file issues — 4 findings accumulated, 2 issues filed (3m12s)`
 
 Step Name Registry:
 | Step | Short Name |
@@ -28,10 +28,9 @@ Step Name Registry:
 | 0 | setup |
 | 1 | partition |
 | 2 | review slice |
-| 3 | implement/defer |
-| 4 | deferred commit |
-| 5 | summary |
-| 6 | cleanup |
+| 3 | file issues |
+| 4 | summary |
+| 5 | cleanup |
 
 ### Verbosity Control
 
@@ -100,19 +99,11 @@ If `PARTITION_CRITERIA` is empty:
 
 Print the partition plan with file counts per slice.
 
-## Step 2 — Initialize Deferred Suggestions Document
-
-If `LOOP_REVIEW_DEFERRED.md` does not exist at the repo root, create it locally (do NOT commit yet — it will be committed as part of the first `/implement` PR):
-
-```markdown
-# Loop Review — Deferred Suggestions
-
-Review suggestions that were identified but deferred, with explanations for each omission.
-```
-
 ## Step 3 — Slice Review Loop
 
-Process slices with **batched implementation**. Review slices sequentially, but accumulate IMPLEMENT findings across up to 3 slices before invoking `/implement`. This reduces the number of CI/merge cycles from N to roughly N/3.
+Process slices with **batched issue filing**. Review slices sequentially, but accumulate actionable findings across up to 3 slices before invoking `/issue --input-file` so `/issue`'s 2-phase LLM dedup runs once per batch instead of once per finding (bounds the Phase-2 30-candidate cap and minimizes network round-trips).
+
+**Legacy `LOOP_REVIEW_DEFERRED.md`**: this skill no longer creates, updates, or commits `LOOP_REVIEW_DEFERRED.md`. If a file by that name exists in a consumer repo, it is historical and this skill leaves it untouched.
 
 For each slice (using `N` as the 1-based slice index):
 
@@ -201,132 +192,111 @@ Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Fo
 
 Follow the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$LR_TMPDIR` as the tmpdir, with `max_rounds=1`. Use `codex-negotiation-prompt.txt` / `codex-negotiation-output.txt` for the single Codex negotiation track and `cursor-negotiation-prompt.txt` / `cursor-negotiation-output.txt` for the Cursor negotiation track. Run both negotiations in parallel when both externals produced findings. Accept findings unless factually incorrect or contradicting CLAUDE.md.
 
-Note: "accepted" in the negotiation sense means the finding is valid — it may still be classified as DEFER below.
+Note: "accepted" in the negotiation sense means the finding is valid — it may still be dropped at Step 3d's FILE gate below.
 
 **3. Deduplicate** — merge findings from all reviewers (if two reviewers flag the same issue, keep the more specific suggestion).
 
-**4. Classify each finding:**
+**4. Classify each finding** (FILE gate with security-focus exception):
 
-**→ IMPLEMENT** if ALL conditions are met:
-- Has a specific, actionable fix (not vague)
-- Touches ≤ 3 files
-- Does NOT require major refactoring or API contract changes
-- Low risk of breaking existing tests or callers
-- Provides meaningful functional improvement (not purely cosmetic)
+**→ FILE** (append to `$LR_TMPDIR/findings-accumulated.md` for batched `/issue` filing) if ALL of:
+- Has a specific, actionable concern (not vague).
+- Cites a concrete location (file, or file:line, or module).
+- Focus area is NOT `security`.
 
-**→ DEFER** if ANY condition is met:
-- Requires major refactoring (> 3 files or architectural change)
-- High risk of breaking existing callers, tests, or deployments
-- Purely cosmetic (formatting, naming that doesn't affect clarity)
-- Requires coordination with external systems or teams
-- Unclear benefit relative to effort
-- Would conflict with other in-flight changes
+**→ HOLD LOCAL** (append to `$LR_TMPDIR/security-findings.md`, do NOT auto-file) if:
+- Focus area is `security`. Per SECURITY.md, security vulnerabilities must not be opened as public GitHub issues — operator handles disclosure.
 
-Print the classification: `📋 Slice N: X findings (Y to implement, Z to defer)`
+**→ DROP** (append one line to `$LR_TMPDIR/warnings.md` for visibility; do NOT file) if ANY of:
+- Purely cosmetic nit (formatting, subjective naming) with no concrete fix impact.
+- Vague concern without a specific location or repro signal.
+- Requires coordination with external systems or teams (not actionable as a code-level issue).
+
+Print the classification: `📋 Slice N: X findings (Y to file, Z held local, W dropped)`
 
 ### 3e — Zero findings
 
 If all reviewers found nothing: `✅ Slice N: <name> — Clean (<elapsed>)`. Continue to next slice.
 
-### 3f — All findings deferred
+### 3f — Accumulate findings and flush batch
 
-If every finding is DEFER: append to `$LR_TMPDIR/deferred-accumulated.md` in this format:
+For each classified finding in this slice:
+- **FILE**: append one entry to `$LR_TMPDIR/findings-accumulated.md` in this generic format (consumed by `/issue`'s `parse-input.sh` generic-format fallback):
 
-```markdown
-## <slice name>
+  ```markdown
+  ### <terse title, ≤ 80 chars, no leading `#` characters>
 
-1. **[file:line]** — <issue description>
-   **Why deferred:** <explanation>
+  **Slice**: <slice name>
+  **File**: <path:line or path>
+  **Reviewer**: <Code | Cursor | Codex>
+  **Focus area**: <code-quality | correctness | risk-integration | architecture>
+
+  **Problem**: <what's wrong, concrete>
+
+  **Suggested fix**: <actionable fix>
+  ```
+
+  Body must be non-empty. If the reviewer's problem or fix text contains a `###`-prefixed line at line-start (i.e., three hashes plus a space), normalize it (replace with `####` or prepend two spaces) so `parse-input.sh` does not split the finding into multiple items.
+
+- **HOLD LOCAL**: append to `$LR_TMPDIR/security-findings.md` using the same structured body but omit the `###`-prefixed heading (or use `####`) so the file is never fed to `/issue`.
+- **DROP**: append one line to `$LR_TMPDIR/warnings.md`: `- Slice <name>: dropped nit — <title> (<reviewer>)`.
+
+**Flush condition**: invoke `/issue --input-file` when **any** of these are true:
+- 3 slices worth of FILE findings have accumulated.
+- This is the last slice.
+- Accumulated FILE findings reference more than 10 distinct files (keeps each batch's Phase 2 dedup window under `/issue`'s 30-candidate cap).
+
+**When flushing — invoke `/issue`:**
+
+If `$LR_TMPDIR/findings-accumulated.md` contains zero `###`-prefixed headings (all slices were clean or all findings were held/dropped), skip the `/issue` invocation entirely.
+
+Otherwise, invoke the `/issue` skill via the Skill tool with:
+
+```
+--input-file $LR_TMPDIR/findings-accumulated.md --label loop-review
 ```
 
-Update defer counter. Print summary. Continue to next slice.
+Do NOT pass `--debug`, `--auto`, or `--merge` — `/issue` is a non-interactive skill and none of those flags apply. Do NOT forward `--title-prefix` — the `loop-review` label is the discovery mechanism and preserves the 80-char title budget.
 
-### 3g — Accumulate or flush implementation batch
+**Per-item retention on partial failure.** After `/issue` returns, parse its stdout for any line matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$`. The input-file order is 1-indexed and stable: finding i in `findings-accumulated.md` (the i-th `###`-prefixed heading) corresponds to `ITEM_<i>_*` on `/issue`'s stdout. Rebuild the accumulator per-item:
 
-Track accumulated IMPLEMENT findings in `$LR_TMPDIR/impl-accumulated.md`. After classifying this slice's findings:
+- **Resolved** (remove from accumulator): any ITEM_<i>_* output with `ISSUE_<i>_NUMBER=<N>`, `ISSUE_<i>_DRY_RUN=true`, or `ISSUE_<i>_DUPLICATE=true`.
+- **Retain in accumulator** (so the next flush retries it): `ISSUE_<i>_FAILED=true`, or no ITEM_<i>_* line present at all.
+- **Whole-batch failure** (no machine lines on stdout, or `/issue` exited non-zero without emitting them): retain the entire accumulator unchanged, log a warning to `$LR_TMPDIR/warnings.md`, and proceed to the next slice.
 
-1. Append this slice's IMPLEMENT findings to `$LR_TMPDIR/impl-accumulated.md` (with slice name header).
-2. Append this slice's DEFER findings to `$LR_TMPDIR/deferred-accumulated.md`.
-
-**Flush condition**: Invoke `/implement` when **any** of these are true:
-- 3 slices worth of IMPLEMENT findings have accumulated
-- This is the last slice
-- Accumulated IMPLEMENT findings touch more than 10 distinct files (risk of conflicts grows)
-
-**When flushing — invoke /implement:**
-
-Build a task description combining all accumulated IMPLEMENT findings and invoke `/implement` via the Skill tool. **Always prepend `--auto --merge`** (plus `--debug` if `debug_mode=true`) — `--auto` suppresses interactive questions, `--merge` opts into the CI+rebase+merge loop (since `/implement`'s default is now to stop after PR creation). **The `--debug` flag MUST appear before the non-flag word "Implement"** which terminates flag parsing:
-
-```
-[--debug] --auto --merge Implement code review findings from loop-review (slices: <slice names>):
-
-## Changes to implement
-
-1. <file:line> — <issue> → <specific fix>
-2. ...
-
-## Also: update LOOP_REVIEW_DEFERRED.md
-
-Append the following deferred items:
-
-<accumulated deferred items>
-```
-
-**After /implement completes and merges:**
-- Clear `$LR_TMPDIR/impl-accumulated.md` and `$LR_TMPDIR/deferred-accumulated.md` (items now committed)
-- Increment PR count, update implemented/deferred counters
-- Verify you're on `main` with latest: `git checkout main && git pull origin main`
-
-**After /implement fails or bails:**
-- Keep accumulated items for next flush
-- Log the failure but continue to next slice
-- Ensure you're back on main: `git checkout main`
+Update counters using `/issue`'s aggregate machine lines: bump `issue-count.txt` by `ISSUES_CREATED`, `issue-dedup-count.txt` by `ISSUES_DEDUPLICATED`, `issue-failed-count.txt` by `ISSUES_FAILED`.
 
 **When NOT flushing**: Print `📦 Slice N findings accumulated (batch X/3). Continuing to next slice.` and proceed.
 
-### 3h — Continue
+### 3g — Continue
 
 Move to next slice. Go back to 3a.
 
-## Step 4 — Final Deferred Commit
-
-If there are uncommitted deferred items in `$LR_TMPDIR/deferred-accumulated.md` (because no /implement ran for those slices, or the last /implement failed):
-
-**Lightweight path** (deferred-only updates don't need full /implement):
-
-1. Create a branch: `git checkout -b $USER_PREFIX/loop-review-deferred`
-2. Update `LOOP_REVIEW_DEFERRED.md` with the accumulated deferred items
-3. Commit: `${CLAUDE_PLUGIN_ROOT}/scripts/git-commit.sh -m "Update LOOP_REVIEW_DEFERRED.md with deferred review suggestions" LOOP_REVIEW_DEFERRED.md`
-4. Create PR via `${CLAUDE_PLUGIN_ROOT}/scripts/create-pr.sh`
-5. Post to Slack: `${CLAUDE_PLUGIN_ROOT}/scripts/post-pr-announce.sh --pr <PR_NUMBER>` — parse `SLACK_TS` from output
-6. Monitor CI and merge (same loop as the `/implement` CI + Rebase + Merge Loop section)
-7. Add :merged: emoji: `${CLAUDE_PLUGIN_ROOT}/scripts/post-merged-emoji.sh --slack-ts "$SLACK_TS"`
-8. Cleanup: `${CLAUDE_PLUGIN_ROOT}/scripts/local-cleanup.sh --branch $USER_PREFIX/loop-review-deferred`
-
-If no remaining items, skip this step.
-
-## Step 5 — Final Summary
+## Step 4 — Final Summary
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 Loop Review Complete
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Slices reviewed: M/M
-PRs created and merged: X
-Total findings: Y (Z implemented, W deferred)
+Issues filed: X   (deduplicated: Y, failed: Z)
+Security-tagged findings held locally: W   (see $LR_TMPDIR/security-findings.md)
+Findings dropped: V   (see warnings.md)
 
 Per-slice breakdown:
-  <slice name>: N findings (A impl, B defer)
+  <slice name>: N findings (A filed, B held, C dropped)
   ...
 
-Deferred suggestions: see LOOP_REVIEW_DEFERRED.md
+Filter in GitHub: `is:issue is:open label:loop-review`
 ```
+
+If `W > 0`, print: `**⚠ Security-tagged findings were held locally per SECURITY.md — copy $LR_TMPDIR/security-findings.md out before Step 5 cleanup removes the session tmpdir.**`
 
 **Repeat any external reviewer warnings** accumulated in `$LR_TMPDIR/warnings.md` so they are visible at the end. For example:
 - `**⚠ Codex not available: <reason>**`
 - `**⚠ Cursor review timed out on slice 3**`
+- `**⚠ /issue: label 'loop-review' not found, dropping**` — indicates the label must be pre-created in the target repo.
 
-## Step 6 — Cleanup
+## Step 5 — Cleanup
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$LR_TMPDIR"

@@ -11,7 +11,7 @@ graph TD
     IMPLEMENT["/implement"] -->|invokes| DESIGN["/design"]
     IMPLEMENT -->|invokes| REVIEW["/review"]
     IMPLEMENT -->|invokes| CHECKS["/relevant-checks"]
-    LOOP["/loop-review"] -->|invokes| IMPLEMENT
+    LOOP["/loop-review"] -->|invokes| ISSUE["/issue"]
     ALIAS["/alias"] -->|invokes| IMPLEMENT
 
     style IMPLEMENT fill:#2d5a27,color:#fff
@@ -19,11 +19,12 @@ graph TD
     style DESIGN fill:#4a3a6e,color:#fff
     style REVIEW fill:#4a3a6e,color:#fff
     style CHECKS fill:#555,color:#fff
+    style ISSUE fill:#555,color:#fff
     style ALIAS fill:#6b4c2a,color:#fff
 ```
 
 - **`/implement`** is the top-level orchestrator. It runs the full design → code → review → PR workflow by default. With the `--merge` flag, it also runs the CI+rebase+merge loop and local cleanup after PR creation.
-- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/implement` to implement accepted improvements — accumulating up to 3 slices per `/implement` invocation before flushing.
+- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/issue` in batch mode to file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`) — accumulating up to 3 slices per `/issue` invocation before flushing so `/issue`'s 2-phase LLM dedup runs once per batch. Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
 
 ## End-to-End Flow
 
@@ -97,7 +98,7 @@ Flags modify behavior across the skill hierarchy:
 | `--quick` | `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 1 Claude Code Reviewer subagent only (no external reviewers, no voting panel). |
 | `--auto` | `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
 | `--merge` | `/implement` | Runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification after PR creation. Without `--merge`, `/implement` creates the PR and stops (the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run). |
-| `--debug` | `/implement`, `/design`, `/review`, `/research`, `/loop-review` | Enables verbose output: descriptive Bash tool descriptions, full explanatory prose between tool calls, per-reviewer individual completion messages alongside the compact status table. Default (no `--debug`) uses minimal output with compact status tables and suppressed prose. `/implement` auto-propagates `--debug` to `/design` and `/review`. `/loop-review` propagates to `/implement`. |
+| `--debug` | `/implement`, `/design`, `/review`, `/research`, `/loop-review` | Enables verbose output: descriptive Bash tool descriptions, full explanatory prose between tool calls, per-reviewer individual completion messages alongside the compact status table. Default (no `--debug`) uses minimal output with compact status tables and suppressed prose. `/implement` auto-propagates `--debug` to `/design` and `/review`. `/loop-review`'s `--debug` controls only its own verbosity (no downstream propagation — `/issue` has no `--debug` flag). |
 
 ## Conditional Steps
 
