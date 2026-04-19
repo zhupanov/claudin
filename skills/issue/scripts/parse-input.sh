@@ -16,6 +16,9 @@
 #         - **Vote tally**: <YES/NO/EXONERATE counts>
 #         - **Phase**: design|review
 #
+#       The inline value after `- **Description**:` may be empty — in that
+#       case the body is supplied entirely by the continuation lines.
+#
 #   (2) Generic fallback: for non-OOS callers, accept `### <title>` headings
 #       followed by free-form body. Emits only ITEM_<i>_TITLE / ITEM_<i>_BODY.
 #

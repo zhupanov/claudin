@@ -260,6 +260,36 @@ assert_eq "case 8 item 2 vote tally" "YES=2, NO=1" "$(get_value ITEM_2_VOTE_TALL
 assert_eq "case 8 item 2 phase" "design" "$(get_value ITEM_2_PHASE "$out8")"
 
 # ---------------------------------------------------------------------------
+# Test case 9 — Issue #131: OOS item where `- **Description**:` has no inline
+# value and the body is supplied entirely by continuation lines. Before the
+# fix, the `[[:space:]]+(.+)$` regex required non-empty inline content, so
+# the Description bullet did not match, IN_BODY stayed false, and all
+# continuation lines were silently dropped. With `[[:space:]]*(.*)$` the
+# empty inline value matches, IN_BODY flips to true, and continuations are
+# captured by the fallback branch.
+# ---------------------------------------------------------------------------
+echo "Case 9: OOS item with empty inline Description, body from continuations"
+cat > "$TMPDIR_TEST/case9.md" <<'EOF'
+### OOS_1: Description body from continuations only
+- **Description**:
+  First continuation line.
+
+  Third line after blank.
+- **Reviewer**: Code
+- **Vote tally**: YES=3, NO=0
+- **Phase**: design
+EOF
+out9=$(run_parser "$TMPDIR_TEST/case9.md")
+assert_eq "case 9 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out9")"
+assert_eq "case 9 title" "Description body from continuations only" "$(get_value ITEM_1_TITLE "$out9")"
+assert_eq "case 9 reviewer" "Code" "$(get_value ITEM_1_REVIEWER "$out9")"
+assert_eq "case 9 vote tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out9")"
+assert_eq "case 9 phase" "design" "$(get_value ITEM_1_PHASE "$out9")"
+expected9=$'  First continuation line.\n\n  Third line after blank.'
+assert_eq "case 9 body captures multi-line continuation" "$expected9" "$(get_body 1 "$out9")"
+assert_absent "case 9 not MALFORMED" "ITEM_1_MALFORMED" "$out9"
+
+# ---------------------------------------------------------------------------
 echo ""
 echo "Summary: $PASS_COUNT passed, $FAIL_COUNT failed"
 if [[ "$FAIL_COUNT" -gt 0 ]]; then
