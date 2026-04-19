@@ -91,9 +91,10 @@ assert_equals "$(line_count "$LOG")" "2" "two lines after second invocation"
 # jq -se — the -e flag is critical. Plain -s exits 0 even when output is `false`.
 assert_true "$(jq -se 'length == 2' "$LOG" >/dev/null 2>&1 && echo true || echo false)" "jq -se confirms length == 2"
 
-# Confirm both events are PostToolUse with distinct tool_name values
-TOOL_NAMES=$(jq -s '[.[].payload.tool_name] | sort | join(",")' "$LOG" -r)
-assert_equals "$TOOL_NAMES" "Edit,Write" "both Edit and Write payloads preserved in order"
+# Confirm the two events appear in the order they were written (Edit first, then Write).
+# No `sort` — that would hide an order regression that wrote records in the wrong sequence.
+TOOL_NAMES=$(jq -s -r '[.[].payload.tool_name] | join(",")' "$LOG")
+assert_equals "$TOOL_NAMES" "Edit,Write" "both payloads preserved in chronological order (Edit,Write)"
 
 # ---- Test 3: empty stdin ----
 echo "Test 3: empty stdin appends no line"

@@ -11,8 +11,15 @@ by adding a `PostToolUse` entry to `.claude/settings.local.json`
 
 ## Enable
 
-Paste this snippet into `.claude/settings.local.json` (create the file
-if it does not exist — the rest of the file can stay untouched):
+Paste one of the two snippets below into `.claude/settings.local.json`
+(create the file if it does not exist — the rest of the file can stay
+untouched). Pick the snippet that matches how you have larch available:
+
+### In-repo dev (editing the larch repo itself)
+
+If you are a larch contributor working inside a clone of this repo and
+your shell cwd is the repo root, `$PWD/scripts/audit-edit-write.sh`
+resolves correctly:
 
 ```json
 {
@@ -33,8 +40,36 @@ if it does not exist — the rest of the file can stay untouched):
 }
 ```
 
+### Installed plugin (larch installed into another project)
+
+If larch is installed as a plugin in a consumer repo, `$PWD` is the
+consumer project root and will not resolve the larch helper. Use
+`${CLAUDE_PLUGIN_ROOT}/scripts/audit-edit-write.sh` instead — this is
+the same resolution pattern used by `hooks/hooks.json` for the shipped
+PreToolUse hooks:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/audit-edit-write.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 Restart Claude Code (or reload the session). Subsequent `Edit` / `Write`
-tool calls will append a JSONL line to `.claude/hook-audit.log`.
+tool calls will append a JSONL line to `.claude/hook-audit.log` in the
+project where Claude Code is running (honoring `CLAUDE_PROJECT_DIR`).
 
 ## Log format
 
@@ -110,13 +145,23 @@ concurrently. Shell `>>` append is best-effort: if two writes
 interleave their bytes, **a line can be corrupted** (not merely
 omitted), producing a physically malformed JSON record.
 
-Consumers parsing the log should tolerate occasional parse errors on
-individual lines rather than aborting on the first error — for example:
+Consumers parsing the log should tolerate parse errors on individual
+lines rather than aborting on the first error. A streaming `jq …
+file.log` does NOT skip malformed records — it aborts the whole run at
+the first parse error. Read one line at a time instead, e.g.:
 
 ```bash
-# Skip lines that don't parse, rather than failing the whole pipeline
-jq -c 'select(.event == "PostToolUse")' .claude/hook-audit.log 2>/dev/null
+# Process each line independently; skip any that fail to parse.
+while IFS= read -r line; do
+    printf '%s\n' "$line" | jq -ec 'select(.event == "PostToolUse")' 2>/dev/null || true
+done < .claude/hook-audit.log
 ```
+
+Or use `jq -R 'fromjson? | select(.event == "PostToolUse")' .claude/hook-audit.log`
+which parses each input line as a raw string first and silently drops
+lines where `fromjson` fails to parse — the `?` operator suppresses
+the parse error and emits no output for that line, so `select` never
+sees a malformed record.
 
 Line locking (`flock`) is intentionally not implemented — for a
 contributor-local debugging aid, the added complexity outweighs the
