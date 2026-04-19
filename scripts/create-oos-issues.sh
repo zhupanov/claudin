@@ -244,8 +244,10 @@ while IFS= read -r line; do
     elif [[ "$line" =~ ^-\ \*\*Phase\*\*:\ (.+)$ ]]; then
         CURRENT_PHASE="${BASH_REMATCH[1]}"
         IN_DESCRIPTION=false
-    elif [[ "$IN_DESCRIPTION" == true ]] && [[ -n "${line// }" ]]; then
-        # Accumulate non-blank continuation lines for multi-line descriptions
+    elif [[ "$IN_DESCRIPTION" == true ]]; then
+        # Accumulate continuation lines (including blank lines) so paragraph breaks
+        # survive — IN_DESCRIPTION is cleared only by a field marker or a new
+        # ### OOS_N: header, so this branch never captures structural lines.
         CURRENT_DESCRIPTION+=$'\n'"$line"
     fi
 done < "$INPUT_FILE"
