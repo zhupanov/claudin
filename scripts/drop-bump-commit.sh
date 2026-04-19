@@ -7,7 +7,9 @@
 #   1. Working tree is clean (no staged, unstaged, or untracked changes).
 #   2. HEAD subject matches ^Bump version to [0-9]+\.[0-9]+\.[0-9]+$.
 #   3. HEAD~1 exists (branch has at least 2 commits).
-#   4. HEAD touches exactly one file: .claude-plugin/plugin.json.
+#   4. HEAD touches only .claude-plugin/plugin.json, optionally together
+#      with CHANGELOG.md (the two-file amended-bump shape produced by
+#      /implement Step 8a), and nothing else.
 #
 # If any check fails, the script prints DROPPED=false and exits 0 (no-op).
 # A stderr WARN line explains which guard refused the drop, for callers that
@@ -57,8 +59,8 @@ fi
 # Use diff --name-only against HEAD~1. A legitimate bump commit produced by
 # apply-bump.sh stages .claude-plugin/plugin.json. Step 8a of /implement may
 # additionally amend CHANGELOG.md into the same commit. Both are acceptable.
-CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | sort)
-# ALLOWED_* constants must match `sort`'s ASCII byte ordering (LC_COLLATE=C semantics):
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | LC_ALL=C sort)
+# ALLOWED_* constants must match `sort`'s ASCII byte ordering (forced above via LC_ALL=C):
 # '.' (0x2E) sorts before 'C' (0x43), so '.claude-plugin/plugin.json' comes before 'CHANGELOG.md'.
 # Do NOT reorder alphabetically by filename — that would break the match against the sorted input.
 ALLOWED_ONE=".claude-plugin/plugin.json"
