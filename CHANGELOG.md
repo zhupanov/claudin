@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-04-18
+
+### Added
+
+- New `/create-skill` public slash command (`skills/create-skill/SKILL.md`) that scaffolds a new larch-style skill from a name and a description, then delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). Default writes under `.claude/skills/<name>/` (consumer mode); `--plugin` writes under `skills/<name>/` for plugin-dev mode. `--multi-step` selects a multi-step scaffold template; default is minimal single-step. `--merge` and `--debug` forward to `/implement`.
+- New scripts under `skills/create-skill/scripts/`: `parse-args.sh` (flag + positional parsing, leading-`/` strip), `validate-args.sh` (name regex + reserved-name union of Anthropic `{anthropic, claude}` ∪ larch's static list ∪ dynamic `${CLAUDE_PLUGIN_ROOT}/skills` ∪ dynamic `$PWD/.claude/skills`, all case-insensitive; description length, no XML tags, no backticks, no `$(...)`, no heredoc terminators, no newlines or control chars), `render-skill-md.sh` (heredoc-in-shell renderer with atomic `.tmp` + `mv`, two path tokens for consumer-vs-plugin mode, YAML-safe description escaping including backslashes), and `post-scaffold-hints.sh`.
+- New entry in `SECURITY.md` documenting `/create-skill`'s description-sanitization design (which patterns are rejected and why they matter for YAML-frontmatter and heredoc-rendering safety).
+- Two new permission entries in `.claude/settings.json` (`Bash($PWD/skills/create-skill/scripts/*)` and `Skill(create-skill)`) in strict ASCII code-point order.
+
+### Changed
+
+- `README.md` Skills catalog and feature matrix now list `/create-skill`.
+
 ## [3.2.0] - 2026-04-18
 
 ### Added
