@@ -134,7 +134,7 @@ Trailing normal text.
 BODY_EOF
 
 # --- 3a: --dry-run path redaction ---
-dry_title_raw='leaking sk-ant-abcdefghijklmnopqrstuvwxyz0123456789ABCD here'
+dry_title_raw="leaking ${SK_TOKEN} here"
 dry_out=$(bash "$CREATE_ONE" --title "$dry_title_raw" --body-file "$BODY_FILE" --repo owner/repo --dry-run 2>&1)
 assert_contains "$dry_out" '<REDACTED-TOKEN>' '[dry-run] preview/title contain placeholder'
 assert_not_contains "$dry_out" "$SK_TOKEN" '[dry-run] sk-ant not echoed'
@@ -272,17 +272,17 @@ assert_contains "$missing_out" 'ISSUE_ERROR=redaction:' '[edge] missing helper �
 # --- 4d: gh emits zero-URL multi-line output (F5) — no-URL branch flattens ---
 ZERO_URL_DIR="$TMPROOT/stub-zero-url"
 mkdir -p "$ZERO_URL_DIR"
-cat > "$ZERO_URL_DIR/gh" <<'GHZERO'
+cat > "$ZERO_URL_DIR/gh" <<GHZERO
 #!/usr/bin/env bash
-if [[ "$1" == "label" ]]; then
+if [[ "\$1" == "label" ]]; then
     exit 0
 fi
-if [[ "$1" == "repo" ]]; then
+if [[ "\$1" == "repo" ]]; then
     echo 'owner/repo'
     exit 0
 fi
 # issue create path — emit multi-line output with no URL, exit 0.
-printf 'line one\nline two with sk-ant-abcdefghijklmnopqrstuvwxyz01\nline three\n'
+printf 'line one\nline two with ${SK_TOKEN:0:35}\nline three\n'
 exit 0
 GHZERO
 chmod +x "$ZERO_URL_DIR/gh"
@@ -300,7 +300,7 @@ else
 fi
 zero_err_line=$(printf '%s\n' "$zero_out" | grep '^ISSUE_ERROR=' || true)
 assert_contains "$zero_err_line" '<REDACTED-TOKEN>' '[edge] no-URL branch redacts stderr token'
-assert_not_contains "$zero_err_line" 'sk-ant-abcdefghijklmnopqrstuvwxyz01' '[edge] no-URL branch does not leak sk-ant'
+assert_not_contains "$zero_err_line" "${SK_TOKEN:0:35}" '[edge] no-URL branch does not leak sk-ant'
 
 echo ""
 echo "=== Summary ==="
