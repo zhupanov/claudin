@@ -182,7 +182,7 @@ Skip `/design` entirely. Handle branch creation directly, then produce an inline
 - If `IS_USER_BRANCH=true`: Verify the branch name (`CURRENT_BRANCH`) aligns with the requested feature. If it appears unrelated (different feature name, unrelated commits), print a warning: `**⚠ Current branch '<branch-name>' may not match the requested feature. Creating a new branch from main.**` and create a new branch. Otherwise, use the existing branch.
 - Otherwise (non-main, non-user branch): Print a warning: `**⚠ Currently on branch '<branch-name>' which doesn't match the expected '<USER_PREFIX>/*' pattern. Creating a new branch from main.**` and create a new branch.
 
-**Inline design**: Research the codebase (read relevant files, grep for patterns), then produce a concrete implementation plan under a `## Implementation Plan` header. This plan should include files to modify, approach, and edge cases — the same content `/design` would produce, but without collaborative sketches, plan review, or voting. Print: `⚡ 1: design plan — quick mode, inline plan`
+**Inline design**: Research the codebase (read relevant files, grep for patterns), then produce a concrete implementation plan under a `## Implementation Plan` header. This plan should include: files to modify, approach, edge cases, **testing strategy** (TDD where applicable; otherwise a concrete verification — `/relevant-checks`, grep, dry-run, or manual repro), and **failure modes** (what could go wrong and how we'd detect it). The same content `/design` would produce, but without collaborative sketches, plan review, or voting. Print: `⚡ 1: design plan — quick mode, inline plan`
 
 Proceed to Step 2.
 
@@ -227,14 +227,16 @@ If successful:
 
 ## Step 2 — Implement the Feature
 
-**Opportunistic questions** (`auto_mode=false` only): Before starting edits, if the implementation plan leaves genuinely ambiguous choices (e.g., naming conventions, test strategy, which of two valid approaches to use), batch them into a single `AskUserQuestion` call with 1-4 questions. Only ask when the ambiguity cannot be resolved from the plan, codebase, or CLAUDE.md. When `auto_mode=true`, proceed with best judgment — do not ask. Material answers that change scope or approach should be noted for the "Implementation Deviations" section.
+**Opportunistic questions** (`auto_mode=false` only): Before starting edits, if the implementation plan leaves genuinely ambiguous choices (e.g., naming conventions, test strategy, which of two valid approaches to use), batch them into a single `AskUserQuestion` call with 1-4 questions. Only ask when the ambiguity cannot be resolved from the plan, codebase, or CLAUDE.md. When `auto_mode=true`, proceed with best judgment — do not ask. When a genuine ambiguity is encountered mid-coding, pick the interpretation most consistent with the plan and existing patterns, and record the decision (question + chosen interpretation + one-sentence rationale) under the "Implementation Deviations" PR-body section. Material answers that change scope or approach are logged there as well.
 
-Implement the feature following the (reviewed) plan from the `/design` phase. Follow all guidelines in CLAUDE.md:
+Implement the feature following the plan from Step 1 — the reviewed `/design` plan in normal mode, or the inline `## Implementation Plan` in quick mode. Follow all guidelines in CLAUDE.md:
 - Read existing code before modifying
 - Match existing style and patterns
 - Avoid code duplication — search for reusable code first
 - Don't over-engineer — for each abstraction, helper, or indirection you introduce, ask: is this justified by a concrete current need? If the answer is "it might be useful later," don't add it
-- When the project has test infrastructure (look for: test directories, Makefile test targets, package.json test scripts, or a test framework), prefer test-driven development: write a failing test for the expected behavior first, then implement to make it pass. For changes that are purely configuration, documentation, or prompt-text edits, skip TDD
+- When the project has test infrastructure (look for: test directories, Makefile test targets, package.json test scripts, or a test framework), prefer test-driven development: write a failing test for the expected behavior first, then implement to make it pass. For changes that are purely configuration, documentation, or prompt-text edits, skip TDD — but state one concrete post-change verification: a `/relevant-checks` invocation, a grep confirming no stale references remain, a dry-run command, or a minimal manual repro
+- Address root causes, not symptoms; do not suppress errors or paper over failures.
+- Invoke `/relevant-checks` promptly after each non-trivial logical sub-step, not only at the end of implementation. Step 3 is the final check, not the only one.
 
 ## Step 3 — Relevant Checks (first pass)
 
