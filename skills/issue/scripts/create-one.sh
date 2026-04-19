@@ -235,7 +235,12 @@ for L in "${VALID_LABELS[@]+"${VALID_LABELS[@]}"}"; do
     GH_ARGS+=(--label "$L")
 done
 
-if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
+# Capture stdout and stderr separately so a stray stderr line (progress,
+# warning) on the success path cannot corrupt URL extraction below. ERR_TMP
+# holds stderr; ISSUE_URL holds stdout only. Both paths explicitly clean up
+# ERR_TMP before exiting.
+ERR_TMP=$(mktemp)
+if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
     # gh issue create emits the URL on stdout. Extract the trailing number.
     # `|| true` keeps the no-URL branch reachable under `set -euo pipefail`
     # when grep finds no match; without it pipefail would abort the script
@@ -248,20 +253,24 @@ if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>&1); then
         # emitted key=value line honors the one-line-per-record contract.
         REDACTED_OUTPUT=$(redact "$ISSUE_URL") || emit_redaction_failure
         REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
+        rm -f "$ERR_TMP"
         echo "ISSUE_FAILED=true"
         echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT_FLAT)"
         exit 2
     fi
     ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
+    rm -f "$ERR_TMP"
     echo "ISSUE_NUMBER=$ISSUE_NUM"
     echo "ISSUE_URL=$URL_LINE"
     echo "ISSUE_TITLE=$FINAL_TITLE"
     exit 0
 else
-    # ISSUE_URL here actually holds stderr content because of 2>&1.
-    # Redact secondary leak surface (tokens in auth-failure messages, request
-    # bodies echoed by the API in 4xx responses) before flattening/echoing.
-    REDACTED_ERR=$(redact "$ISSUE_URL") || emit_redaction_failure
+    # Read stderr from the temp file and redact secondary leak surface
+    # (tokens in auth-failure messages, request bodies echoed by the API in
+    # 4xx responses) before flattening/echoing.
+    ERR_CONTENT=$(cat "$ERR_TMP")
+    rm -f "$ERR_TMP"
+    REDACTED_ERR=$(redact "$ERR_CONTENT") || emit_redaction_failure
     ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
     echo "ISSUE_FAILED=true"
     echo "ISSUE_ERROR=$ERR_FLAT"
