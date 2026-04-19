@@ -63,6 +63,15 @@ fi
 # Key invariant: an item is emitted only when it has BOTH a title and a body/
 # description. A title alone → ITEM_<i>_MALFORMED=true (the caller / SKILL
 # treats this as an early-failed item that contributes to ISSUES_FAILED).
+#
+# CURRENT_MODE tracks whether the in-progress item is OOS-shaped or generic-
+# shaped. Structured OOS field branches (`- **Description**:`, `- **Reviewer**:`,
+# `- **Vote tally**:`, `- **Phase**:`) fire only when CURRENT_MODE=oos; in
+# generic items those lines are plain body text. A `### <title>` line inside
+# an OOS item's description body (CURRENT_MODE=oos AND IN_BODY=true) is
+# absorbed as body continuation rather than starting a new item, so OOS
+# descriptions may contain markdown subheadings. `flush_item` resets
+# CURRENT_MODE alongside the other per-item state.
 # ---------------------------------------------------------------------------
 ITEM_INDEX=0
 CURRENT_TITLE=""
@@ -71,6 +80,7 @@ CURRENT_REVIEWER=""
 CURRENT_VOTE=""
 CURRENT_PHASE=""
 IN_BODY=false
+CURRENT_MODE=""
 
 b64() {
     # Portable single-line base64 (no wrapping). macOS `base64` wraps at 76 chars
@@ -131,12 +141,28 @@ flush_item() {
     CURRENT_VOTE=""
     CURRENT_PHASE=""
     IN_BODY=false
+    CURRENT_MODE=""
 }
 
 # Parse line-by-line. Support both OOS (`### OOS_N: title`) and generic
-# (`### <title>` followed by body text) formats. The `**Description**:` line
-# is OOS-specific — its absence means generic mode, where everything after
-# the `### ` line until the next `### ` is the body.
+# (`### <title>` followed by body text) formats, distinguished by CURRENT_MODE:
+#
+#   * An `### OOS_N: title` line sets CURRENT_MODE=oos; the four structured
+#     bullets (Description / Reviewer / Vote tally / Phase) are parsed as
+#     metadata only while CURRENT_MODE=oos. In generic items those same
+#     bullets are preserved verbatim as body text.
+#   * A plain `### <title>` line sets CURRENT_MODE=generic — UNLESS we are
+#     inside an OOS description (CURRENT_MODE=oos AND IN_BODY=true), in which
+#     case the line is absorbed as body continuation (so OOS descriptions may
+#     contain subheadings like `### Notes`).
+#   * Well-formed OOS items close their body when a Reviewer / Vote tally /
+#     Phase field fires (all set IN_BODY=false), so a following `### <title>`
+#     correctly starts a new item. An incomplete OOS item that has only a
+#     Description (no trailing structured fields) leaves IN_BODY=true, so a
+#     following `### <title>` is absorbed as continuation — by design. Feed
+#     well-formed OOS inputs (all 4 fields) to terminate the body explicitly.
+#   * flush_item resets CURRENT_MODE so per-item mode does not leak across
+#     items.
 while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" =~ ^\#\#\#[[:space:]]+OOS_[0-9]+:[[:space:]]+(.+)$ ]]; then
         # OOS-format heading. Body comes from the `**Description**:` field that
@@ -144,30 +170,43 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         flush_item
         CURRENT_TITLE="${BASH_REMATCH[1]}"
         IN_BODY=false
+        CURRENT_MODE="oos"
     elif [[ "$line" =~ ^\#\#\#[[:space:]]+(.+)$ ]]; then
-        # Generic heading. Lines that follow (until the next `### ` or a
-        # structured `- **X**:` field) form the body directly.
-        flush_item
-        CURRENT_TITLE="${BASH_REMATCH[1]}"
-        IN_BODY=true
-    elif [[ "$line" =~ ^-[[:space:]]+\*\*Description\*\*:[[:space:]]+(.+)$ ]]; then
+        # Generic heading — or a markdown subheading inside an OOS description.
+        # Inside an active OOS body, absorb as body continuation rather than
+        # flushing (fix for bug a in issue #129).
+        if [[ "$CURRENT_MODE" == "oos" && "$IN_BODY" == true ]]; then
+            if [[ -n "$CURRENT_BODY" ]]; then
+                CURRENT_BODY+=$'\n'"$line"
+            else
+                CURRENT_BODY="$line"
+            fi
+        else
+            flush_item
+            CURRENT_TITLE="${BASH_REMATCH[1]}"
+            IN_BODY=true
+            CURRENT_MODE="generic"
+        fi
+    elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Description\*\*:[[:space:]]+(.+)$ ]]; then
         CURRENT_BODY="${BASH_REMATCH[1]}"
         IN_BODY=true
-    elif [[ "$line" =~ ^-[[:space:]]+\*\*Reviewer\*\*:[[:space:]]+(.+)$ ]]; then
+    elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Reviewer\*\*:[[:space:]]+(.+)$ ]]; then
         CURRENT_REVIEWER="${BASH_REMATCH[1]}"
         IN_BODY=false
-    elif [[ "$line" =~ ^-[[:space:]]+\*\*Vote\ tally\*\*:[[:space:]]+(.+)$ ]]; then
+    elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Vote\ tally\*\*:[[:space:]]+(.+)$ ]]; then
         CURRENT_VOTE="${BASH_REMATCH[1]}"
         IN_BODY=false
-    elif [[ "$line" =~ ^-[[:space:]]+\*\*Phase\*\*:[[:space:]]+(.+)$ ]]; then
+    elif [[ "$CURRENT_MODE" == "oos" && "$line" =~ ^-[[:space:]]+\*\*Phase\*\*:[[:space:]]+(.+)$ ]]; then
         CURRENT_PHASE="${BASH_REMATCH[1]}"
         IN_BODY=false
     elif [[ "$IN_BODY" == true ]]; then
         # Continuation line. Preserve blank lines in BOTH modes — multi-paragraph
-        # descriptions need them. Structured field markers (Reviewer:, Vote
-        # tally:, Phase:, next ### OOS_N: header) already set IN_BODY=false
-        # above, so blank lines inside a Description cannot bleed past the next
-        # field. This matches the behavior fix applied to the deleted
+        # descriptions need them. OOS structured field markers (Reviewer, Vote
+        # tally, Phase) already set IN_BODY=false above, so blank lines inside
+        # a Description cannot bleed past the next field. In generic mode, lines
+        # that look like OOS bullets (`- **Reviewer**:`, etc.) fall through to
+        # here and are preserved as ordinary body text (fix for bug b in #129).
+        # This matches the behavior fix applied to the deleted
         # scripts/create-oos-issues.sh (see CHANGELOG 3.3.10).
         if [[ -n "$CURRENT_BODY" ]]; then
             CURRENT_BODY+=$'\n'"$line"
