@@ -107,7 +107,7 @@ These tools enhance the workflow but are not required. When unavailable, Claude 
 - **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
 - **End-to-end automation** — From feature design through PR creation, initial CI wait, and Slack announcement in a single command. With `--merge`, also runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification
 - **External reviewer integration** — Codex and Cursor participate alongside Claude subagents as both reviewers and voters
-- **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and implement improvements automatically
+- **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`). Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
 
 ## Skills
 

@@ -42,17 +42,17 @@
   <text x="230" y="348" font-size="11">Focus area</text>
   <text x="230" y="362" font-size="11">= security?</text>
 
-  <!-- HOLD arrow (right) -->
-  <text x="365" y="348" class="label">yes</text>
-  <polyline points="340,352 375,352 375,400 330,400" stroke="#333" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <!-- HOLD arrow (right) leading to HOLD node offset rightward of the FILE path -->
+  <text x="355" y="348" class="label">yes</text>
+  <polyline points="340,352 395,352 395,395" stroke="#333" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 
   <!-- FILE arrow (down) -->
   <text x="215" y="390" class="label">no</text>
   <line x1="230" y1="382" x2="230" y2="425"/>
 
-  <!-- HOLD node: security-findings.md -->
-  <rect x="200" y="380" width="130" height="36" rx="4" fill="#8E44AD"/>
-  <text x="265" y="398" font-size="11">security-findings.md</text>
+  <!-- HOLD node: security-findings.md — moved right so the FILE vertical path does not intersect -->
+  <rect x="325" y="395" width="140" height="36" rx="4" fill="#8E44AD"/>
+  <text x="395" y="413" font-size="11">security-findings.md</text>
 
   <!-- Accumulate -->
   <rect x="130" y="425" width="200" height="36" rx="4" fill="#4A90D9"/>

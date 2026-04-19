@@ -13,22 +13,21 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`. `--debug` controls only loop-review's own verbosity; it is NOT propagated downstream. `/issue` does not expose a `--debug` flag, and `/implement` is no longer invoked by loop-review.
 
-**This skill runs fully autonomously** — never ask for user confirmation. Make all FILE/drop decisions based on the classification criteria in Step 3d. All sub-skills (`/issue`, `/review`, `/design`, `/relevant-checks`) also run autonomously. `/issue` is invoked in batch mode (`--input-file`) with `--label loop-review` so findings are discoverable via label filter in the issue tracker. **The `loop-review` label must be pre-created in the target repository** — `/issue`'s helper silently drops unknown labels with a stderr warning; loop-review surfaces that warning in the final summary but does not create the label itself.
+**This skill runs fully autonomously** — never ask for user confirmation. Make all FILE/drop decisions based on the classification criteria in Step 3d. The only sub-skill invoked via the Skill tool is `/issue` (in batch mode, `--input-file` with `--label loop-review`) so findings are discoverable via label filter in the issue tracker; the reviewer lanes run as Cursor/Codex CLI processes or Claude Code Reviewer subagents directly, not through `/review`, `/design`, or `/relevant-checks`. **The `loop-review` label must be pre-created in the target repository** — Step 0 preflight-checks its existence; if missing, the skill appends a warning to `$LR_TMPDIR/warnings.md` and continues (issues will be filed unlabeled and excluded from the `label:loop-review` discovery filter).
 
 ## Progress Reporting
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
 
-- Print a **start line** when entering a step: e.g., `> **🔶 3: file issues — slice: scripts/...**`
-- Print a **completion line** when done: e.g., `✅ 3: file issues — 4 findings accumulated, 2 issues filed (3m12s)`
+- Print a **start line** when entering a step: e.g., `> **🔶 3: review + file issues — slice: scripts/...**`
+- Print a **completion line** when done: e.g., `✅ 3: review + file issues — 4 findings accumulated, 2 issues filed (3m12s)`
 
 Step Name Registry:
 | Step | Short Name |
 |------|------------|
 | 0 | setup |
 | 1 | partition |
-| 2 | review slice |
-| 3 | file issues |
+| 3 | review + file issues |
 | 4 | summary |
 | 5 | cleanup |
 
@@ -38,7 +37,7 @@ Step Name Registry:
 
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (slice results, findings lists, deferred items, final report).
+- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (slice results, per-batch `/issue` counters, held security notes, dropped nits, final report).
 
 **Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls.
 
@@ -75,6 +74,16 @@ Initialize tracking files for the slice review loop:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/init-session-files.sh --dir "$LR_TMPDIR"
 ```
+
+### 0c — Preflight Label Check
+
+Verify the `loop-review` GitHub label exists in the current repository. `/issue`'s create-one.sh drops unknown labels with a stderr-only warning, and loop-review's flush path only parses `/issue`'s stdout machine lines — so a missing label would silently produce unlabeled issues that escape the final summary's label filter. Preflight-check once here, not per-flush:
+
+```bash
+gh label list --limit 200 --json name --jq '.[].name' | grep -Fxq loop-review
+```
+
+If the command exits non-zero (label missing OR `gh` unreachable), append `**⚠ 'loop-review' label not found in current repo — /issue will create issues unlabeled. Create it once with: gh label create loop-review --description "Surfaced by /loop-review" --color 5319E7**` to `$LR_TMPDIR/warnings.md`. Do NOT abort — the skill still files issues, they will just not carry the label. The Step 4 summary surfaces the warning.
 
 ## Step 1 — Partition the Repository
 
@@ -134,7 +143,7 @@ Run Cursor **first** in the parallel message (it takes the longest):
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$LR_TMPDIR/cursor-output-slice-N.txt" --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
-    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Combine 4 review perspectives: (1) Quality: bugs, logic errors, dead code, duplication, missing error handling. (2) Correctness: off-by-one, nil handling, type mismatches, races, error paths. (3) Risk/Integration: broken contracts, thread safety, deployment risks, CI gaps. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Return numbered findings with perspective, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Walk five focus areas: (1) code-quality: bugs, logic errors, dead code, duplication, missing error handling. (2) correctness: off-by-one, nil handling, type mismatches, races, error paths. (3) risk-integration: broken contracts, thread safety, deployment risks, CI gaps. (4) architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area using EXACTLY one of these labels: code-quality / correctness / risk-integration / architecture / security. Return numbered findings with focus-area tag, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
@@ -149,7 +158,7 @@ Run Codex **second** in the parallel message (after Cursor):
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-output-slice-N.txt" --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$LR_TMPDIR/codex-output-slice-N.txt" \
-    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Walk four focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. Tag each finding with its focus area. Return numbered findings with focus-area tag, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Walk five focus areas: (1) code-quality: bugs, logic, reuse, tests, backward compat, style. (2) risk-integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area using EXACTLY one of these labels: code-quality / correctness / risk-integration / architecture / security. Return numbered findings with focus-area tag, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
@@ -289,7 +298,17 @@ Per-slice breakdown:
 Filter in GitHub: `is:issue is:open label:loop-review`
 ```
 
-If `W > 0`, print: `**⚠ Security-tagged findings were held locally per SECURITY.md — copy $LR_TMPDIR/security-findings.md out before Step 5 cleanup removes the session tmpdir.**`
+If `W > 0`, print the **full verbatim contents** of `$LR_TMPDIR/security-findings.md` inline in the summary output (the session tmpdir is removed by Step 5, so this is the only durable copy surfaced to the operator). Wrap it under a clearly-labeled block:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔒 Security-tagged findings (held locally per SECURITY.md)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<full contents of $LR_TMPDIR/security-findings.md>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Then print: `**⚠ Handle these findings per SECURITY.md's vulnerability-disclosure procedure. They are NOT filed as public GitHub issues. Session tmpdir is removed by Step 5 — preserve the block above if further triage is needed.**`
 
 **Repeat any external reviewer warnings** accumulated in `$LR_TMPDIR/warnings.md` so they are visible at the end. For example:
 - `**⚠ Codex not available: <reason>**`
