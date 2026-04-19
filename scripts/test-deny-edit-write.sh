@@ -9,16 +9,27 @@
 #   - hookSpecificOutput.permissionDecision == "deny"
 #   - hookSpecificOutput.permissionDecisionReason is a non-empty string
 #   - idempotency: a second invocation produces byte-identical stdout
+#   - jq-absent fallback: invoking the hook under a stub-only PATH that hides
+#     jq exercises the printf fallback branch and produces byte-identical
+#     stdout to the jq -cn branch (enforces the script's INVARIANT)
 #
-# Skip-if-no-jq: jq is required for both the hook itself and the assertions
-# below; if absent, the harness skips with exit 0 (matching repo precedent in
-# scripts/test-sessionstart-health.sh).
+# Harness `jq` requirement: the assertions below validate JSON structure via
+# `jq` queries, so harness `jq` is required. The harness fails hard if `jq`
+# is missing rather than skipping silently — matching the precedent in
+# scripts/test-sessionstart-health.sh:32-35 and ensuring `make lint` cannot
+# pass on a machine where the hook's deterministic deny shape cannot be
+# verified.
+#
+# Note: the hook itself (scripts/deny-edit-write.sh) has its own jq-absent
+# fallback (static printf path) so the production deny semantics don't
+# depend on `jq`. This harness still requires `jq` because validating the
+# emitted JSON shape requires a JSON parser.
 #
 # Usage:
 #   bash scripts/test-deny-edit-write.sh
 #
 # Exit codes:
-#   0 — all assertions passed (or skipped due to missing jq)
+#   0 — all assertions passed
 #   1 — at least one assertion failed (first failing assertion listed on stderr)
 
 set -euo pipefail
@@ -32,8 +43,8 @@ if [[ ! -x "$HOOK" ]]; then
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
-    echo "SKIP: jq not on PATH; cannot run JSON assertions" >&2
-    exit 0
+    echo "FAIL: harness jq not on PATH; cannot validate JSON output" >&2
+    exit 1
 fi
 
 PASS=0
@@ -96,6 +107,24 @@ if [[ "$OUT1" == "$OUT2" ]]; then
     pass
 else
     fail "Test 6: second invocation produced different stdout"
+fi
+
+# Test 7 — jq-absent fallback path is byte-identical to the jq -cn path.
+# Resolve bash from the ambient PATH before env -i scrubs the environment
+# (matches the pattern in scripts/test-sessionstart-health.sh).
+BASH_BIN=$(command -v bash)
+# Build a stub PATH containing only `bash` and the bare essentials needed by
+# the hook itself (`command`, `printf`, `exit` are all bash builtins). We
+# deliberately omit any directory where `jq` lives so the `command -v jq`
+# guard inside the hook routes through the printf fallback branch.
+STUB_DIR=$(mktemp -d "${TMPDIR:-/tmp}/test-deny-edit-write-stub-XXXXXX")
+trap 'rm -rf "$STUB_DIR"' EXIT
+ln -s "$BASH_BIN" "$STUB_DIR/bash"
+OUT_FALLBACK=$(env -i PATH="$STUB_DIR" "$BASH_BIN" "$HOOK" </dev/null)
+if [[ "$OUT1" == "$OUT_FALLBACK" ]]; then
+    pass
+else
+    fail "Test 7: printf fallback diverged from jq -cn output: '$OUT_FALLBACK' vs '$OUT1'"
 fi
 
 TOTAL=$((PASS + FAIL))
