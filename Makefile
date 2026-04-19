@@ -1,9 +1,9 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-sessionstart test-audit-edit-write smoke-dialectic
+.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-sessionstart test-audit-edit-write test-block-submodule smoke-dialectic
 
-lint: test-redact test-parse-input test-sessionstart test-audit-edit-write
+lint: test-redact test-parse-input test-sessionstart test-audit-edit-write test-block-submodule
 	pre-commit run --all-files
 
 test-redact:
@@ -17,6 +17,9 @@ test-sessionstart:
 
 test-audit-edit-write:
 	bash scripts/test-audit-edit-write.sh
+
+test-block-submodule:
+	bash scripts/test-block-submodule-edit.sh
 
 smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh

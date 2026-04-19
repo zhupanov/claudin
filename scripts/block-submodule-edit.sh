@@ -10,6 +10,9 @@
 # - Fails CLOSED on stdin / JSON parse failure
 # - Fails OPEN for clearly non-git situations
 # - Blocks only true submodules of the current repo, not arbitrary nested repos
+#
+# Regression harness: ${CLAUDE_PLUGIN_ROOT}/scripts/test-block-submodule-edit.sh
+# (wired into `make lint` via the `test-block-submodule` target).
 
 set -uo pipefail
 
