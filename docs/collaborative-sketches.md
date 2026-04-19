@@ -36,6 +36,7 @@ The handling of unavailable external tools differs across workflow phases:
 | **Plan review** (`/design`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
 | **Code review** (`/review`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
 | **Voting** | Claude replacement voters used — always 3 voters. 3 voters: 2+ YES to accept; 2 voters: unanimous YES; <2 voters: voting skipped, all findings accepted |
+| **Dialectic debate** (`/design`) | **No Claude substitution** — when the assigned external tool (Cursor for odd-indexed decisions, Codex for even-indexed) is unavailable, that decision's bucket is skipped entirely and the Step 2a.4 synthesis decision stands. Intentional divergence from the rules above; see Step 2a.5 in `skills/design/SKILL.md` |
 
 ## How It Works
 
@@ -117,7 +118,7 @@ For each contested decision (up to 5, prioritized by impact):
 1. A **thesis agent** defends the approach chosen by the synthesis, arguing why it's the right call given the codebase and requirements
 2. An **antithesis agent** attacks that choice, arguing for the strongest alternative, poking at hidden assumptions, and surfacing risks the synthesis glossed over
 
-Both agents run in parallel and produce 1-2 focused paragraphs. A **quorum rule** requires both sides to produce substantive output before a binding resolution is written — if either side fails, the debate falls back to the original synthesis decision.
+Both agents run in parallel and produce 1-2 focused paragraphs. A **quorum rule** requires both sides to report `STATUS=OK` from the collector and produce substantive structured output before a binding resolution is written — if either side's status check or content check fails, the debate falls back to the original synthesis decision.
 
 The orchestrator then writes a resolution for each contested point that must explicitly address the antithesis arguments. It can still pick the original choice, but now it must justify against the strongest counterargument.
 

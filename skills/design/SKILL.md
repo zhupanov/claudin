@@ -349,7 +349,7 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
    - Cursor buckets write to `$DESIGN_TMPDIR/debate-<n>-cursor-thesis.txt` and `…-cursor-antithesis.txt`.
    - Codex buckets write to `$DESIGN_TMPDIR/debate-<n>-codex-thesis.txt` and `…-codex-antithesis.txt`.
 
-   Each Cursor launch (use `run_in_background: true` and `timeout: 1860000`):
+   Each Cursor launch (use `run_in_background: true` and `timeout: 1860000`). Pass a short bootstrap prompt that references the per-decision prompt file by path; the tool reads the file via its own filesystem access. This mirrors the voting pattern below ("Read the ballot from $DESIGN_TMPDIR/ballot.txt") and avoids `$(cat ...)` in the launch shell — which would trigger Claude Code permission prompts that break autonomous execution:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
      --output "$DESIGN_TMPDIR/debate-<n>-cursor-<thesis|antithesis>.txt" \
@@ -357,10 +357,10 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
      cursor agent -p --force --trust \
        $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
        --workspace "$PWD" \
-       "$(cat "$DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt") Work at your maximum reasoning effort level."
+       "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
    ```
 
-   Each Codex launch (use `run_in_background: true` and `timeout: 1860000`):
+   Each Codex launch (use `run_in_background: true` and `timeout: 1860000`). Same file-path-reference pattern:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex \
      --output "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
@@ -368,7 +368,7 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
      codex exec --full-auto -C "$PWD" \
        $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
        --output-last-message "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
-       "$(cat "$DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt") Work at your maximum reasoning effort level."
+       "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
    ```
 
    The trailing `Work at your maximum reasoning effort level.` is appended at the bash-launch level (NOT in the templated prompt body) because `${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh --with-effort` is documented as a no-op for Cursor (Cursor has no dedicated reasoning-effort flag — the convention is the prompt-level suffix). Codex receives the same suffix for symmetry.
@@ -381,7 +381,7 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
    ```
    `--write-health /dev/null` ensures both the read path (collect-reviewer-results.sh checks `-f "$WRITE_HEALTH"`, which is false for character devices like `/dev/null`) and the write path (explicit `!= "/dev/null"` guard) skip — the dialectic phase NEVER updates the cross-skill `${SESSION_ENV_PATH}.health` file. Block on this call (do NOT use `run_in_background`).
 
-9. **Per-bucket runtime failure handling**. For any reviewer with `STATUS != OK`, print `**⚠ <Tool> dialectic debate (decision <n>, <thesis|antithesis>) failed: <FAILURE_REASON>. Bucket truncated; synthesis decision stands.**` Do NOT flip any flag. The "debate quorum rule" below already routes failed buckets to the synthesis-fallback path because the missing/failed side fails the substantive-output / role-vs-RECOMMEND consistency check.
+9. **Per-bucket runtime failure handling**. For any reviewer with `STATUS != OK`, print `**⚠ <Tool> dialectic debate (decision <n>, <thesis|antithesis>) failed: <FAILURE_REASON>. Bucket truncated; synthesis decision stands.**` Do NOT flip any flag. The mandatory STATUS pre-check at the top of the "debate quorum rule" below catches the partial-launch case (thesis or antithesis non-OK → decision immediately fails quorum → synthesis decision stands).
 
 The thesis/antithesis prompt template bodies below are byte-identical to Phase 1. Only the delivery channel (external CLI via `run-external-reviewer.sh` rather than the Agent tool) and the call-site effort suffix change.
 
@@ -454,7 +454,11 @@ These tags are prompt-level delimiters, not a sanitization boundary — they red
 </debater_decision>
 ```
 
-**After all external debaters return** (read each output file for which the collector reported `STATUS=OK`), apply the **debate quorum rule** for each decision. A side passes quorum only when every check below is satisfied; otherwise the orchestrator does NOT write a binding resolution for that decision. The check is a conjunct — the pre-existing "substantive output" requirement is retained alongside the new structural gates:
+**After all external debaters return**, apply the **debate quorum rule** to each decision **whose bucket was launched** (decisions skipped in step 4 or skipped by the zero-externals guardrail in step 5 have no output files; their synthesis decisions already stand and need no quorum check).
+
+**Per-decision STATUS pre-check** (mandatory, applied before the per-side checks below): for each launched decision, if the collector did not report `STATUS=OK` for BOTH the thesis and the antithesis output files, the decision immediately fails quorum — do NOT apply the per-side checks below; the synthesis decision stands for that point and no binding resolution is written. This guards the partial-launch case where one side completed but its sibling failed (e.g., thesis OK + antithesis TIMED_OUT): the orchestrator must NOT write a one-sided resolution from the lone surviving file, since adversarial debate requires both sides.
+
+For each surviving decision (both sides `STATUS=OK`), read each side's file via the file path from the collector's `REVIEWER_FILE` field (which may point at a `*-retry.txt` if a retry recovered an empty output) — do NOT read directly from the launch path, as that would miss content recovered by retry. A side passes quorum only when every check below is satisfied; otherwise the orchestrator does NOT write a binding resolution for that decision. The check is a conjunct — the pre-existing "substantive output" requirement is retained alongside the new structural gates:
 
 - **Substantive output**: non-empty output with at least one full sentence of substantive content per required tag body.
 - **All 5 tags present**: `<claim>`, `<evidence>`, `<strongest_concession>`, `<counter_to_opposition>`, `<risk_if_wrong>`.
