@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.8] - 2026-04-19
+
+### Changed
+
+- `skills/issue/scripts/test-parse-input.sh` is now wired into `make lint` via a new `test-parse-input` Makefile target, mirroring the existing `test-redact` target for `scripts/test-redact-secrets.sh`. The 83-assertion parser regression harness runs on every PR through the existing `lint` CI job in `.github/workflows/ci.yaml`, closing the gap where regressions in `skills/issue/scripts/parse-input.sh` could previously ship undetected. Documentation updated in `skills/issue/SKILL.md`, `AGENTS.md`, and the script header. Closes #136.
+
 ## [3.4.7] - 2026-04-19
 
 ### Fixed

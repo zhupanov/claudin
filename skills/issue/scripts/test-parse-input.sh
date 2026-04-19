@@ -6,8 +6,9 @@
 # empty inline value), the Issue #132 bug (nested `### OOS_N:` inside a
 # generic body should be absorbed, not flushed), and baseline and boundary
 # cases including the #132-review-surfaced bodyless-generic + nested-OOS edge
-# case. Not wired into any automated test runner; shellcheck (via pre-commit)
-# lints this file automatically. Run manually:
+# case. Wired into `make lint` via the `test-parse-input` target so the harness
+# runs in CI on every PR; shellcheck (via pre-commit) lints this file
+# automatically. Run manually:
 #
 #   bash skills/issue/scripts/test-parse-input.sh
 #
