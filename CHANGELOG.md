@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.2] - 2026-04-19
+
+### Added
+
+- `scripts/audit-edit-write.sh` — dev-only opt-in `PostToolUse` audit hook that appends one JSONL line per `Edit` / `Write` tool invocation to `.claude/hook-audit.log`. Shipped in the plugin install tree but **not registered by default** in `hooks/hooks.json` or `.claude/settings.json`; contributors opt in locally via the gitignored `.claude/settings.local.json`. Uses `set -uo pipefail` (no `-e`), always exits 0, `|| true` on the append — a PostToolUse hook must never block Edit/Write, even on disk full / read-only fs. `jq -ec --arg ts … 'select(type=="object") | {ts, event, payload: .}'` composes the log line; empty / invalid / non-object stdin exits non-zero and the `|| true` swallows it, so no corrupted or empty-payload line is ever appended. `scripts/test-audit-edit-write.sh` is the 12-assertion regression harness (tmpdir + `CLAUDE_PROJECT_DIR` override, happy-path + append-order + empty-stdin + invalid-JSON-stdin coverage), wired into `make lint` via the new `test-audit-edit-write` phony target. `docs/dev-hook-audit.md` documents enable / rotate / privacy / concurrency with two enablement snippets (`$PWD/…` for in-repo dev, `${CLAUDE_PLUGIN_ROOT}/…` for plugin consumers). `SECURITY.md` gains a dev-only-audit-log subsection per AGENTS.md's security-documentation contract. `.gitignore` adds `.claude/hook-audit.log`. `agent-lint.toml` adds the two scripts to the G004/dead-script exclude list alongside the existing `scripts/test-sessionstart-health.sh` entry — all three are dev-infrastructure scripts structurally referenced from Makefile/docs/AGENTS.md but not from the SKILL.md / hooks.json / settings.json files agent-lint scans. Closes #155.
+
 ## [4.0.1] - 2026-04-19
 
 ### Added
