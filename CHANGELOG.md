@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.4] - 2026-04-19
+
+### Fixed
+
+- `skills/issue/scripts/parse-input.sh` Description bullet regex now accepts an empty inline value. Previously, `^-[[:space:]]+\*\*Description\*\*:[[:space:]]+(.+)$` required non-empty inline content, so a bullet written as `- **Description**:` with body on continuation lines only failed to match, `IN_BODY` never transitioned to `true`, and both the bullet line and all its continuations were silently dropped from `CURRENT_BODY`. The regex is relaxed to `^-[[:space:]]+\*\*Description\*\*:[[:space:]]*(.*)$` — both trailing quantifiers become zero-or-more, so an empty inline value captures as `""`, `IN_BODY` flips to `true`, and the existing fallback branch populates the body from subsequent continuation lines. `test-parse-input.sh` grows a new case 9 that feeds this shape (empty inline + multi-line continuation including a blank line) and asserts the decoded body, tallied vote count, reviewer, phase, and absence of `ITEM_1_MALFORMED`. Header grammar comment updated to document that the inline value may be empty. Closes #131.
+
 ## [3.4.3] - 2026-04-19
 
 ### Fixed
