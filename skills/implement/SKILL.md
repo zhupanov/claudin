@@ -149,7 +149,7 @@ Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issu
 
 ### Mandatory dual-write for `Pre-existing Code Issues`
 
-Whenever the main agent appends an entry to the `Pre-existing Code Issues` category in `execution-issues.md`, it MUST also append a corresponding `### OOS_N:` block to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` so that Step 9a.1 can file it as a GitHub issue. This dual-write is unconditional — it runs in every mode (`--quick`, `--auto`, `--merge`, `--debug`, `--no-merge`, or any future flag) and is the source of truth that converges main-agent-discovered pre-existing bugs into the same accepted-OOS pipeline as reviewer-surfaced OOS items from `/design` and `/review`.
+Whenever the main agent appends an entry to the `Pre-existing Code Issues` category in `execution-issues.md`, it MUST also append a corresponding `### OOS_N:` block to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` so that Step 9a.1 can file it as a GitHub issue. This dual-write is unconditional — it runs in every mode (`--quick`, `--auto`, `--merge`, `--draft`, `--debug`, `--no-merge`, or any future flag) and is the source of truth that converges main-agent-discovered pre-existing bugs into the same accepted-OOS pipeline as reviewer-surfaced OOS items from `/design` and `/review`.
 
 **Schema** (matches the format consumed by `/issue`'s batch-mode parser at `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/parse-input.sh`):
 

@@ -143,7 +143,7 @@ These tools enhance the workflow but are not required. When unavailable, Claude 
 - **Dialectic adjudication** — Contested design decisions from the sketch phase are resolved by a 3-judge binary panel (Claude Code Reviewer subagent + Codex + Cursor) after a thesis/antithesis debate run on external Cursor/Codex. Ballots are attribution-stripped with deterministic position rotation to cancel judge bias.
 - **Voting-based review resolution** — A 3-agent voting panel (YES/NO/EXONERATE) adjudicates review findings for both plan review and code review
 - **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
-- **End-to-end automation** — From feature design through PR creation, initial CI wait, and Slack announcement in a single command. With `--merge`, also runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification
+- **End-to-end automation** — From feature design through PR creation, initial CI wait, and Slack announcement in a single command. With `--merge`, also runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification. With `--draft` (mutually exclusive with `--merge`), creates a draft PR and keeps the feature branch checked out so the user can keep iterating
 - **External reviewer integration** — Codex and Cursor participate alongside Claude subagents as both reviewers and voters
 - **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`). Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
 
