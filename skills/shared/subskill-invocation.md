@@ -22,7 +22,7 @@ Note: `/create-skill` forwards to `/im` (not directly to `/implement`); `/im` in
 
 ### Pattern B — Stateful orchestrator (inline)
 
-Used when the parent runs setup, forwards `--session-env`, invokes the child, and then parses structured output to continue. Appears in `skills/fix-issue/SKILL.md § Step 6 — Implement` (parent step heading + explicit "Invoke `/implement` via the Skill tool" line + SIMPLE/HARD variant bullets) and in `skills/implement/SKILL.md § Step 1 — Ensure Design Plan Exists`, `§ Step 5 — Code Review`, `§ Step 8 — Version Bump` (around `/design`, `/review`, `/bump-version` calls). Canonical form:
+Used when the parent runs setup, forwards `--session-env`, invokes the child, and then parses structured output to continue. Appears in `skills/fix-issue/SKILL.md § Step 6 — Execute` (parent step heading + explicit "Invoke `/implement` via the Skill tool" line + SIMPLE/HARD variant bullets) and in `skills/implement/SKILL.md § Step 1 — Ensure Design Plan Exists`, `skills/implement/SKILL.md § Step 5 — Code Review`, `skills/implement/SKILL.md § Step 8 — Version Bump` (around `/design`, `/review`, `/bump-version` calls). Canonical form:
 
 ```
 Invoke `/implement` via the Skill tool:
@@ -73,7 +73,7 @@ Canonical examples:
 
   See `skills/implement/SKILL.md § Step 8 — Version Bump` for the full recipe. `--mode post` **requires** `--before-count $COMMITS_BEFORE` — calling `--mode post` without it errors out at the script level.
 
-- **Parsed stdout machine value after `/issue`** — the orchestrator reads `ISSUES_CREATED=<N>` / `ISSUES_FAILED=<N>` / per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL` lines from `/issue`'s stdout. Without those parsed values, the parent cannot file the created issue links into the PR body. See `skills/implement/SKILL.md § Step 9a.1 — Create OOS GitHub Issues`.
+- **Parsed stdout machine value after `/issue`** — the orchestrator reads `ISSUES_CREATED=<N>` / `ISSUES_FAILED=<N>` / per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL` lines from `/issue`'s stdout. Without those parsed values, the parent cannot file the created issue links into the PR body. See `skills/implement/SKILL.md § 9a.1 — Create OOS GitHub Issues`.
 
 - **Sentinel file** — `/design` writes `$DESIGN_TMPDIR/accepted-plan-findings.md`; `/implement` reads it (or notices its absence) to know whether to reflect findings in the PR body.
 
@@ -151,7 +151,7 @@ Canonical producers and consumers in the live tree:
 
 - `skills/fix-issue/SKILL.md § Step 0 — Setup` writes `$FIX_ISSUE_TMPDIR/session-env.sh` and passes it to `/implement`.
 - `skills/implement/SKILL.md § Step 0 — Session Setup` accepts `--session-env` from its parent and propagates a fresh `$IMPLEMENT_TMPDIR/session-env.sh` to `/design` and `/review` via `--session-env` on each invocation.
-- `skills/design/SKILL.md § Step 0 — Session Setup` and `skills/review/SKILL.md § Step 0` both accept `--session-env` as an `--caller-env` forward.
+- `skills/design/SKILL.md § Step 0 — Session Setup` and `skills/review/SKILL.md § Step 0 — Session Setup` both accept `--session-env` as an `--caller-env` forward.
 
 ### Security — never `source` a session-env file
 
