@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.9] - 2026-04-19
+
+### Added
+
+- `scripts/verify-skill-called.sh` — generic mechanical post-invocation verifier for `Skill` tool calls, with three mutually-exclusive modes: `--sentinel-file <path>` (file exists, regular, non-empty), `--stdout-line <regex> --stdout-file <path>` (captured stdout has a matching line via `LC_ALL=C grep -E -q -- …`; empty regex rejected as argument error; grep exit 2 treated as internal fault per fail-closed contract), and `--commit-delta <N> --before-count <B>` (commit count ahead of main increased by exactly N). Emits `VERIFIED=true|false` and `REASON=<token>` on stdout; exit 0 for pass/fail outcomes, exit 1 only for argument errors or internal faults. Reason tokens are a stable enum: `ok`, `missing_path`, `not_regular_file`, `empty_file`, `missing_stdout_file`, `no_match`, `commit_delta_mismatch`, `missing_main_ref`, `git_error`. Intended as a defense-in-depth gate for `Skill` calls whose child skills have no dedicated domain-specific verifier.
+- `scripts/lib-count-commits.sh` — sourced-only shell library (no shebang, not invokable directly) extracting the shared `count_commits` function used by both `scripts/check-bump-version.sh` and the new verifier. Distinguishes `ok` / `missing_main_ref` / `git_error` via a file-based status side channel (`COUNT_COMMITS_STATUS_FILE`) so the `$(count_commits)` subshell's result can be classified without losing the status. Preserves the existing `WARN: check-bump-version.sh:` stderr prefix for log parity with operators' existing grep patterns. Explicitly documents that `.claude/skills/bump-version/scripts/classify-bump.sh`'s merge-base logic is a structurally different concept intentionally not migrated.
+- `scripts/test-verify-skill-called.sh` — 53-assertion black-box regression harness covering all three modes' pass/fail paths, argument-error paths (exit 1 with no KEY=VALUE), stdout-contract assertions, exit-code assertions on every non-argument-error path, malformed-ERE regression (grep exit 2 → exit 1 fail-closed), and the cwd-neutral source chain via `check-bump-version.sh`. Wired into `make lint` via the new `test-verify-skill-called` target. Added to `agent-lint.toml`'s exclude list alongside `scripts/lib-count-commits.sh`.
+- `skills/implement/SKILL.md` Step 8 and Step 12 Rebase + Re-bump Sub-procedure step 4 migrate to call `verify-skill-called.sh --sentinel-file "$BUMP_REASONING_FILE"` alongside the existing `check-bump-version.sh --mode post` commit-delta check, with an empty-path guard. The sentinel check is advisory (warn-and-continue; commit-delta remains the hard gate) and complementary. `scripts/check-bump-version.sh` refactored to source `lib-count-commits.sh`; no behavior change. Closes #160.
+
 ## [4.0.8] - 2026-04-19
 
 ### Added
