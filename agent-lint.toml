@@ -40,10 +40,18 @@ suppress = [
 # therefore not excluded; the test script is referenced only from Makefile
 # (test-post-scaffold-hints target) and AGENTS.md, matching the same
 # Makefile-only pattern as the test-deny-edit-write.sh entry above.
+#
+# skills/create-skill/scripts/test-render-skill-md.sh is the regression
+# harness for render-skill-md.sh (the scaffold generator). The generator
+# itself IS structurally referenced from skills/create-skill/SKILL.md's
+# Step 3 feature-description template and is therefore not excluded; the
+# test script is referenced only from Makefile's test-render-skill target,
+# matching the same Makefile-only pattern as the entries above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
   "scripts/test-audit-edit-write.sh",
   "scripts/test-deny-edit-write.sh",
   "scripts/test-post-scaffold-hints.sh",
+  "skills/create-skill/scripts/test-render-skill-md.sh",
 ]

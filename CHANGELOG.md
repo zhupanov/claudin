@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.8] - 2026-04-19
+
+### Added
+
+- Canonical sub-skill invocation style guide: `skills/shared/subskill-invocation.md` documents the six conventions larch skills already follow implicitly — two first-class invocation patterns (Pattern A bulleted bare-name fallback, Pattern B inline "Invoke `/X` via the Skill tool"), the `allowed-tools` narrowing heuristic (pure delegator → `Skill` only, delegator-that-validates → `Bash, Skill`, hybrid orchestrator → `Skill` plus whatever the parent needs), post-invocation verification expectation (scoped to orchestrators that continue based on child side effects — pure forwarders exempt), session-env handoff with safe-parse rule (do NOT `source` the file; parse line-by-line; writer does not escape so constrain the value set at the source), anti-conditional-phrasing for Skill-tool calls, and the bare-name-then-fully-qualified (`larch:<name>`) fallback. `skills/create-skill/scripts/render-skill-md.sh` now emits a `## Sub-skill Invocation` checklist block unconditionally in both minimal and multi-step scaffold variants, placed after `## Progress Reporting` and before `## Step 0` in multi-step and at the bottom of MINIMAL_BODY, so every newly scaffolded skill inherits the conventions with a pointer to the canonical guide. `skills/create-skill/scripts/post-scaffold-hints.sh` gains a reminder line pointing at the guide. `skills/create-skill/scripts/test-render-skill-md.sh` is the new 3-case regression harness asserting `RENDERED=` stdout line, frontmatter name + YAML-quoted description, `## Sub-skill Invocation` section presence, a `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` citation with non-empty prefix (guards against empty `--plugin-token` producing a rooted path), and empty-`--plugin-token` rejection. Wired into `make lint` via the new `test-render-skill` target. `AGENTS.md` declares the shared file as canonical (Editing rules + Canonical sources). `agent-lint.toml` excludes the new harness from the G004/dead-script rule (Makefile-only reference, matching the `test-deny-edit-write.sh` precedent). Closes #158.
+
 ## [4.0.7] - 2026-04-19
 
 ### Fixed

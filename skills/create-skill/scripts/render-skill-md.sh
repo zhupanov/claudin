@@ -143,6 +143,18 @@ Step Name Registry:
 | 1 | TODO |
 | ... | ... |
 
+## Sub-skill Invocation
+
+If this skill invokes another skill via the \`Skill\` tool, read \`${PLUGIN_TOKEN}/skills/shared/subskill-invocation.md\` for the full conventions. Quick checklist:
+
+1. Pick one of two invocation shapes (Pattern A bulleted or Pattern B inline). Do not bury the Skill-tool call in a prose conditional.
+2. Use the bare name first (e.g., \`"implement"\`), then the fully-qualified \`larch:<name>\` fallback. Never start with the fully-qualified name.
+3. If this skill delegates to another skill, widen the \`allowed-tools\` frontmatter to include \`Skill\` — the scaffold default is \`Bash, Read\`, which silently blocks \`Skill\` invocations.
+4. For orchestrators that continue based on child side effects, pair the Skill call with a mechanical verification (commit-count delta, parsed stdout key, or sentinel file).
+5. For state that must cross skill boundaries (reviewer health, repo name, slack-ok, session tmpdir), write a \`session-env.sh\` and pass \`--session-env <path>\` to the child. Never \`source\` the file — parse it line-by-line.
+
+If this skill does not delegate to any other skill, delete this entire section.
+
 ## Step 0 — Setup
 
 <!-- TODO: invoke ${LOCAL_TOKEN}/${SKILL_REL}/scripts/setup.sh -->
@@ -165,6 +177,18 @@ ${DESCRIPTION}
   Do NOT place raw bash commands in this SKILL.md — wrap every command in a script.
   Shared scripts (used by two or more skills) should live under ${PLUGIN_TOKEN}/scripts/ instead.
 -->
+
+## Sub-skill Invocation
+
+If this skill invokes another skill via the \`Skill\` tool, read \`${PLUGIN_TOKEN}/skills/shared/subskill-invocation.md\` for the full conventions. Quick checklist:
+
+1. Pick one of two invocation shapes (Pattern A bulleted or Pattern B inline). Do not bury the Skill-tool call in a prose conditional.
+2. Use the bare name first (e.g., \`"implement"\`), then the fully-qualified \`larch:<name>\` fallback. Never start with the fully-qualified name.
+3. If this skill delegates to another skill, widen the \`allowed-tools\` frontmatter to include \`Skill\` — the scaffold default is \`Bash, Read\`, which silently blocks \`Skill\` invocations.
+4. For orchestrators that continue based on child side effects, pair the Skill call with a mechanical verification (commit-count delta, parsed stdout key, or sentinel file).
+5. For state that must cross skill boundaries (reviewer health, repo name, slack-ok, session tmpdir), write a \`session-env.sh\` and pass \`--session-env <path>\` to the child. Never \`source\` the file — parse it line-by-line.
+
+If this skill does not delegate to any other skill, delete this entire section.
 MINIMAL_BODY
 fi
 
