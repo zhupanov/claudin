@@ -260,9 +260,14 @@ if [[ -n "$ISSUE_ARG" ]]; then
         exit 2
     fi
 
-    # Verify last comment is GO
-    LAST_COMMENT=$(gh api --paginate "repos/${REPO}/issues/${ISSUE_NUM}/comments" \
-        --jq '.[-1].body // empty' 2>/dev/null | tail -1) || {
+    # Verify last comment is GO.
+    # Using --slurp so `jq` sees a single array-of-arrays and can select the
+    # globally-last comment via `add // [] | .[-1]`. The older `--jq '.[-1].body'`
+    # pattern ran the filter per page and was only accidentally correct because
+    # the last page contains the globally-last comment. See `prose_open_blockers`
+    # above for the canonical reference use of this pattern.
+    LAST_COMMENT=$(gh api --paginate --slurp "repos/${REPO}/issues/${ISSUE_NUM}/comments" 2>/dev/null \
+        | jq -r 'add // [] | .[-1].body // empty') || {
         echo "ELIGIBLE=false"
         echo "ERROR=Failed to fetch comments for issue #$ISSUE_NUM"
         exit 2
@@ -320,9 +325,10 @@ while IFS= read -r issue_row; do
     ISSUE_NUM=$(echo "$issue_row" | jq -r '.number')
     ISSUE_TITLE=$(echo "$issue_row" | jq -r '.title')
 
-    # Get the last comment body (paginated to ensure we see all comments)
-    LAST_COMMENT=$(gh api --paginate "repos/${REPO}/issues/${ISSUE_NUM}/comments" \
-        --jq '.[-1].body // empty' 2>/dev/null | tail -1) || {
+    # Get the globally-last comment body. See the explicit-issue path above for
+    # the rationale on `--slurp` + `add // [] | .[-1]`.
+    LAST_COMMENT=$(gh api --paginate --slurp "repos/${REPO}/issues/${ISSUE_NUM}/comments" 2>/dev/null \
+        | jq -r 'add // [] | .[-1].body // empty') || {
         echo "ELIGIBLE=false"
         echo "ERROR=Failed to fetch comments for issue #$ISSUE_NUM"
         exit 2
