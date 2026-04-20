@@ -61,8 +61,9 @@ grep -q 'dialectic-debate\.md' "$DIALEXEC_MD" \
 grep -q 'All 4 keys are required' "$FLAGS_MD" \
   || fail "references/flags.md lacks the --branch-info 4-key literal 'All 4 keys are required'"
 
+# shellcheck disable=SC2016 # single quotes intentional — grep pattern is literal, includes backticks
 grep -q '`::` delimiter' "$FLAGS_MD" \
-  || fail "references/flags.md lacks the --step-prefix '\`::\` delimiter' literal"
+  || fail "references/flags.md lacks the --step-prefix backtick-colon-delimiter literal"
 
 echo "PASS: test-design-structure.sh — all 4 structural invariants hold"
 exit 0

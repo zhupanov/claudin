@@ -59,7 +59,7 @@
 
 **After all external debaters return**, classify each decision's `Disposition` and, for `voted`-eligible decisions, hand off to the 3-judge panel defined in `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`. The orchestrator no longer picks winners by reading tagged output — that role is delegated to the judge panel. See `dialectic-protocol.md` for the authoritative ballot format, judge prompt template, threshold rules, tally algorithm, and resolution schema. The prose below is the call-site contract in Step 2a.5; `dialectic-protocol.md` is the single source of truth for dialectic parser/threshold rules (do NOT reuse `voting-protocol.md` parsers for dialectic — the token sets and ID shapes differ).
 
-### Eligibility gate (Dispositions)
+## Eligibility gate (Dispositions)
 
 Classify every decision originally present in `contested-decisions.md`:
 
@@ -82,7 +82,7 @@ The **debate quorum gate** (retained byte-compatible with prior behavior) is app
 
 If any check fails for either side, print `**⚠ Debate for DECISION_N failed quorum (reason: <missing_tag|bad_recommend|missing_citation|role_mismatch|substantive_empty|no_output>). Fallback to synthesis.**` Classify the decision as `Disposition: fallback-to-synthesis` with the specific failure reason as the `Why fallback` value. Do NOT include it on the judge ballot.
 
-### Dialectic-local judge-panel re-probe (Part D — cascade scoping)
+## Dialectic-local judge-panel re-probe (Part D — cascade scoping)
 
 After the eligibility gate finishes, run a fresh health probe right before launching judges. A Cursor/Codex timeout in **debating** must not lock that tool out of **judging** — the debater phase may have snapshotted availability many minutes ago.
 
@@ -97,7 +97,7 @@ Apply the **two-key rule** (matching the Step 0 convention in `${CLAUDE_PLUGIN_R
 
 A tool that is installed but unhealthy (`*_HEALTHY=false`) is treated as **unavailable** for judge-panel purposes and replaced by a Claude Code Reviewer subagent per the replacement-first pattern in `dialectic-protocol.md`. The `judge_` prefix is deliberate — these are judge-phase-local flags; do NOT mutate orchestrator-wide `codex_available` / `cursor_available` (those drive Step 3 plan review).
 
-### Ballot construction and judge launch
+## Ballot construction and judge launch
 
 If zero decisions are `voted`-eligible (all failed the gate, all were bucket-skipped, or all were over-cap), skip ballot construction and judge launch entirely — jump directly to the **Write `dialectic-resolutions.md`** sub-step below and emit only the non-`voted` entries.
 
@@ -115,7 +115,7 @@ Launch 3 judges **in parallel** (single message). Spawn order: Cursor first, the
 - Codex judge via `run-external-reviewer.sh --tool codex` (with `run_in_background: true`, `timeout: 1860000`). If `judge_codex_available=false`, launch a Claude subagent replacement inline.
 - Claude Code Reviewer subagent judge: always via the Agent tool (subagent_type: `code-reviewer`), inline.
 
-### Collecting judge results (split pattern)
+## Collecting judge results (split pattern)
 
 External judge outputs are collected via `collect-reviewer-results.sh` using its sentinel polling. Inline Agent-tool judges produce no sentinel; their votes are returned directly by the Agent tool and parsed from its return text. Do NOT pass inline-judge output paths to `collect-reviewer-results.sh` — the sentinel check would time out and incorrectly drop the voter count.
 
@@ -133,7 +133,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
 
 For each external judge, parse its `STATUS` and `REVIEWER_FILE`. An external judge with `STATUS != OK` is ineligible for every decision on the ballot. For inline Agent-tool judges (primary Claude subagent + any Claude replacements), parse votes directly from the Agent return text; inline judges are always eligible.
 
-### Tally and resolution writing
+## Tally and resolution writing
 
 For each `voted`-eligible decision, tally per-decision votes from all 3 judges per the protocol's Parser tolerance and Threshold Rules. Apply the binary thresholds:
 
@@ -141,7 +141,7 @@ For each `voted`-eligible decision, tally per-decision votes from all 3 judges p
 - 2 eligible voters: unanimous → `Disposition: voted`; 1-1 tie → `Disposition: fallback-to-synthesis` with reason `1-1 tie with 2 voters`.
 - <2 eligible voters: `Disposition: fallback-to-synthesis` with reason `<N> judges eligible`.
 
-### Write `$DESIGN_TMPDIR/dialectic-resolutions.md`
+## Write `$DESIGN_TMPDIR/dialectic-resolutions.md`
 
 Write one resolution entry per decision originally present in `contested-decisions.md` (including `over-cap`, `bucket-skipped`, and `fallback-to-synthesis` entries), using the schema from `dialectic-protocol.md`:
 
