@@ -2,7 +2,7 @@
 name: research
 description: "Use when read-only research is needed. 3 research agents then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) produce findings summary, risk assessment, difficulty estimates, and feasibility verdict."
 argument-hint: "[--debug] <research question or topic>"
-allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch
+allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
   PreToolUse:
     - matcher: "Edit|Write|NotebookEdit"
@@ -14,7 +14,9 @@ hooks:
 
 # Research Skill
 
-Collaborative read-only research task using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) and a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when Cursor or Codex is unavailable. Produces a structured research report without modifying the repository.
+Collaborative read-only research task using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) and a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when Cursor or Codex is unavailable. Produces a structured research report without modifying the repository. May invoke `/issue` via the Skill tool to file research-result issues.
+
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/issue`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the research question. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, save the remainder as `RESEARCH_QUESTION`. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
@@ -22,7 +24,13 @@ Collaborative read-only research task using 3 research agents (Claude inline + C
 
 The research question is described by `RESEARCH_QUESTION` (not raw `$ARGUMENTS`). Use `RESEARCH_QUESTION` wherever human-readable topic text is needed (e.g., agent prompts, report headers, temp file content).
 
-**Read-only contract**: This skill does NOT create branches, modify files, or make commits. All scratch artifacts are written to `/tmp` via Bash. The `allowed-tools` frontmatter omits `Edit`, `Write`, and `Skill` — the orchestrating agent cannot use those tools. External reviewers (Codex, Cursor) are instructed not to modify files, but this is a behavioral constraint (prompt-enforced), not mechanically enforced. Known limitation: concurrent repo changes during a long research run may cause agents to see slightly different snapshots.
+**Read-only-repo contract**: This skill does NOT create branches, modify tracked repo files, or make commits. Two mechanical layers enforce the contract: (a) the `allowed-tools` frontmatter lists `Edit`, `Write`, `NotebookEdit`, and `Skill`, widening the orchestrator's surface beyond pure-read; (b) the skill-scoped PreToolUse hook `${CLAUDE_PLUGIN_ROOT}/scripts/deny-edit-write.sh` matches `Edit|Write|NotebookEdit` and permits the call only when the target `tool_input.file_path` (or `tool_input.notebook_path`) resolves to an absolute path under canonical `/tmp`; any other path denies. The hook is defense-in-depth — `allowed-tools` remains the primary gate because hook `permissionDecision` semantics may vary by Claude Code version. `Skill` is permitted so the orchestrator may invoke `/issue` via the Skill tool for research-results-to-issues flows; child skills run under their own `allowed-tools` and hooks, not under this one. External reviewers (Codex, Cursor) are instructed not to modify files, but this is a behavioral constraint (prompt-enforced), not mechanically enforced. Known limitation: concurrent repo changes during a long research run may cause agents to see slightly different snapshots. Existing Bash heredoc writes to `$RESEARCH_TMPDIR` under `/tmp` continue to work unchanged.
+
+## Sub-skill invocation
+
+Invoke `/issue` via the Skill tool when the research brief calls for filing the findings as GitHub issues. Follow the Pattern B conventions in `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` — pass `--session-env`, parse `/issue`'s stdout machine lines, and continue with the parent's next step after the child returns.
+
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 ## Progress Reporting
 
@@ -282,7 +290,7 @@ Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background:
 
 If any external reviewers produced findings, negotiate with each independently using the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, with `$RESEARCH_TMPDIR` as the tmpdir. Use `codex-negotiation-prompt.txt` / `codex-negotiation-output.txt` for the single Codex negotiation track and `cursor-negotiation-prompt.txt` / `cursor-negotiation-output.txt` for the Cursor negotiation track. Run both negotiations **in parallel** when both produced findings.
 
-**Note on negotiation prompt files**: `/research` does not have `Write` in its `allowed-tools` frontmatter. Create each negotiation prompt file via a Bash heredoc (e.g., `cat > "$RESEARCH_TMPDIR/codex-negotiation-prompt.txt" <<'EOF' ... EOF`) or pass the prompt to `run-negotiation-round.sh --prompt-file`.
+**Note on negotiation prompt files**: Negotiation prompt files live under `$RESEARCH_TMPDIR` (which is always a path under `/tmp`), so they may be created either via the `Write` tool or via a Bash heredoc (e.g., `cat > "$RESEARCH_TMPDIR/codex-negotiation-prompt.txt" <<'EOF' ... EOF`). The skill-scoped PreToolUse hook permits `Write` to paths under canonical `/tmp`; both approaches are equivalent.
 
 Merge accepted/rejected outcomes after both complete.
 
