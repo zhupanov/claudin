@@ -46,9 +46,8 @@ if [[ "$PLUGIN" == "true" ]]; then
   echo "      \"Bash(\$PWD/skills/$NAME/scripts/*)\""
   echo "      \"Skill($NAME)\""
   echo "      \"Skill(larch:$NAME)\""
-  echo "  - Both Skill forms are required for strict-permissions consumers;"
-  echo "    see README subsection \"Strict-permissions consumers — Skill"
-  echo "    permission entries\" for rationale."
+  echo "  - Both Skill forms are required for strict-permissions consumers; see"
+  echo "    README subsection \"Strict-permissions consumers — Skill permission entries\" for rationale."
 fi
 
 if [[ -d "$PWD/.claude/skills/relevant-checks" ]]; then

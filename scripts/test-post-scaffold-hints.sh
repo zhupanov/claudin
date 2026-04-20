@@ -104,8 +104,18 @@ assert_count_eq "$out" '"Skill(larch:foo)"' 1 "qualified Skill(larch:foo) appear
 # shellcheck disable=SC2016
 assert_contains "$out" '"Bash($PWD/skills/foo/scripts/*)"' "Bash permission line present with literal \$PWD token"
 
-# README cross-reference present.
-assert_contains "$out" "Strict-permissions consumers" "README subsection cross-reference present"
+# README cross-reference present. The full subsection title must appear on
+# a single emitted line (so it can be grepped as a single string and matches
+# the actual README heading exactly).
+full_title='Strict-permissions consumers — Skill permission entries'
+if printf '%s\n' "$out" | grep -Fq -- "$full_title"; then
+    PASS=$((PASS + 1))
+    echo "  ok: README subsection title appears on a single line"
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("README subsection title split across lines — should be on one line")
+    echo "  FAIL: README subsection title split across lines — should be on one line" >&2
+fi
 
 # ASCII-ordering instruction mentions sort -u (not a "bare first" rule).
 assert_contains "$out" "sort -u" "sort -u instruction present"
