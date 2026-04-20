@@ -1,9 +1,9 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro smoke-dialectic
+.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-subskill-anchors smoke-dialectic
 
-lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro
+lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-subskill-anchors
 	pre-commit run --all-files
 
 test-redact:
@@ -50,6 +50,9 @@ test-design-structure:
 
 test-implement-rebase-macro:
 	bash scripts/test-implement-rebase-macro.sh
+
+test-subskill-anchors:
+	bash scripts/test-subskill-anchors.sh
 
 smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh

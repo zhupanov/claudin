@@ -97,6 +97,14 @@ suppress = [
 # SKILL.md files. It is structurally referenced from Makefile (test-anti-halt
 # target) and AGENTS.md, matching the same Makefile-only pattern as the other
 # test-* harnesses above.
+#
+# scripts/test-subskill-anchors.sh is the regression harness for every
+# `<path>/SKILL.md § <heading>` citation in skills/shared/subskill-invocation.md
+# (closes #236). The harness enforces heading-anchor resolution against the
+# referenced SKILL.md files — a contract orthogonal to the invocation-wording
+# contract enforced by scripts/lint-skill-invocations.py. It is referenced
+# only from Makefile (test-subskill-anchors target) and AGENTS.md, matching
+# the same Makefile-only pattern as the other test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -112,4 +120,5 @@ exclude = [
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
+  "scripts/test-subskill-anchors.sh",
 ]
