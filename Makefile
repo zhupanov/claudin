@@ -1,9 +1,9 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called smoke-dialectic
+.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version smoke-dialectic
 
-lint: test-redact test-parse-input test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called
+lint: test-redact test-parse-input test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version
 	pre-commit run --all-files
 
 test-redact:
@@ -32,6 +32,9 @@ test-render-skill:
 
 test-verify-skill-called:
 	bash scripts/test-verify-skill-called.sh
+
+test-check-bump-version:
+	bash scripts/test-check-bump-version.sh
 
 smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh
