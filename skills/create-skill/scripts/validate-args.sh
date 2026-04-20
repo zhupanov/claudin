@@ -15,9 +15,9 @@
 #
 # Reserved-name union (rejects the name if it matches any):
 #   Anthropic:     anthropic, claude
-#   larch static:  design, implement, review, research, loop-review, alias,
-#                  relevant-checks, bump-version, fix-issue, im, imaq,
-#                  create-skill
+#   larch static:  design, implement, review, research, loop-review,
+#                  loop-improve-skill, alias, relevant-checks, bump-version,
+#                  fix-issue, im, imaq, create-skill, issue
 #   Plugin skills: ls "${CLAUDE_PLUGIN_ROOT}/skills" (if present)
 #   Local skills:  ls "$PWD/.claude/skills" (if present)
 #
@@ -75,7 +75,7 @@ for n in "${ANTHROPIC_RESERVED[@]}"; do
   fi
 done
 
-# Static larch-reserved names — mirrors skills/alias/SKILL.md Step 2 AND includes create-skill itself.
+# Static larch-reserved names — aligned with alias name-shadowing intent (see /alias Step 2 for the dynamic-probe rationale). Serves as a fast pre-check before the plugin-skills directory probe below; the dynamic probe remains authoritative and catches anything missed here.
 LARCH_RESERVED=(
   alias
   bump-version
@@ -86,6 +86,7 @@ LARCH_RESERVED=(
   imaq
   implement
   issue
+  loop-improve-skill
   loop-review
   relevant-checks
   research

@@ -35,12 +35,12 @@ ORCHESTRATORS=(
   "skills/review/SKILL.md"
   "skills/loop-review/SKILL.md"
   "skills/loop-improve-skill/SKILL.md"
+  "skills/alias/SKILL.md"  # has Step 4 post-delegation verification
 )
 
 DELEGATORS=(
   "skills/im/SKILL.md"
   "skills/imaq/SKILL.md"
-  "skills/alias/SKILL.md"
   "skills/create-skill/SKILL.md"
 )
 
