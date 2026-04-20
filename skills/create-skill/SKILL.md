@@ -41,7 +41,7 @@ The validator enforces:
 
 ## Principles
 
-Principles for every skill scaffolded by `/create-skill` are documented in `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md`. They still apply to every scaffolded skill and are forwarded verbatim as a compact A/B/C excerpt into the `/im` feature description handed off by Step 3.
+Principles for every skill scaffolded by `/create-skill` are documented in `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md`. They still apply to every scaffolded skill; Section III (larch mechanical rules A/B/C) is forwarded as a compact excerpt into the `/im` feature description handed off by Step 3.
 
 ## Step 3 — Delegate to /im
 

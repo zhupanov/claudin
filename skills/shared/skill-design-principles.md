@@ -113,7 +113,7 @@ A well-formed larch skill satisfies every bullet below. Use this list during ski
 - **No tutorial prose** — no "what is X" explanations of concepts Claude already knows; knowledge-delta ratio of the body is high (Section I).
 - **SKILL.md body under 500 lines** — if longer, heavy content lives in `references/` with explicit loading triggers (Section II).
 - **Explicit anti-pattern list with WHY** for any fragile or commonly-mistaken surface (Section VI).
-- **Pattern match** — the skill structure matches exactly one of the five patterns in Section VIII; structure feels coherent end-to-end.
+- **Pattern match** — the skill structure has a clear primary pattern from Section VIII (named hybrids like "Process + Tool" are acceptable when documented); structure feels coherent end-to-end.
 - **Section III compliance** — all non-trivial shell logic lives in `.sh` wrappers; no direct command calls or consecutive Bash tool calls in the body.
 - **Description triggers reliably** — under the intended use cases (e.g., "the user says 'review my PR'") the description's keywords match; under adjacent use cases that should NOT trigger, they do not.
 - **No orphan references** — every `references/*.md` file is loaded by at least one workflow step via a `MANDATORY — READ ENTIRE FILE` trigger; unused references are deleted.
