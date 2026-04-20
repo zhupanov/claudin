@@ -14,7 +14,10 @@
 #   $TMPROOT/super      — superproject
 #     sub/              — submodule (added via `git submodule add file://...`)
 #     nested/           — standalone nested repo, NOT registered as a submodule
-#     symlink-file      — symlink → super/README.md
+#     symlink-file      — symlink → super/README.md (case 6)
+#     outside-link      — symlink → sub/any.txt, absolute target (case 11)
+#     cycle-link        — symlink → itself, self-referential cycle (case 12)
+#     relative-link     — symlink → sub/any.txt, relative target (case 13)
 #   $TMPROOT/nonrepo    — ordinary directory outside any git repo
 #
 # Deny channel: the hook always exits 0 and emits Anthropic's hookSpecificOutput
@@ -198,6 +201,15 @@ git -C "$NESTED" commit -m 'nested' >/dev/null
 # asserts the hook allows it (target canonicalizes into the superproject).
 ln -s "$SUPER/README.md" "$SUPER/symlink-file"
 
+# Symlinks exercising the symlink-resolution loop added for issue #166.
+# Case 11: absolute symlink into the submodule — must now deny.
+# Case 12: self-referential cycle — must deny via the bounded-depth branch.
+# Case 13: relative symlink into the submodule — exercises the
+#          `$(dirname "$resolved")/$target` rebasing branch.
+ln -s "$SUB/any.txt" "$SUPER/outside-link"
+ln -s "$SUPER/cycle-link" "$SUPER/cycle-link"
+ln -s "sub/any.txt" "$SUPER/relative-link"
+
 # Non-repo directory outside any git repo. Case 9 runs the hook from here.
 mkdir -p "$NONREPO"
 
@@ -355,6 +367,38 @@ echo "=== 10: Fail-closed — non-absolute file_path ==="
 run_hook "$SUPER" '{"tool_input":{"file_path":"relative/path.txt"}}'
 assert_eq "[case 10] exit code" 0 "$RC"
 assert_deny_json "$HOOK_STDOUT" "absolute" "[case 10]"
+
+# --- Case 11: Deny — absolute symlink in superproject pointing into submodule (issue #166) ---
+# Without the symlink-resolution loop, the hook classified outside-link's
+# dirname ($SUPER) as the repo and allowed the edit, bypassing the submodule
+# guard. The loop resolves outside-link → $SUB/any.txt before the ancestor
+# walk; classification then correctly lands in the submodule. Strict, not
+# tri-state.
+echo ""
+echo "=== 11: Deny symlink into submodule (absolute target, issue #166) ==="
+run_hook "$SUPER" "$(json_payload "$SUPER/outside-link")"
+assert_eq "[case 11] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "submodule" "[case 11]"
+
+# --- Case 12: Deny — self-referential symlink cycle (fail-closed depth cap) --
+# Exercises the new bounded-depth branch (max_depth=40 hops). The deny reason
+# contains "symlink" so assert_deny_json matches only that branch.
+echo ""
+echo "=== 12: Deny self-referential symlink cycle (fail-closed depth cap) ==="
+run_hook "$SUPER" "$(json_payload "$SUPER/cycle-link")"
+assert_eq "[case 12] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "symlink" "[case 12]"
+
+# --- Case 13: Deny — relative symlink into submodule (relative-rebase branch) ---
+# Exercises `$(dirname "$resolved")/$target` — the trickiest branch of the
+# resolution loop. relative-link → sub/any.txt (relative target) must be
+# rebased against $SUPER (the link's own directory) to $SUPER/sub/any.txt,
+# which lands in the submodule.
+echo ""
+echo "=== 13: Deny symlink into submodule (relative target, issue #166) ==="
+run_hook "$SUPER" "$(json_payload "$SUPER/relative-link")"
+assert_eq "[case 13] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "submodule" "[case 13]"
 
 # --- Summary --------------------------------------------------------------
 echo ""

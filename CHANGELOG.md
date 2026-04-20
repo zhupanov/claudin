@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.7] - 2026-04-19
+
+### Fixed
+
+- `scripts/block-submodule-edit.sh` now resolves `tool_input.file_path` through any symlink chain before repo classification, closing the bypass where a symlink in the superproject pointing into a submodule was allowed (the hook previously canonicalized only the containing directory via `pwd -P` and never resolved the `file_path` itself). Implementation is a bounded-depth (40-hop) pure-bash `readlink` loop inserted after `REPO_ROOT` canonicalization and before the ancestor walk — non-symlink inputs pass through unchanged, so all prior allow / deny behavior is preserved. macOS ships without `readlink -f` / `realpath` so the loop avoids them; relative readlink targets are rebased against the link's own directory. Fail-closed via the existing `block()` helper on depth-cap exhaustion (possible cycle), `readlink` failure, or empty target. `scripts/test-block-submodule-edit.sh` gains three strict regression cases: case 11 (absolute symlink into submodule → deny), case 12 (self-referential symlink cycle → deny via depth cap), case 13 (relative symlink into submodule → deny, exercises the `$(dirname "$resolved")/$target` rebasing branch); the top-of-file fixture comment block lists the three new symlinks. Closes #166.
+
 ## [4.0.6] - 2026-04-19
 
 ### Added
