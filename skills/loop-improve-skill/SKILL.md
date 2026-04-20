@@ -42,15 +42,18 @@ Validate:
 
 If invalid, print `**⚠ 1: parse args — invalid or missing <skill-name>. Usage: /loop-improve-skill <skill-name>**` and abort.
 
-Resolve the target skill path. Probe both:
-- `${CLAUDE_PLUGIN_ROOT}/skills/${SKILL_NAME}/SKILL.md` (plugin-public skill)
-- `.claude/skills/${SKILL_NAME}/SKILL.md` (project-local skill, relative to the current working directory)
+Resolve the target skill path. Determine the current repo root via `git rev-parse --show-toplevel`; if that command fails (not a git repo), fall back to `$PWD`. Save as `REPO_ROOT`.
 
-If neither exists, print `**⚠ 1: parse args — no skill found at ${CLAUDE_PLUGIN_ROOT}/skills/${SKILL_NAME}/ or .claude/skills/${SKILL_NAME}/. Aborting.**` and abort.
+Probe in this order (first match wins) and save as an absolute path in `TARGET_SKILL_PATH`:
+1. `${REPO_ROOT}/skills/${SKILL_NAME}/SKILL.md` — plugin-dev mode: the current checkout IS the larch plugin (or another plugin repo).
+2. `${REPO_ROOT}/.claude/skills/${SKILL_NAME}/SKILL.md` — project-local skill defined in the current repo.
+3. `${CLAUDE_PLUGIN_ROOT}/skills/${SKILL_NAME}/SKILL.md` — plugin-installation fallback (read-only source of truth when the current repo is NOT a larch clone).
 
-Save the first matching path as `TARGET_SKILL_PATH` (for diagnostics) and continue.
+**Why repo-local wins**: `/loop-improve-skill` is an iterative loop. Inside it, `/im` modifies the skill file in the current repo. If the probe order preferred the plugin-installation path (e.g., a pristine `larch1` clone) over the current repo (e.g., a working `larch3` clone being mutated by `/im`), every iteration after the first would re-judge the frozen plugin-dir copy instead of the latest modified contents — defeating the purpose of the loop.
 
-Print: `✅ 1: parse args — target /${SKILL_NAME}`
+If none of the three paths exist, print `**⚠ 1: parse args — no skill found. Probed: ${REPO_ROOT}/skills/${SKILL_NAME}/, ${REPO_ROOT}/.claude/skills/${SKILL_NAME}/, ${CLAUDE_PLUGIN_ROOT}/skills/${SKILL_NAME}/. Aborting.**` and abort.
+
+Print: `✅ 1: parse args — target /${SKILL_NAME} at ${TARGET_SKILL_PATH}`
 
 ## Step 2 — Create Tracking GitHub Issue
 
@@ -74,7 +77,15 @@ Print: `> **🔶 3: loop — iteration ${ITER}**`
 
 ### 3.j — Run /skill-judge
 
-Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no matching skill", retry with `"skill-judge:skill-judge"`. Pass `${SKILL_NAME}` as args. Capture the full response to `$JUDGE_OUT` (a temp file).
+Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no matching skill", retry with `"skill-judge:skill-judge"`. Pass the following string as args so the judge reads the current on-disk contents from the repo-local path resolved in Step 1 rather than whatever default resolution `/skill-judge` would otherwise perform:
+
+```
+${SKILL_NAME} (absolute SKILL.md path: ${TARGET_SKILL_PATH}) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.
+```
+
+The explicit absolute-path directive is load-bearing: `/loop-improve-skill` is an iterative loop where `/im` mutates the skill file between iterations, and subsequent rounds MUST judge the latest modified contents in the current repo (e.g., a `larch3` clone), not the frozen copy in the plugin-installation tree (e.g., `larch1`).
+
+Capture the full response to `$JUDGE_OUT` (a temp file).
 
 > **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call step (gh comment) and then 3.d — do NOT end the turn.
 
