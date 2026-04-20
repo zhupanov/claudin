@@ -5,9 +5,12 @@
 # (--multi-step true / --multi-step false) into a temp dir, then asserts:
 #   (1) RENDERED=<path> line appears on stdout,
 #   (2) rendered SKILL.md file exists at that path,
-#   (3) frontmatter contains the skill name and description,
-#   (4) a `## Sub-skill Invocation` section is present,
-#   (5) the Sub-skill Invocation section references
+#   (3) frontmatter contains the skill `name:` line,
+#   (4) frontmatter contains the skill `description: "<escaped>"` line
+#       (exercises the validate-args.sh ESCAPED_DESC YAML-quoting pipeline —
+#       a regression dropping description or breaking YAML escaping fails here),
+#   (5) a `## Sub-skill Invocation` section is present,
+#   (6) the Sub-skill Invocation section references
 #       skills/shared/subskill-invocation.md with a NON-EMPTY prefix (guards
 #       against empty ${PLUGIN_TOKEN} expansion silently producing a rooted
 #       "/skills/shared/subskill-invocation.md" pointer that would resolve
@@ -61,7 +64,10 @@ run_case() {
   fi
 
   local rendered_path
-  rendered_path="$(printf '%s\n' "$render_stdout" | awk -F= '/^RENDERED=/ { print $2; exit }')"
+  # Use sed substring extraction (not `awk -F=`): awk splits on every `=`,
+  # silently truncating paths containing a literal `=`. sed keeps the full
+  # remainder after the first `=`. head -n1 caps to the first matching line.
+  rendered_path="$(printf '%s\n' "$render_stdout" | sed -n 's/^RENDERED=//p' | head -n1)"
   if [[ -z "$rendered_path" ]]; then
     echo "FAIL: no RENDERED= line in stdout for $label" >&2
     FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -80,6 +86,14 @@ run_case() {
   # Check frontmatter name.
   if ! printf '%s\n' "$content" | grep -Eq "^name: ${name}\$"; then
     echo "FAIL: rendered file missing expected 'name: $name' frontmatter" >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    return
+  fi
+
+  # Check frontmatter description (must appear YAML-quoted per
+  # render-skill-md.sh's always-double-quoted contract).
+  if ! printf '%s\n' "$content" | grep -Fq "description: \"$description\""; then
+    echo "FAIL: rendered file missing expected 'description: \"$description\"' frontmatter" >&2
     FAIL_COUNT=$((FAIL_COUNT + 1))
     return
   fi

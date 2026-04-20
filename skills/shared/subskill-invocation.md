@@ -87,7 +87,9 @@ Canonical producers and consumers in the live tree:
 
 ### Security — never `source` a session-env file
 
-**Do NOT `source` `session-env.sh`.** Parse it line-by-line with `KEY=VALUE` matching. The file crosses a trust boundary (written by one skill, consumed by another), so `source` would execute arbitrary shell if any line contained `$(...)`, backticks, or command substitution. The canonical safe-parse pattern lives in `${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh` (the `--caller-env` reader) and `${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh` (the writer, which escapes values on write but does not relax the parser).
+**Do NOT `source` `session-env.sh`.** Parse it line-by-line with `KEY=VALUE` matching. The file crosses a trust boundary (written by one skill, consumed by another), so `source` would execute arbitrary shell if any line contained `$(...)`, backticks, or command substitution. The canonical safe-parse pattern lives in `${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh` (the `--caller-env` reader).
+
+Note: the current writer (`${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh`) does **not** perform value-side escaping — it emits raw `KEY=value` lines. Safety today depends on (a) the safe line-by-line parser on the read side and (b) a narrowly-constrained value set (fixed schema of known keys: `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`, each drawn from a bounded domain). When your skill adds new fields to a session-env file, constrain the value set at the source (e.g., boolean flags, validated owner/repo strings) rather than relying on parser hardening — and never widen the writer to emit arbitrary user-supplied text without explicit escaping + regression coverage.
 
 When your skill consumes a session-env file, always route through `session-setup.sh --caller-env` rather than ad-hoc `while read` loops so the safe-parse invariant is centralized.
 
@@ -112,7 +114,7 @@ Skill resolution from a consumer repo differs from resolution inside the larch p
 - **First**: try the bare name — `"implement"`, `"design"`, `"review"`.
 - **Second** (only if no skill matched): try the fully-qualified name — `"larch:implement"`, `"larch:design"`, `"larch:review"`.
 
-Never start with the fully-qualified name — it couples the caller to the plugin namespace and breaks in repos that install the plugin under a different name. The alias generator at `${CLAUDE_PLUGIN_ROOT}/skills/alias/scripts/generate-alias.sh § generate_alias()` emits this fallback automatically for every alias; follow the same shape when authoring an invocation by hand.
+Never start with the fully-qualified name — it couples the caller to the plugin namespace and breaks in repos that install the plugin under a different name. The alias generator at `${CLAUDE_PLUGIN_ROOT}/skills/alias/scripts/generate-alias.sh` emits this fallback automatically for every alias — see the generated `## Behavior` section inside the `HEREDOC_BODY` block (lines 72-86) of that script; follow the same shape when authoring an invocation by hand.
 
 ---
 
