@@ -1,6 +1,6 @@
 ---
 name: implement
-description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green squash-merge, Slack. Triggers: 'ship X', 'land PR', 'merge this'. See /research (research-only), /design (plan only), /im (default), /imaq (fastest)."
+description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green squash-merge, Slack. Triggers: 'ship X', 'land PR', 'merge this'. See /research (read-only), /design (plan), /im (merge), /imaq (auto-merge)."
 argument-hint: "[--quick] [--auto] [--merge | --draft] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
