@@ -12,7 +12,11 @@ repo root derived from this script's path). For each file that declares `Skill` 
 its allowed-tools frontmatter, checks that the body contains either PATTERN_A_PHRASE
 or PATTERN_B_PHRASE.
 
-Exit codes: 0 = clean, 1 = violations found, 2 = internal error.
+Exit codes: 0 = clean, 1 = violations found, 2 = internal error. When a run
+produces both violations and internal errors simultaneously, exit 2 wins — the
+violation messages are still printed to stderr, but the process-level signal
+prioritizes the internal error so callers keyed on exit code do not treat a
+broken environment as a clean policy decision.
 """
 
 from __future__ import annotations
@@ -35,9 +39,12 @@ GLOB_PATTERNS = (
 def extract_frontmatter_and_body(text: str) -> tuple[str | None, str]:
     """Return (frontmatter_text, body_text). frontmatter_text is None if absent.
 
-    Recognizes the first `---\\n`-delimited block at the top of the file.
+    Recognizes the first `---\\n`-delimited block at the top of the file. Strips
+    a leading UTF-8 BOM and normalizes CRLF to LF before the prefix test so files
+    authored on Windows or by editors that insert a BOM are not silently skipped.
     Everything after the second `---` line is body.
     """
+    text = text.lstrip("\ufeff").replace("\r\n", "\n")
     if not text.startswith("---\n"):
         return None, text
     remainder = text[len("---\n"):]
@@ -84,12 +91,16 @@ def find_skill_files(root: Path) -> list[Path]:
     return files
 
 
+class LintError(Exception):
+    """Raised for internal errors (file unreadable, non-UTF-8 bytes). Exit 2."""
+
+
 def lint_file(path: Path, root: Path) -> str | None:
-    """Return a violation message (relative path included) or None."""
+    """Return a violation message or None. Raises LintError for internal I/O errors."""
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as e:
-        return f"lint-skill-invocations: {path}: cannot read file: {e}"
+    except (OSError, UnicodeDecodeError) as e:
+        raise LintError(f"lint-skill-invocations: {path}: cannot read file: {e}") from e
     frontmatter, body = extract_frontmatter_and_body(text)
     if frontmatter is None:
         return None
@@ -123,13 +134,22 @@ def main() -> int:
         return 2
 
     violations: list[str] = []
+    errors: list[str] = []
     for path in find_skill_files(root):
-        msg = lint_file(path, root)
+        try:
+            msg = lint_file(path, root)
+        except LintError as e:
+            errors.append(str(e))
+            continue
         if msg is not None:
             violations.append(msg)
 
+    for e in errors:
+        print(e, file=sys.stderr)
     for v in violations:
         print(v, file=sys.stderr)
+    if errors:
+        return 2
     return 1 if violations else 0
 
 
