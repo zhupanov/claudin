@@ -70,6 +70,35 @@ REPO_ROOT=$(cd "$REPO_ROOT" 2>/dev/null && pwd -P) || {
   exit 0
 }
 
+# --- Resolve file_path through any symlink chain ---
+# macOS has no readlink -f / realpath by default; use a pure-bash loop.
+# Bounded depth (40) doubles as a cycle detector (fail-closed on exhaustion).
+# Relative readlink targets are rebased against the link's own directory
+# (follows each hop; does not perform full lexical `..` normalization — the
+# kernel resolves `..` at lstat time, and PROBE_DIR is canonicalized below).
+# Placed after REPO_ROOT so non-git callers still fail-open (issue #166).
+# Only activates when the path is itself a symlink; non-symlink inputs pass
+# through unchanged.
+resolved="$FILE_PATH"
+max_depth=40
+depth=0
+while [[ -L "$resolved" ]]; do
+  if (( depth >= max_depth )); then
+    block "submodule edit guard: symlink resolution exceeded $max_depth hops (possible cycle), blocking as precaution"
+  fi
+  target=$(readlink "$resolved" 2>/dev/null) \
+    || block "submodule edit guard: readlink failed on '$resolved', blocking as precaution"
+  [[ -n "$target" ]] \
+    || block "submodule edit guard: readlink returned empty target for '$resolved', blocking as precaution"
+  if [[ "$target" == /* ]]; then
+    resolved="$target"
+  else
+    resolved="$(dirname "$resolved")/$target"
+  fi
+  depth=$((depth + 1))
+done
+FILE_PATH="$resolved"
+
 # --- Find the nearest existing ancestor of the target path ---
 # Handles Write to a new file in a new subdirectory inside a submodule.
 PROBE_PATH="$FILE_PATH"
