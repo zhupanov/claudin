@@ -59,8 +59,12 @@ if [[ "$FILE_PATH" != /* ]]; then
 fi
 
 # --- Determine the superproject root ---
-# If we're not running inside a git repo, do not interfere.
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+# Anchor to CLAUDE_PROJECT_DIR so that a session `cd`'d into a submodule still
+# resolves REPO_ROOT to the superproject; $PWD fallback preserves behavior for
+# non-Claude-Code callers (manual testing). Closes the cd-into-submodule bypass
+# tracked as issue #150.
+ANCHOR_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+REPO_ROOT=$(git -C "$ANCHOR_DIR" rev-parse --show-toplevel 2>/dev/null || true)
 if [[ -z "$REPO_ROOT" ]]; then
   exit 0
 fi

@@ -28,8 +28,8 @@
 # Bypass case (#3) uses tri-state fingerprint matching: post-fix (exit 0 +
 # parseable deny JSON whose reason mentions "submodule") → PASS; legacy-buggy
 # (exit 0 + empty stdout) → KNOWN-FAIL, increments EXPECTED_FAIL (non-fatal);
-# anything else → HARD FAIL. When issue #150 lands and removes the bypass,
-# the case auto-flips to PASS.
+# anything else → HARD FAIL. Issue #150 has landed and removed the bypass —
+# the fingerprint is retained as defense-in-depth against regressions.
 #
 # Scope note: NotebookEdit and Bash-mediated mutations are outside the current
 # hook matcher's scope (PreToolUse on Edit/Write only) — no assertion here.
@@ -240,14 +240,20 @@ assert_deny_json "$HOOK_STDOUT" "submodule" "[case 2]"
 case2_reason=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
 assert_contains "$case2_reason" "sub" "[case 2] reason names submodule path"
 
-# --- Case 3: Bypass (known-failing until #150) — cwd inside submodule ------
-# Tri-state fingerprint: post-fix (RC=0, parseable deny JSON whose reason
-# mentions "submodule") → PASS. Legacy-buggy (RC=0, empty stdout) → KNOWN-FAIL,
-# non-fatal, EXPECTED_FAIL++. Anything else → HARD FAIL. Auto-flips to PASS
-# when #150 lands correctly.
+# --- Case 3: Bypass (fixed by #150) — cwd inside submodule -----------------
+# Tri-state fingerprint (retained after #150 landed for defense-in-depth):
+# post-fix (RC=0, parseable deny JSON whose reason mentions "submodule") →
+# PASS. Legacy-buggy (RC=0, empty stdout) → KNOWN-FAIL, non-fatal,
+# EXPECTED_FAIL++. Anything else → HARD FAIL.
 echo ""
-echo "=== 3: Bypass — cwd inside submodule (known-failing until #150) ==="
+echo "=== 3: Bypass — cwd inside submodule (fixed by #150) ==="
+# Simulate a real Claude Code session where CLAUDE_PROJECT_DIR is anchored to
+# the superproject and the session has `cd`'d into the submodule. The hook's
+# post-#150 anchor uses CLAUDE_PROJECT_DIR so the superproject/submodule
+# distinction is preserved even when cwd is inside the submodule.
+export CLAUDE_PROJECT_DIR="$SUPER"
 run_hook "$SUB" "$(json_payload "$SUB/any.txt")"
+unset CLAUDE_PROJECT_DIR
 post_fix_match=0
 legacy_match=0
 case3_reason=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
@@ -405,7 +411,7 @@ echo ""
 echo "=== Summary ==="
 echo "Passed:    $PASS"
 echo "Failed:    $FAIL"
-echo "KnownFail: $EXPECTED_FAIL (non-fatal; tracked by #150)"
+echo "KnownFail: $EXPECTED_FAIL (non-fatal; fingerprint retained after #150)"
 if (( FAIL > 0 )); then
     echo "" >&2
     echo "Failed tests:" >&2
