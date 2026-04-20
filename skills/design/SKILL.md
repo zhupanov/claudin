@@ -355,7 +355,13 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
 
 5. **Zero-externals guardrail**. If after iterating all selected decisions, zero buckets are queued, print no further launches, do NOT call `collect-reviewer-results.sh` at all, skip the judge phase entirely, and jump directly to the **Write `dialectic-resolutions.md`** sub-step below. The file IS written — it contains only `Disposition: bucket-skipped` entries (one per selected decision) plus any `Disposition: over-cap` entries for decisions ranked outside the top-5 cap — so Step 2b and Step 3.5 parse a uniform schema regardless of dialectic outcome.
 
-6. **Per-decision prompt-file rendering**. For each queued decision, render the thesis and antithesis prompts (the templates below) with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substituted, and use the **Write tool** (not heredoc/cat) to write each rendered prompt to its own file:
+**Thesis/antithesis prompt templates**: these are loaded from the reference file below. Template bodies are byte-identical to Phase 1; only the delivery channel (external CLI via `run-external-reviewer.sh` rather than the Agent tool) and the call-site effort suffix change.
+
+**MANDATORY — READ ENTIRE FILE before rendering debate prompts (step 6 below)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-debate.md` completely. It contains the byte-preserved Thesis agent template and Antithesis agent template with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substitution placeholders plus the `<debater_synthesis>` and `<debater_decision>` reference-block wrappers.
+
+**Do NOT Load when contested-decisions.md contains only NO_CONTESTED_DECISIONS** — the short-circuit print at the top of Step 2a.5 exits before reaching this point, so the reference file is naturally never loaded on the no-contest path.
+
+6. **Per-decision prompt-file rendering**. For each queued decision, render the thesis and antithesis prompts (loaded from `references/dialectic-debate.md` via the MANDATORY directive above) with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substituted, and use the **Write tool** (not heredoc/cat) to write each rendered prompt to its own file:
    - `$DESIGN_TMPDIR/debate-<n>-thesis-prompt.txt`
    - `$DESIGN_TMPDIR/debate-<n>-antithesis-prompt.txt`
    File-based prompt delivery eliminates shell-quoting hazards from synthesis/decision content that may contain `"`, `$()`, backticks, or newlines.
@@ -397,12 +403,6 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
    `--write-health /dev/null` ensures both the read path (collect-reviewer-results.sh checks `-f "$WRITE_HEALTH"`, which is false for character devices like `/dev/null`) and the write path (explicit `!= "/dev/null"` guard) skip — the dialectic phase NEVER updates the cross-skill `${SESSION_ENV_PATH}.health` file. Block on this call (do NOT use `run_in_background`).
 
 9. **Per-bucket runtime failure handling**. For any reviewer with `STATUS != OK`, print `**⚠ <Tool> dialectic debate (decision <n>, <thesis|antithesis>) failed: <FAILURE_REASON>. Bucket truncated; synthesis decision stands.**` Do NOT flip any flag. The mandatory STATUS pre-check at the top of the "debate quorum rule" below catches the partial-launch case (thesis or antithesis non-OK → decision immediately fails quorum → synthesis decision stands).
-
-**Thesis/antithesis prompt templates**: these are loaded from the reference file below. Template bodies are byte-identical to Phase 1; only the delivery channel (external CLI via `run-external-reviewer.sh` rather than the Agent tool) and the call-site effort suffix change.
-
-**MANDATORY — READ ENTIRE FILE before rendering debate prompts**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-debate.md` completely. It contains the byte-preserved Thesis agent template and Antithesis agent template with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substitution placeholders plus the `<debater_synthesis>` and `<debater_decision>` reference-block wrappers.
-
-**Do NOT Load when contested-decisions.md contains only NO_CONTESTED_DECISIONS** — the short-circuit print at the top of Step 2a.5 exits before reaching this point, so the reference file is naturally never loaded on the no-contest path.
 
 **After all external debaters return**, classify each decision's `Disposition` and, for `voted`-eligible decisions, hand off to the 3-judge panel defined in `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`. The orchestrator no longer picks winners by reading tagged output — that role is delegated to the judge panel. See `dialectic-protocol.md` for the authoritative ballot format, judge prompt template, threshold rules, tally algorithm, and resolution schema. The prose below is the call-site contract in Step 2a.5; `dialectic-protocol.md` is the single source of truth for dialectic parser/threshold rules (do NOT reuse `voting-protocol.md` parsers for dialectic — the token sets and ID shapes differ).
 
@@ -546,6 +546,8 @@ Print the plan to the user under a `## Implementation Plan` header so reviewers 
 
 **IMPORTANT: Plan review MUST ALWAYS run with all 3 reviewers (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Never skip or abbreviate this step regardless of how straightforward the plan appears — even when all sketch agents agreed, the plan is short, or the change seems trivial. Reviewers validate against the actual codebase state, catching issues that sketch-phase reasoning alone cannot detect.**
 
+**MANDATORY — READ ENTIRE FILE before launching reviewers**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` completely. It contains the byte-preserved Competition notice blockquote (appended to EACH reviewer prompt in the launches below), the voter-1 / voter-2 / voter-3 detailed quoted prompts (used in the Voting Panel sub-section), the ballot file handling paragraph, the Finalize Plan Review `FINDING_N` template, the `oos-accepted-design.md` format, and the Track Rejected Plan Review Findings template. The Competition notice must be in context before any reviewer launch below — reading this file now guarantees that.
+
 Launch **all 3 reviewers in parallel** (in a single message). When an external tool is unavailable, launch a Claude subagent fallback so the total reviewer count always remains 3. **Spawn order matters for parallelism** — launch the slowest reviewer first: Cursor, then Codex, then the Claude subagent. Each reviewer receives the plan text and the feature description. Each must **only report findings** — never edit files.
 
 ### External Reviewer Setup (if `codex_available` or `cursor_available`)
@@ -610,7 +612,7 @@ Invoke via Agent tool with subagent_type: `code-reviewer`. The agent file's chec
 
 Additionally, append the following competition context to each reviewer's prompt (Claude subagent and external reviewers):
 
-The Competition notice text appended to each reviewer's prompt is the byte-preserved blockquote in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` (see "Competition notice"); read the reference file first if not already loaded.
+The Competition notice text appended to each reviewer's prompt is the byte-preserved blockquote in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` (see "Competition notice"). It was loaded by the MANDATORY directive at the top of Step 3.
 
 ### Collecting External Reviewer Results
 
@@ -634,7 +636,7 @@ After deduplication, submit both in-scope findings and out-of-scope observations
 
 **Panel**: 3 voters — Claude Code Reviewer subagent (Voter 1) + Codex (Voter 2) + Cursor (Voter 3). Each votes YES/NO/EXONERATE with proportionality (vote EXONERATE if the concern is legitimate but the proposed change introduces more complexity than the issue warrants). 2+ YES threshold accepts a finding. When an external tool is unavailable, launch a Claude subagent voter replacement per the Voting Protocol so the panel always remains at 3 voters.
 
-**MANDATORY — READ ENTIRE FILE before launching voters**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` completely. It contains the byte-preserved Competition notice blockquote (appended to each reviewer prompt during the earlier review phase), the voter-1 / voter-2 / voter-3 detailed quoted prompts, the ballot file handling paragraph (Write-tool rule and ballot-from-file bootstrap pattern), the Finalize Plan Review `FINDING_N` template, the `oos-accepted-design.md` format, and the Track Rejected Plan Review Findings template.
+Use the byte-preserved voter prompts, ballot file handling rules, and format blocks in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` (loaded by the MANDATORY directive at the top of Step 3).
 
 Launch all available voters **in parallel** (Cursor first, then Codex, then Claude subagent). Wait for external voter sentinels using `wait-for-reviewers.sh` per the Voting Protocol, then parse voter outputs.
 
