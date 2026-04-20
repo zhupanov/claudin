@@ -153,6 +153,27 @@ This ensures runtime timeouts propagate across skill boundaries within the `/imp
 
 ## Execution Issues Tracking
 
+### Follow-up Work Principle
+
+Any durable, actionable follow-up work identified during design, implementation, or review MUST be tracked as a GitHub issue. The PR body is a pointer to tracked work, not its sole storage. Two filing paths:
+
+1. **Auto-filed via Step 9a.1** — when the item fits the OOS pipeline (accepted OOS from `/design` or `/review` voting panel, or main-agent-discovered items written via the dual-write below). `/implement` Step 9a.1 creates GitHub issues via `/issue` batch mode.
+2. **Manually filed via `/issue`** — when the main agent discovers durable follow-up that does not fit the OOS schema (e.g., a process-level gap surfaced by a warning). Use the `/issue` skill directly; the PR body's `Out-of-Scope Observations` block then references the filed issue number.
+
+**Actionability, not category, drives filing.** Map the existing execution-issues categories:
+
+- `Pre-existing Code Issues` — always durable follow-up. Mechanically enforced by the dual-write subsection below.
+- `Tool Failures`, `CI Issues`, `Warnings` — file an issue when the failure exposes a recurring/systemic repo defect or missing capability; log-only for one-off transient flakes.
+- `External Reviewer Issues`, `Permission Prompts` — typically log-only (operational telemetry). File only when the pattern is persistent across sessions.
+
+**Carve-outs** (do NOT fight existing protocol):
+
+- Non-accepted OOS observations (voting panel rejected for filing) remain PR-narrative in the `Out-of-Scope Observations` block.
+- Rejected review findings (not accepted by the panel) remain PR-narrative in the `Rejected Plan Review Suggestions` / `Rejected Code Review Suggestions` blocks.
+- `repo_unavailable=true` is a blocked-filing state — the entry stays in `execution-issues.md` only and the PR body's `Accepted OOS` subsection reports `Skipped — repo unavailable`.
+
+**Sanitize before filing from execution context.** Any issue body composed from execution-issues.md or oos-accepted-main-agent.md content MUST apply the same redaction rules documented in the dual-write subsection below (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`) and SECURITY.md's outbound-redaction subsection. `/issue` batch mode forwards Description verbatim into public issue bodies.
+
 Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issues.md`. This file captures problems worth investigating later but that do not block the current task. **Any step** may append to this file when an issue is encountered.
 
 **When to log** (non-exhaustive):
@@ -178,9 +199,9 @@ Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issu
 - `CI Issues` — CI failures, transient retries, or infrastructure problems
 - `Warnings` — `⚠` warnings printed during execution that do not fall under another category (e.g., version bump skipped, design-phase omissions, missing configuration). Do NOT duplicate warnings already logged under a more specific category.
 
-### Mandatory dual-write for `Pre-existing Code Issues`
+### Mechanical enforcement of the principle: `Pre-existing Code Issues` dual-write
 
-Whenever the main agent appends an entry to the `Pre-existing Code Issues` category in `execution-issues.md`, it MUST also append a corresponding `### OOS_N:` block to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` so that Step 9a.1 can file it as a GitHub issue. This dual-write is unconditional — it runs in every mode (`--quick`, `--auto`, `--merge`, `--draft`, `--debug`, `--no-merge`, or any future flag) and is the source of truth that converges main-agent-discovered pre-existing bugs into the same accepted-OOS pipeline as reviewer-surfaced OOS items from `/design` and `/review`.
+This subsection is the specialized mechanical enforcement of the Follow-up Work Principle above, applied to the `Pre-existing Code Issues` category. Whenever the main agent appends an entry to the `Pre-existing Code Issues` category in `execution-issues.md`, it MUST also append a corresponding `### OOS_N:` block to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` so that Step 9a.1 can file it as a GitHub issue. This dual-write is unconditional — it runs in every mode (`--quick`, `--auto`, `--merge`, `--draft`, `--debug`, `--no-merge`, or any future flag) and is the source of truth that converges main-agent-discovered pre-existing bugs into the same accepted-OOS pipeline as reviewer-surfaced OOS items from `/design` and `/review`. For durable follow-up work outside the `Pre-existing Code Issues` category, enforcement is prescriptive (principle above), not mechanical — the main agent uses `/issue` directly.
 
 **Schema** (matches the format consumed by `/issue`'s batch-mode parser at `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/parse-input.sh`):
 
@@ -602,19 +623,19 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 
 <details><summary>Rejected Plan Review Suggestions</summary>
 
-<rejected plan review findings from the /design phase's Step 4 output visible in conversation context above. If none were rejected, write "All plan review suggestions were implemented." If /design was interrupted and these findings are not visible in context, omit this entire <details> block.>
+<rejected plan review findings from the /design phase's Step 4 output visible in conversation context above. If none were rejected, write "All plan review suggestions were implemented." If /design was interrupted and these findings are not visible in context, omit this entire <details> block. If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
 
 </details>
 
 <details><summary>Implementation Deviations</summary>
 
-<compare the plan to what was actually implemented. List any deviations, or write "No deviations from the plan." If no plan exists, write "Design phase did not complete — no plan to compare against.">
+<compare the plan to what was actually implemented. List any deviations, or write "No deviations from the plan." If no plan exists, write "Design phase did not complete — no plan to compare against." If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
 
 </details>
 
 <details><summary>Rejected Code Review Suggestions</summary>
 
-<content from $IMPLEMENT_TMPDIR/rejected-findings.md if it exists and is non-empty, otherwise "All code review suggestions were implemented.">
+<content from $IMPLEMENT_TMPDIR/rejected-findings.md if it exists and is non-empty, otherwise "All code review suggestions were implemented." If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
 
 </details>
 
@@ -633,10 +654,10 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 <details><summary>Out-of-Scope Observations</summary>
 
 **Accepted OOS (GitHub issues filed):**
-<If Step 9a.1 created issues, list each with its issue link: "- #<NUMBER>: <title> (<reviewer attribution>)". Reviewer attribution may be `Code`, `Cursor`, `Codex`, or `Main agent` — the latter for items sourced from the dual-write to oos-accepted-main-agent.md per the Execution Issues Tracking → Mandatory dual-write rule. If no OOS items were accepted, write "No OOS items were accepted for issue filing.">
+<If Step 9a.1 created issues, list each with its issue link: "- #<NUMBER>: <title> (<reviewer attribution>)". Reviewer attribution may be `Code`, `Cursor`, `Codex`, or `Main agent` — the latter for items sourced from the dual-write to oos-accepted-main-agent.md per the Execution Issues Tracking → Mechanical enforcement of the principle: `Pre-existing Code Issues` dual-write. If no OOS items were accepted, write "No OOS items were accepted for issue filing.">
 
 **Non-accepted OOS observations:**
-<Non-accepted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-accepted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available.">
+<Non-accepted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-accepted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available." If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
 
 </details>
 
@@ -690,7 +711,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 Read the OOS artifact files:
 - `$IMPLEMENT_TMPDIR/oos-accepted-design.md` (from `/design` plan review)
 - `$IMPLEMENT_TMPDIR/oos-accepted-review.md` (from `/review` code review)
-- `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` (from main-agent dual-write per the Execution Issues Tracking → Mandatory dual-write rule)
+- `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` (from main-agent dual-write per the Execution Issues Tracking → Mechanical enforcement of the principle: `Pre-existing Code Issues` dual-write)
 
 **If none of the three artifacts exist or all are empty**: Print `⏩ 9a.1: OOS issues — no accepted OOS items (<elapsed>)`. Update `$IMPLEMENT_TMPDIR/pr-body.md`: replace the "Accepted OOS (GitHub issues filed)" placeholder with `No OOS items were accepted for issue filing.` and set the `| OOS issues filed |` Run Statistics cell to `0`. Then proceed to Step 9b.
 
