@@ -25,30 +25,13 @@
 
 set -euo pipefail
 
-# count_commits — Count commits on the current branch that aren't on main.
-# Prefers local `main`; falls back to `origin/main` if local is absent.
-# Prints "0" on any git error to preserve the caller's key=value contract.
-# When neither `main` nor `origin/main` exists (a degenerate repo state that
-# normally cannot occur mid-/implement because `rebase-push.sh` would have
-# already failed on the missing `origin/main` fetch), emits a stderr WARN
-# so the caller can see the edge case in execution logs, and still returns
-# "0" to preserve the KEY=VALUE stdout contract. The downstream VERIFIED
-# check will then report false and /implement's Step 12 will bail — which
-# is the correct outcome when the bump base cannot be determined.
-count_commits() {
-  local base_ref=""
-  if git rev-parse --verify main >/dev/null 2>&1; then
-    base_ref="main"
-  elif git rev-parse --verify origin/main >/dev/null 2>&1; then
-    base_ref="origin/main"
-  fi
-  if [[ -z "$base_ref" ]]; then
-    echo "WARN: check-bump-version.sh: neither local 'main' nor 'origin/main' exists; cannot determine bump base. Returning 0." >&2
-    echo "0"
-    return
-  fi
-  git rev-list "${base_ref}..HEAD" --count 2>/dev/null || echo "0"
-}
+# count_commits is defined in the shared library scripts/lib-count-commits.sh
+# so scripts/verify-skill-called.sh (#160) can reuse the exact same base-ref
+# resolution and git-error handling. The stderr WARN prefix remains
+# `WARN: check-bump-version.sh:` for log parity with operators' existing grep
+# patterns; see lib-count-commits.sh's header for rationale.
+# shellcheck source=scripts/lib-count-commits.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib-count-commits.sh"
 
 MODE=""
 BEFORE_COUNT=""
