@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.11] - 2026-04-20
+
+### Changed
+
+- `/implement` — expand `description:` frontmatter with explicit trigger scenarios ("ship X", "land PR", "merge this"), keywords (CI-green squash-merge, version bump, Slack), and negative-space sibling pointers (`/research` read-only, `/design` plan, `/im` merge, `/imaq` auto-merge) to improve discoverability and disambiguate vs sibling skills. Stays within the 250-character S015 cap and preserves the "Use when..." trigger pattern required by agent-lint S017. `argument-hint:` and body retain full flag semantics (`--merge`, `--draft`). Closes #233 (follow-up to #227 / PR #229). No runtime behavior change.
+
 ## [4.2.10] - 2026-04-20
 
 ### Changed
