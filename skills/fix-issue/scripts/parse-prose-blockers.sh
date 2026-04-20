@@ -61,4 +61,10 @@ fi
 # Extract the numeric portion from each match and dedupe. `sed -nE` with `/p`
 # prints only lines that match the substitution pattern. Empty input yields
 # empty output; `sort` on empty input is a successful no-op.
-printf '%s\n' "$matches" | sed -nE 's/.*#([0-9]+).*/\1/p' | sort -u -n
+#
+# The trailing `|| true` honors the fail-open exit-code contract declared in
+# the header. Under `set -euo pipefail`, any pipeline stage exiting non-zero
+# (e.g., `sort` killed by SIGPIPE when a caller pipes stdout into `head -n 0`)
+# would otherwise propagate non-zero here, breaking the "always exit 0" promise
+# — which the orchestrator and future bare callers rely on.
+printf '%s\n' "$matches" | sed -nE 's/.*#([0-9]+).*/\1/p' | sort -u -n || true
