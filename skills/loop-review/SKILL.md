@@ -15,7 +15,7 @@ Systematically review the entire codebase by partitioning into slices, reviewing
 
 **This skill runs fully autonomously** — never ask for user confirmation. Make all FILE/drop decisions based on the classification criteria in Step 3d. The only sub-skill invoked via the Skill tool is `/issue` (in batch mode, `--input-file` with `--label loop-review`) so findings are discoverable via label filter in the issue tracker; the reviewer lanes run as Cursor/Codex CLI processes or Claude Code Reviewer subagents directly, not through `/review`, `/design`, or `/relevant-checks`. **The `loop-review` label must be pre-created in the target repository** — Step 0 preflight-checks its existence; if missing, the skill appends a warning to `$LR_TMPDIR/warnings.md` and continues (issues will be filed unlabeled and excluded from the `label:loop-review` discovery filter).
 
-**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule. **Loop-internal note**: `/issue` in Step 3f is invoked inside the slice loop. After `/issue` returns, continue the slice loop per Step 3g's explicit loop-back directive — do NOT exit the loop unless the exit condition fires.
+**Anti-halt continuation reminder.** The only child `Skill` tool call this skill makes is `/issue` (at Step 3f's batch flush). After `/issue` returns, IMMEDIATELY continue with this skill's NEXT step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule. **Loop-internal note**: `/issue` in Step 3f is invoked inside the slice loop. After `/issue` returns, continue the slice loop per Step 3g's explicit loop-back directive — do NOT exit the loop unless the exit condition fires.
 
 ## Progress Reporting
 
@@ -260,8 +260,6 @@ For each classified finding in this slice:
 
 If `$LR_TMPDIR/findings-accumulated.md` contains zero `###`-prefixed headings (all slices were clean or all findings were held/dropped), skip the `/issue` invocation entirely.
 
-> **Continue after child returns (loop-internal).** When `/issue` returns, continue the slice loop — parse `/issue`'s stdout for per-item `ITEM_<i>_*` lines, rebuild the accumulator per Step 3f's per-item retention rule, then proceed to Step 3g's "Move to next slice." Do NOT exit the slice loop to Step 4 unless Step 3g's exit condition fires. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
-
 Otherwise, invoke `/issue` via the Skill tool with:
 
 ```
@@ -269,6 +267,8 @@ Otherwise, invoke `/issue` via the Skill tool with:
 ```
 
 Do NOT pass `--debug`, `--auto`, or `--merge` — `/issue` is a non-interactive skill and none of those flags apply. Do NOT forward `--title-prefix` — the `loop-review` label is the discovery mechanism and preserves the 80-char title budget.
+
+> **Continue after child returns (loop-internal).** When `/issue` returns, continue the slice loop — parse `/issue`'s stdout for per-item `ITEM_<i>_*` lines, rebuild the accumulator per the per-item retention rule below, then proceed to Step 3g's "Move to next slice." Do NOT exit the slice loop to Step 4 unless Step 3g's exit condition fires. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 **Per-item retention on partial failure.** After `/issue` returns, parse its stdout for any line matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$`. The input-file order is 1-indexed and stable: finding i in `findings-accumulated.md` (the i-th `###`-prefixed heading) corresponds to `ITEM_<i>_*` on `/issue`'s stdout. Rebuild the accumulator per-item:
 

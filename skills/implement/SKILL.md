@@ -718,7 +718,7 @@ Read the OOS artifact files:
 2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in two or more of {design, review, implement} (matching by exact normalized title — case-insensitive, `[oos]`-prefix-stripped, whitespace-collapsed), keep one entry whose Description text notes the contributing phases (e.g., append " (also surfaced during design review)" to the description). Do NOT modify the schema fields — Reviewer and Phase remain single-valued; the merged provenance lives in the Description prose. This cross-phase merge runs **before** calling `/issue` so the batch mode sees one canonical item per observation.
 3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for `/issue` batch mode. Preserve the OOS markdown format — `/issue`'s parser reads it directly.
 
-   > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 4. Invoke `/issue` in batch mode via the Skill tool:
    ```
@@ -817,7 +817,7 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
      - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
    - **If `HAS_BUMP=true`**:
 
-     > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this sub-procedure (proceed to step 4a's CHANGELOG re-apply, then step 5's push, etc. — do NOT end the turn). See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+     > **Continue after child returns.** When `/bump-version` returns, execute the NEXT steps of this sub-procedure in order — do NOT end the turn. The first mandatory action is the post-verification block immediately below (commit-delta check via `check-bump-version.sh --mode post`, then the sentinel-file check); only after those gates pass do you proceed to step 4a's CHANGELOG re-apply, step 5's push, step 6's PR body refresh, and step 7's return to caller. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
      Invoke `/bump-version` via the Skill tool. If the skill invocation itself fails (returns an error, or bails internally):
      - **step12 family**: hard failure — bail to 12d.
