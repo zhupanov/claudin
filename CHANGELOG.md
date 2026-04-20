@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.3] - 2026-04-20
+
+### Changed
+
+- `/alias` reclassified from pure delegator to hybrid orchestrator: validates, delegates to `/implement`, then performs a mechanical sentinel-file verification (new Step 4 via `scripts/verify-skill-called.sh --sentinel-file`) that `.claude/skills/<alias-name>/SKILL.md` was actually written. `skills/alias/SKILL.md` Step 2.2 replaces the static 12-name reserved list with a dynamic two-root `test -d` probe against `${CLAUDE_PLUGIN_ROOT}/skills/<n>` and `${CLAUDE_PLUGIN_ROOT}/.claude/skills/<n>` (fail-closed on unset `CLAUDE_PLUGIN_ROOT`), eliminating drift when new skills ship. Step 3 replaces the "research the codebase and discover `generate-alias.sh`" hand-wave with an explicit generator contract naming the script path, its four required flags (`--name`, `--target`, `--flags`, `--version`), the pinned version source (`jq -r .version ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`), and the write target. Adds the canonical anti-halt banner + micro-reminder required of orchestrators. Step 4 emits branched fail-closed error text for the `--merge` vs non-`--merge` paths.
+- `scripts/test-anti-halt-banners.sh` — move `skills/alias/SKILL.md` from `DELEGATORS` to `ORCHESTRATORS` to reflect the reclassification.
+- `skills/shared/subskill-invocation.md` — remove `/alias` from pure-delegator lists (Pattern A example citation, allowed-tools tier, Post-invocation verification scope, Anti-halt scope, Scope list); add to orchestrator/hybrid category with sentinel-file verification as the concrete mechanical check.
+- `skills/create-skill/scripts/render-skill-md.sh` — drop `/alias` from the two scaffold-emitted pure-delegator exemption checklists so newly scaffolded skills see accurate reminders.
+- `skills/create-skill/scripts/validate-args.sh` — update the stale "mirrors skills/alias/SKILL.md Step 2" comment to describe the actual relationship (static pre-check before the dynamic plugin-skills probe); add `loop-improve-skill` to the static `LARCH_RESERVED` list; update the header comment's reserved-name enumeration.
+- `docs/workflow-lifecycle.md` — update the Skill Orchestration Hierarchy intro, Delegation Topology prose, `/alias` bullet, and post-invocation-verification exemption paragraph to reflect `/alias`'s hybrid classification.
+- `AGENTS.md` — update the `scripts/test-anti-halt-banners.sh` bullet counts (four→six orchestrators, four→three delegators) and note `/alias`'s reclassification rationale.
+
 ## [4.2.2] - 2026-04-20
 
 ### Changed
