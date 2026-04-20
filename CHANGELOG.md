@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.19] - 2026-04-19
+
+### Changed
+
+- `skills/fix-issue/SKILL.md` — Step 5 now classifies each eligible issue along two independent dimensions: **intent** (PR-producing vs. non-PR task) and, only when `INTENT=PR`, complexity (SIMPLE vs. HARD). Step 6 branches on intent: `PR` delegates to `/implement` as before; `NON_PR` follows the issue's instructions inline using Read/Grep/Glob/Bash and `/issue` (batch mode for multi-issue output, with the `--input-file` markdown written under `$FIX_ISSUE_TMPDIR` — never inside the working tree). Steps 7 and 8 mirror the branching: `NON_PR` closes with a `WORK_SUMMARY` comment (no PR URL, no body update) and announces on Slack via the pre-existing `--message` free-form path. Default to `PR` when uncertain preserves pre-existing behavior for any issue where the intent is ambiguous. Step 4 triage gains an explicit guidance bullet that for investigation/review-only issues, "still relevant" means the **task** is still meaningful rather than "the referenced bug is still in code".
+
 ## [4.0.18] - 2026-04-19
 
 ### Fixed
