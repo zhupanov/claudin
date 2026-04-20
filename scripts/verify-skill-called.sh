@@ -189,11 +189,23 @@ case "$MODE" in
         # `--` stops option parsing so a regex beginning with `-` is not
         # mistaken for a grep flag. `LC_ALL=C` pins regex semantics to
         # byte-literal matching (no locale-dependent character classes).
-        if LC_ALL=C grep -E -q -- "$STDOUT_LINE_REGEX" "$STDOUT_FILE_PATH"; then
-            emit "true" "ok"
-        else
-            emit "false" "no_match"
-        fi
+        # grep exit codes per POSIX: 0 match, 1 no match, 2 error (e.g.,
+        # malformed regex, unreadable file). Treat 2 as an internal helper
+        # fault per the fail-closed contract — do NOT emit VERIFIED=false
+        # no_match, which would mask a genuinely broken regex behind a
+        # seemingly legitimate "line not present" result.
+        set +e
+        LC_ALL=C grep -E -q -- "$STDOUT_LINE_REGEX" "$STDOUT_FILE_PATH"
+        grep_rc=$?
+        set -e
+        case "$grep_rc" in
+            0) emit "true" "ok" ;;
+            1) emit "false" "no_match" ;;
+            *)
+                echo "ERROR: grep failed (exit $grep_rc) — regex may be malformed or file unreadable" >&2
+                exit 1
+                ;;
+        esac
         exit 0
         ;;
 
@@ -223,8 +235,7 @@ case "$MODE" in
         status_file=$(mktemp "${TMPDIR:-/tmp}/verify-skill-called-status.XXXXXX")
         # shellcheck disable=SC2064  # status_file expansion is intentional at trap-registration time
         trap "rm -f '$status_file'" EXIT
-        COUNT_COMMITS_STATUS_FILE="$status_file" \
-            actual_total=$(COUNT_COMMITS_STATUS_FILE="$status_file" count_commits)
+        actual_total=$(COUNT_COMMITS_STATUS_FILE="$status_file" count_commits)
         COUNT_COMMITS_STATUS=$(cat "$status_file" 2>/dev/null || echo "")
 
         # Short-circuit on degraded git state — a raw count of 0 under

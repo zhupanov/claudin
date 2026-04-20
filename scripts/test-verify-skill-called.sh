@@ -84,6 +84,27 @@ assert_exit_eq() {
     fi
 }
 
+# run_helper — invoke the helper, capture stdout and exit code, and assert
+# both. Wraps the two assertions together so every non-argument-error
+# scenario exercises the exit-code contract (exit 0 on pass/fail outcomes,
+# exit 1 on argument errors and internal faults) — not just the stdout
+# substring check.
+# Usage: run_helper <label> <expected_rc> <expected_needle|-> <helper args...>
+# Pass `-` as expected_needle to skip the stdout substring check (useful for
+# argument-error cases where no KEY=VALUE is emitted).
+run_helper() {
+    local label="$1" want_rc="$2" needle="$3"; shift 3
+    local out rc
+    set +e
+    out=$("$HELPER" "$@" 2>&1)
+    rc=$?
+    set -e
+    assert_exit_eq "$label (exit)" "$rc" "$want_rc"
+    if [[ "$needle" != "-" ]]; then
+        assert_stdout_contains "$label (stdout)" "$out" "$needle"
+    fi
+}
+
 # --- Section 1: --sentinel-file mode -----------------------------------------
 
 echo "=== Section 1: --sentinel-file mode ==="
@@ -128,6 +149,13 @@ rc=$?
 set -e
 assert_exit_eq "1f: empty sentinel arg exit 1" "$rc" 1
 
+# 1g — non-empty file exits 0 (not 1). Explicit exit-code assertion on pass.
+run_helper "1g: non-empty exits 0" 0 "VERIFIED=true" --sentinel-file "$SENT_OK"
+
+# 1h — missing file exits 0 (not 1). Explicit exit-code assertion on fail.
+run_helper "1h: missing exits 0" 0 "VERIFIED=false" \
+    --sentinel-file "$TMPROOT/does-not-exist"
+
 # --- Section 2: --stdout-line mode -------------------------------------------
 
 echo "=== Section 2: --stdout-line mode ==="
@@ -167,6 +195,29 @@ out=$("$HELPER" --stdout-line '^FOO' 2>&1)
 rc=$?
 set -e
 assert_exit_eq "2f: missing --stdout-file exit 1" "$rc" 1
+
+# 2g — malformed ERE (grep exit 2) must not be treated as no_match.
+# Per fail-closed contract, grep exit 2 (bad regex) is an internal fault:
+# exit 1 with no KEY=VALUE emitted (caller must distinguish from a clean
+# VERIFIED=false no_match result).
+set +e
+out=$("$HELPER" --stdout-line '[' --stdout-file "$CAP" 2>&1)
+rc=$?
+set -e
+assert_exit_eq "2g: malformed ERE exit 1 (not exit 0)" "$rc" 1
+if [[ "$out" == *"VERIFIED="* ]]; then
+    fail "2g: malformed ERE emitted VERIFIED=... (should not — fail-closed)"
+else
+    pass
+fi
+
+# 2h — successful match exits 0 (not 1). Explicit exit-code assertion.
+run_helper "2h: match exits 0" 0 "VERIFIED=true" \
+    --stdout-line '^ISSUES_CREATED=' --stdout-file "$CAP"
+
+# 2i — clean no-match exits 0 (not 1). Explicit exit-code assertion.
+run_helper "2i: no-match exits 0" 0 "VERIFIED=false" \
+    --stdout-line '^NOTHING_WILL_MATCH' --stdout-file "$CAP"
 
 # --- Section 3: --commit-delta mode ------------------------------------------
 
@@ -266,6 +317,20 @@ rc=$?
 set -e
 assert_exit_eq "3h: non-numeric --before-count exit 1" "$rc" 1
 
+# 3i — successful delta match exits 0 (not 1). Explicit exit-code assertion.
+REPO_3i="$TMPROOT/repo-delta-exit0"
+setup_git_repo "$REPO_3i" 1 1
+out=$(cd "$REPO_3i" && "$HELPER" --commit-delta 1 --before-count 0 2>&1)
+rc=$?
+assert_exit_eq "3i: delta match exits 0" "$rc" 0
+assert_stdout_contains "3i: delta match VERIFIED=true" "$out" "VERIFIED=true"
+
+# 3j — delta mismatch exits 0 (not 1). Explicit exit-code assertion on fail path.
+out=$(cd "$REPO_2" && "$HELPER" --commit-delta 1 --before-count 0 2>&1)
+rc=$?
+assert_exit_eq "3j: delta mismatch exits 0" "$rc" 0
+assert_stdout_contains "3j: delta mismatch VERIFIED=false" "$out" "VERIFIED=false"
+
 # --- Section 4: argument-error paths -----------------------------------------
 
 echo "=== Section 4: argument-error paths ==="
@@ -307,8 +372,14 @@ setup_git_repo "$REPO_CHECK" 1 0
     printf -- '---\nname: bump-version\n---\ndummy\n' > .claude/skills/bump-version/SKILL.md
 )
 
-# 5a — invoke check-bump-version.sh from /tmp (outside repo) using absolute path.
-# PWD matters because check-bump-version.sh uses $PWD/.claude/skills/... to probe.
+# 5a — invoke check-bump-version.sh from the repo root using an absolute
+# script path. PWD matters here because check-bump-version.sh uses
+# $PWD/.claude/skills/... to probe for the /bump-version skill, so we cd
+# INTO $REPO_CHECK first. What this test validates is the `source` chain:
+# check-bump-version.sh uses `$(dirname "${BASH_SOURCE[0]}")/lib-count-commits.sh`
+# which must resolve correctly when the script is invoked via an absolute
+# path from any cwd. Section 5b below exercises sourcing the lib directly
+# from a non-repo cwd (/tmp) as the truly cwd-neutral case.
 out=$(cd "$REPO_CHECK" && bash "$CHECK_BUMP" --mode pre 2>&1) || true
 assert_stdout_contains "5a: check-bump-version --mode pre emits HAS_BUMP=true" "$out" "HAS_BUMP=true"
 assert_stdout_contains "5a: check-bump-version --mode pre emits COMMITS_BEFORE=" "$out" "COMMITS_BEFORE="
