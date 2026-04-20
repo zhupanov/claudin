@@ -77,6 +77,64 @@ Canonical examples:
 
 If you cannot name a concrete mechanical check, the call is not actually mandatory — reclassify it as Pattern A (pure delegation) or restructure so the child's side effect is observable.
 
+See `## Anti-halt continuation reminder` below — the two sections govern the same call-site boundary from complementary directions (verification asks "did the child run?"; anti-halt asks "did the parent continue?").
+
+## Anti-halt continuation reminder
+
+**Scope**: this rule applies to the same orchestrator set as `## Post-invocation verification` above — stateful orchestrators (`/fix-issue`, `/implement`, `/review`, `/loop-review`) that run additional steps after a child `Skill` tool call returns. Pure forwarders (`/im`, `/imaq`, `/alias`, `/create-skill`) are exempt — once they delegate, they do nothing further. The two sections are complementary: `## Post-invocation verification` asks **"did the child run?"**; this section asks **"did the parent continue?"** Both failure modes are distinct and real (see GitHub issue #177 for the originating report).
+
+**The rule**: after every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, the main agent MUST immediately continue with the parent skill's NEXT step. The child's cleanup / summary output is NOT end-of-turn. In long sessions where the child produces many tokens (e.g., `/design` with 3 reviewers + voting easily produces 15k+ tokens), the main agent's attention can drift to the child's local "mission accomplished" framing and lose the parent orchestration frame. A short, standardized banner at the top of every orchestrator plus short per-Skill-call-site micro-reminders reinforce the rule where attention is most at risk.
+
+**Carve-out (critical)**: the rule is strictly subordinate to any explicit non-sequential control-flow directive in the parent skill — including `skip to Step N`, `bail to cleanup`, `jump back to Step Na`, `loop back to Step 3a`, `fall through to 12c`, `break out of the loop`, or any other explicit redirect. A normal numerically-sequential `proceed to Step N+1` directive is the default continuation path that anti-halt reinforces — NOT an exception.
+
+**Loop-internal carve-out**: when the parent's step explicitly loops (e.g., `/loop-review`'s Step 3f → 3g → 3a slice loop), the "next step" of the parent IS the loop-continuation directive, not the first textually-following section header. Use the loop-aware micro-reminder variant at loop-internal child-Skill call sites.
+
+**Generic `/relevant-checks` clause**: every `/relevant-checks` invocation anywhere in an orchestrator SKILL.md is covered by this rule without requiring a per-site micro-reminder at every call site. The parent must resume after `/relevant-checks` returns — whether that means advancing to the next numbered step, re-running `/relevant-checks` after a fix, or committing the fixed files.
+
+### Canonical banner (top of each orchestrator SKILL.md, after the title body, before `## Progress Reporting`)
+
+````markdown
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+````
+
+The substring `**Anti-halt continuation reminder.**` is a contract token asserted by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`.
+
+### Canonical micro-reminder (per Skill-tool call site — branch-specific placement)
+
+Place the micro-reminder **inside the specific branch that actually invokes the child** — not at the top of a step whose body may skip the invocation on some branches (e.g., `/implement` Step 1 quick-mode skips `/design`; Step 5 quick-mode skips `/review`; Step 8 `HAS_BUMP=false` skips `/bump-version`). The reminder belongs next to the real Skill-tool call, inside the branch that emits it.
+
+Standard variant:
+
+````markdown
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+````
+
+Loop-aware variant (for loop-internal call sites like `/loop-review`'s `/issue` batch flush):
+
+````markdown
+> **Continue after child returns (loop-internal).** When the child Skill returns, continue the loop per the parent's explicit loop-back directive — do NOT exit the loop unless the exit condition fires. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+````
+
+The substring `Continue after child returns` is a contract token asserted by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh` (matches both the standard and loop-internal variants).
+
+### Scope list
+
+The banner MUST appear in these orchestrator SKILL.md files:
+
+- `skills/fix-issue/SKILL.md`
+- `skills/implement/SKILL.md`
+- `skills/review/SKILL.md`
+- `skills/loop-review/SKILL.md`
+
+The banner MUST NOT appear in pure-delegator SKILL.md files:
+
+- `skills/im/SKILL.md`
+- `skills/imaq/SKILL.md`
+- `skills/alias/SKILL.md`
+- `skills/create-skill/SKILL.md`
+
+Both presence and absence are enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`, wired into `make lint` via the `test-anti-halt` target.
+
 ## Session-env handoff
 
 Environment variables **do not propagate reliably across `Skill` invocations** — treat every `Skill` call as a fresh bash environment. For any state that must cross skill boundaries (reviewer health flags, repo name, slack-ok, session tmpdir), use a session-env file:

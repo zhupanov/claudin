@@ -9,6 +9,8 @@ allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task
 
 Full end-to-end feature implementation: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, Slack announce, and cleanup. With `--merge`: also runs the CI+rebase+merge loop, adds the :merged: emoji, deletes the local branch, and verifies main.
 
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+
 The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, save the remainder as `FEATURE_DESCRIPTION` — use this (not raw `$ARGUMENTS`) whenever the human-readable feature description is needed (e.g., PR body, design invocation, commit messages). **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
@@ -230,6 +232,8 @@ Proceed to Step 2.
 
 ### Normal mode (`quick_mode=false`)
 
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: this reminder applies only to the `/design` invocation in normal mode; quick mode skips `/design` entirely.)
+
 **Decision logic**:
 - If `IS_USER_BRANCH=true` **AND** a reviewed implementation plan is visible in the conversation context above: The plan was created by a prior `/design` invocation in this session. Proceed to Step 2.
 - If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke `/design` via the Skill tool with flags and feature description. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
@@ -281,6 +285,8 @@ Implement the feature following the plan from Step 1 — the reviewed `/design` 
 - Invoke `/relevant-checks` via the Skill tool promptly after each non-trivial logical sub-step, not only at the end of implementation. Step 3 is the final check, not the only one.
 
 ## Step 3 — Relevant Checks (first pass)
+
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (The canonical section's generic `/relevant-checks` clause covers every other `/relevant-checks` invocation in this file — no per-site reminders are needed at the quick-mode 5.7, Step 6, Step 10, or Step 12 /relevant-checks sites.)
 
 Invoke `/relevant-checks` via the Skill tool to run validation checks relevant to the modified files. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` via the Skill tool to confirm the fix.
 
@@ -385,6 +391,8 @@ Append rejected findings to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the s
 Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`: `Step 5 — quick-mode review loop did not converge after 7 rounds.` Then proceed to Step 6.
 
 ### Normal mode (`quick_mode=false`)
+
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: this reminder applies only to the `/review` invocation in normal mode; quick mode uses an inline reviewer loop and never invokes `/review`.)
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip this step regardless of the nature of the changes — whether code, skills, documentation, data files, or configuration. All changes require full review.**
 
@@ -499,6 +507,8 @@ Parse the output for `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS` (the `STATUS=ok|
 **If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 9.
 
 **If `HAS_BUMP=true`**:
+
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: this reminder applies only to the `HAS_BUMP=true` branch; `HAS_BUMP=false` skips to Step 9 per the control-flow directive above, which overrides this rule per the carve-out.)
 
 1. Invoke `/bump-version` via the Skill tool.
 
@@ -707,6 +717,9 @@ Read the OOS artifact files:
 1. Read and parse all accepted OOS items from all three files.
 2. Deduplicate across phases: if the same pre-existing issue was surfaced and accepted in two or more of {design, review, implement} (matching by exact normalized title — case-insensitive, `[oos]`-prefix-stripped, whitespace-collapsed), keep one entry whose Description text notes the contributing phases (e.g., append " (also surfaced during design review)" to the description). Do NOT modify the schema fields — Reviewer and Phase remain single-valued; the merged provenance lives in the Description prose. This cross-phase merge runs **before** calling `/issue` so the batch mode sees one canonical item per observation.
 3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for `/issue` batch mode. Preserve the OOS markdown format — `/issue`'s parser reads it directly.
+
+   > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
 4. Invoke `/issue` in batch mode via the Skill tool:
    ```
    Skill tool → skill: "issue"
@@ -802,7 +815,11 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
    - **If `HAS_BUMP=false`**:
      - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version not found, cannot re-bump. Bailing to 12d.**` Bail to 12d.
      - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
-   - **If `HAS_BUMP=true`**: Invoke `/bump-version` via the Skill tool. If the skill invocation itself fails (returns an error, or bails internally):
+   - **If `HAS_BUMP=true`**:
+
+     > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this sub-procedure (proceed to step 4a's CHANGELOG re-apply, then step 5's push, etc. — do NOT end the turn). See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
+     Invoke `/bump-version` via the Skill tool. If the skill invocation itself fails (returns an error, or bails internally):
      - **step12 family**: hard failure — bail to 12d.
      - **step10 family**: log warning and break out of Step 10 to Step 11.
      After the skill returns successfully, run the post-verification:
