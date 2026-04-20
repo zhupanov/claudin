@@ -152,10 +152,14 @@ rebase_push_skip_count=$(grep -cF '${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh 
 [[ "$rebase_push_skip_count" == "1" ]] \
   || fail "(H) expected exactly 1 'rebase-push.sh --no-push --skip-if-pushed' occurrence (macro M2 only), found $rebase_push_skip_count — residual inline rebase block may have survived the refactor"
 
-# Sanity checks: the two non-macro call sites must still exist.
-grep -Fq '${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
-```' "$SKILL_MD" \
-  || fail "(H) 'rebase-push.sh --no-push' (without --skip-if-pushed) call site missing — Step 1.m or Sub-procedure was accidentally altered"
+# Sanity check: both non-macro --no-push call sites must still exist (Step 1.m + Rebase +
+# Re-bump Sub-procedure). Count lines ending with 'rebase-push.sh --no-push' (indentation
+# tolerated; --skip-if-pushed excluded because its lines do NOT end with --no-push). Expect
+# exactly 2 — one per call site. This catches accidental removal of EITHER site, which the
+# prior unindented-only grep missed for the Sub-procedure's 3-space-indented line.
+no_push_only_count=$(grep -cE 'rebase-push\.sh --no-push$' "$SKILL_MD" || true)
+[[ "$no_push_only_count" == "2" ]] \
+  || fail "(H) expected exactly 2 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites, found $no_push_only_count — Step 1.m or Rebase + Re-bump Sub-procedure was accidentally altered"
 
 # ---------------------------------------------------------------------------
 # (I) Macro body placeholder-pinned SKIPPED format strings.
