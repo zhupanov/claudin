@@ -115,12 +115,12 @@ while IFS=$'\t' read -r src_line rel_path heading; do
     failures=$((failures + 1))
     continue
   fi
-  # Strip trailing whitespace from target lines, then exact-match against
-  # "## <heading>" or "### <heading>". No regex interpolation. grep is
-  # invoked WITHOUT -q to avoid a SIGPIPE race against awk under
-  # pipefail: with -q, grep exits on first match before awk finishes
-  # writing, awk receives SIGPIPE, and pipefail propagates exit 141.
-  # Routing stdout to /dev/null makes grep consume the full input.
+  # Strip trailing whitespace from target lines into a temp file, then
+  # exact-match against "## <heading>" or "### <heading>" via
+  # grep -Fxq (fixed-string, whole-line, quiet). No regex interpolation
+  # of heading text anywhere. grep reads from the temp file rather than
+  # a pipe, so -q is safe here (no SIGPIPE interaction with the awk
+  # pre-filter under pipefail).
   stripped_target="$(mktemp -t subskill-target.XXXXXX)"
   awk '{ sub(/[[:space:]]+$/, ""); print }' "$target" > "$stripped_target"
   if grep -Fxq -- "## $heading" "$stripped_target"; then
