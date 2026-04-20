@@ -40,10 +40,15 @@ if [[ "$PLUGIN" == "true" ]]; then
   echo ""
   echo "Plugin-dev reminders:"
   echo "  - Add a row for /$NAME to README.md (Skills catalog + feature matrix)."
-  echo "  - Add the following entries to .claude/settings.json permissions.allow"
-  echo "    (maintain strict ASCII code-point order):"
+  echo "  - Add the following entries to .claude/settings.json permissions.allow,"
+  echo "    then re-sort the whole permissions.allow block by strict ASCII"
+  echo "    code-point order (e.g. via sort -u):"
   echo "      \"Bash(\$PWD/skills/$NAME/scripts/*)\""
   echo "      \"Skill($NAME)\""
+  echo "      \"Skill(larch:$NAME)\""
+  echo "  - Both Skill forms are required for strict-permissions consumers;"
+  echo "    see README subsection \"Strict-permissions consumers — Skill"
+  echo "    permission entries\" for rationale."
 fi
 
 if [[ -d "$PWD/.claude/skills/relevant-checks" ]]; then
