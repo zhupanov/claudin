@@ -232,8 +232,8 @@ Proceed to Step 2.
 
 **Decision logic**:
 - If `IS_USER_BRANCH=true` **AND** a reviewed implementation plan is visible in the conversation context above: The plan was created by a prior `/design` invocation in this session. Proceed to Step 2.
-- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke the `/design` skill with flags and feature description. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
-- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke the `/design` skill with the same flags. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
+- If `IS_USER_BRANCH=true` but **no** implementation plan is visible in the conversation context: Invoke `/design` via the Skill tool with flags and feature description. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
+- If on `main` or empty (detached HEAD) or any non-user branch: No design plan exists yet. Invoke `/design` via the Skill tool with the same flags. **If `auto_mode=true`, also prepend `--auto`**. **If `debug_mode=true`, also prepend `--debug`**. Always prepend `--step-prefix "1.::design plan"` and `--branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH"`. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "<values>" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. After `/design` completes, proceed to Step 2.
 
 ### Cross-Skill Health Update (after /design)
 
@@ -278,11 +278,11 @@ Implement the feature following the plan from Step 1 — the reviewed `/design` 
 - Don't over-engineer — for each abstraction, helper, or indirection you introduce, ask: is this justified by a concrete current need? If the answer is "it might be useful later," don't add it
 - When the project has test infrastructure (look for: test directories, Makefile test targets, package.json test scripts, or a test framework), prefer test-driven development: write a failing test for the expected behavior first, then implement to make it pass. For changes that are purely configuration, documentation, or prompt-text edits, skip TDD — but state one concrete post-change verification: a `/relevant-checks` invocation, a grep confirming no stale references remain, a dry-run command, or a minimal manual repro
 - Address root causes, not symptoms; do not suppress errors or paper over failures.
-- Invoke `/relevant-checks` promptly after each non-trivial logical sub-step, not only at the end of implementation. Step 3 is the final check, not the only one.
+- Invoke `/relevant-checks` via the Skill tool promptly after each non-trivial logical sub-step, not only at the end of implementation. Step 3 is the final check, not the only one.
 
 ## Step 3 — Relevant Checks (first pass)
 
-Invoke `/relevant-checks` to run validation checks relevant to the modified files. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` to confirm the fix.
+Invoke `/relevant-checks` via the Skill tool to run validation checks relevant to the modified files. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` via the Skill tool to confirm the fix.
 
 ## Step 4 — First Commit (implementation)
 
@@ -374,7 +374,7 @@ Append rejected findings to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the s
 
 **5.6 — Short-circuit if no accepted findings**: If zero findings were accepted in this round, no fixes will be applied — no significant changes will be made. The loop is done — proceed to Step 6.
 
-**5.7 — Implement accepted fixes**: Edit the affected files. Then invoke `/relevant-checks`. If checks fail, diagnose and fix, then re-invoke `/relevant-checks` until clean.
+**5.7 — Implement accepted fixes**: Edit the affected files. Then invoke `/relevant-checks` via the Skill tool. If checks fail, diagnose and fix, then re-invoke `/relevant-checks` via the Skill tool until clean.
 
 **5.8 — Re-review gate**: Observable signal is whether Step 5.7 actually edited any files in the working tree — the main agent knows this from its own Edit/Write tool usage during this round. If Step 5.7 made no file edits (accepted findings turned out to be no-ops after re-reading code), the loop is done — proceed to Step 6. Otherwise, significant changes were made: increment `round_num`. If `round_num <= 7`, loop back to 5.1. If `round_num > 7`, print:
 
@@ -388,7 +388,7 @@ Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`: `Step 5 — qui
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip this step regardless of the nature of the changes — whether code, skills, documentation, data files, or configuration. All changes require full review.**
 
-Invoke the `/review` skill with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` to forward reviewer health state. Always prepend `--step-prefix "5.::code review"`. **If `debug_mode=true`, also prepend `--debug`.** Canonical invocation order: `[--debug] --step-prefix "5.::code review" --session-env $IMPLEMENT_TMPDIR/session-env.sh`. This launches the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude fallbacks when externals are unavailable), implements accepted suggestions recursively until clean.
+Invoke `/review` via the Skill tool with `--session-env $IMPLEMENT_TMPDIR/session-env.sh` to forward reviewer health state. Always prepend `--step-prefix "5.::code review"`. **If `debug_mode=true`, also prepend `--debug`.** Canonical invocation order: `[--debug] --step-prefix "5.::code review" --session-env $IMPLEMENT_TMPDIR/session-env.sh`. This launches the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude fallbacks when externals are unavailable), implements accepted suggestions recursively until clean.
 
 After `/review` returns, follow the **Cross-Skill Health Propagation** procedure from Step 0 to read the health status file and update `session-env.sh` if any reviewer timed out during the review.
 
@@ -412,7 +412,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh
 
 Parse the output for `FILES_CHANGED`. If `FILES_CHANGED=false`, print: `⏩ 6: checks (2) — skipped, no review changes (<elapsed>)` and skip Steps 6 and 7 (but NOT Step 7a — the Code Flow Diagram step runs unconditionally).
 
-If files **did change**, invoke `/relevant-checks` to ensure review fixes didn't introduce new issues. If checks fail, diagnose and fix, then re-invoke `/relevant-checks`.
+If files **did change**, invoke `/relevant-checks` via the Skill tool to ensure review fixes didn't introduce new issues. If checks fail, diagnose and fix, then re-invoke `/relevant-checks` via the Skill tool.
 
 ## Step 7 — Second Commit (review fixes)
 
@@ -796,7 +796,7 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
    - **step12 family**: **HARD FAILURE** — bail to 12d immediately. Print `**⚠ 12: CI+merge loop — check-bump-version.sh reported pre-check STATUS=$STATUS (baseline untrustworthy). Cannot safely verify bump freshness. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. Rationale: without a trustworthy baseline, the post-check comparison is meaningless — the merged version cannot be guaranteed correct.
    - **step10 family**: log warning `**⚠ 10: CI monitor — check-bump-version.sh reported pre-check STATUS=$STATUS (baseline untrustworthy). Skipping numeric-delta verification; Step 12 will re-verify.**` to `CI Issues`, then:
      - **If `HAS_BUMP=false`** (no `/bump-version` skill installed): skip the `/bump-version` invocation entirely and proceed directly to step 5 (push) → step 6 → step 7 — same as the `HAS_BUMP=false` path under `STATUS=ok` below. Do NOT attempt to call a skill that does not exist.
-     - **If `HAS_BUMP=true`**: invoke `/bump-version` anyway (the rebase still needs its re-bump commit), but **SKIP the post-check commit-delta verification below** since the baseline is untrustworthy. After `/bump-version` returns, skip directly to step 5 (push) → step 6 (PR body refresh) → step 7 (return to caller). The post-check `STATUS`-first branches below and the numeric-comparison branches both rely on a trustworthy pre-check baseline that this invocation does not have.
+     - **If `HAS_BUMP=true`**: invoke `/bump-version` via the Skill tool anyway (the rebase still needs its re-bump commit), but **SKIP the post-check commit-delta verification below** since the baseline is untrustworthy. After `/bump-version` returns, skip directly to step 5 (push) → step 6 (PR body refresh) → step 7 (return to caller). The post-check `STATUS`-first branches below and the numeric-comparison branches both rely on a trustworthy pre-check baseline that this invocation does not have.
 
    Only if pre-check `STATUS=ok`, proceed with the bump workflow below:
    - **If `HAS_BUMP=false`**:
