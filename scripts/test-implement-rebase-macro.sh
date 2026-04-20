@@ -152,14 +152,16 @@ rebase_push_skip_count=$(grep -cF '${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh 
 [[ "$rebase_push_skip_count" == "1" ]] \
   || fail "(H) expected exactly 1 'rebase-push.sh --no-push --skip-if-pushed' occurrence (macro M2 only), found $rebase_push_skip_count — residual inline rebase block may have survived the refactor"
 
-# Sanity check: both non-macro --no-push call sites must still exist (Step 1.m + Rebase +
-# Re-bump Sub-procedure). Count lines ending with 'rebase-push.sh --no-push' (indentation
-# tolerated; --skip-if-pushed excluded because its lines do NOT end with --no-push). Expect
-# exactly 2 — one per call site. This catches accidental removal of EITHER site, which the
-# prior unindented-only grep missed for the Sub-procedure's 3-space-indented line.
-no_push_only_count=$(grep -cE 'rebase-push\.sh --no-push$' "$SKILL_MD" || true)
+# Sanity check: both non-macro --no-push call sites must still exist (Step 1.m in SKILL.md +
+# Rebase + Re-bump Sub-procedure, now extracted to references/rebase-rebump-subprocedure.md).
+# Count lines ending with 'rebase-push.sh --no-push' across both files (indentation tolerated;
+# --skip-if-pushed excluded because its lines do NOT end with --no-push). Expect exactly 2 —
+# one per call site. This catches accidental removal of EITHER site.
+SUBPROC_MD="$REPO_ROOT/skills/implement/references/rebase-rebump-subprocedure.md"
+[[ -f "$SUBPROC_MD" ]] || fail "(H) references/rebase-rebump-subprocedure.md missing: $SUBPROC_MD"
+no_push_only_count=$(grep -chE 'rebase-push\.sh --no-push$' "$SKILL_MD" "$SUBPROC_MD" | awk '{s+=$1} END {print s+0}')
 [[ "$no_push_only_count" == "2" ]] \
-  || fail "(H) expected exactly 2 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites, found $no_push_only_count — Step 1.m or Rebase + Re-bump Sub-procedure was accidentally altered"
+  || fail "(H) expected exactly 2 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites across SKILL.md + references/rebase-rebump-subprocedure.md, found $no_push_only_count — Step 1.m or Rebase + Re-bump Sub-procedure was accidentally altered"
 
 # ---------------------------------------------------------------------------
 # (I) Macro body placeholder-pinned SKIPPED format strings.
