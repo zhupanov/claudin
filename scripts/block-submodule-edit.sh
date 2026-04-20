@@ -59,8 +59,19 @@ if [[ "$FILE_PATH" != /* ]]; then
 fi
 
 # --- Determine the superproject root ---
-# If we're not running inside a git repo, do not interfere.
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+# Anchor to CLAUDE_PROJECT_DIR so that a session `cd`'d into a submodule still
+# resolves REPO_ROOT to the superproject (closes the cd-into-submodule bypass
+# tracked as issue #150). If CLAUDE_PROJECT_DIR is set but does not resolve to
+# a git repo (stale/broken value), fall through to $PWD rather than fail open
+# — a healthy $PWD still catches submodule edits; this preserves pre-#150 guard
+# strength for mis-configured sessions.
+REPO_ROOT=""
+if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
+  REPO_ROOT=$(git -C "$CLAUDE_PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+fi
+if [[ -z "$REPO_ROOT" ]]; then
+  REPO_ROOT=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
+fi
 if [[ -z "$REPO_ROOT" ]]; then
   exit 0
 fi

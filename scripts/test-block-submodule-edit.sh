@@ -28,8 +28,8 @@
 # Bypass case (#3) uses tri-state fingerprint matching: post-fix (exit 0 +
 # parseable deny JSON whose reason mentions "submodule") → PASS; legacy-buggy
 # (exit 0 + empty stdout) → KNOWN-FAIL, increments EXPECTED_FAIL (non-fatal);
-# anything else → HARD FAIL. When issue #150 lands and removes the bypass,
-# the case auto-flips to PASS.
+# anything else → HARD FAIL. Issue #150 has landed and removed the bypass —
+# the fingerprint is retained as defense-in-depth against regressions.
 #
 # Scope note: NotebookEdit and Bash-mediated mutations are outside the current
 # hook matcher's scope (PreToolUse on Edit/Write only) — no assertion here.
@@ -62,6 +62,10 @@ export HOME="$TMPROOT/fakehome"
 mkdir -p "$HOME"
 export GIT_CONFIG_GLOBAL=/dev/null
 export GIT_CONFIG_SYSTEM=/dev/null
+# Clear any inherited CLAUDE_PROJECT_DIR so cases 1/2/4-13 test the $PWD
+# fallback path deterministically — only case 3 deliberately sets it to
+# simulate a Claude Code session that has cd'd into the submodule.
+unset CLAUDE_PROJECT_DIR
 export GIT_AUTHOR_NAME=test
 export GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test
@@ -240,14 +244,20 @@ assert_deny_json "$HOOK_STDOUT" "submodule" "[case 2]"
 case2_reason=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
 assert_contains "$case2_reason" "sub" "[case 2] reason names submodule path"
 
-# --- Case 3: Bypass (known-failing until #150) — cwd inside submodule ------
-# Tri-state fingerprint: post-fix (RC=0, parseable deny JSON whose reason
-# mentions "submodule") → PASS. Legacy-buggy (RC=0, empty stdout) → KNOWN-FAIL,
-# non-fatal, EXPECTED_FAIL++. Anything else → HARD FAIL. Auto-flips to PASS
-# when #150 lands correctly.
+# --- Case 3: Bypass (fixed by #150) — cwd inside submodule -----------------
+# Tri-state fingerprint (retained after #150 landed for defense-in-depth):
+# post-fix (RC=0, parseable deny JSON whose reason mentions "submodule") →
+# PASS. Legacy-buggy (RC=0, empty stdout) → KNOWN-FAIL, non-fatal,
+# EXPECTED_FAIL++. Anything else → HARD FAIL.
 echo ""
-echo "=== 3: Bypass — cwd inside submodule (known-failing until #150) ==="
+echo "=== 3: Bypass — cwd inside submodule (fixed by #150) ==="
+# Simulate a real Claude Code session where CLAUDE_PROJECT_DIR is anchored to
+# the superproject and the session has `cd`'d into the submodule. The hook's
+# post-#150 anchor uses CLAUDE_PROJECT_DIR so the superproject/submodule
+# distinction is preserved even when cwd is inside the submodule.
+export CLAUDE_PROJECT_DIR="$SUPER"
 run_hook "$SUB" "$(json_payload "$SUB/any.txt")"
+unset CLAUDE_PROJECT_DIR
 post_fix_match=0
 legacy_match=0
 case3_reason=$(printf '%s' "$HOOK_STDOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
@@ -260,15 +270,28 @@ if [[ $RC -eq 0 && -z "$HOOK_STDOUT" ]]; then
 fi
 if (( post_fix_match )); then
     PASS=$((PASS + 1))
-    echo "  ok: [case 3] bypass now blocks (post-fix behavior; #150 appears to have landed — flip this case to a regular assertion)"
+    echo "  ok: [case 3] bypass blocked (post-#150 behavior; tri-state fingerprint retained as regression guard)"
 elif (( legacy_match )); then
     EXPECTED_FAIL=$((EXPECTED_FAIL + 1))
-    echo "  KNOWN-FAIL: [case 3] bypass still succeeds when cwd is inside the submodule (tracked by #150, non-fatal). Will auto-flip to PASS when #150 lands."
+    echo "  KNOWN-FAIL: [case 3] legacy bypass fingerprint matched — submodule guard regression, investigate scripts/block-submodule-edit.sh REPO_ROOT anchor."
 else
     FAIL=$((FAIL + 1))
     FAILED_TESTS+=("[case 3] bypass — unexpected state: RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")")
     echo "  HARD FAIL: [case 3] bypass — neither post-fix (0, deny JSON with reason containing \"submodule\") nor legacy (0, empty stdout) fingerprint matched; RC=$RC, stdout=$(printf %q "$HOOK_STDOUT")" >&2
 fi
+
+# --- Case 3b: Deny — broken CLAUDE_PROJECT_DIR, healthy $PWD ---------------
+# Regression lock (#150 round-2 review): a stale/broken CLAUDE_PROJECT_DIR
+# must NOT silently disable the guard when $PWD is a healthy superproject.
+# The hook's two-step anchor resolution tries CLAUDE_PROJECT_DIR first, then
+# falls through to $PWD when the first attempt does not yield a git repo.
+echo ""
+echo "=== 3b: Deny submodule file with broken CLAUDE_PROJECT_DIR (fallback to \$PWD) ==="
+export CLAUDE_PROJECT_DIR="$NONREPO"
+run_hook "$SUPER" "$(json_payload "$SUB/any.txt")"
+unset CLAUDE_PROJECT_DIR
+assert_eq "[case 3b] exit code" 0 "$RC"
+assert_deny_json "$HOOK_STDOUT" "submodule" "[case 3b]"
 
 # --- Case 4: Deny — new file in new subdir under submodule (ancestor walk) -
 echo ""
@@ -405,7 +428,7 @@ echo ""
 echo "=== Summary ==="
 echo "Passed:    $PASS"
 echo "Failed:    $FAIL"
-echo "KnownFail: $EXPECTED_FAIL (non-fatal; tracked by #150)"
+echo "KnownFail: $EXPECTED_FAIL (non-fatal; fingerprint retained after #150)"
 if (( FAIL > 0 )); then
     echo "" >&2
     echo "Failed tests:" >&2

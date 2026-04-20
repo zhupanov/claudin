@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.10] - 2026-04-20
+
+### Fixed
+
+- `scripts/block-submodule-edit.sh` closes the cd-into-submodule bypass (#150): `REPO_ROOT` now resolves via a two-step anchor — try `CLAUDE_PROJECT_DIR` first, fall through to `$PWD` when the first attempt does not yield a git repo — so a session that has `cd`'d into a submodule still detects the superproject, and a stale/broken `CLAUDE_PROJECT_DIR` cannot silently downgrade the guard to fail-open when `$PWD` is a healthy superproject. `scripts/test-block-submodule-edit.sh` case 3 auto-flips from KNOWN-FAIL to PASS via the existing tri-state fingerprint (retained as defense-in-depth against future regressions); the harness also unsets any inherited `CLAUDE_PROJECT_DIR` at startup for hermeticity and gains new case 3b covering the broken-anchor + healthy-`$PWD` fallback scenario. `SECURITY.md` gains a one-paragraph note in the Trust Model section documenting the `CLAUDE_PROJECT_DIR` anchor and the bypass it closes. Closes #150.
+
 ## [4.0.9] - 2026-04-19
 
 ### Added
