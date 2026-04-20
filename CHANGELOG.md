@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.1] - 2026-04-20
+
+### Changed
+
+- `/create-skill` — delegate via `/im` instead of `/implement` so scaffold PRs auto-merge by default. `--merge` on `/create-skill` is now a backward-compat no-op (the flag still parses; the behavior change is in the default path). Switched the Skill tool call from `"implement"` / `"larch:implement"` to `"im"` / `"larch:im"`.
+- `/create-skill` — add a `## Principles` section (A: express logic as bash scripts with shared/private reuse; B: no direct Bash commands — wrap in scripts; C: no consecutive Bash tool calls — combine via coordinator script). Principles are forwarded verbatim into the feature description handed to `/im` so they propagate to the implementing agent. Not mechanically enforced.
+- `skills/create-skill/scripts/post-scaffold-hints.sh` — emit an expanded doc-sync reminder set for plugin-dev scaffolds: `docs/workflow-lifecycle.md` orchestration-hierarchy / delegation-topology / standalone-usage updates, `docs/agents.md` and `docs/review-agents.md` (with "when applicable" wording), and `AGENTS.md` Canonical sources (when the new skill introduces a shared script or is itself canonical). Existing README catalog + `.claude/settings.json` permission reminders unchanged.
+- `scripts/test-post-scaffold-hints.sh` — add contract-token assertions for the new reminders and a negative assertion verifying the `--plugin false` branch does not leak them.
+- `docs/workflow-lifecycle.md` — restructure the Skill Orchestration Hierarchy to include `/fix-issue` and `/loop-improve-skill` as orchestrators; add a new "Delegation Topology" subsection covering `/im`, `/imaq`, `/alias`, `/create-skill` as pure forwarders with their delegation edges; expand Standalone Usage with `/fix-issue`, `/loop-improve-skill`, `/create-skill`, `/issue`.
+- `skills/shared/subskill-invocation.md` — update the Pattern A cited source-example citation from `/create-skill § Step 3 — Delegate to /implement` to `§ Step 3 — Delegate to /im`; add a note explaining the chained delegation.
+- `skills/create-skill/scripts/parse-args.sh` — refresh the `--merge` header comment to state the flag is accepted for backward compatibility but no longer forwarded (since `/im` already prepends `--merge`).
+- `README.md` — update the `/create-skill` skill-catalog row to describe the new `/im` delegation target and auto-merge default.
+- `AGENTS.md` — expand the `skills/create-skill/scripts/post-scaffold-hints.sh` bullet to document the new reminder tokens and the paired harness contract.
+
 ## [4.2.0] - 2026-04-20
 
 ### Added
