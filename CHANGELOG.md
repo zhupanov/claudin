@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.15] - 2026-04-19
+
+### Changed
+
+- `/fix-issue` now honors prose-stated dependency relationships in addition to GitHub's native `blocked_by` API. `skills/fix-issue/scripts/fetch-eligible-issue.sh` unions two blocker sources before declaring an issue eligible: (1) the existing native-dependencies check, and (2) a new `prose_open_blockers()` function that extracts same-repo issue numbers from the issue body and every comment body using the conservative case-insensitive keyword set (`Depends on #N`, `Blocked by #N`, `Blocked on #N`, `Requires #N`, `Needs #N`). A native-first short-circuit skips the prose path when the native check already flags the candidate, capping API volume at the cost of a documented diagnostic gap in skip/error messages. Every boundary is fail-open, mirroring the pre-existing native-dep contract. Motivating case: issue #152's body used `Depends on **#150 (bypass fix) only**` but the native `blocked_by` endpoint had no dependency registered, so `/fix-issue` picked it up as eligible despite the prose-declared open blocker.
+- `skills/fix-issue/scripts/parse-prose-blockers.sh` is the new pure text-in / numbers-out parser (takes one document body at a time, no network). Emphasis wrappers (`*`, `_`) are normalized before matching so `**#150**` formatting is caught; link-target forms (`[#150](url)`) and cross-repo references (`owner/repo#N`) remain NON-matches by parser construction. `skills/fix-issue/scripts/test-parse-prose-blockers.sh` is its 43-assertion offline regression harness — wired into `make lint` via the new `test-parse-prose-blockers` target and added to `agent-lint.toml`'s exclude list per the Makefile-only harness convention. `skills/fix-issue/SKILL.md` Step 1 and Known Limitations are updated accordingly; `README.md`'s `/fix-issue` row is updated to mention both native and prose keyword scanning.
+
 ## [4.0.14] - 2026-04-19
 
 ### Fixed
