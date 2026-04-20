@@ -494,7 +494,7 @@ Check if the repo has a `/bump-version` skill and capture commit count:
 ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
 ```
 
-Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
+Parse the output for `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS` (the `STATUS=ok|missing_main_ref|git_error` field from #172). If `STATUS != ok`, the pre-mode count is untrustworthy — log a warning `**⚠ 8: version bump — pre-check STATUS=$STATUS, commit count may be unreliable. Continuing.**` to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings` and proceed. Step 8 is pre-PR and can afford to be permissive; the last-chance enforcement happens in the Rebase + Re-bump Sub-procedure step 4 invoked by Step 12 (step12 family), which hard-bails on non-`ok` status.
 
 **If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 9.
 
@@ -508,7 +508,11 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
    ```
-   Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. If `VERIFIED=false`, print: `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`
+   Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`, and `STATUS`. `STATUS != ok` (the #172 fail-closed invariant) forces `VERIFIED=false` at the script level independently of the numeric comparison — do not try to second-guess it. Handling:
+   - **`STATUS=git_error`**: print `**⚠ 8: version bump — post-check STATUS=git_error, commit count untrustworthy. Continuing (Step 12 will re-verify under strict semantics).**`, log to `Warnings`, and continue. Do NOT treat this as a bump failure requiring manual intervention.
+   - **`STATUS=missing_main_ref`**: same handling as `git_error` — log warning, continue.
+   - **`STATUS=ok` AND `VERIFIED=false`**: the normal "wrong commit count" path — print `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`.
+   - **`STATUS=ok` AND `VERIFIED=true`**: proceed.
 
 3b. **Sentinel-file defense-in-depth** (per #160). Run the generic post-invocation verifier against the reasoning-file sentinel. This is complementary to step 3's commit-delta check — it catches the case where `/bump-version` silently no-ops without writing its reasoning artifact, whereas step 3 catches the case where no commit was created. Both checks run unconditionally; neither short-circuits the other. **Guard on non-empty path**: `verify-skill-called.sh --sentinel-file` rejects an empty path as an argument error (exit 1), so only invoke the helper when `$BUMP_REASONING_FILE` is non-empty. If `$BUMP_REASONING_FILE` is empty (step 2 failed to parse `REASONING_FILE=<path>` from `/bump-version`'s stdout), treat that as equivalent to a failed sentinel check: print `**⚠ /bump-version sentinel check skipped — BUMP_REASONING_FILE is empty. Continuing.**`, append to `Warnings`, and do not invoke the helper.
    ```bash
@@ -784,7 +788,7 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
    ```
-   Parse `HAS_BUMP` and `COMMITS_BEFORE`.
+   Parse `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS`. The `STATUS=ok|missing_main_ref|git_error` field (#172) is authoritative for degraded-git detection — do NOT grep stderr for the old `WARN: ... neither local 'main' nor 'origin/main' exists` line.
    - **If `HAS_BUMP=false`**:
      - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version not found, cannot re-bump. Bailing to 12d.**` Bail to 12d.
      - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
@@ -795,13 +799,23 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
      ```bash
      ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
      ```
-     Parse `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. Use the commit-count delta (not the skill's prose output) to detect the outcome — this is the reliable structured signal:
+     Parse `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`, and `STATUS`. **Evaluate `STATUS` FIRST** — before the `VERIFIED`/`COMMITS` comparison. A non-`ok` status means the count is 0-by-coercion (not a legitimate "0 commits ahead" result), and `VERIFIED` has already been forced to `false` by the script itself. Do not route such cases through the numeric-comparison branches below, which would emit a misleading "BUMP_TYPE=NONE or missing main ref" message when the true cause is a transient git error:
+
+     - **`STATUS=git_error`** (rev-list failed against a valid base ref — corrupted pack, shallow-clone object boundary, permission error):
+       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ 12: CI+merge loop — check-bump-version.sh reported STATUS=git_error after re-bump (git rev-list failed against a valid base ref). Cannot verify bump freshness. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. Rationale: Step 12 is the last-chance enforcement point for the version bump freshness invariant; a transient git error that masks the count means we cannot guarantee the merged version is correct.
+       - **step10 family**: log warning `**⚠ 10: CI monitor — check-bump-version.sh reported STATUS=git_error after re-bump. Proceeding to Step 11. Step 12 will re-verify.**` to `CI Issues`, then proceed directly to step 5 (rebased history must be force-pushed). Skip ahead past the numeric-comparison branches below to step 6 and step 7.
+
+     - **`STATUS=missing_main_ref`** (neither local `main` nor `origin/main` exists):
+       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ 12: CI+merge loop — check-bump-version.sh reported STATUS=missing_main_ref after re-bump (no base ref to classify against). Cannot verify bump freshness. Bailing to 12d.**` Log to `CI Issues`.
+       - **step10 family**: log warning `**⚠ 10: CI monitor — check-bump-version.sh reported STATUS=missing_main_ref after re-bump. Proceeding to Step 11. Step 12 will re-verify.**` to `CI Issues`, proceed to step 5 and skip ahead to step 6/7.
+
+     **Only if `STATUS=ok`**, use the commit-count delta to detect the outcome — this is the reliable structured signal when the count is trustworthy:
 
      - **`VERIFIED=true`** (a new commit was created — the common case): proceed to step 5.
 
-     - **`VERIFIED=false` AND `COMMITS_AFTER == COMMITS_BEFORE`** (zero new commits — `/bump-version` ran a `BUMP_TYPE=NONE` no-op path, because `classify-bump.sh` detected HEAD is already a bump commit). This normally happens when `drop-bump-commit.sh` reported `DROPPED=false` (e.g., Guard 4 refused the drop because the bump commit touched files beyond `.claude-plugin/plugin.json`) and the stale bump commit survived the rebase unchanged. **Note**: this condition is also reached in the degenerate case where `count_commits()` in `check-bump-version.sh` returned `0` for both pre and post calls because neither local `main` nor `origin/main` exists — in that case, a `WARN: ... neither local 'main' nor 'origin/main' exists` line will have been printed to stderr. Before acting on the bail, check the stderr output of the most recent `check-bump-version.sh` calls for that WARN to determine the true root cause. Caller-family handling:
-       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ 12: CI+merge loop — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE or missing main ref). Cannot verify bump freshness. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues` (including the relevant stderr excerpt if the WARN was seen). Rationale: Step 12 is the last-chance enforcement point for the version bump freshness invariant. Either a stale bump commit classified against an older base or a missing base ref means we cannot guarantee the merged version is correct; we must fail loudly rather than silently merge a potentially-wrong version.
-       - **step10 family**: log warning `**⚠ 10: CI monitor — /bump-version created 0 new commits (BUMP_TYPE=NONE or missing main ref). Proceeding to Step 11. Step 12 will re-attempt.**` to `Warnings`, then proceed directly to step 5 (the rebased history still needs to be force-pushed). Step 10 can afford to be permissive here because Step 12 re-runs the sub-procedure under strict semantics and will bail then if the drop still cannot happen.
+     - **`VERIFIED=false` AND `COMMITS_AFTER == COMMITS_BEFORE`** (zero new commits — `/bump-version` ran a `BUMP_TYPE=NONE` no-op path, because `classify-bump.sh` detected HEAD is already a bump commit). This normally happens when `drop-bump-commit.sh` reported `DROPPED=false` (e.g., Guard 4 refused the drop because the bump commit touched files beyond `.claude-plugin/plugin.json`) and the stale bump commit survived the rebase unchanged. Caller-family handling:
+       - **step12 family**: **HARD FAILURE** — bail to 12d. Print `**⚠ 12: CI+merge loop — /bump-version created 0 new commits after rebase (BUMP_TYPE=NONE). Cannot verify bump freshness. Bailing to 12d.**` Log to `CI Issues`.
+       - **step10 family**: log warning `**⚠ 10: CI monitor — /bump-version created 0 new commits (BUMP_TYPE=NONE). Proceeding to Step 11. Step 12 will re-attempt.**` to `Warnings`, then proceed directly to step 5 (the rebased history still needs to be force-pushed). Step 10 can afford to be permissive here because Step 12 re-runs the sub-procedure under strict semantics and will bail then if the drop still cannot happen.
 
      - **`VERIFIED=false` AND `COMMITS_AFTER != COMMITS_BEFORE`** (unexpected state — `/bump-version` created more than one commit, or somehow decreased the count):
        - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Bailing to 12d.**` Bail to 12d.

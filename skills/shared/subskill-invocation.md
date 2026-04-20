@@ -57,10 +57,14 @@ Canonical examples:
 
   ```bash
   ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
-  # Parse HAS_BUMP, COMMITS_BEFORE from stdout.
+  # Parse HAS_BUMP, COMMITS_BEFORE, STATUS from stdout.
   # Invoke /bump-version via the Skill tool.
   ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode post --before-count "$COMMITS_BEFORE"
-  # Parse VERIFIED, COMMITS_AFTER, EXPECTED. Handle VERIFIED=false and missing-main edge cases.
+  # Parse VERIFIED, COMMITS_AFTER, EXPECTED, STATUS.
+  # STATUS ∈ {ok, missing_main_ref, git_error}. MUST check STATUS=ok before trusting
+  # the COMMITS_* counts — a non-ok STATUS means the count is 0-by-coercion, not
+  # a legitimate "0 commits ahead" result (#172). --mode post already forces
+  # VERIFIED=false when STATUS != ok, independent of the numeric comparison.
   ```
 
   See `skills/implement/SKILL.md § Step 8 — Version Bump` for the full recipe. `--mode post` **requires** `--before-count $COMMITS_BEFORE` — calling `--mode post` without it errors out at the script level.
