@@ -1,0 +1,144 @@
+---
+name: loop-improve-skill
+description: "Use when iteratively improving an existing skill via a judge-design-implement loop tracked in a GitHub issue; runs up to 10 iterations or stops when no plan materializes."
+argument-hint: "<skill-name>"
+allowed-tools: Bash, Skill, Read, Write, Edit
+---
+
+# loop-improve-skill
+
+Iteratively improve an existing skill. Creates a tracking GitHub issue, then runs up to 10 rounds of: `/skill-judge` → post judgment → `/design` → (stop if no plan) → post plan → `/im`.
+
+Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
+
+**Anti-halt continuation reminder.** After every child `Skill` tool call (`/skill-judge`, `/design`, `/im`) returns, IMMEDIATELY continue with this skill's NEXT numbered sub-step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., loop exit on "no plan", `max iterations reached`). A normal sequential continuation is the default this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+
+## Flags
+
+Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token.
+
+- `--debug`: Set `debug_mode=true`. Default: `debug_mode=false`.
+
+After stripping flags, the first positional token is `<skill-name>`.
+
+## Progress Reporting
+
+Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
+
+Step Name Registry:
+| Step | Short Name |
+|------|------------|
+| 1 | parse args |
+| 2 | create issue |
+| 3 | loop |
+| 3.j | judge |
+| 3.d | design |
+| 3.i | im |
+| 4 | close out |
+
+## Step 1 — Parse Arguments and Resolve Target Skill
+
+Parse flags, then read the first positional token as `SKILL_NAME`. Strip a single leading `/`.
+
+Validate:
+- Non-empty.
+- Matches `^[a-z][a-z0-9-]*$`.
+
+If invalid, print `**⚠ 1: parse args — invalid or missing <skill-name>. Usage: /loop-improve-skill <skill-name>**` and abort.
+
+Resolve the target skill path. Probe both:
+- `${CLAUDE_PLUGIN_ROOT}/skills/${SKILL_NAME}/SKILL.md` (plugin-public skill)
+- `.claude/skills/${SKILL_NAME}/SKILL.md` (project-local skill, relative to the current working directory)
+
+If neither exists, print `**⚠ 1: parse args — no skill found at ${CLAUDE_PLUGIN_ROOT}/skills/${SKILL_NAME}/ or .claude/skills/${SKILL_NAME}/. Aborting.**` and abort.
+
+Save the first matching path as `TARGET_SKILL_PATH` (for diagnostics) and continue.
+
+Print: `✅ 1: parse args — target /${SKILL_NAME}`
+
+## Step 2 — Create Tracking GitHub Issue
+
+Compose the issue body: one short paragraph describing the loop (up to 10 iterations of `/skill-judge` → `/design` → `/im`, exit when no plan materializes), plus a line with the target skill path.
+
+Create the issue:
+
+```bash
+gh issue create --title "Improve /${SKILL_NAME} skill via loop-improve-skill" --body-file "$ISSUE_BODY_FILE"
+```
+
+Parse the returned URL, extract the trailing issue number into `ISSUE_NUM`. If `gh issue create` fails or no number is captured, print `**⚠ 2: create issue — gh issue create failed. Aborting.**` and abort.
+
+Print: `✅ 2: create issue — #${ISSUE_NUM}`
+
+## Step 3 — Loop
+
+Initialize `ITER=1`. Loop while `ITER <= 10`:
+
+Print: `> **🔶 3: loop — iteration ${ITER}**`
+
+### 3.j — Run /skill-judge
+
+Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no matching skill", retry with `"skill-judge:skill-judge"`. Pass `${SKILL_NAME}` as args. Capture the full response to `$JUDGE_OUT` (a temp file).
+
+> **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call step (gh comment) and then 3.d — do NOT end the turn.
+
+Post the captured judgment to the tracking issue:
+
+```bash
+{ printf '## Iteration %s — skill-judge output\n\n' "${ITER}"; cat "$JUDGE_OUT"; } > "$JUDGE_COMMENT_FILE"
+gh issue comment "${ISSUE_NUM}" --body-file "$JUDGE_COMMENT_FILE"
+```
+
+### 3.d — Run /design
+
+Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`). Pass a prompt asking for an improvement plan for `/${SKILL_NAME}` that addresses the `skill-judge` findings just captured. Capture the full response to `$DESIGN_OUT` via the Skill tool call.
+
+> **Continue after child returns.** When `/design` returns, execute the no-plan detector and then either exit the loop or continue to 3.i — do NOT end the turn.
+
+**No-plan detection.** Exit the loop cleanly if any of:
+- `$DESIGN_OUT` is empty.
+- `$DESIGN_OUT` contains a case-insensitive match for any of: `NO PLAN`, `no improvements`, `skill is already high quality`, `nothing to improve`, `already optimal`.
+- `/design` returned an explicit refusal or error.
+
+On no-plan exit, post a final comment and break out of the loop:
+
+```bash
+gh issue comment "${ISSUE_NUM}" --body "Loop exited at iteration ${ITER} — no plan materialized."
+```
+
+Set `EXIT_REASON="no plan at iteration ${ITER}"` and proceed to Step 4.
+
+Otherwise, post the plan to the issue:
+
+```bash
+{ printf '## Iteration %s — design plan\n\n' "${ITER}"; cat "$DESIGN_OUT"; } > "$PLAN_COMMENT_FILE"
+gh issue comment "${ISSUE_NUM}" --body-file "$PLAN_COMMENT_FILE"
+```
+
+### 3.i — Run /im
+
+Invoke the Skill tool with skill `"im"` (bare name first; fallback `"larch:im"`) via the Skill tool. Pass the full plan text (from `$DESIGN_OUT`) as args so `/im` runs the design + implement + review + version bump + PR + merge pipeline on the plan.
+
+> **Continue after child returns.** When `/im` returns, increment the iteration counter and decide whether to loop or exit — do NOT end the turn.
+
+### 3.next — Iterate
+
+Increment `ITER`. If `ITER > 10`, post:
+
+```bash
+gh issue comment "${ISSUE_NUM}" --body "Loop exited at iteration 10 — max iterations reached."
+```
+
+Set `EXIT_REASON="max iterations (10) reached"` and proceed to Step 4.
+
+Otherwise, continue at 3.j with the new iteration.
+
+## Step 4 — Close Out
+
+Post a final summary comment. Do not close the issue.
+
+```bash
+gh issue comment "${ISSUE_NUM}" --body "Loop finished. Iterations run: $(( ITER > 10 ? 10 : ITER )). Exit reason: ${EXIT_REASON}."
+```
+
+Print: `✅ 4: close out — issue #${ISSUE_NUM}, exit: ${EXIT_REASON}`
