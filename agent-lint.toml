@@ -6,6 +6,17 @@ suppress = [
   "mcp-tool-unqualified",
   "desc-body-misalign",
   "terminology-inconsistent",
+  # nested-ref-deep is suppressed because the anti-halt continuation banner
+  # (closes #177) requires every orchestrator SKILL.md to cite
+  # skills/shared/subskill-invocation.md as the canonical source of the
+  # rule. subskill-invocation.md itself contains many inline SKILL.md
+  # example references (which the S029 rule counts as "nested"), but the
+  # banner carries the operative one-sentence rule inline — the canonical
+  # reference is a discoverability aid, not a mandatory cross-ref chain.
+  # The rule's stated concern ("humans/LLMs chasing chained refs") does not
+  # apply to this use case. See AGENTS.md "Editing rules" for the anti-halt
+  # banner convention.
+  "nested-ref-deep",
 ]
 
 # scripts/test-sessionstart-health.sh is the regression test for the
@@ -79,6 +90,13 @@ suppress = [
 # harness is referenced only from Makefile (test-parse-prose-blockers target)
 # and AGENTS.md, matching the same Makefile-only pattern as the other test-*
 # harnesses above.
+#
+# scripts/test-anti-halt-banners.sh is the regression harness for the
+# anti-halt continuation banner (closes #177). The harness asserts banner
+# presence in 4 orchestrator SKILL.md files and absence in 4 pure-delegator
+# SKILL.md files. It is structurally referenced from Makefile (test-anti-halt
+# target) and AGENTS.md, matching the same Makefile-only pattern as the other
+# test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -91,4 +109,5 @@ exclude = [
   "scripts/test-check-bump-version.sh",
   "scripts/test-lint-skill-invocations.sh",
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
+  "scripts/test-anti-halt-banners.sh",
 ]

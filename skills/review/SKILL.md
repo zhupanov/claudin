@@ -9,6 +9,8 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 
 Review all changes on the current branch (vs `main`) using a unified 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor), then implement all accepted suggestions.
 
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+
 **Flags**: Parse flags from `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, the remainder (if any) is unused — `/review` takes no positional arguments. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
@@ -247,6 +249,8 @@ For each **accepted in-scope** finding (`FINDING_*` items only — exclude `OOS_
 1. Apply the suggested fix by editing the relevant file.
 2. If the fix involves creating new tests, write them.
 3. If the fix involves CI workflow changes, edit the workflow YAML.
+
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill (Step 3f — Re-review, or Step 4 — Final Summary if converged) — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run validation checks. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` via the Skill tool to confirm the fix.
 

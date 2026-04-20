@@ -118,6 +118,18 @@ run_case() {
     return
   fi
 
+  # Check that the Sub-skill Invocation checklist references the anti-halt
+  # continuation reminder (closes #177). This asserts that scaffolded
+  # orchestrators inherit awareness of the anti-halt rule — without this the
+  # scaffold would silently drop the rule for every new orchestrator.
+  if ! printf '%s\n' "$content" | grep -Fq 'Anti-halt continuation reminder'; then
+    echo "FAIL: rendered file does not mention 'Anti-halt continuation reminder' in the scaffold checklist" >&2
+    echo "--- rendered content ---" >&2
+    printf '%s\n' "$content" >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    return
+  fi
+
   echo "PASS: $label"
   PASS_COUNT=$((PASS_COUNT + 1))
 }
