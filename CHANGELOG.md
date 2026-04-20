@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.18] - 2026-04-19
+
+### Fixed
+
+- `skills/fix-issue/scripts/fetch-eligible-issue.sh` — the GO-sentinel check at two sites (explicit-issue path and auto-pick loop) used `gh api --paginate "repos/…/comments" --jq '.[-1].body // empty' | tail -1`. Because `--jq` runs per page, `.[-1]` returned the last element of each page, not the last of the full history — the `tail -1` was only accidentally correct (pages arrive in order, so the final page's last element coincides with the globally-last comment, but the logic is brittle to any jq/paginate behavior change and `tail -1` also truncates multi-line last comments to their final line). Both sites now use the `gh api --paginate --slurp … | jq -r 'add // [] | .[-1].body // empty'` pattern already used by `prose_open_blockers` at line 135-136 — `--slurp` concatenates all pages into one JSON array-of-arrays, `add // []` flattens to a single array, `.[-1].body` unambiguously addresses the globally-last comment. Closes #184.
+
 ## [4.0.17] - 2026-04-19
 
 ### Fixed
