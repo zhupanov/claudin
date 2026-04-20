@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- README.md — append `(see `skills/shared/skill-design-principles.md`)` parenthetical to `/create-skill` catalog row so consumers reading the Skills feature matrix have a discovery path to the canonical skill-design principles doc. Closes #217.
+- README.md — append a parenthetical pointer to `skills/shared/skill-design-principles.md` on the `/create-skill` catalog row so consumers reading the Skills feature matrix have a discovery path to the canonical skill-design principles doc. Closes #217.
 
 ## [4.2.7] - 2026-04-20
 
