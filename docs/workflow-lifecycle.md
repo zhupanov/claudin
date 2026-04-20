@@ -4,27 +4,64 @@ How skills compose to form the end-to-end development workflow in Larch.
 
 ## Skill Orchestration Hierarchy
 
-Skills are not invoked in a flat sequence. They form a hierarchical call graph where higher-level skills orchestrate lower-level ones:
+Skills are not invoked in a flat sequence. They form a hierarchical call graph where higher-level **stateful orchestrators** invoke lower-level skills and continue execution based on their side effects. The diagram below shows only true orchestrators and their direct sub-skills; pure forwarders (`/im`, `/imaq`, `/alias`, `/create-skill`) are covered separately in the [Delegation Topology](#delegation-topology) subsection below because they run no post-delegation logic.
 
 ```mermaid
 graph TD
     IMPLEMENT["/implement"] -->|invokes| DESIGN["/design"]
     IMPLEMENT -->|invokes| REVIEW["/review"]
     IMPLEMENT -->|invokes| CHECKS["/relevant-checks"]
-    LOOP["/loop-review"] -->|invokes| ISSUE["/issue"]
-    ALIAS["/alias"] -->|invokes| IMPLEMENT
+    IMPLEMENT -->|invokes| BUMP["/bump-version"]
+    IMPLEMENT -->|invokes| ISSUE_OOS["/issue (OOS filing)"]
+    LOOP["/loop-review"] -->|invokes| ISSUE["/issue (batch)"]
+    FIX["/fix-issue"] -->|invokes| IMPLEMENT
+    LOOP_IMPROVE["/loop-improve-skill"] -->|invokes| SKILL_JUDGE["/skill-judge"]
+    LOOP_IMPROVE -->|invokes| DESIGN
+    LOOP_IMPROVE -->|invokes| IM_ALIAS["/im (→ /implement --merge)"]
 
     style IMPLEMENT fill:#2d5a27,color:#fff
     style LOOP fill:#2d5a27,color:#fff
+    style FIX fill:#2d5a27,color:#fff
+    style LOOP_IMPROVE fill:#2d5a27,color:#fff
     style DESIGN fill:#4a3a6e,color:#fff
     style REVIEW fill:#4a3a6e,color:#fff
     style CHECKS fill:#555,color:#fff
+    style BUMP fill:#555,color:#fff
     style ISSUE fill:#555,color:#fff
-    style ALIAS fill:#6b4c2a,color:#fff
+    style ISSUE_OOS fill:#555,color:#fff
+    style SKILL_JUDGE fill:#555,color:#fff
+    style IM_ALIAS fill:#6b4c2a,color:#fff
 ```
 
-- **`/implement`** is the top-level orchestrator. It runs the full design → code → review → PR workflow by default. With the `--merge` flag, it also runs the CI+rebase+merge loop and local cleanup after PR creation.
-- **`/loop-review`** partitions the codebase into slices, reviews each, and invokes `/issue` in batch mode to file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`) — accumulating up to 3 slices per `/issue` invocation before flushing so `/issue`'s 2-phase LLM dedup runs once per batch. Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
+- **`/implement`** — top-level orchestrator. Runs the full design → code → review → PR workflow by default. With the `--merge` flag, also runs the CI+rebase+merge loop and local cleanup after PR creation. Step 9a.1 additionally invokes `/issue` in batch mode to file accepted OOS findings as GitHub issues.
+- **`/loop-review`** — partitions the codebase into slices, reviews each with a 3-reviewer panel, and invokes `/issue` in batch mode to file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`) — accumulating up to 3 slices per `/issue` invocation before flushing so `/issue`'s 2-phase LLM dedup runs once per batch. Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
+- **`/fix-issue`** — processes one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any with open blockers, triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement` with mode-appropriate flags (`--quick` for SIMPLE, full for HARD; always `--merge`).
+- **`/loop-improve-skill`** — iteratively improves an existing skill. Creates a tracking GitHub issue, then runs up to 10 rounds of `/skill-judge` → post judgment → `/design` → (exit if no plan) → post plan → `/im`. Stops early when `/design` produces no improvement plan or after 10 iterations. `/skill-judge` comes from the skill-judge plugin; the loop references it by bare name with plugin-qualified fallback.
+
+## Delegation Topology
+
+Pure forwarders are **not** orchestrators — they validate input (when applicable), call the Skill tool exactly once, and exit. They run no logic after the child returns. This subsection documents how each delegator maps to its child skill and what preset flags it adds. Edges are labeled with the final expansion (what `/implement` sees).
+
+```mermaid
+graph LR
+    CREATE["/create-skill"] -->|--quick --auto| IM
+    IM["/im"] -->|--merge $ARGS| IMPLEMENT["/implement"]
+    IMAQ["/imaq"] -->|--merge --auto --quick $ARGS| IMPLEMENT
+    ALIAS["/alias"] -->|--quick --auto $ARGS| IMPLEMENT
+
+    style CREATE fill:#6b4c2a,color:#fff
+    style IM fill:#6b4c2a,color:#fff
+    style IMAQ fill:#6b4c2a,color:#fff
+    style ALIAS fill:#6b4c2a,color:#fff
+    style IMPLEMENT fill:#2d5a27,color:#fff
+```
+
+- **`/im`** — prepends `--merge` to `$ARGUMENTS` and forwards to `/implement`. Equivalent to `/implement --merge <args>`.
+- **`/imaq`** — prepends `--merge --auto --quick`. Equivalent to `/implement --merge --auto --quick <args>`.
+- **`/alias`** — validates alias name, then delegates to `/implement --quick --auto` to scaffold a new project-level alias skill under `.claude/skills/`. Accepts optional `--merge` to merge the alias-creation PR.
+- **`/create-skill`** — validates name + description, then delegates to `/im --quick --auto` (which expands to `/implement --merge --quick --auto`) to scaffold a new larch-style skill. Auto-merge is the default. Accepts `--merge` as a backward-compat no-op. `/create-skill --plugin` writes under `skills/`; default is `.claude/skills/<name>/`. The scaffold process also emits a post-scaffold doc-sync checklist via `skills/create-skill/scripts/post-scaffold-hints.sh` — reminders to update the README catalog, `.claude/settings.json` permissions, this file (`docs/workflow-lifecycle.md`), and (when applicable) `docs/agents.md`, `docs/review-agents.md`, and `AGENTS.md` canonical sources.
+
+Pure forwarders are exempt from the post-invocation-verification and anti-halt-continuation rules defined in `skills/shared/subskill-invocation.md` — see that document for the full classification rules.
 
 ## End-to-End Flow
 
@@ -84,10 +121,18 @@ flowchart TD
 
 Not every task requires the full `/implement` pipeline. Skills can be used independently:
 
-- **`/design [--debug] <feature>`** — Plan a feature without implementing it. Creates a branch, runs collaborative sketches, writes and reviews the plan.
+- **`/design [--auto] [--debug] <feature>`** — Plan a feature without implementing it. Creates a branch, runs 5-agent collaborative sketches, writes and reviews the plan with a 3-reviewer panel + voting.
 - **`/review [--debug]`** — Review the current branch's changes. Launches reviewers, runs voting on findings, implements accepted fixes, and re-runs validation checks in a recursive loop.
 - **`/research [--debug] <topic>`** — Read-only investigation. Does not create branches, modify files, or make commits. Uses a restricted tool set (no Edit, Write, or Skill tools).
+- **`/fix-issue [--debug] [<number-or-url>]`** — Process one approved GitHub issue per invocation. Triages, classifies SIMPLE/HARD, and delegates to `/implement`. Single-iteration; caller handles repetition.
+- **`/loop-improve-skill <skill-name>`** — Iterate judge → plan → implement over an existing skill up to 10 rounds. Stops early if `/design` returns no plan.
 - **`/alias [--merge] <name> <skill> [flags...]`** — Create a project-level alias skill in `.claude/skills/` that forwards to a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR after CI passes.
+- **`/create-skill [--plugin] [--multi-step] [--merge] [--debug] <name> <desc>`** — Scaffold a new larch-style skill. Validates inputs, delegates to `/im --quick --auto` (auto-merges by default). See [Delegation Topology](#delegation-topology) above for the full chain and post-scaffold sync obligations.
+- **`/issue [--input-file F] [--title-prefix P] [--label L]... [--go] [<desc>]`** — Create one or more GitHub issues with 2-phase LLM-based semantic duplicate detection.
+
+Shortcut aliases (covered in [Delegation Topology](#delegation-topology)):
+- **`/im <args>`** ≡ `/implement --merge <args>`
+- **`/imaq <args>`** ≡ `/implement --merge --auto --quick <args>`
 
 ## Flags
 

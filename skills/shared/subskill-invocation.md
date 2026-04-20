@@ -8,7 +8,9 @@ Every larch skill that invokes another skill uses exactly one of two first-class
 
 ### Pattern A — Pure delegator (bulleted)
 
-Used when the parent skill mostly forwards to a child with preset flags or light argument assembly. Appears in `skills/im/SKILL.md § Behavior`, `skills/imaq/SKILL.md § Behavior`, `skills/alias/SKILL.md § Step 3 — Delegate to /implement`, and `skills/create-skill/SKILL.md § Step 3 — Delegate to /implement`. Canonical form:
+Used when the parent skill mostly forwards to a child with preset flags or light argument assembly. Appears in `skills/im/SKILL.md § Behavior`, `skills/imaq/SKILL.md § Behavior`, `skills/alias/SKILL.md § Step 3 — Delegate to /implement`, and `skills/create-skill/SKILL.md § Step 3 — Delegate to /im`. Canonical form:
+
+Note: `/create-skill` forwards to `/im` (not directly to `/implement`); `/im` in turn forwards to `/implement --merge` per its own Pattern A definition. The chained delegation gives `/create-skill` auto-merge semantics while keeping each hop as a minimal pure forwarder.
 
 ```
 Invoke the Skill tool:
