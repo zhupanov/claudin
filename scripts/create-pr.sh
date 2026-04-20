@@ -5,11 +5,12 @@
 # If none exists, pushes the branch and creates a new PR.
 #
 # Usage:
-#   create-pr.sh --title TEXT --body-file FILE
+#   create-pr.sh --title TEXT --body-file FILE [--draft]
 #
 # Arguments:
 #   --title     — PR title (under 70 chars recommended)
 #   --body-file — Path to a file containing the PR body (markdown)
+#   --draft     — Create the PR in draft state (optional)
 #
 # Outputs (key=value to stdout):
 #   PR_NUMBER=<N>
@@ -24,14 +25,16 @@
 
 set -euo pipefail
 
-usage() { echo "Usage: create-pr.sh --title TEXT --body-file FILE" >&2; }
+usage() { echo "Usage: create-pr.sh --title TEXT --body-file FILE [--draft]" >&2; }
 
 TITLE=""
 BODY_FILE=""
+DRAFT=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --title) TITLE="${2:?--title requires a value}"; shift 2 ;;
         --body-file) BODY_FILE="${2:?--body-file requires a value}"; shift 2 ;;
+        --draft) DRAFT=true; shift ;;
         --help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
     esac
@@ -89,12 +92,17 @@ fi
 
 # --- Create PR ---
 PR_STDERR_FILE=$(mktemp)
+GH_DRAFT_ARGS=()
+if [[ "$DRAFT" == "true" ]]; then
+    GH_DRAFT_ARGS+=(--draft)
+fi
 PR_OUTPUT=$(gh pr create \
     --assignee @me \
     --head "$BRANCH" \
     --base main \
     --title "$TITLE" \
-    --body-file "$BODY_FILE" 2>"$PR_STDERR_FILE")
+    --body-file "$BODY_FILE" \
+    ${GH_DRAFT_ARGS[@]+"${GH_DRAFT_ARGS[@]}"} 2>"$PR_STDERR_FILE")
 PR_EXIT=$?
 
 if [[ $PR_EXIT -ne 0 ]]; then
