@@ -36,6 +36,7 @@ ORCHESTRATORS=(
   "skills/loop-review/SKILL.md"
   "skills/loop-improve-skill/SKILL.md"
   "skills/alias/SKILL.md"  # has Step 4 post-delegation verification
+  "skills/research/SKILL.md"  # may invoke /issue via the Skill tool and continue to report/cleanup
 )
 
 DELEGATORS=(

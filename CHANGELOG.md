@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.7] - 2026-04-20
+
+### Changed
+
+- `/research` — relax the always-deny `scripts/deny-edit-write.sh` PreToolUse hook to a `/tmp`-only allow policy so `/research` may write scratch artifacts via `Write`/`Edit`/`NotebookEdit` and invoke `/issue` via the Skill tool (e.g., to file research-result issues). `allowed-tools` now lists `Skill, Write, Edit, NotebookEdit`; the hook is the sole mechanical enforcer of the `/tmp`-only confinement (residual risk if hook `permissionDecision` semantics vary by Claude Code version — see `SECURITY.md`). Hook mirrors `scripts/block-submodule-edit.sh`'s stdin-JSON / bounded-symlink-walk / `pwd -P` / jq-absent-printf-fallback discipline and handles macOS `/tmp` → `/private/tmp` aliasing; extraction uses a length-aware `map(select(type == "string" and length > 0))` selector so an empty `file_path` does not shadow a valid `notebook_path`. `/research` is registered as an orchestrator in `scripts/test-anti-halt-banners.sh` (banner + per-site micro-reminder). Updated `SECURITY.md`, `AGENTS.md`, `README.md`, `docs/workflow-lifecycle.md`. Test harness rewritten to a 13-case table-driven matrix (repo-deny, `/tmp` allow for new and existing files, traversal-deny, relative-deny, `notebook_path` allow/deny, empty-`file_path`-with-valid-`notebook_path` allow, fail-closed empty-path deny, malformed-JSON deny, idempotency, jq-absent byte-identity). Closes #215.
+
 ## [4.2.6] - 2026-04-20
 
 ### Changed
