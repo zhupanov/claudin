@@ -1,6 +1,6 @@
 ---
 name: design
-description: "Use when designing an implementation plan before coding. 5 parallel sketch agents (General + Architecture/Edge-cases/Innovation/Pragmatism) propose approaches; 3-reviewer voting panel validates. Pre-implementation planning + scope."
+description: "Use when designing any non-trivial feature, refactor, or architectural change — for design, architecture planning, scope definition, approach validation. 5 parallel sketch agents propose approaches; 3-reviewer voting panel validates via dialectic."
 argument-hint: "[--auto] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---

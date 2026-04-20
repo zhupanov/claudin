@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.10] - 2026-04-20
+
+### Changed
+
+- `/design` — strengthen `description:` frontmatter with additional trigger keywords (design, architecture planning, scope definition, approach validation) while preserving the "Use when..." trigger pattern required by agent-lint S017 and staying within the 250-character S015 cap. Closes the D4 Specification-Compliance nit from iteration-2 `/skill-judge` review (follow-up to PR #228; tracking issue #224). No runtime behavior change.
+
 ## [4.2.9] - 2026-04-20
 
 ### Changed
