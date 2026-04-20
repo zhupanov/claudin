@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.13] - 2026-04-19
+
+### Fixed
+
+- `.pre-commit-config.yaml`'s `shellcheck` hook gains `args: [-x]` so pre-commit instructs shellcheck to follow `source` directives, eliminating the SC1091 false-positive that fired when `/relevant-checks` (via `pre-commit run --files <subset>`) scoped shellcheck to consumers of `scripts/lib-count-commits.sh` (`scripts/check-bump-version.sh`, `scripts/verify-skill-called.sh`) without also including the library itself. CI's `make lint` (via `pre-commit run --all-files`) was unaffected because all files were always present. With `-x`, the file-subset path now matches the all-files behavior on source-following. Reproduces on unmodified main via `pre-commit run shellcheck --files scripts/check-bump-version.sh`. Closes #178.
+
 ## [4.0.12] - 2026-04-19
 
 ### Added
