@@ -126,6 +126,8 @@ ${DESCRIPTION}
   Shared scripts (used by two or more skills) should live under ${PLUGIN_TOKEN}/scripts/ instead.
 -->
 
+> **Before editing, read \`${PLUGIN_TOKEN}/skills/shared/skill-design-principles.md\`** — canonical larch skill-design principles (knowledge delta, structure, mechanical rules A/B/C, anti-patterns). Section III overrides general writing-style guidance.
+
 ## Flags
 
 Parse flags from the start of \$ARGUMENTS. Flags may appear in any order; stop at the first non-flag token.
@@ -178,6 +180,8 @@ ${DESCRIPTION}
   Do NOT place raw bash commands in this SKILL.md — wrap every command in a script.
   Shared scripts (used by two or more skills) should live under ${PLUGIN_TOKEN}/scripts/ instead.
 -->
+
+> **Before editing, read \`${PLUGIN_TOKEN}/skills/shared/skill-design-principles.md\`** — canonical larch skill-design principles (knowledge delta, structure, mechanical rules A/B/C, anti-patterns). Section III overrides general writing-style guidance.
 
 ## Sub-skill Invocation
 

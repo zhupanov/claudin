@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.6] - 2026-04-20
+
+### Changed
+
+- `skills/create-skill/scripts/render-skill-md.sh` — emit a single-line pointer to `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md` at the top of both scaffold body variants (multi-step and minimal), right after the opening TODO HTML comment, so scaffold authors encounter the canonical principles doc at creation time. `skills/create-skill/scripts/test-render-skill-md.sh` — add contract assertion (7) guarding regression and reusing the empty-plugin-token rooted-path guard. Closes #216.
+
 ## [4.2.5] - 2026-04-20
 
 ### Fixed

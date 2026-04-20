@@ -14,7 +14,10 @@
 #       skills/shared/subskill-invocation.md with a NON-EMPTY prefix (guards
 #       against empty ${PLUGIN_TOKEN} expansion silently producing a rooted
 #       "/skills/shared/subskill-invocation.md" pointer that would resolve
-#       to a filesystem root rather than the plugin tree).
+#       to a filesystem root rather than the plugin tree),
+#   (7) the rendered body cites
+#       skills/shared/skill-design-principles.md (closes #216 — the canonical
+#       principles doc must be surfaced to scaffold authors at creation time).
 #
 # Invoked via:  bash skills/create-skill/scripts/test-render-skill-md.sh
 # Wired into:   make lint (via the test-render-skill Makefile target).
@@ -124,6 +127,17 @@ run_case() {
   # scaffold would silently drop the rule for every new orchestrator.
   if ! printf '%s\n' "$content" | grep -Fq 'Anti-halt continuation reminder'; then
     echo "FAIL: rendered file does not mention 'Anti-halt continuation reminder' in the scaffold checklist" >&2
+    echo "--- rendered content ---" >&2
+    printf '%s\n' "$content" >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    return
+  fi
+
+  # Check that the rendered body cites the canonical skill-design-principles
+  # doc (closes #216). Must match PLUGIN_TOKEN + "/skills/shared/skill-design-principles.md"
+  # so an empty --plugin-token cannot silently emit a rooted pointer.
+  if ! printf '%s\n' "$content" | grep -Eq '\$\{CLAUDE_PLUGIN_ROOT\}/skills/shared/skill-design-principles\.md'; then
+    echo "FAIL: rendered file does not cite \${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md" >&2
     echo "--- rendered content ---" >&2
     printf '%s\n' "$content" >&2
     FAIL_COUNT=$((FAIL_COUNT + 1))
