@@ -78,6 +78,37 @@ Step Name Registry:
 
 **Limitation**: Verbosity suppression is prompt-enforced and best-effort; it may degrade in very long sessions.
 
+## Rebase Checkpoint Macro
+
+This macro standardizes the four post-step rebase checkpoints at Steps 1.r, 4.r, 7.r, and 7a.r. Call sites invoke it with `<step-prefix>` (e.g., `4.r`) and `<short-name>` (e.g., `commit (impl)`). Step 7.r's `FILES_CHANGED=true` guard stays at the call site — this macro owns HOW to rebase and report; call sites own WHETHER to rebase.
+
+**Invocation form** (exact, one line per call site): `Apply the Rebase Checkpoint Macro with <step-prefix>=<X> and <short-name>=<Y>.`
+
+**Procedure** (internal steps labeled M1-M4 to avoid collision with outer Step 0-18 numbering):
+
+- **M1 — Print start line**: `🔃 <step-prefix>: <short-name> | rebase`
+
+- **M2 — Run rebase**:
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
+  ```
+
+- **M3 — On non-zero exit**: print `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
+
+- **M4 — On success**, branch on stdout (check `SKIPPED_ALREADY_PUSHED` BEFORE `SKIPPED_ALREADY_FRESH` — `rebase-push.sh` exits early on already-pushed, before fetch):
+  - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ <step-prefix>: <short-name> | rebase — already pushed` Otherwise, silently continue.
+  - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ <step-prefix>: <short-name> | rebase — already at latest main` Otherwise, silently continue.
+  - Otherwise, print: `✅ <step-prefix>: <short-name> | rebase — rebased onto latest main (<elapsed>)`
+
+**Call-site registry** (the four authorized instantiations; `scripts/test-implement-rebase-macro.sh` pins these rows):
+
+| Step | `<step-prefix>` | `<short-name>`   |
+|------|-----------------|------------------|
+| 1.r  | `1.r`           | `design plan`    |
+| 4.r  | `4.r`           | `commit (impl)`  |
+| 7.r  | `7.r`           | `commit (review)`|
+| 7a.r | `7a.r`          | `code flow`      |
+
 ## Step 0 — Session Setup
 
 Run the shared session setup script. This handles preflight, temp directory creation, reviewer health probe, and session-env file writing in a single call:
@@ -258,19 +289,7 @@ Parse the output for `BRANCH=<name>` and save it as `BRANCH_NAME`. This variable
 
 **This rebase runs unconditionally in both quick and normal mode** — freshness is beneficial regardless of mode. Both the quick-mode "Proceed to Step 2" and normal-mode "proceed to Step 2" instructions above lead here before entering Step 2.
 
-Print: `🔃 1.r: design plan | rebase`
-
-Run:
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
-```
-
-If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
-
-If successful:
-- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 1.r: design plan | rebase — already pushed` Otherwise, silently continue.
-- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 1.r: design plan | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 1.r: design plan | rebase — rebased onto latest main (<elapsed>)`
+Apply the Rebase Checkpoint Macro with `<step-prefix>=1.r` and `<short-name>=design plan`.
 
 ## Step 2 — Implement the Feature
 
@@ -303,19 +322,7 @@ The commit message should describe WHAT was implemented and WHY, not HOW.
 
 ### Rebase onto latest main (after implementation commit)
 
-Print: `🔃 4.r: commit (impl) | rebase`
-
-Run:
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
-```
-
-If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
-
-If successful:
-- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 4.r: commit (impl) | rebase — already pushed` Otherwise, silently continue.
-- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 4.r: commit (impl) | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 4.r: commit (impl) | rebase — rebased onto latest main (<elapsed>)`
+Apply the Rebase Checkpoint Macro with `<step-prefix>=4.r` and `<short-name>=commit (impl)`.
 
 ## Step 5 — Code Review
 
@@ -437,19 +444,7 @@ If no files changed (review found no issues), skip this commit.
 
 **Conditional**: Only run this rebase if `FILES_CHANGED=true` from Step 6's `check-review-changes.sh` output (meaning Step 7 created a commit). If Steps 6–7 were skipped (no review changes), skip this rebase — the pre-Step-8 rebase provides the safety net.
 
-Print: `🔃 7.r: commit (review) | rebase`
-
-Run:
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
-```
-
-If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
-
-If successful:
-- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 7.r: commit (review) | rebase — already pushed` Otherwise, silently continue.
-- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 7.r: commit (review) | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 7.r: commit (review) | rebase — rebased onto latest main (<elapsed>)`
+Apply the Rebase Checkpoint Macro with `<step-prefix>=7.r` and `<short-name>=commit (review)`.
 
 ## Step 7a — Code Flow Diagram
 
@@ -481,19 +476,7 @@ Print the diagram under a `## Code Flow Diagram` header with a mermaid code fenc
 
 This rebase runs as a final safety net before the version bump and PR creation, even if a previous rebase just ran. It ensures the branch is as fresh as possible before the version bump becomes the last commit. Exception: if the branch is already on origin (e.g., re-run on an existing PR branch), the `--skip-if-pushed` flag causes this rebase to be skipped — freshness of already-pushed branches is the CI+rebase+merge loop's responsibility (Step 12).
 
-Print: `🔃 7a.r: code flow | rebase`
-
-Run:
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
-```
-
-If the script exits non-zero, print: `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
-
-If successful:
-- If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ 7a.r: code flow | rebase — already pushed` Otherwise, silently continue.
-- If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ 7a.r: code flow | rebase — already at latest main` Otherwise, silently continue.
-- Otherwise, print: `✅ 7a.r: code flow | rebase — rebased onto latest main (<elapsed>)`
+Apply the Rebase Checkpoint Macro with `<step-prefix>=7a.r` and `<short-name>=code flow`.
 
 ## Step 8 — Version Bump
 

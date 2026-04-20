@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.12] - 2026-04-20
+
+### Changed
+
+- `/implement` — dedup 4 near-identical rebase-checkpoint blocks at Steps 1.r, 4.r, 7.r, 7a.r (~60 lines of duplication) into a single `## Rebase Checkpoint Macro` section parameterized on `<step-prefix>` and `<short-name>`. Each former block is now a single-line `Apply the Rebase Checkpoint Macro with ...` invocation. Preserves: uniform `debug_mode` gate at all 4 sites, three byte-pinned Verbosity Control literals, Step 7.r `FILES_CHANGED=true` guard at its call site, and byte-identical breadcrumb output (🔃 start, ⏩ debug, ✅ success). Macro procedure steps labeled M1-M4 to avoid collision with outer Step 0-18 numbering. New `scripts/test-implement-rebase-macro.sh` (wired into `make lint`) asserts 9 structural invariants (A-I) guarding the macro section, the 4 call-site registry rows, the 4 Apply invocations, the Verbosity Control literals, the Step 7.r guard placement, the macro placement between Verbosity Control and Step 0, the macro body's rebase-push invocation + bail string, the total rebase-push call-site counts (1 `--no-push --skip-if-pushed` + 2 plain `--no-push`), and the macro body's placeholder-pinned SKIPPED format strings. Closes #232 (follow-up to #227 / PR #229 FINDING_1).
+
 ## [4.2.11] - 2026-04-20
 
 ### Changed
