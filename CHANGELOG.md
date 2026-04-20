@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.14] - 2026-04-19
+
+### Fixed
+
+- `.claude/settings.json` no longer mirrors the `PreToolUse` submodule-guard registration; `hooks/hooks.json` (with `${CLAUDE_PLUGIN_ROOT}` paths) is now the single source of truth, eliminating possible double-invocation, policy drift between the two copies, and the `$PWD`-vs-anchored path question. Contributors developing in this repo should load larch as a plugin (`claude --plugin-dir .` or the local marketplace) to pick up the guard — `AGENTS.md` carries a one-line note to that effect. Closes #152.
+
 ## [4.0.13] - 2026-04-19
 
 ### Fixed
