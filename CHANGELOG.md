@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.17] - 2026-04-19
+
+### Fixed
+
+- Orchestrator SKILL.md files (`fix-issue`, `implement`, `review`, `loop-review`) now carry a prominent top-of-file "Anti-halt continuation reminder" banner plus per-Skill-call-site micro-reminders, so the main agent does not halt on a child skill's cleanup output and skip the parent's remaining steps. The canonical wording lives in `skills/shared/subskill-invocation.md`'s new "Anti-halt continuation reminder" section (complementary to the existing "Post-invocation verification" section — "did the child run?" vs "did the parent continue?"). The `skills/create-skill/scripts/render-skill-md.sh` scaffold checklist gains a 6th item so new orchestrators inherit the convention. New regression harness `scripts/test-anti-halt-banners.sh` asserts banner presence in the 4 orchestrators, absence in the 4 pure-delegator skills, and micro-reminder presence in each orchestrator — wired into `make lint` via the `test-anti-halt` target. Closes #177.
+
 ## [4.0.16] - 2026-04-19
 
 ### Changed
