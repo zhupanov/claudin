@@ -105,7 +105,7 @@ gh issue comment "${ISSUE_NUM}" --body-file "$JUDGE_COMMENT_FILE"
 Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`). Pass a prompt asking for an improvement plan for `/${SKILL_NAME}` that addresses the `skill-judge` findings just captured. The prompt MUST include these three contract clauses verbatim so `/design` produces a plan even for minor findings and never self-curtails on budget:
 
 - `/design` MUST produce a concrete, implementable plan for ANY actionable `/skill-judge` finding — including findings classified "minor", "nit", or cosmetic. Treat "minor" as "small plan", not as "no plan".
-- `/design` MUST NOT self-curtail citing token/context budget. Under any perceived pressure, narrow scope to the single highest-leverage finding and emit a compressed micro-plan that still conforms to the standard `/design` plan schema (`## Implementation Plan` with `Files to modify/create`, `Approach`, `Edge cases`, `Failure modes`, `Testing strategy`) — never emit a no-plan sentinel on budget grounds.
+- `/design` MUST NOT self-curtail citing token/context budget. Under any perceived pressure, narrow scope to the single highest-leverage finding and emit a compressed micro-plan that still conforms to the standard `/design` plan schema (`## Implementation Plan` with `Files to modify/create`, `Approach`, `Edge cases`, `Testing strategy`, and `Failure modes` when the change is non-trivial per `/design`'s own rules) — never emit a no-plan sentinel on budget grounds.
 - `/design` MUST NOT emit any of the no-plan sentinel phrases (`no plan`, `no improvements`, `nothing to improve`, `already optimal`, `skill is already high quality`) when `/skill-judge` surfaced any actionable finding. Sentinels are reserved for the genuine case where no improvement is warranted.
 
 The prompt should also explicitly name `TARGET_SKILL_PATH` as the absolute path of the SKILL.md to modify, so the plan references the file at that resolved path (whichever Step 1 probe matched — repo-local when available, plugin-installation when only probe 3 hit) when `/im` consumes it. This is best-effort guidance to `/design` (and in turn `/im` / `/implement`) — whether `/implement` honors an absolute path in the plan over other resolution heuristics depends on that skill's own behavior. Capture the full response to `$DESIGN_OUT` via the Skill tool call.
@@ -132,7 +132,7 @@ The prompt should also explicitly name `TARGET_SKILL_PATH` as the absolute path 
 
 That is: prose-only output with no plan shape — the characteristic pattern when `/design` self-curtailed, returned a budget excuse, or emitted a weak non-sentinel reply.
 
-When rescue fires, re-invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`) and pass args `--quick --auto <rescue prompt>`. `--quick` skips `/design`'s expensive 5-agent sketch phase and 3-reviewer voting panel so rescue stays cheap; `--auto` suppresses `/design`'s interactive `AskUserQuestion` checkpoints so rescue runs fully autonomously. The rescue prompt MUST require `/design`'s standard plan schema (a top-level `## Implementation Plan` section with the headings `Files to modify/create`, `Approach`, `Edge cases`, `Failure modes`, `Testing strategy`), focused exclusively on the single highest-leverage `/skill-judge` finding from this iteration, and MUST forbid preamble prose, budget excuses, and all no-plan sentinels. Capture the rescue response and OVERWRITE `$DESIGN_OUT` with it.
+When rescue fires, re-invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`) and pass args `--auto <rescue prompt>`. `--auto` suppresses `/design`'s interactive `AskUserQuestion` checkpoints so rescue runs fully autonomously. (`/design` does not currently expose a "cheap" or "skip-sketches" flag of its own, so the rescue runs the full `/design` pipeline — the cost is accepted as proportionate to the alternative of the loop exiting silently after iteration 1; the rescue cap of 1 per iteration bounds total blast radius.) The rescue prompt MUST require `/design`'s standard plan schema (a top-level `## Implementation Plan` section with the headings `Files to modify/create`, `Approach`, `Edge cases`, `Testing strategy`, and `Failure modes` when applicable per `/design`'s own rules), focused exclusively on the single highest-leverage `/skill-judge` finding from this iteration, and MUST forbid preamble prose, budget excuses, and all no-plan sentinels. Capture the rescue response and OVERWRITE `$DESIGN_OUT` with it.
 
 Re-run the tightened no-plan detector on the (new) `$DESIGN_OUT`. If it fires this time, exit the loop per the detector rules above. Do NOT chain a second rescue — at most one rescue per iteration. If the four rescue conditions did not hold in the first place, skip the rescue entirely.
 
@@ -140,7 +140,7 @@ Re-run the tightened no-plan detector on the (new) `$DESIGN_OUT`. If it fires th
 
 1. Invoke `/design` via the Skill tool (the first call).
 2. Run the tightened no-plan detector on `$DESIGN_OUT`.
-3. If the four rescue conditions hold, invoke `/design --quick --auto` via the Skill tool (the rescue call) and OVERWRITE `$DESIGN_OUT` with the rescue output.
+3. If the four rescue conditions hold, invoke `/design --auto` via the Skill tool (the rescue call) and OVERWRITE `$DESIGN_OUT` with the rescue output.
 4. Re-run the tightened no-plan detector on the (now-overwritten) `$DESIGN_OUT`.
 5. If the detector fired (in step 2 for the original, or in step 4 for the rescue), proceed to the no-plan exit below.
 6. Otherwise, post exactly ONE plan comment (the `gh issue comment` block below) using the final `$DESIGN_OUT` (the rescue output if rescue ran, else the original).
@@ -148,7 +148,12 @@ Re-run the tightened no-plan detector on the (new) `$DESIGN_OUT`. If it fires th
 
 At most one `gh issue comment` plan-body post is made per iteration — never post both the original and the rescue output.
 
-On no-plan exit, set `EXIT_REASON="no plan at iteration ${ITER}"` and proceed directly to Step 4 — Step 4 posts the single summary comment; do not post a separate "no plan materialized" comment here.
+On no-plan exit, set `EXIT_REASON` and proceed directly to Step 4 — Step 4 posts the single summary comment; do not post a separate "no plan materialized" comment here. The `EXIT_REASON` wording depends on which of the four authoritative exits fired:
+
+- Empty `$DESIGN_OUT` or sentinel match (tightened): `EXIT_REASON="no plan at iteration ${ITER}"`.
+- `/design` returned an explicit refusal or error: `EXIT_REASON="/design refusal or error at iteration ${ITER}"`.
+
+(The fourth exit — `ITER > 10` — is handled in 3.next, not here.)
 
 Otherwise, post the plan to the issue:
 
