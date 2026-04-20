@@ -102,9 +102,15 @@ assert_allow() {
 # T1 — repo-path Write denies.
 assert_deny "T1 Write repo path" "{\"tool_input\":{\"file_path\":\"$REPO_ROOT/foo.txt\"}}"
 
-# T2 — /tmp Write allows.
+# T2 — /tmp Write allows (not-yet-existing file — ancestor-walk path).
 TMP_FILE="/tmp/test-deny-edit-write-$$-$RANDOM.txt"
-assert_allow "T2 Write /tmp file" "{\"tool_input\":{\"file_path\":\"$TMP_FILE\"}}"
+assert_allow "T2 Write /tmp file (new)" "{\"tool_input\":{\"file_path\":\"$TMP_FILE\"}}"
+
+# T2b — /tmp Write allows for an existing file (direct-exist path, skips
+# the dirname walk).
+TMP_EXISTING=$(mktemp "/tmp/test-deny-edit-write-existing-XXXXXX")
+assert_allow "T2b Write /tmp file (existing)" "{\"tool_input\":{\"file_path\":\"$TMP_EXISTING\"}}"
+rm -f "$TMP_EXISTING"
 
 # T3 — /tmp traversal denies (canonicalizes to /etc/passwd).
 assert_deny "T3 traversal /tmp/../etc/passwd" '{"tool_input":{"file_path":"/tmp/../etc/passwd"}}'
@@ -122,6 +128,10 @@ assert_deny "T6 malformed JSON" 'not json at all'
 # T7 — NotebookEdit with notebook_path under /tmp allows.
 TMP_IPYNB="/tmp/test-deny-edit-write-$$-$RANDOM.ipynb"
 assert_allow "T7 NotebookEdit notebook_path /tmp" "{\"tool_input\":{\"notebook_path\":\"$TMP_IPYNB\"}}"
+
+# T7b — Empty file_path with valid /tmp notebook_path allows. Guards
+# against jq `//` treating "" as present (which would deny here).
+assert_allow "T7b empty file_path with /tmp notebook_path" "{\"tool_input\":{\"file_path\":\"\",\"notebook_path\":\"$TMP_IPYNB\"}}"
 
 # T8 — NotebookEdit with notebook_path under repo denies.
 assert_deny "T8 NotebookEdit notebook_path repo" "{\"tool_input\":{\"notebook_path\":\"$REPO_ROOT/notebook.ipynb\"}}"

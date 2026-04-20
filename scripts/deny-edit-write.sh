@@ -44,16 +44,16 @@ block() {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: "/research is a read-only skill -- Edit/Write/NotebookEdit outside /tmp is not permitted."
+      permissionDecisionReason: "/research is a read-only-repo skill -- Edit/Write/NotebookEdit outside /tmp is not permitted."
     }
-  }' || printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"/research is a read-only skill -- Edit/Write/NotebookEdit outside /tmp is not permitted."}}'
+  }' || printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"/research is a read-only-repo skill -- Edit/Write/NotebookEdit outside /tmp is not permitted."}}'
   exit 0
 }
 
 # jq-absent static fallback. Byte-identical to the `jq -cn` output
 # above (same single reason literal).
 if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"/research is a read-only skill -- Edit/Write/NotebookEdit outside /tmp is not permitted."}}'
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"/research is a read-only-repo skill -- Edit/Write/NotebookEdit outside /tmp is not permitted."}}'
   exit 0
 fi
 
@@ -62,8 +62,11 @@ INPUT=$(cat) || block
 
 # --- Extract path ---
 # NotebookEdit's JSON uses `notebook_path`; fall back to it so that
-# shape does not fail-open. Empty result when neither field is set.
-FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' 2>/dev/null) \
+# shape does not fail-open. `jq //` treats empty string as present,
+# so we use `select(length > 0)` on both candidates — an empty
+# file_path with a valid notebook_path must not deny the legitimate
+# NotebookEdit shape. Empty result when neither field is set.
+FILE_PATH=$(printf '%s' "$INPUT" | jq -r '[.tool_input.file_path, .tool_input.notebook_path] | map(select(type == "string" and length > 0)) | .[0] // empty' 2>/dev/null) \
   || block
 
 # Fail-closed when matcher triggered but no path is present.
