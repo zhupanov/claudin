@@ -1,6 +1,6 @@
 ---
 name: fix-issue
-description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips blocked, triages, classifies intent, then either delegates to /implement or follows the issue's instructions inline for research/review tasks."
+description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues with open blockers, triages, classifies intent, then either delegates to /implement or follows the issue's instructions inline for research/review tasks."
 argument-hint: "[--debug] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
@@ -109,6 +109,7 @@ Check for:
 - Has the issue already been fixed by recent commits?
 - Is the code/feature the issue references still present?
 - Is the issue a valid bug/feature request, or was it filed in error?
+- For investigation/review-only issues (whose deliverable is research findings or new issues rather than code changes): is the **task itself** still relevant — are the targets, scope, and constraints it describes still meaningful — rather than "is the referenced bug still in code"?
 
 **If the issue is no longer material** (already fixed, invalid, or no longer relevant):
 
@@ -182,7 +183,7 @@ Read the issue details from Step 3 and execute the instructions directly using R
 Common `NON_PR` patterns:
 
 - **Research task** — investigate the requested topic in-codebase via Read/Grep/Glob; when the scope warrants a collaborative read-only research panel, invoke `/research` via the Skill tool. Create one or more summary issues via `/issue` (invoked via the Skill tool) if the issue body requests it.
-- **Code-review task** — examine the requested area and file one issue per problem found. Invoke `/issue` via the Skill tool in batch mode (`--input-file` with a markdown file listing the findings) to file all findings in a single pass with semantic duplicate detection.
+- **Code-review task** — examine the requested area and file one issue per problem found. Invoke `/issue` via the Skill tool in batch mode (`--input-file` with a markdown file listing the findings) to file all findings in a single pass with semantic duplicate detection. Write the `--input-file` markdown to a path under `$FIX_ISSUE_TMPDIR` (never inside the repository working tree) so the "no working-tree edits" rule above holds.
 - **Other investigative or planning tasks** — follow the body's instructions literally; when ambiguous, prefer the interpretation that produces actionable output (issues, documented findings) over the interpretation that produces code changes.
 
 > **Continue after child returns.** When any child Skill (`/issue`, `/research`, ...) returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
