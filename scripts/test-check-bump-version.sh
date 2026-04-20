@@ -26,7 +26,7 @@
 # failures as `COMMITS_*=0` with no status signal, so a post-mode check
 # whose pre- and post-call both hit git errors would numerically match
 # and spuriously emit `VERIFIED=true`. The fail-closed test below
-# (Section 3g) proves this cannot happen now: when pre and post both
+# (Section 4) proves this cannot happen now: when pre and post both
 # return count=0 with non-ok status, VERIFIED MUST be false.
 #
 # Invariants asserted:
@@ -287,7 +287,7 @@ mkdir -p "$REPO_3A"
     git commit --allow-empty -q -m "init"
 )
 # count=0, before=0, expected=1 → naive numeric comparison would give VERIFIED=false here too,
-# but 3g below proves the fail-closed path for delta=0.
+# but Section 4 below proves the fail-closed path for delta=0.
 out=$(cd "$REPO_3A" && bash "$SCRIPT" --mode post --before-count 0 2>&1) || true
 assert_stdout_contains "3a: post missing-main VERIFIED=false" "$out" "VERIFIED=false"
 assert_stdout_contains "3a: post missing-main STATUS=missing_main_ref" "$out" "STATUS=missing_main_ref"
@@ -376,39 +376,94 @@ out=$(cd "$REPO_3B" && PATH="$SHIM_3B:$PATH" bash "$SCRIPT" --mode post --before
 assert_stdout_contains "4b: post git_error delta 0 VERIFIED=false" "$out" "VERIFIED=false"
 assert_stdout_contains "4b: STATUS=git_error" "$out" "STATUS=git_error"
 
-# --- Section 5: argument-error paths -----------------------------------------
+# --- Section 5: degraded pre + recovered post sequence -----------------------
+# Regression guard for the pre-STATUS caller-side trap (surfaced during #172
+# code review). The script does not itself mix pre and post state — each
+# invocation is independent — but the observable signals MUST allow callers
+# (e.g., skills/implement/SKILL.md Rebase + Re-bump Sub-procedure step 4)
+# to distinguish:
+#   (a) pre-degraded → COMMITS_BEFORE coerced to 0, STATUS non-ok
+#   (b) post-recovered → COMMITS_AFTER reflects true count N, STATUS=ok
+# When (a) then (b), a naive caller that trusted COMMITS_BEFORE=0 and computed
+# EXPECTED = 0 + 1 would misdiagnose a correct bump as "wrong commit count".
+# The test below captures the raw signals a correct caller uses to avoid that
+# misdiagnosis: (a) emits STATUS != ok so the caller knows the baseline is
+# untrustworthy and skips the numeric comparison; (b) emits STATUS=ok with
+# the true count.
 
-echo "=== Section 5: argument errors ==="
+echo "=== Section 5: pre-degraded + post-recovered sequence ==="
 
-# 5a — no --mode
+# 5a — pre-degraded (missing_main_ref) must emit STATUS=missing_main_ref with
+# COMMITS_BEFORE=0 so the caller can recognize the untrustworthy baseline.
+REPO_5A="$TMPROOT/repo-pre-degraded"
+mkdir -p "$REPO_5A"
+(
+    cd "$REPO_5A"
+    git init -q -b feature
+    git config user.email "test@example.com"
+    git config user.name "Test"
+    git commit --allow-empty -q -m "init"
+    git commit --allow-empty -q -m "feature commit 1"
+)
+pre_out=$(cd "$REPO_5A" && bash "$SCRIPT" --mode pre 2>&1) || true
+assert_stdout_contains "5a pre-degraded: COMMITS_BEFORE=0 coerced" "$pre_out" "COMMITS_BEFORE=0"
+assert_stdout_contains "5a pre-degraded: STATUS=missing_main_ref signal" "$pre_out" "STATUS=missing_main_ref"
+
+# 5b — post-recovered with a NEW (trustworthy) local main — simulates the
+# repo recovering between pre and post (e.g., the pre-invocation's transient
+# git failure resolves). Caller captured COMMITS_BEFORE=0 from the degraded
+# pre-check. Post-check sees true COMMITS_AFTER=N_real_count. The script
+# emits VERIFIED=false (because count != EXPECTED from the coerced baseline)
+# but STATUS=ok. A correct caller recognizes the pre-degraded provenance
+# and does NOT interpret VERIFIED=false as "wrong commit count" — the
+# observable signal it must route on is the combination (pre STATUS=non-ok,
+# post STATUS=ok).
+REPO_5B="$TMPROOT/repo-post-recovered"
+setup_git_repo "$REPO_5B" 1 3
+# Caller captured COMMITS_BEFORE=0 from its prior pre-degraded invocation (5a).
+post_out=$(cd "$REPO_5B" && bash "$SCRIPT" --mode post --before-count 0 2>&1) || true
+assert_stdout_contains "5b post-recovered: STATUS=ok (baseline now trustworthy at script level)" "$post_out" "STATUS=ok"
+assert_stdout_contains "5b post-recovered: COMMITS_AFTER=3 (true count)" "$post_out" "COMMITS_AFTER=3"
+# With the coerced BEFORE=0 and true AFTER=3, the numeric check would
+# naturally set VERIFIED=false — but a correct caller skips the comparison
+# because the pre-check STATUS was non-ok. This test documents the raw
+# signals; the SKILL.md step 4 "Pre-check STATUS guard" branches on the
+# pre-check STATUS, not on this post-check's VERIFIED value.
+assert_stdout_contains "5b post-recovered: script-level VERIFIED reflects naive arithmetic" "$post_out" "VERIFIED=false"
+
+# --- Section 6: argument-error paths -----------------------------------------
+
+echo "=== Section 6: argument errors ==="
+
+# 6a — no --mode
 set +e
 out=$(bash "$SCRIPT" 2>&1)
 rc=$?
 set -e
-assert_exit_eq "5a: no --mode exit 1" "$rc" 1
+assert_exit_eq "6a: no --mode exit 1" "$rc" 1
 
-# 5b — unknown --mode value
+# 6b — unknown --mode value
 set +e
 out=$(bash "$SCRIPT" --mode banana 2>&1)
 rc=$?
 set -e
-assert_exit_eq "5b: invalid --mode exit 1" "$rc" 1
+assert_exit_eq "6b: invalid --mode exit 1" "$rc" 1
 
-# 5c — post without --before-count
-REPO_5C="$TMPROOT/repo-5c"
-setup_git_repo "$REPO_5C" 1 0
+# 6c — post without --before-count
+REPO_6C="$TMPROOT/repo-6c"
+setup_git_repo "$REPO_6C" 1 0
 set +e
-out=$(cd "$REPO_5C" && bash "$SCRIPT" --mode post 2>&1)
+out=$(cd "$REPO_6C" && bash "$SCRIPT" --mode post 2>&1)
 rc=$?
 set -e
-assert_exit_eq "5c: post without --before-count exit 1" "$rc" 1
+assert_exit_eq "6c: post without --before-count exit 1" "$rc" 1
 
-# 5d — unknown flag
+# 6d — unknown flag
 set +e
 out=$(bash "$SCRIPT" --not-a-real-flag 2>&1)
 rc=$?
 set -e
-assert_exit_eq "5d: unknown flag exit 1" "$rc" 1
+assert_exit_eq "6d: unknown flag exit 1" "$rc" 1
 
 # --- Summary -----------------------------------------------------------------
 

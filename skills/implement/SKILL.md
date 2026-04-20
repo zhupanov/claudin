@@ -494,7 +494,7 @@ Check if the repo has a `/bump-version` skill and capture commit count:
 ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
 ```
 
-Parse the output for `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS` (the `STATUS=ok|missing_main_ref|git_error` field from #172). If `STATUS != ok`, the pre-mode count is untrustworthy — log a warning `**⚠ 8: version bump — pre-check STATUS=$STATUS, commit count may be unreliable. Continuing.**` to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings` and proceed. Step 8 is pre-PR and can afford to be permissive; the last-chance enforcement happens in the Rebase + Re-bump Sub-procedure step 4 invoked by Step 12 (step12 family), which hard-bails on non-`ok` status.
+Parse the output for `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS` (the `STATUS=ok|missing_main_ref|git_error` field from #172). If `STATUS != ok`, the pre-mode count is untrustworthy — log a warning `**⚠ 8: version bump — pre-check STATUS=$STATUS, commit count may be unreliable. Continuing.**` to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings` and proceed. Step 8 is pre-PR and can afford to be permissive; the last-chance enforcement happens in the Rebase + Re-bump Sub-procedure step 4 invoked by Step 12 (step12 family), which hard-bails on non-`ok` status from **either** the pre-check or the post-check — so the sub-procedure always catches a degraded-git scenario before merging.
 
 **If `HAS_BUMP=false`**: Print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 9.
 
@@ -508,7 +508,9 @@ Parse the output for `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS` (the `STATUS=ok|
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
    ```
-   Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`, and `STATUS`. `STATUS != ok` (the #172 fail-closed invariant) forces `VERIFIED=false` at the script level independently of the numeric comparison — do not try to second-guess it. Handling:
+   **First**: if the pre-check STATUS was non-`ok` (baseline untrustworthy per the warning above), skip the numeric-comparison branches below — the `EXPECTED = COMMITS_BEFORE + 1` arithmetic is built on a coerced 0 baseline, so any mismatch with the true `COMMITS_AFTER` is meaningless. Log `**⚠ 8: version bump — pre-check was degraded; skipping post-check numeric verification. Step 12 will re-verify under strict semantics.**` to `Warnings` and continue to Step 8a.
+
+   Otherwise (pre-check `STATUS=ok`), parse the post-check output for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`, and `STATUS`. `STATUS != ok` (the #172 fail-closed invariant) forces `VERIFIED=false` at the script level independently of the numeric comparison — do not try to second-guess it. Handling:
    - **`STATUS=git_error`**: print `**⚠ 8: version bump — post-check STATUS=git_error, commit count untrustworthy. Continuing (Step 12 will re-verify under strict semantics).**`, log to `Warnings`, and continue. Do NOT treat this as a bump failure requiring manual intervention.
    - **`STATUS=missing_main_ref`**: same handling as `git_error` — log warning, continue.
    - **`STATUS=ok` AND `VERIFIED=false`**: the normal "wrong commit count" path — print `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`.
@@ -789,6 +791,14 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
    ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
    ```
    Parse `HAS_BUMP`, `COMMITS_BEFORE`, and `STATUS`. The `STATUS=ok|missing_main_ref|git_error` field (#172) is authoritative for degraded-git detection — do NOT grep stderr for the old `WARN: ... neither local 'main' nor 'origin/main' exists` line.
+
+   **Pre-check STATUS guard (#172)**: If pre-check `STATUS != ok`, `COMMITS_BEFORE` is the script's coerced 0 value, not a trustworthy baseline count. A subsequent post-check that recovers to `STATUS=ok` with a correct bump commit would compute `EXPECTED = 0 + 1 = 1` but would see the true `COMMITS_AFTER = N_prior + 1`, routing the sub-procedure to a bogus "wrong commit count" hard-bail. To prevent this mis-diagnosis:
+   - **step12 family**: **HARD FAILURE** — bail to 12d immediately. Print `**⚠ 12: CI+merge loop — check-bump-version.sh reported pre-check STATUS=$STATUS (baseline untrustworthy). Cannot safely verify bump freshness. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. Rationale: without a trustworthy baseline, the post-check comparison is meaningless — the merged version cannot be guaranteed correct.
+   - **step10 family**: log warning `**⚠ 10: CI monitor — check-bump-version.sh reported pre-check STATUS=$STATUS (baseline untrustworthy). Skipping numeric-delta verification; Step 12 will re-verify.**` to `CI Issues`, then:
+     - **If `HAS_BUMP=false`** (no `/bump-version` skill installed): skip the `/bump-version` invocation entirely and proceed directly to step 5 (push) → step 6 → step 7 — same as the `HAS_BUMP=false` path under `STATUS=ok` below. Do NOT attempt to call a skill that does not exist.
+     - **If `HAS_BUMP=true`**: invoke `/bump-version` anyway (the rebase still needs its re-bump commit), but **SKIP the post-check commit-delta verification below** since the baseline is untrustworthy. After `/bump-version` returns, skip directly to step 5 (push) → step 6 (PR body refresh) → step 7 (return to caller). The post-check `STATUS`-first branches below and the numeric-comparison branches both rely on a trustworthy pre-check baseline that this invocation does not have.
+
+   Only if pre-check `STATUS=ok`, proceed with the bump workflow below:
    - **If `HAS_BUMP=false`**:
      - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version not found, cannot re-bump. Bailing to 12d.**` Bail to 12d.
      - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
