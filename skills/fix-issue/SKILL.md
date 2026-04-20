@@ -1,13 +1,13 @@
 ---
 name: fix-issue
-description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues blocked by open dependencies, triages, classifies complexity, and delegates to /implement."
+description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues with open blockers, triages, classifies intent, then either delegates to /implement or follows the issue's instructions inline for research/review tasks."
 argument-hint: "[--debug] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
 # Fix Issue
 
-Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any whose GitHub issue-dependencies list includes an open blocker, triages the remaining candidate against the codebase, classifies complexity, and delegates to `/implement`.
+Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any whose GitHub issue-dependencies list includes an open blocker, triages the remaining candidate against the codebase, classifies **intent** (PR-producing vs. non-PR task) and (for PR work) **complexity**, and either delegates to `/implement` or executes the issue's instructions inline. Non-PR tasks — e.g., "research topic X and summarize findings as issues", "code-review module Y and file issues for each problem" — are followed without `/implement`; any output issues are created via `/issue` and the source issue is closed with a work summary instead of a PR link.
 
 **Single-iteration design**: Each invocation handles at most one issue, then exits. The caller (cron, `/loop`, or manual invocation) is responsible for repeated execution.
 
@@ -33,7 +33,7 @@ Step Name Registry:
 | 3 | read details |
 | 4 | triage |
 | 5 | classify |
-| 6 | implement |
+| 6 | execute |
 | 7 | close issue |
 | 8 | slack announce |
 | 9 | cleanup |
@@ -109,6 +109,7 @@ Check for:
 - Has the issue already been fixed by recent commits?
 - Is the code/feature the issue references still present?
 - Is the issue a valid bug/feature request, or was it filed in error?
+- For investigation/review-only issues (whose deliverable is research findings or new issues rather than code changes): is the **task itself** still relevant — are the targets, scope, and constraints it describes still meaningful — rather than "is the referenced bug still in code"?
 
 **If the issue is no longer material** (already fixed, invalid, or no longer relevant):
 
@@ -130,22 +131,37 @@ Check for:
 
 **If the issue is still actual**, print `✅ 4: triage — issue is active, proceeding (<elapsed>)` and continue.
 
-## Step 5 — Classify Complexity
+## Step 5 — Classify Intent and Complexity
 
 Print `> **🔶 5: classify**`
 
-Based on the issue details and codebase exploration from Step 4, classify the issue:
+Based on the issue details and codebase exploration from Step 4, determine two independent dimensions:
+
+### Intent — does this issue prescribe work that should produce a pull request?
+
+- **PR**: The issue prescribes a code change — bug fix, refactor, new feature, documentation edit, prompt/skill edit, config change, test addition, etc. — whose natural output is a pull request against the current repository.
+- **NON_PR**: The issue prescribes an investigative or review task whose natural output is something other than a PR: new GitHub issues summarizing research findings, new GitHub issues flagging code-review problems, a written report, or similar. Typical signals: the issue body contains phrases like "research and summarize", "investigate and report", "code-review this module and file issues", "do not create a PR", or otherwise makes clear that the deliverable is issues/reports rather than code changes.
+
+**Default to `PR` when uncertain.** The `PR` path is the pre-existing behavior; misclassifying a borderline `NON_PR` as `PR` is recoverable (`/implement`'s `/review` phase surfaces the mismatch) while misclassifying a `PR` as `NON_PR` could silently skip real work.
+
+### Complexity (only evaluated when `INTENT=PR`)
 
 - **SIMPLE**: Isolated fix in 2 or fewer files. Obvious solution with no architectural decisions needed. Examples: typo fix, small bug with clear root cause, config change.
 - **HARD**: Everything else. Multi-file changes, new features, architectural decisions, unclear root cause, or any uncertainty.
 
 **Default to HARD when uncertain.** A HARD classification uses the full `/design` + `/review` pipeline, which is safer for non-trivial changes.
 
-Print `✅ 5: classify — $CLASSIFICATION (<elapsed>)`
+When `INTENT=NON_PR`, complexity is not meaningful — leave `COMPLEXITY` unset and skip the SIMPLE/HARD determination.
 
-## Step 6 — Implement
+Print `✅ 5: classify — INTENT=$INTENT [COMPLEXITY=$COMPLEXITY] (<elapsed>)` (omit the `COMPLEXITY=` segment when `INTENT=NON_PR`).
 
-Print `> **🔶 6: implement**`
+## Step 6 — Execute
+
+Print `> **🔶 6: execute**`
+
+Branch on `INTENT` from Step 5.
+
+### 6a — `INTENT=PR` path (delegate to `/implement`)
 
 Compose the feature description from the issue content: use the issue title as the primary description, with key details from the issue body and comments as context.
 
@@ -158,17 +174,46 @@ Invoke `/implement` via the Skill tool:
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
-If `/implement` fails or bails, print `**⚠ 6: implement — failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
+If `/implement` fails or bails, print `**⚠ 6: execute — /implement failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
+
+### 6b — `INTENT=NON_PR` path (follow instructions inline)
+
+Read the issue details from Step 3 and execute the instructions directly using Read, Grep, Glob, and Bash. Do NOT call `/implement`. Do NOT modify files in the working tree — `NON_PR` tasks deliver their output as new GitHub issues, a written summary comment, or both.
+
+Common `NON_PR` patterns:
+
+- **Research task** — investigate the requested topic in-codebase via Read/Grep/Glob; when the scope warrants a collaborative read-only research panel, invoke `/research` via the Skill tool. Create one or more summary issues via `/issue` (invoked via the Skill tool) if the issue body requests it.
+- **Code-review task** — examine the requested area and file one issue per problem found. Invoke `/issue` via the Skill tool in batch mode (`--input-file` with a markdown file listing the findings) to file all findings in a single pass with semantic duplicate detection. Write the `--input-file` markdown to a path under `$FIX_ISSUE_TMPDIR` (never inside the repository working tree) so the "no working-tree edits" rule above holds.
+- **Other investigative or planning tasks** — follow the body's instructions literally; when ambiguous, prefer the interpretation that produces actionable output (issues, documented findings) over the interpretation that produces code changes.
+
+> **Continue after child returns.** When any child Skill (`/issue`, `/research`, ...) returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
+As work proceeds, maintain a running `WORK_SUMMARY` — a concise markdown summary of what was done and the output artifacts (links to any issues created, key findings, etc.). This summary becomes the closing comment in Step 7 and the Slack message in Step 8. Keep `PR_URL` and `PR_NUMBER` unset on this path.
+
+If the work cannot be completed (e.g., `/issue` fails repeatedly, the issue's instructions are infeasible, or required external access is unavailable), print `**⚠ 6: execute — non-PR task failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` and skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed — same recovery semantics as the `/implement` failure path.
 
 ## Step 7 — Close Issue
 
 Print `> **🔶 7: close issue**`
 
-Update the issue body with PR link and close with DONE comment (single call):
+Branch on `INTENT`.
+
+### 7a — `INTENT=PR`
+
+Update the issue body with the PR link and close with a DONE comment (single call):
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
   --issue $ISSUE_NUMBER --pr-url "$PR_URL" --comment "DONE"
+```
+
+### 7b — `INTENT=NON_PR`
+
+Close the issue with `WORK_SUMMARY` as the closing comment (no `--pr-url`, no body update):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
+  --issue $ISSUE_NUMBER --comment "$WORK_SUMMARY"
 ```
 
 Print `✅ 7: close issue — #$ISSUE_NUMBER closed (<elapsed>)`
@@ -177,12 +222,30 @@ Print `✅ 7: close issue — #$ISSUE_NUMBER closed (<elapsed>)`
 
 If `slack_available=false`, print `⏭️ 8: slack announce — skipped (Slack not configured) (<elapsed>)` and proceed to Step 9.
 
+Branch on `INTENT`.
+
+### 8a — `INTENT=PR`
+
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
   --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" --pr-url "$PR_URL" \
   --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
   --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"
 ```
+
+### 8b — `INTENT=NON_PR`
+
+Post a free-form Slack message summarizing the non-PR work (no PR URL). Compose the `--message` value from `WORK_SUMMARY` — a one-sentence summary is ideal (e.g., "research complete, filed #123 and #124" or "code review complete, filed 5 issues"):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
+  --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" \
+  --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
+  --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
+  --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence summary from WORK_SUMMARY>"
+```
+
+### After the branch
 
 If the script exits non-zero, print `**⚠ 8: slack announce — failed. Continuing.**`
 
