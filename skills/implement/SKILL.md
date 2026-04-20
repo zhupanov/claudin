@@ -170,9 +170,10 @@ Any durable, actionable follow-up work identified during design, implementation,
 
 - Non-accepted OOS observations (voting panel rejected for filing) remain PR-narrative in the `Out-of-Scope Observations` block.
 - Rejected review findings (not accepted by the panel) remain PR-narrative in the `Rejected Plan Review Suggestions` / `Rejected Code Review Suggestions` blocks.
-- `repo_unavailable=true` is a blocked-filing state — the entry stays in `execution-issues.md` only and the PR body's `Accepted OOS` subsection reports `Skipped — repo unavailable`.
+- `repo_unavailable=true` is a blocked-filing state for BOTH the auto-filing Step 9a.1 pipeline AND the manual `/issue` path described above — the entry stays in `execution-issues.md` only and the PR body's `Accepted OOS` subsection reports `Skipped — repo unavailable`. Do not call the `/issue` skill manually when `repo_unavailable=true`.
+- **Security findings are NEVER filed via this principle.** Public GitHub issues are not the correct channel for security vulnerabilities per SECURITY.md. Route security-classified findings through the private disclosure flow defined in SECURITY.md — not via Step 9a.1 and not via manual `/issue`.
 
-**Sanitize before filing from execution context.** Any issue body composed from execution-issues.md or oos-accepted-main-agent.md content MUST apply the same redaction rules documented in the dual-write subsection below (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`) and SECURITY.md's outbound-redaction subsection. `/issue` batch mode forwards Description verbatim into public issue bodies.
+**Sanitize before filing from execution context.** Any issue body composed from execution-session-derived content — including execution-issues.md, oos-accepted-main-agent.md, the Implementation Deviations block, reviewer prose surfaced during design/implementation/review, or any other session-derived source — MUST apply the same redaction rules documented in the dual-write subsection below (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`) and SECURITY.md's outbound-redaction subsection before invocation. `/issue`'s outbound shell scrubber covers secrets but not internal hostnames/URLs or PII, so prompt-level sanitization is required for those categories. `/issue` batch mode forwards Description verbatim into public issue bodies.
 
 Throughout execution, log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issues.md`. This file captures problems worth investigating later but that do not block the current task. **Any step** may append to this file when an issue is encountered.
 
@@ -623,7 +624,7 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 
 <details><summary>Rejected Plan Review Suggestions</summary>
 
-<rejected plan review findings from the /design phase's Step 4 output visible in conversation context above. If none were rejected, write "All plan review suggestions were implemented." If /design was interrupted and these findings are not visible in context, omit this entire <details> block. If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
+<rejected plan review findings from the /design phase's Step 4 output visible in conversation context above. If none were rejected, write "All plan review suggestions were implemented." If /design was interrupted and these findings are not visible in context, omit this entire <details> block.>
 
 </details>
 
@@ -635,7 +636,7 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 
 <details><summary>Rejected Code Review Suggestions</summary>
 
-<content from $IMPLEMENT_TMPDIR/rejected-findings.md if it exists and is non-empty, otherwise "All code review suggestions were implemented." If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
+<content from $IMPLEMENT_TMPDIR/rejected-findings.md if it exists and is non-empty, otherwise "All code review suggestions were implemented.">
 
 </details>
 
@@ -657,7 +658,7 @@ Write the PR body to a temp file at `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body 
 <If Step 9a.1 created issues, list each with its issue link: "- #<NUMBER>: <title> (<reviewer attribution>)". Reviewer attribution may be `Code`, `Cursor`, `Codex`, or `Main agent` — the latter for items sourced from the dual-write to oos-accepted-main-agent.md per the Execution Issues Tracking → Mechanical enforcement of the principle: `Pre-existing Code Issues` dual-write. If no OOS items were accepted, write "No OOS items were accepted for issue filing.">
 
 **Non-accepted OOS observations:**
-<Non-accepted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-accepted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available." If any item here is durable, actionable follow-up work, file an issue per the Follow-up Work Principle in skills/implement/SKILL.md and reference the issue number here instead of leaving it only as prose.>
+<Non-accepted out-of-scope observations from both plan review (/design Step 3) and code review (/review Step 3c.1) visible in conversation context above. These are pre-existing issues or concerns beyond the PR's scope that reviewers surfaced for future attention. Copy the non-accepted OOS items as they were listed, including the reviewer attribution and description. If no OOS observations were raised, write "No out-of-scope observations were raised." If the observations are not visible in conversation context, write "Out-of-scope observations not available.">
 
 </details>
 
