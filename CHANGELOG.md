@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.14] - 2026-04-20
+
+### Added
+
+- `scripts/test-subskill-anchors.sh` — regression harness that verifies every backticked `` `<path>/SKILL.md § <heading>` `` citation in `skills/shared/subskill-invocation.md` resolves to a `## <heading>` or `### <heading>` line in the referenced file (exact string match via `grep -Fxq`, both `##` and `###` accepted, trailing whitespace tolerated on target lines). Fail-closed on parse/IO errors; fence-aware parser skips any 3+ backtick opener (including the doc's quadruple-backtick banner examples); minimum-citation floor of 10 guards against extractor regressions. Wired into `make lint` via a new `test-subskill-anchors` target; added to `agent-lint.toml` exclude list. Contract orthogonal to `scripts/lint-skill-invocations.py` (which enforces invocation wording). Also fixes 3 pre-existing citation drifts (`Step 6 — Implement` → `Step 6 — Execute`; `Step 9a.1 — Create OOS GitHub Issues` → `9a.1 — Create OOS GitHub Issues`; `Step 0` → `Step 0 — Session Setup`) and expands 2 continuation-shorthand citations to full-path form so all 14 citations resolve mechanically. Closes #236 (follow-up from #227 / PR #229).
+
 ## [4.2.13] - 2026-04-20
 
 ### Changed
