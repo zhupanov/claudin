@@ -123,8 +123,13 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
 Parse stdout for `VERIFIED=true|false` and `REASON=<token>`.
 
 - **If `VERIFIED=true`**: print `✅ /alias — created .claude/skills/<alias-name>/SKILL.md` and exit 0.
-- **If `VERIFIED=false`**: print a fail-closed error and exit 1:
-  ```
-  **ERROR: /implement returned but .claude/skills/<alias-name>/SKILL.md was not written (REASON=<token>). DO NOT merge the PR. Inspect the PR/branch manually — /implement may have written the file elsewhere, skipped the generator, or failed silently.**
-  ```
+- **If `VERIFIED=false`**: print a fail-closed error and exit 1. Branch the message on `alias_merge`:
+  - **If `alias_merge=false`** (PR created but not merged):
+    ```
+    **ERROR: /implement returned but .claude/skills/<alias-name>/SKILL.md was not written (REASON=<token>). DO NOT merge the PR. Inspect the PR/branch manually — /implement may have written the file elsewhere, skipped the generator, or failed silently.**
+    ```
+  - **If `alias_merge=true`** (PR may already be merged):
+    ```
+    **ERROR: /implement returned but .claude/skills/<alias-name>/SKILL.md was not written (REASON=<token>). The PR may have already been merged — do not assume success. Inspect the PR/branch/merged-main manually; a revert or follow-up PR may be required.**
+    ```
   Do not attempt auto-remediation — `/implement` has already created (and possibly merged) the PR, so any recovery requires human judgment.
