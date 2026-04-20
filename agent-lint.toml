@@ -93,10 +93,12 @@ suppress = [
 #
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
-# presence in 4 orchestrator SKILL.md files and absence in 4 pure-delegator
-# SKILL.md files. It is structurally referenced from Makefile (test-anti-halt
-# target) and AGENTS.md, matching the same Makefile-only pattern as the other
-# test-* harnesses above.
+# presence in 8 orchestrator SKILL.md files (fix-issue, implement, review,
+# loop-review, loop-improve-skill, loop-improve-skill-iter, alias, research)
+# and absence in 3 pure-delegator SKILL.md files (im, imaq, create-skill).
+# It is structurally referenced from Makefile (test-anti-halt target) and
+# AGENTS.md, matching the same Makefile-only pattern as the other test-*
+# harnesses above.
 #
 # scripts/test-subskill-anchors.sh is the regression harness for every
 # `<path>/SKILL.md § <heading>` citation in skills/shared/subskill-invocation.md

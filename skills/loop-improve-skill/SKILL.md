@@ -13,7 +13,14 @@ Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
 
 **Anti-halt continuation reminder.** After every child `Skill` tool call (`/loop-improve-skill-iter`) returns, IMMEDIATELY continue with this skill's NEXT numbered sub-step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., loop exit on `no plan`, `max iterations reached`, `bail to Step 4`, `iteration sentinel missing`). A normal sequential continuation is the default this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
-The four authoritative loop exits: (1) `ITER > 10` (max iterations reached); (2) inner returns `ITER_STATUS=no_plan`; (3) inner returns `ITER_STATUS=design_refusal`; (4) outer's `verify-skill-called.sh --sentinel-file` gate returns `VERIFIED=false` (halt detected). Token/context budget is NOT a valid loop exit; the split-skill structure converts the old self-curtailment failure mode into an observable missing-sentinel diagnostic.
+Authoritative loop exits fall into two categories, each triggering one of the Step 4.v branches below:
+
+1. **Sentinel verified** (`VERIFIED=true`): the inner reached its Step 4 close-out and wrote `iter-${ITER}-status.txt`. Read that file to learn `ITER_STATUS`. Happy path (`completed`) loops on; any other value (`no_plan`, `design_refusal`, `im_verification_failed`, or any unexpected value) maps to a category-specific `EXIT_REASON` and breaks to Step 5.
+2. **Sentinel missing** (`VERIFIED=false`): the inner halted partway through an iteration. The outer writes a diagnostic `EXIT_REASON="iteration sentinel missing — ..."` and breaks to Step 5. This is the mechanical halt-detection branch that fixes #231.
+
+Additionally, after a successful iteration the outer increments `ITER` and compares against the 10-round cap; exceeding it sets `EXIT_REASON="max iterations (10) reached"` and breaks to Step 5 — the normal-completion exit.
+
+Token/context budget is NOT a valid loop exit; the split-skill structure converts the old self-curtailment failure mode into an observable missing-sentinel diagnostic.
 
 ## Arguments
 
@@ -94,10 +101,10 @@ Print: `> **🔶 4: loop — iteration ${ITER}**`
 
 ### 4.i — Invoke /loop-improve-skill-iter
 
-Invoke the Skill tool with skill `"loop-improve-skill-iter"` (bare name first). On "no matching skill", retry with `"larch:loop-improve-skill-iter"`. Pass args:
+Invoke the Skill tool with skill `"loop-improve-skill-iter"` (bare name first). On "no matching skill", retry with `"larch:loop-improve-skill-iter"`. Pass the five required values as flag-style args (order not significant, but flag-style is load-bearing — `TARGET_SKILL_PATH` and `LOOP_TMPDIR` may contain spaces on macOS user paths, and positional parsing would silently mis-split):
 
 ```
-${SKILL_NAME} ${TARGET_SKILL_PATH} ${ITER} ${ISSUE_NUM} ${LOOP_TMPDIR}
+--skill-name ${SKILL_NAME} --target-skill-path ${TARGET_SKILL_PATH} --iter ${ITER} --issue-num ${ISSUE_NUM} --loop-tmpdir ${LOOP_TMPDIR}
 ```
 
 > **Continue after child returns.** When `/loop-improve-skill-iter` returns, execute the 4.v mechanical gate immediately, then either increment `ITER` and loop or fall through to Step 5 — do NOT end the turn.
@@ -121,10 +128,11 @@ Parse `VERIFIED` and `REASON` from stdout. Branch:
   - `no_plan`: set `EXIT_REASON="no plan at iteration ${ITER}"` and break to Step 5.
   - `design_refusal`: set `EXIT_REASON="/design refusal or error at iteration ${ITER}"` and break to Step 5.
   - `im_verification_failed`: set `EXIT_REASON="/im did not reach canonical completion line at iteration ${ITER}"` and break to Step 5.
-  - `bad_args`: set `EXIT_REASON="inner rejected arguments at iteration ${ITER}"` and break to Step 5.
   - any other value: set `EXIT_REASON="inner returned unexpected ITER_STATUS=<value> at iteration ${ITER}"` and break to Step 5.
 
-- **`VERIFIED=false`**: the halt-detected branch. Set `EXIT_REASON="iteration sentinel missing — iter ${ITER} did not complete (REASON=<token>)"` and break to Step 5. This path catches the case where the inner halted partway through an iteration (never reached its Step 4) — the exact failure mode of #231, now mechanically detected at the outer's gate.
+  The inner's argument-validation failure path (`bad_args`) does NOT surface here because the inner deliberately does not write the completion sentinel when argument validation fails (writing through an unvalidated `LOOP_TMPDIR` would defeat the security check). That case collapses to the `VERIFIED=false` branch below as `REASON=missing_path`, which is the correct diagnostic.
+
+- **`VERIFIED=false`**: the halt-detected branch. Set `EXIT_REASON="iteration sentinel missing — iter ${ITER} did not complete (REASON=<token>)"` and break to Step 5. This path catches both the case where the inner halted partway through an iteration (never reached its Step 4) — the exact failure mode of #231, now mechanically detected at the outer's gate — and the case where the inner aborted during argument validation (per the note above).
 
 ### 4.n — Iteration Advance
 

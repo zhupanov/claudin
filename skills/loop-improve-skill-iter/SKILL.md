@@ -1,7 +1,7 @@
 ---
 name: loop-improve-skill-iter
 description: "Use when running one improvement iteration for a target skill as part of /loop-improve-skill's outer loop; invokes /skill-judge then /design then /im, writes a per-substep sentinel ledger, emits ITER_STATUS to the caller tmpdir."
-argument-hint: "<skill-name> <target-skill-path> <iter-num> <issue-num> <loop-tmpdir>"
+argument-hint: "--skill-name <name> --target-skill-path <path> --iter <N> --issue-num <N> --loop-tmpdir <path>"
 allowed-tools: Bash, Skill, Read
 ---
 
@@ -13,13 +13,13 @@ Runs one `/skill-judge` → post comment → `/design` → post plan → `/im` i
 
 ## Arguments
 
-`$ARGUMENTS` is a space-separated list of five positional tokens: `<skill-name> <target-skill-path> <iter-num> <issue-num> <loop-tmpdir>`.
+`$ARGUMENTS` is a flag-style argument list consumed as five required `--flag value` pairs. Flag order is not significant, but every flag is required. Flag-style parsing is load-bearing — `TARGET_SKILL_PATH` and `LOOP_TMPDIR` come from `git rev-parse --show-toplevel` and `mktemp` respectively, either of which may contain spaces on macOS user home paths, so positional parsing would silently mis-split fields.
 
-- `<skill-name>` — target skill short name (e.g., `alias`), already validated by the outer.
-- `<target-skill-path>` — absolute path to the target's `SKILL.md`, resolved by the outer.
-- `<iter-num>` — integer in `[1, 10]`. Outer enforces the range; inner re-validates defensively.
-- `<issue-num>` — the tracking issue number created by the outer's Step 2.
-- `<loop-tmpdir>` — absolute path to the outer's session tmpdir under `/tmp` or `/private/tmp`.
+- `--skill-name <name>` — target skill short name (e.g., `alias`), already validated by the outer.
+- `--target-skill-path <path>` — absolute path to the target's `SKILL.md`, resolved by the outer.
+- `--iter <N>` — integer in `[1, 10]`. Outer enforces the range; inner re-validates defensively.
+- `--issue-num <N>` — the tracking issue number created by the outer's Step 3.
+- `--loop-tmpdir <path>` — absolute path to the outer's session tmpdir under `/tmp` or `/private/tmp`. Must NOT contain `..` path components.
 
 ## Progress Reporting
 
@@ -37,18 +37,18 @@ Step Name Registry:
 
 ## Step 1 — Parse and Validate Arguments
 
-Parse `$ARGUMENTS` into `SKILL_NAME`, `TARGET_SKILL_PATH`, `ITER`, `ISSUE_NUM`, `LOOP_TMPDIR`.
+Parse `$ARGUMENTS` flag-style into `SKILL_NAME`, `TARGET_SKILL_PATH`, `ITER`, `ISSUE_NUM`, `LOOP_TMPDIR`. Reject unknown flags, missing flags, and duplicate flags.
 
 Validate:
 - `SKILL_NAME` matches `^[a-z][a-z0-9-]*$`.
 - `TARGET_SKILL_PATH` is absolute and ends in `/SKILL.md`.
 - `ITER` is an integer and `1 <= ITER <= 10`.
 - `ISSUE_NUM` is a positive integer.
-- `LOOP_TMPDIR` is absolute AND begins with `/tmp/` OR `/private/tmp/` AND is an existing directory.
+- `LOOP_TMPDIR` is absolute AND begins with `/tmp/` OR `/private/tmp/` AND does NOT contain `..` as a path component (reject any occurrence of the literal `/..` or a trailing `..`; the `..` rejection closes the `/tmp/../etc/...` traversal bypass — a prefix check alone is insufficient) AND is an existing directory.
 
-If any check fails, print `**⚠ 1: parse-args — invalid arguments (<specific failure>). Aborting.**` and exit with `printf 'ITER_STATUS=%s\n' 'bad_args' > "$LOOP_TMPDIR/iter-${ITER}-status.txt" 2>/dev/null || true`. Do NOT write the completion sentinel. The outer's mechanical gate will flag this as a halt-equivalent failure.
+If any check fails, print `**⚠ 1: parse-args — invalid arguments (<specific failure>). Aborting.**` and abort **without writing any file** through `LOOP_TMPDIR`. Writing a `bad_args` status file through an untrusted path would defeat the validation itself — the outer's `verify-skill-called.sh --sentinel-file` gate already catches this case as `REASON=missing_path` when the completion sentinel is absent, which the outer maps to the generic "iteration sentinel missing" halt-detected EXIT_REASON. That diagnostic is sufficient; a dedicated `bad_args` status file is unnecessary and security-adverse.
 
-The `LOOP_TMPDIR` prefix guard (`/tmp/` or `/private/tmp/`) is the skill's sole security boundary against arbitrary-path writes if the inner is ever invoked outside the outer orchestrator. Keep the check literal; do NOT introduce relative paths or canonicalization beyond this prefix test.
+The `LOOP_TMPDIR` prefix guard (`/tmp/` or `/private/tmp/`) plus the `..` rejection together form the skill's security boundary against arbitrary-path writes if the inner is ever invoked outside the outer orchestrator. Keep the checks literal; do NOT introduce broader canonicalization — the lightweight combined check is proportionate for an inner skill whose sole caller (`/loop-improve-skill`) controls its own input via `mktemp`.
 
 Print: `✅ 1: parse-args — ITER=${ITER}, target=/${SKILL_NAME}`
 

@@ -24,7 +24,9 @@
 #       return VERIFIED=false empty_file).
 #     - A verify-skill-called.sh invocation (for /im's stdout-line gate).
 #     - gh issue comment (appears at least twice: 3.j + 3.d-plan-post).
-#     - Each substep breadcrumb: 🔶 3.j, 🔶 3.d, 🔶 3.i, 🔶 4.
+#     - Each substep breadcrumb: 🔶 3.j, 🔶 3.d, 🔶 3.i
+#       (Step 4 is close-out only; it emits a ✅ completion line, not a
+#       🔶 start line, so no breadcrumb assertion applies there.)
 #     - The LOOP_TMPDIR path-prefix guard literal /private/tmp/ (the
 #       security-boundary check from FINDING_8).
 #
