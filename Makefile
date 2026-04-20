@@ -1,9 +1,9 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt smoke-dialectic
+.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure smoke-dialectic
 
-lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt
+lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure
 	pre-commit run --all-files
 
 test-redact:
@@ -44,6 +44,9 @@ test-lint-skill-invocations:
 
 test-anti-halt:
 	bash scripts/test-anti-halt-banners.sh
+
+test-design-structure:
+	bash scripts/test-design-structure.sh
 
 smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh

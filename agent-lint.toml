@@ -110,4 +110,5 @@ exclude = [
   "scripts/test-lint-skill-invocations.sh",
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
   "scripts/test-anti-halt-banners.sh",
+  "scripts/test-design-structure.sh",
 ]
