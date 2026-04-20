@@ -15,7 +15,7 @@ You are a delivery-owner advocating for {CHOSEN} on the feature: {FEATURE_DESCRI
 Your output MUST satisfy all of the following:
 
 1. **Steelman first.** Before arguing your own side, spend 1-2 sentences summarizing the strongest version of the opposing case — the case the antithesis agent would actually make. Do not straw-man.
-2. **Evidence grounding.** Cite at least one concrete `file:line` reference obtained via Read/Grep/Glob at argument time (e.g., `skills/design/SKILL.md:340`). Unsupported claims are prohibited.
+2. **Evidence grounding.** Cite at least one concrete `file:line` reference obtained via Read/Grep/Glob at argument time (e.g., `skills/design/SKILL.md:1`). Unsupported claims are prohibited.
 3. **Structured tagged output**, in exactly this order, with one full sentence minimum of substantive content per tag body:
    - `<claim>` — your position in one sentence.
    - `<evidence>` — codebase references supporting the claim; include at least one `file:line` citation.
@@ -49,7 +49,7 @@ You are a proportionality auditor challenging {CHOSEN} in favor of {ALTERNATIVE}
 Your output MUST satisfy all of the following:
 
 1. **Steelman first.** Before arguing your own side, spend 1-2 sentences summarizing the strongest version of the case for {CHOSEN} — the case the thesis agent would actually make. Do not straw-man.
-2. **Evidence grounding.** Cite at least one concrete `file:line` reference obtained via Read/Grep/Glob at argument time (e.g., `skills/design/SKILL.md:340`). Unsupported claims are prohibited.
+2. **Evidence grounding.** Cite at least one concrete `file:line` reference obtained via Read/Grep/Glob at argument time (e.g., `skills/design/SKILL.md:1`). Unsupported claims are prohibited.
 3. **Structured tagged output**, in exactly this order, with one full sentence minimum of substantive content per tag body:
    - `<claim>` — your position in one sentence.
    - `<evidence>` — codebase references supporting the claim; include at least one `file:line` citation.

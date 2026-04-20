@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.9] - 2026-04-20
+
+### Changed
+
+- `/design` — refactor SKILL.md per `/skill-judge` findings (Grade C → expected B). Three orthogonal edits: add a `## Design Mindset` section near the top transferring the orchestrator's thinking pattern via 5 "Before X, ask yourself" prompts; replace the 5 flag-description paragraphs with a compact 4-column table followed by a `MANDATORY` pointer to the new `skills/design/references/flags.md` (declared the single normative source), placed adjacent to the flag block before Step 0 so it is read before flag parsing begins; hybrid-extract Step 2a.5 — keep inline the GH#98 debate-phase carve-out, bucket assignment, and zero-externals guardrail while extracting per-decision rendering, parallel launch, collection, judge re-probe, ballot construction, judge launch, tally, and `dialectic-resolutions.md` writing to the new `skills/design/references/dialectic-execution.md`. Dual `Do NOT load` guards prevent debate-instruction leakage on the `NO_CONTESTED_DECISIONS` and zero-externals short-circuit paths. New `scripts/test-design-structure.sh` (wired into `make lint` via `test-design-structure`) asserts the four structural invariants: flag-MANDATORY placement before Step 0, dual skip-branch guards, `dialectic-execution.md` header MANDATORY naming `dialectic-debate.md`, and `references/flags.md` load-bearing literals (`--branch-info` 4-key rule + `--step-prefix` `::` delimiter). Updates `references/dialectic-debate.md` example line-refs from `SKILL.md:340` to `SKILL.md:1` (stable file-level pointer after refactor line drift).
+
 ## [4.2.8] - 2026-04-20
 
 ### Changed
