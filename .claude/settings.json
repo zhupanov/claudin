@@ -175,29 +175,5 @@
       "/tmp",
       "/var/folders"
     ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$PWD/scripts/block-submodule-edit.sh",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$PWD/scripts/block-submodule-edit.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
   }
 }
