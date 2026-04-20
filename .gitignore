@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .claude/settings.local.json
 .claude/hook-audit.log
+.agents/
+skills-lock.json
