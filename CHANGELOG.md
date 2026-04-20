@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.12] - 2026-04-19
+
+### Added
+
+- `scripts/lint-skill-invocations.py` — minimal-guardrail lint that flags public and dev `SKILL.md` files which declare `Skill` in their `allowed-tools` frontmatter but omit both canonical invocation phrases (`Invoke the Skill tool`, `via the Skill tool`) anywhere in the body. Catches *total omission* only; per-invocation alignment is intentionally out of scope and tracked as follow-up issue #180. Accepts `--root <dir>` (defaults to the script's parent directory) so the regression harness can isolate fixtures under a temp tree. Uses `PyYAML` for frontmatter parsing, normalizes leading UTF-8 BOM and CRLF before the `---` prefix test, and distinguishes internal errors (unreadable or non-UTF-8 files → exit 2) from policy violations (→ exit 1); exit 2 takes priority when both occur.
+- `scripts/test-lint-skill-invocations.sh` — 12-case black-box regression harness (a through l) covering Pattern A, Pattern B, YAML-list and quoted-string `allowed-tools` shapes, exact-token discipline (`SkillCheck` must not satisfy a `Skill` requirement), multi-violation runs, CRLF/BOM normalization, non-UTF-8 files exercising the exit-2 internal-error path, and the mixed error+violation priority rule. Wired into `make lint` via the new `test-lint-skill-invocations` target and added to `agent-lint.toml`'s exclude list.
+- `.pre-commit-config.yaml` gains a `lint-skill-invocations` local hook with `additional_dependencies: ['pyyaml==6.0.2']`, `always_run: true`, `pass_filenames: false`. The hook runs in its own isolated venv and fires uniformly from `make lint`, `/relevant-checks`, and CI's existing lint job. `.github/workflows/ci.yaml`'s lint step additionally installs `pyyaml==6.0.2` into the ambient Python so the `test-lint-skill-invocations` harness (which invokes the script directly with `python3`, outside the pre-commit venv) can import it; the pyyaml version is pinned identically in both locations. Closes #159.
+
+### Changed
+
+- `skills/review/SKILL.md` Step 3e rewrites "invoke `/relevant-checks`" to "invoke `/relevant-checks` via the Skill tool" (Pattern B), addressing pre-existing non-compliance with the sub-skill invocation style guide that the new lint uncovers.
+
 ## [4.0.11] - 2026-04-19
 
 ### Fixed

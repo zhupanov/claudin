@@ -24,8 +24,8 @@ jobs:
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
             pre-commit-
-      - name: Install pre-commit
-        run: pip install pre-commit==4.2.0
+      - name: Install pre-commit and PyYAML
+        run: pip install pre-commit==4.2.0 pyyaml==6.0.2
       - name: Run all linters
         run: make lint
 
