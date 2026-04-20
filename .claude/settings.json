@@ -163,6 +163,8 @@
       "Skill(relevant-checks)",
       "Skill(research)",
       "Skill(review)",
+      "Skill(skill-judge)",
+      "Skill(skill-judge:skill-judge)",
       "WebFetch(domain:code.claude.com)",
       "WebFetch(domain:docs.github.com)",
       "WebFetch(domain:github.com)",

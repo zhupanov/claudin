@@ -2,7 +2,7 @@
 name: loop-improve-skill
 description: "Use when iteratively improving an existing skill via a judge-design-implement loop tracked in a GitHub issue; runs up to 10 iterations or stops when no plan materializes."
 argument-hint: "<skill-name>"
-allowed-tools: Bash, Skill, Read, Write, Edit
+allowed-tools: Bash, Skill, Read
 ---
 
 # loop-improve-skill
@@ -13,13 +13,9 @@ Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
 
 **Anti-halt continuation reminder.** After every child `Skill` tool call (`/skill-judge`, `/design`, `/im`) returns, IMMEDIATELY continue with this skill's NEXT numbered sub-step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., loop exit on "no plan", `max iterations reached`). A normal sequential continuation is the default this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
-## Flags
+## Arguments
 
-Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token.
-
-- `--debug`: Set `debug_mode=true`. Default: `debug_mode=false`.
-
-After stripping flags, the first positional token is `<skill-name>`.
+`$ARGUMENTS` is a single positional token: `<skill-name>`.
 
 ## Progress Reporting
 
@@ -38,7 +34,7 @@ Step Name Registry:
 
 ## Step 1 — Parse Arguments and Resolve Target Skill
 
-Parse flags, then read the first positional token as `SKILL_NAME`. Strip a single leading `/`.
+Read `$ARGUMENTS` as `SKILL_NAME`. Strip a single leading `/`.
 
 Validate:
 - Non-empty.
@@ -97,16 +93,10 @@ Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:d
 
 **No-plan detection.** Exit the loop cleanly if any of:
 - `$DESIGN_OUT` is empty.
-- `$DESIGN_OUT` contains a case-insensitive match for any of: `NO PLAN`, `no improvements`, `skill is already high quality`, `nothing to improve`, `already optimal`.
+- The first non-blank line of `$DESIGN_OUT`, trimmed and case-folded, matches one of these exact sentinels: `no plan`, `no improvements`, `nothing to improve`, `already optimal`, `skill is already high quality`. Match the whole trimmed line only — do NOT substring-search the body (a legitimate plan may mention any of these phrases in prose).
 - `/design` returned an explicit refusal or error.
 
-On no-plan exit, post a final comment and break out of the loop:
-
-```bash
-gh issue comment "${ISSUE_NUM}" --body "Loop exited at iteration ${ITER} — no plan materialized."
-```
-
-Set `EXIT_REASON="no plan at iteration ${ITER}"` and proceed to Step 4.
+On no-plan exit, set `EXIT_REASON="no plan at iteration ${ITER}"` and proceed directly to Step 4 — Step 4 posts the single summary comment; do not post a separate "no plan materialized" comment here.
 
 Otherwise, post the plan to the issue:
 
@@ -123,13 +113,7 @@ Invoke the Skill tool with skill `"im"` (bare name first; fallback `"larch:im"`)
 
 ### 3.next — Iterate
 
-Increment `ITER`. If `ITER > 10`, post:
-
-```bash
-gh issue comment "${ISSUE_NUM}" --body "Loop exited at iteration 10 — max iterations reached."
-```
-
-Set `EXIT_REASON="max iterations (10) reached"` and proceed to Step 4.
+Increment `ITER`. If `ITER > 10`, set `EXIT_REASON="max iterations (10) reached"` and proceed to Step 4 — Step 4 posts the single summary comment.
 
 Otherwise, continue at 3.j with the new iteration.
 

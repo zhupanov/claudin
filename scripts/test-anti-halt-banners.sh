@@ -34,6 +34,7 @@ ORCHESTRATORS=(
   "skills/implement/SKILL.md"
   "skills/review/SKILL.md"
   "skills/loop-review/SKILL.md"
+  "skills/loop-improve-skill/SKILL.md"
 )
 
 DELEGATORS=(
