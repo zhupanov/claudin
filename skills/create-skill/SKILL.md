@@ -1,13 +1,13 @@
 ---
 name: create-skill
-description: "Use when creating a new larch skill. Validates name and description, then delegates to /implement --quick --auto to scaffold via render-skill-md.sh. Writes under .claude/skills/ by default; --plugin writes under skills/."
-argument-hint: "[--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>"
+description: "Use when creating a new larch skill. Validates name and description, then delegates to /im --quick --auto to scaffold via render-skill-md.sh (auto-merges by default). Writes under .claude/skills/ by default; --plugin writes under skills/."
+argument-hint: "[--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>  (--merge is a backward-compat no-op; /im auto-merges)"
 allowed-tools: Bash, Skill
 ---
 
 # Create Skill
 
-Scaffold a new larch-style skill and delegate to `/implement --quick --auto` for the full pipeline (implementation, code review, version bump, PR).
+Scaffold a new larch-style skill and delegate to `/im --quick --auto` for the full pipeline (implementation, code review, version bump, PR, auto-merge). `/im` is larch's `/implement --merge` alias — auto-merge is now the default for scaffolded skills. Pass `--merge` if you want to be explicit (it is a backward-compat no-op since `/im` already merges).
 
 Example: `/create-skill foo "Use when doing X"` creates `.claude/skills/foo/SKILL.md` in the consumer repo. With `--plugin`, creates `skills/foo/SKILL.md` inside the larch plugin repo.
 
@@ -19,7 +19,7 @@ Invoke the argument parser:
 ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/parse-args.sh $ARGUMENTS
 ```
 
-Parse the output for `NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`.
+Parse the output for `NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`. (`MERGE` is kept in the parse output for backward compat but is a no-op — delegation via `/im` always auto-merges.)
 
 If the script exits non-zero or emits an `ERROR=` line, print the error and abort.
 
@@ -39,9 +39,17 @@ The validator enforces:
 - When `--plugin` is set, the CWD must be the larch plugin repo (`.claude-plugin/plugin.json` + `skills/implement/SKILL.md` present).
 - Description is non-empty, ≤ 1024 chars, contains no XML tags, no backticks, no `$(`, no heredoc terminators or frontmatter breakers, no newlines or control characters.
 
-## Step 3 — Delegate to /implement
+## Principles
 
-Construct a concise feature description for `/implement`:
+These principles apply to every new skill scaffolded by `/create-skill`. They are forwarded verbatim into the feature description handed to `/im` (see Step 3), so the implementing agent follows them while building out the scaffolded skill. They are guidance, not mechanically enforced — no lint runs against them.
+
+- **A — Express content and logic as bash scripts.** Any non-trivial step belongs in a `.sh` file: shared at `${CLAUDE_PLUGIN_ROOT}/scripts/` when two or more skills can reuse it, or private at `${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/` when it is skill-specific. Prefer reuse — grep existing `scripts/` before creating a new one. See `AGENTS.md` Editing rules for canonical script-ownership bullets.
+- **B — No direct command calls via the Bash tool.** Every shell command invoked from a SKILL.md step must be a call to a `.sh` wrapper. Do NOT inline pipelines, loops, or multi-line `bash -c` strings into the SKILL.md. Wrappers keep the SKILL.md scannable, centralize error handling and logging, and make the step auditable without reading prompt prose.
+- **C — No consecutive Bash tool calls.** When a step needs two or more shell actions, combine them into a single coordinator `.sh` that invokes the individual scripts internally (or calls them via `source`). The SKILL.md step should issue exactly one Bash tool call per logical unit of work. Rationale: each Bash tool call is a separate inspectable artifact; stacking them fragments the audit trail and encourages copy-paste drift.
+
+## Step 3 — Delegate to /im
+
+Construct a concise feature description for `/im`:
 
 - Target directory (in consumer mode): `.claude/skills/<NAME>/`
 - Target directory (plugin mode, `--plugin`): `skills/<NAME>/`
@@ -61,21 +69,30 @@ Use ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/render-skill-md.sh to writ
     --local-token "<LOCAL_TOKEN>" --plugin-token "${CLAUDE_PLUGIN_ROOT}" \
     --multi-step <MULTI_STEP>
 
-After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN> and include the hints in the PR body.
+After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN>. The hints script is the single source of truth for the post-scaffold doc-sync checklist — execute every reminder it emits (README catalog + feature matrix row, .claude/settings.json dual-form Skill permission entries, docs/workflow-lifecycle.md orchestration-hierarchy / delegation-topology / standalone-usage updates, docs/agents.md and docs/review-agents.md when applicable, AGENTS.md Canonical sources when the new skill introduces a shared script or itself becomes a canonical source). Include the hints output verbatim in the PR body under a "Post-scaffold sync checklist" section.
 
-If --plugin, also:
+Implementation principles (MUST follow — sourced from /create-skill's ## Principles section):
+  A. Express content and logic as bash scripts. Shared at ${CLAUDE_PLUGIN_ROOT}/scripts/ when reusable across skills; private at ${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/ when skill-specific. Grep existing scripts/ before creating a new one.
+  B. No direct command calls via the Bash tool. Every shell command invoked from the scaffolded SKILL.md must be a call to a .sh wrapper. Do NOT inline pipelines, loops, or multi-line bash -c strings into SKILL.md.
+  C. No consecutive Bash tool calls. When a step needs two or more shell actions, combine them into a single coordinator .sh that invokes the individual scripts internally. The scaffolded SKILL.md step should issue exactly one Bash tool call per logical unit of work.
+
+If --plugin, also (these rules are also emitted by post-scaffold-hints.sh — follow its output as canonical):
   - Add a row for /<NAME> to README.md Skills catalog and feature matrix.
   - Add three permission entries to .claude/settings.json permissions.allow, then re-sort the whole permissions.allow block by strict ASCII code-point order (e.g. via `sort -u`) so the new entries interleave correctly with existing ones (do NOT assume the new entries always append; `Skill(larch:<NAME>)` may sort before `Skill(loop-review)`, `Skill(research)`, or `Skill(review)` depending on <NAME>):
       - Bash entry for the new skill's scripts directory (using the working-directory shell variable prefix + skills/<NAME>/scripts/*).
       - Skill(<NAME>) entry (bare name).
       - Skill(larch:<NAME>) entry (fully-qualified plugin name).
   - Rationale: larch's `.claude/settings.json` runs under `defaultMode: "bypassPermissions"` so both Skill forms are cosmetic in the plugin-dev harness, but they document the dual-form convention consumers running in strict permissions must adopt. See the README subsection "Strict-permissions consumers — Skill permission entries" for the consumer-side rationale and the canonical copy-paste block.
+  - Add /<NAME> to docs/workflow-lifecycle.md — either to the Skill Orchestration Hierarchy mermaid (if /<NAME> is a stateful orchestrator that invokes other skills) or to the Delegation Topology subsection (if /<NAME> is a pure forwarder/delegator). Also add a Standalone Usage bullet.
+  - When applicable (new skill spawns subagents via the Agent tool), update docs/agents.md.
+  - When applicable (new skill alters reviewer composition or archetypes), update docs/review-agents.md.
+  - When applicable (new skill introduces a shared script used by multiple skills, or is itself a canonical source), add a bullet to AGENTS.md Canonical sources.
 ```
 
-Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /implement --quick --auto [--merge] [--debug]**` (omit the optional flags that are `false`).
+Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug]**` (omit `--debug` if `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and is not forwarded.
 
 Invoke the Skill tool:
-- Try skill: `"implement"` first (bare name). If no skill matches, try skill: `"larch:implement"` (fully-qualified plugin name).
-- args: `"--quick --auto [--merge] [--debug] <feature-description>"` — include `--merge` only if `MERGE=true`, include `--debug` only if `DEBUG=true`.
+- Try skill: `"im"` first (bare name). If no skill matches, try skill: `"larch:im"` (fully-qualified plugin name).
+- args: `"--quick --auto [--debug] <feature-description>"` — include `--debug` only if `DEBUG=true`. `--merge` is NOT forwarded (`/im` prepends it itself); the `MERGE` parse value is ignored at delegation time.
 
-The implementing agent will execute `render-skill-md.sh`, run validation checks, commit, review, bump the version, and create (and optionally merge) the PR.
+The implementing agent will execute `render-skill-md.sh`, run validation checks, commit, review, bump the version, create the PR, and merge it (via `/im` → `/implement --merge`).

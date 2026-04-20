@@ -51,6 +51,13 @@ if [[ "$PLUGIN" == "true" ]]; then
   echo "      \"Skill(larch:$NAME)\""
   echo "  - Both Skill forms are required for strict-permissions consumers; see"
   echo "    README subsection \"Strict-permissions consumers — Skill permission entries\" for rationale."
+  echo "  - Update docs/workflow-lifecycle.md — if /$NAME is a stateful orchestrator,"
+  echo "    add it to the Skill Orchestration Hierarchy mermaid; if /$NAME is a pure"
+  echo "    forwarder/delegator, add it to the Delegation Topology subsection. Also"
+  echo "    add a Standalone Usage bullet."
+  echo "  - Update docs/agents.md when applicable (your skill spawns subagents via the Agent tool)."
+  echo "  - Update docs/review-agents.md when applicable (your skill alters reviewer composition or archetypes)."
+  echo "  - Update AGENTS.md Canonical sources list when applicable (your skill introduces a shared script used by multiple skills, or is itself a canonical source)."
 fi
 
 if [[ -d "$PWD/.claude/skills/relevant-checks" ]]; then

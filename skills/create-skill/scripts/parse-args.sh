@@ -6,8 +6,11 @@
 #                 Default: .claude/skills/<name>/ with $PWD path token.
 #   --multi-step  Emit the multi-step scaffold.
 #                 Default: minimal single-step scaffold.
-#   --merge       Forward to /implement.
-#   --debug       Forward to /implement.
+#   --merge       Accepted for backward compatibility. /create-skill delegates via /im
+#                 (which prepends --merge), so this flag is redundant and is NOT forwarded
+#                 to the child skill. Kept in the parser to avoid breaking existing
+#                 invocations that pass it explicitly.
+#   --debug       Forward to /im (which forwards to /implement).
 #
 # Positional (after flags):
 #   <skill-name>  First positional. Leading '/' is stripped.

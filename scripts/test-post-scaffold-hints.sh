@@ -121,6 +121,21 @@ fi
 assert_contains "$out" "sort -u" "sort -u instruction present"
 assert_not_contains "$out" "bare form first" "no stale bare-first ordering rule"
 
+# Expanded doc-sync reminder set (PR that added /im delegation + Principles to /create-skill).
+# These tokens are contract: the reminders must name each canonical-doc target by path
+# so the implementing agent in /implement (called via /im) knows exactly which files to touch.
+assert_contains "$out" "docs/workflow-lifecycle.md" "workflow-lifecycle.md reminder present"
+assert_contains "$out" "Delegation Topology" "Delegation Topology subsection reference present"
+assert_contains "$out" "docs/agents.md" "docs/agents.md reminder present"
+assert_contains "$out" "docs/review-agents.md" "docs/review-agents.md reminder present"
+assert_contains "$out" "AGENTS.md Canonical sources" "AGENTS.md Canonical sources reminder present"
+assert_contains "$out" "when applicable" "conditional 'when applicable' wording present for the conditional reminders"
+
+# Plugin-false branch MUST NOT leak the new reminders (they are plugin-dev-only).
+out_nonplugin=$("$HINTS" --target-dir "/tmp/smoke/foo" --plugin false)
+assert_not_contains "$out_nonplugin" "docs/workflow-lifecycle.md" "workflow-lifecycle.md reminder absent when --plugin false"
+assert_not_contains "$out_nonplugin" "AGENTS.md Canonical sources" "AGENTS.md canonical sources reminder absent when --plugin false"
+
 echo "=== Section 3: --plugin true, NAME=loop-review (ASCII edge case) ==="
 
 # NAME starting with 'l' is the edge case where Skill(larch:NAME) sorts
