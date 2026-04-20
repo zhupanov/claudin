@@ -248,7 +248,7 @@ For each **accepted in-scope** finding (`FINDING_*` items only — exclude `OOS_
 2. If the fix involves creating new tests, write them.
 3. If the fix involves CI workflow changes, edit the workflow YAML.
 
-After all fixes are applied, invoke `/relevant-checks` to run validation checks. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` to confirm the fix.
+After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run validation checks. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` via the Skill tool to confirm the fix.
 
 ### 3f — Re-review
 

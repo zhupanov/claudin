@@ -39,6 +39,17 @@ repos:
 
   - repo: local
     hooks:
+      - id: lint-skill-invocations
+        name: Lint skill-invocation docs
+        entry: python scripts/lint-skill-invocations.py
+        language: python
+        additional_dependencies: ['pyyaml==6.0.2']
+        pass_filenames: false
+        always_run: true
+        files: ^(skills|\.claude/skills)/[^/]+/SKILL\.md$
+
+  - repo: local
+    hooks:
       - id: agnix
         name: Lint AI agent configuration files
         entry: agnix .
