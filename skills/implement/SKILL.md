@@ -1,7 +1,7 @@
 ---
 name: implement
-description: "Use when implementing a feature end-to-end: design, implement, code review, version bump, PR, Slack announce, and cleanup. Pass --merge to additionally run the CI+rebase+merge loop and delete the local branch after merging."
-argument-hint: "[--quick] [--auto] [--merge] [--debug] [--session-env <path>] <feature description>"
+description: "Use when implementing a feature end-to-end: design, implement, code review, version bump, PR, Slack, cleanup. --merge runs CI+rebase+merge loop and deletes the local branch. --draft (excludes --merge) creates a draft PR and skips cleanup."
+argument-hint: "[--quick] [--auto] [--merge | --draft] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
@@ -17,7 +17,8 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 - `--quick`: Set a mental flag `quick_mode=true`. Default: `quick_mode=false`. When `quick_mode=true`: Step 1 skips `/design` (this skill creates the branch and an inline plan directly), Step 5 skips `/review` (a single-reviewer loop of up to 7 rounds using the Cursor → Codex → Claude Code Reviewer subagent fallback chain — no voting panel), and Step 7a skips the Code Flow Diagram. All other steps (CI wait, Slack, cleanup) run normally. The `--merge` opt-in is independent of `--quick`.
 - `--auto`: Set a mental flag `auto_mode=true`. Default: `auto_mode=false`. When `auto_mode=true`: (a) forward `--auto` to `/design` invocation in Step 1, suppressing `/design`'s interactive question checkpoints; (b) suppress this skill's own opportunistic questions in Step 2; (c) in Step 12, when merge conflicts require user input for uncertain resolutions, suppress `AskUserQuestion` and use best-effort resolution instead (bailing if confidence is too low). When `--quick` is also set and `/design` is skipped, `--auto` still suppresses Step 2 questions.
-- `--merge`: Set a mental flag `merge=true`. Default: `merge=false`. When `merge=true`, Steps 12–15 run (CI+rebase+merge loop, :merged: emoji, local cleanup, and main verification). When `merge=false`, these steps are skipped — the PR is created and the workflow stops after the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup.
+- `--merge`: Set a mental flag `merge=true`. Default: `merge=false`. When `merge=true`, Steps 12–15 run (CI+rebase+merge loop, :merged: emoji, local cleanup, and main verification). When `merge=false`, these steps are skipped — the PR is created and the workflow stops after the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup. **Mutually exclusive with `--draft`.**
+- `--draft`: Set a mental flag `draft=true`. Default: `draft=false`. When `draft=true`, Step 9b creates the PR in draft state (via `create-pr.sh --draft` → `gh pr create --draft`) and Step 14 is skipped so the local branch is NOT deleted and the working tree stays on the feature branch (so the user can keep iterating). `draft=true` implies `merge=false` — Steps 12–15 are skipped via their existing `merge=false` branches. **Mutually exclusive with `--merge`.** If both `--draft` and `--merge` are present in the arguments, print `**⚠ --draft and --merge are mutually exclusive. Aborting.**` and exit without running Step 0.
 - `--no-merge`: **Deprecated** — recognized for backward compatibility but treated as a no-op (the new default already skips merge steps). When this flag is encountered, print: `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. When `debug_mode=true`, forward `--debug` to `/design` (Step 1) and `/review` (Step 5) invocations. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill and will be forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
@@ -737,13 +738,13 @@ Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED>
 
 ### 9b — Create PR via script
 
-Run the `create-pr.sh` script with a concise title (under 70 chars):
+Run the `create-pr.sh` script with a concise title (under 70 chars). **If `draft=true`, append `--draft`** so the PR is created in draft state:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/create-pr.sh --title "<title>" --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
+${CLAUDE_PLUGIN_ROOT}/scripts/create-pr.sh --title "<title>" --body-file "$IMPLEMENT_TMPDIR/pr-body.md" [--draft]
 ```
 
-Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The script handles pushing the branch, detecting existing PRs, and creating new ones with `--assignee @me`. `PR_STATUS` is `created` for new PRs or `existing` for already-open PRs. Save `PR_STATUS` — it is used in Step 11 to decide whether to post to Slack.
+Parse the output for `PR_NUMBER`, `PR_URL`, `PR_TITLE`, and `PR_STATUS`. The script handles pushing the branch, detecting existing PRs, and creating new ones with `--assignee @me`. `PR_STATUS` is `created` for new PRs or `existing` for already-open PRs. Save `PR_STATUS` — it is used in Step 11 to decide whether to post to Slack. When `draft=true` and `PR_STATUS=existing`, the pre-existing PR's draft state is left unchanged — `--draft` only affects newly-created PRs.
 
 **If `create-pr.sh` exits non-zero**, print the error from its output and abort. Do not proceed to Steps 10–18.
 
@@ -1192,7 +1193,9 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/post-merged-emoji.sh --slack-ts "$SLACK_TS"
 
 ## Step 14 — Local Cleanup
 
-**If `merge=false`**: Print `⏭️ 14: local cleanup — skipped (--merge not set), still on $BRANCH_NAME (<elapsed>)` and skip to Step 16.
+**If `draft=true`**: Print `⏭️ 14: local cleanup — skipped (--draft set, staying on $BRANCH_NAME for further iteration) (<elapsed>)` and skip to Step 16.
+
+**If `merge=false`** (and not already skipped for `--draft` above): Print `⏭️ 14: local cleanup — skipped (--merge not set), still on $BRANCH_NAME (<elapsed>)` and skip to Step 16.
 
 **If the PR was successfully merged (Step 12b or force-merged externally)**:
 
@@ -1259,6 +1262,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"
 - `**⚠ Codex not available: <reason>**`
 - `**⚠ Cursor review failed: <reason>**`
 
-If `merge=false`, remind: `**Note: --merge was not set. PR was created but not merged. Merge manually when ready.**`
+If `draft=true`, remind: `**Note: --draft was set. Draft PR created; local branch retained. Mark the PR ready-for-review and merge manually when ready.**`
+
+Otherwise, if `merge=false`, remind: `**Note: --merge was not set. PR was created but not merged. Merge manually when ready.**`
 
 Print: `✅ 18: cleanup — implement complete! (<elapsed>)`
