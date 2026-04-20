@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.2] - 2026-04-20
+
+### Changed
+
+- `/design` — refactor for progressive disclosure: extract the 4 personality prompts (`ARCH_PROMPT`/`EDGE_PROMPT`/`INNOVATION_PROMPT`/`PRAGMATIC_PROMPT`) into `skills/design/references/sketch-prompts.md`, the Thesis/Antithesis debate templates into `skills/design/references/dialectic-debate.md`, and the Competition notice + voter prompts + ballot handling + FINDING_N/OOS/rejected-findings format blocks into `skills/design/references/plan-review.md`. Each reference file is loaded via a MANDATORY directive at the correct call site (Step 2a.2 for sketch prompts, between Step 2a.5 steps 5-6 for debate templates, top of Step 3 for plan-review artifacts). Reviewer launch shell blocks and numeric invariants remain inline in SKILL.md to preserve the CI agent-sync focus-area-enum check and `timeout: 1860000`/`--write-health "${SESSION_ENV_PATH}.health"` contracts. Byte-preserved all relocated prompt bodies, template bodies, and shell commands — zero behavioral change.
+- `/design` — add consolidated `## Anti-patterns` section after Verbosity Control with 6 NEVER rules (skip Step 2a; substitute Claude into dialectic debate bucket; mutate orchestrator-wide `codex_available`/`cursor_available` inside Step 2a.5; pass `--caller-env`/`--write-health` to `session-setup.sh` when `SESSION_ENV_PATH` empty; call `collect-reviewer-results.sh` with zero positional args; conflate the sketch-phase vs. plan-review+dialectic timeout families). Each rule states the WHY so edits can respect the original constraint; inline step-local mentions remain where they carry load-bearing context.
+- `/design` — strengthen frontmatter description with explicit "Use when..." trigger phrasing + 5-sketch + voting-panel keywords (within the 250-character agent-lint limit).
+
 ## [4.2.1] - 2026-04-20
 
 ### Changed
