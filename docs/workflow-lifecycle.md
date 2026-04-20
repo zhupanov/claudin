@@ -15,14 +15,16 @@ graph TD
     IMPLEMENT -->|invokes| ISSUE_OOS["/issue (OOS filing)"]
     LOOP["/loop-review"] -->|invokes| ISSUE["/issue (batch)"]
     FIX["/fix-issue"] -->|invokes| IMPLEMENT
-    LOOP_IMPROVE["/loop-improve-skill"] -->|invokes| SKILL_JUDGE["/skill-judge"]
-    LOOP_IMPROVE -->|invokes| DESIGN
-    LOOP_IMPROVE -->|invokes| IM_ALIAS["/im (→ /implement --merge)"]
+    LOOP_IMPROVE["/loop-improve-skill"] -->|delegates one iteration| LOOP_IMPROVE_ITER["/loop-improve-skill-iter"]
+    LOOP_IMPROVE_ITER -->|invokes| SKILL_JUDGE["/skill-judge"]
+    LOOP_IMPROVE_ITER -->|invokes| DESIGN
+    LOOP_IMPROVE_ITER -->|invokes| IM_ALIAS["/im (→ /implement --merge)"]
 
     style IMPLEMENT fill:#2d5a27,color:#fff
     style LOOP fill:#2d5a27,color:#fff
     style FIX fill:#2d5a27,color:#fff
     style LOOP_IMPROVE fill:#2d5a27,color:#fff
+    style LOOP_IMPROVE_ITER fill:#2d5a27,color:#fff
     style DESIGN fill:#4a3a6e,color:#fff
     style REVIEW fill:#4a3a6e,color:#fff
     style CHECKS fill:#555,color:#fff
@@ -36,7 +38,8 @@ graph TD
 - **`/implement`** — top-level orchestrator. Runs the full design → code → review → PR workflow by default. With the `--merge` flag, also runs the CI+rebase+merge loop and local cleanup after PR creation. Step 9a.1 additionally invokes `/issue` in batch mode to file accepted OOS findings as GitHub issues.
 - **`/loop-review`** — partitions the codebase into slices, reviews each with a 3-reviewer panel, and invokes `/issue` in batch mode to file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`) — accumulating up to 3 slices per `/issue` invocation before flushing so `/issue`'s 2-phase LLM dedup runs once per batch. Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
 - **`/fix-issue`** — processes one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any with open blockers, triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement` with mode-appropriate flags (`--quick` for SIMPLE, full for HARD; always `--merge`).
-- **`/loop-improve-skill`** — iteratively improves an existing skill. Creates a tracking GitHub issue, then runs up to 10 rounds of `/skill-judge` → post judgment → `/design` → (exit if no plan) → post plan → `/im`. Stops early when `/design` produces no improvement plan or after 10 iterations. `/skill-judge` comes from the skill-judge plugin; the loop references it by bare name with plugin-qualified fallback.
+- **`/loop-improve-skill`** — iteratively improves an existing skill. Creates a tracking GitHub issue, establishes a session tmpdir under canonical `/tmp`, then delegates up to 10 improvement rounds to `/loop-improve-skill-iter` via the Skill tool. After each iteration returns, a mechanical `${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file` gate verifies a non-empty `iter-${ITER}-done.sentinel` under the session tmpdir — a gate the outer cannot satisfy without the inner's side effect, converting the old "parent halted after child returned" failure mode (issue #231) into an observable missing-sentinel diagnostic. Four authoritative loop exits: ITER>10, inner `ITER_STATUS=no_plan`, inner `ITER_STATUS=design_refusal`, outer sentinel-gate `VERIFIED=false`.
+- **`/loop-improve-skill-iter`** — runs exactly one `/skill-judge` → post judgment → `/design` → (+ optional rescue + no-plan detector) → post plan → `/im` iteration for the target skill, writing a per-substep `.done` sentinel ledger under the caller-supplied `LOOP_TMPDIR` (validated as under `/tmp/` or `/private/tmp/`). `/im` completion is verified mechanically via `verify-skill-called.sh --stdout-line '^✅ 18: cleanup'` against the captured `/im` stdout. Invoked only by `/loop-improve-skill` via the Skill tool — not a standalone user-facing skill.
 
 ## Delegation Topology
 
@@ -125,7 +128,7 @@ Not every task requires the full `/implement` pipeline. Skills can be used indep
 - **`/review [--debug]`** — Review the current branch's changes. Launches reviewers, runs voting on findings, implements accepted fixes, and re-runs validation checks in a recursive loop.
 - **`/research [--debug] <topic>`** — Read-only-repo investigation. Does not create branches, modify tracked repo files, or make commits. The skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook enforces the contract mechanically: `Edit`/`Write`/`NotebookEdit` calls are permitted only when the target path resolves under canonical `/tmp`. May invoke `/issue` via the Skill tool to file research-result issues.
 - **`/fix-issue [--debug] [<number-or-url>]`** — Process one approved GitHub issue per invocation. Triages, classifies SIMPLE/HARD, and delegates to `/implement`. Single-iteration; caller handles repetition.
-- **`/loop-improve-skill <skill-name>`** — Iterate judge → plan → implement over an existing skill up to 10 rounds. Stops early if `/design` returns no plan.
+- **`/loop-improve-skill <skill-name>`** — Iterate judge → plan → implement over an existing skill up to 10 rounds. Delegates each iteration to `/loop-improve-skill-iter` with per-iteration mechanical sentinel verification. Stops early if `/design` returns no plan, on `/design` refusal, or when the sentinel gate detects a halted iteration.
 - **`/alias [--merge] <name> <skill> [flags...]`** — Create a project-level alias skill in `.claude/skills/` that forwards to a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR after CI passes.
 - **`/create-skill [--plugin] [--multi-step] [--merge] [--debug] <name> <desc>`** — Scaffold a new larch-style skill. Validates inputs, delegates to `/im --quick --auto` (auto-merges by default). See [Delegation Topology](#delegation-topology) above for the full chain and post-scaffold sync obligations.
 - **`/issue [--input-file F] [--title-prefix P] [--label L]... [--go] [<desc>]`** — Create one or more GitHub issues with 2-phase LLM-based semantic duplicate detection.
