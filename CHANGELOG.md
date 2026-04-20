@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.6] - 2026-04-19
+
+### Added
+
+- Strict-permissions consumer guidance: README.md gains a `### Strict-permissions consumers — Skill permission entries` subsection documenting that `Skill(name)` is exact-match and does NOT authorize `Skill(larch:name)` (per Claude Code's official permissions docs), that `Skill(larch:*)` wildcards are not currently supported, and that consumers running without `"defaultMode": "bypassPermissions"` must grant both the bare and fully-qualified form for each larch skill. Includes a copy-paste `settings.allow` snippet covering all 11 public plugin skills in strict ASCII code-point order, the shadowing caveat (bare names may resolve to project-local skills before reaching the plugin), and links to upstream Claude Code docs. `skills/create-skill/SKILL.md` Step 3 and `skills/create-skill/scripts/post-scaffold-hints.sh` now emit both `Skill(<NAME>)` and `Skill(larch:<NAME>)` when scaffolding plugin-mode skills, with a cross-reference to the README subsection for rationale. `scripts/test-post-scaffold-hints.sh` is the new 20-assertion regression harness covering `--plugin true/false` branches, dual-Skill output, literal-`$PWD` Bash entry, `sort -u` instruction, and the single-line README subsection title (verified across a normal skill name and the ASCII-edge-case `loop-review`); wired into `make lint` via the new `test-post-scaffold-hints` target. `SECURITY.md` gains a one-sentence pointer to the new README subsection in the Trust Model section. `AGENTS.md` documents the harness contract alongside the other `test-*` entries. `agent-lint.toml` adds the new test script to the G004/dead-script exclude list (Makefile-only reference, matching the `test-deny-edit-write.sh` precedent). `README.md` install paragraph also gains the missing `/create-skill` entry in the slash-command list. Closes #161. Cross-references #158.
+
 ## [4.0.5] - 2026-04-19
 
 ### Added

@@ -32,9 +32,18 @@ suppress = [
 # skills/research/SKILL.md's hooks: frontmatter and is therefore not
 # excluded; the test script is referenced only from Makefile, matching the
 # same Makefile-only pattern as the test-sessionstart-health.sh entry above.
+#
+# scripts/test-post-scaffold-hints.sh is the regression harness for
+# skills/create-skill/scripts/post-scaffold-hints.sh (the post-scaffold
+# reminder emitter invoked by /create-skill). The hints script itself IS
+# structurally referenced from skills/create-skill/SKILL.md Step 3 and is
+# therefore not excluded; the test script is referenced only from Makefile
+# (test-post-scaffold-hints target) and AGENTS.md, matching the same
+# Makefile-only pattern as the test-deny-edit-write.sh entry above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
   "scripts/test-audit-edit-write.sh",
   "scripts/test-deny-edit-write.sh",
+  "scripts/test-post-scaffold-hints.sh",
 ]

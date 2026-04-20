@@ -65,9 +65,11 @@ After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-sc
 
 If --plugin, also:
   - Add a row for /<NAME> to README.md Skills catalog and feature matrix.
-  - Add two permission entries to .claude/settings.json permissions.allow (maintain strict ASCII code-point order):
+  - Add three permission entries to .claude/settings.json permissions.allow, then re-sort the whole permissions.allow block by strict ASCII code-point order (e.g. via `sort -u`) so the new entries interleave correctly with existing ones (do NOT assume the new entries always append; `Skill(larch:<NAME>)` may sort before `Skill(loop-review)`, `Skill(research)`, or `Skill(review)` depending on <NAME>):
       - Bash entry for the new skill's scripts directory (using the working-directory shell variable prefix + skills/<NAME>/scripts/*).
-      - Skill(<NAME>) entry.
+      - Skill(<NAME>) entry (bare name).
+      - Skill(larch:<NAME>) entry (fully-qualified plugin name).
+  - Rationale: larch's `.claude/settings.json` runs under `defaultMode: "bypassPermissions"` so both Skill forms are cosmetic in the plugin-dev harness, but they document the dual-form convention consumers running in strict permissions must adopt. See the README subsection "Strict-permissions consumers — Skill permission entries" for the consumer-side rationale and the canonical copy-paste block.
 ```
 
 Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /implement --quick --auto [--merge] [--debug]**` (omit the optional flags that are `false`).
