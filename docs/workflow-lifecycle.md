@@ -40,7 +40,7 @@ graph TD
 
 ## Delegation Topology
 
-Pure forwarders are **not** orchestrators — they validate input (when applicable), call the Skill tool exactly once, and exit. They run no logic after the child returns. This subsection documents how each delegator maps to its child skill and what preset flags it adds. Edges are labeled with the final expansion (what `/implement` sees).
+Pure forwarders are **not** orchestrators — they validate input (when applicable), call the Skill tool exactly once, and exit. They run no logic after the child returns. This subsection documents how each delegator maps to its child skill and what preset flags it adds. Edges are labeled with the **arguments passed on that edge** (what the immediate child receives), not the final expansion — for single-hop delegators (`/im`, `/imaq`, `/alias`) this is also what `/implement` sees, but for the two-hop chain `/create-skill → /im → /implement`, the `CREATE→IM` edge shows only what `/im` receives; `/im` then prepends `--merge` so `/implement` sees `--merge --quick --auto <feature-desc>`.
 
 ```mermaid
 graph LR
