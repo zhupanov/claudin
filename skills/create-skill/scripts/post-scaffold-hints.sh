@@ -35,6 +35,9 @@ echo "  - Open $TARGET_DIR/SKILL.md and fill in the TODO body."
 echo "  - Every operational step must live in a .sh under $TARGET_DIR/scripts/."
 echo "    Do NOT place raw bash commands in SKILL.md."
 echo "  - If a script is needed by two or more skills, promote it to the shared scripts/ directory instead."
+echo "  - If this skill invokes another skill via the Skill tool, read"
+echo "    \${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md for the canonical"
+echo "    sub-skill invocation conventions (patterns, allowed-tools narrowing, session-env handoff)."
 
 if [[ "$PLUGIN" == "true" ]]; then
   echo ""
