@@ -42,7 +42,7 @@ Validate:
 
 If invalid, print `**⚠ 1: parse args — invalid or missing <skill-name>. Usage: /loop-improve-skill <skill-name>**` and abort.
 
-Resolve the target skill path. Determine the current repo root via `git rev-parse --show-toplevel`; if that command fails (not a git repo), fall back to `$PWD`. Save as `REPO_ROOT`.
+Resolve the target skill path. Determine the current repo root via `REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)`. The `pwd -P` fallback resolves symlinks and guarantees an absolute path even when the process was launched with a relative `$PWD` or inside a symlinked working directory, so `TARGET_SKILL_PATH` below is always a usable absolute path when passed to child skills.
 
 Probe in this order (first match wins) and save as an absolute path in `TARGET_SKILL_PATH`:
 1. `${REPO_ROOT}/skills/${SKILL_NAME}/SKILL.md` — plugin-dev mode: the current checkout IS the larch plugin (or another plugin repo).
@@ -83,7 +83,7 @@ Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no match
 ${SKILL_NAME} (absolute SKILL.md path: ${TARGET_SKILL_PATH}) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.
 ```
 
-The explicit absolute-path directive is load-bearing: `/loop-improve-skill` is an iterative loop where `/im` mutates the skill file between iterations, and subsequent rounds MUST judge the latest modified contents in the current repo (e.g., a `larch3` clone), not the frozen copy in the plugin-installation tree (e.g., `larch1`).
+The explicit absolute-path directive is load-bearing for two reasons: (1) the **probe order** in Step 1 prefers the repo-local copy when one exists (see "Why repo-local wins"); (2) passing that absolute path into `/skill-judge`'s args is what prevents `/skill-judge` from resolving the target by name and falling back to the plugin-installation copy — this matters regardless of which probe matched, because even when only probe 3 (plugin-installation) matched, the judge still reads the exact resolved file rather than re-resolving via a potentially different search path.
 
 Capture the full response to `$JUDGE_OUT` (a temp file).
 
@@ -98,7 +98,7 @@ gh issue comment "${ISSUE_NUM}" --body-file "$JUDGE_COMMENT_FILE"
 
 ### 3.d — Run /design
 
-Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`). Pass a prompt asking for an improvement plan for `/${SKILL_NAME}` that addresses the `skill-judge` findings just captured. Capture the full response to `$DESIGN_OUT` via the Skill tool call.
+Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`). Pass a prompt asking for an improvement plan for `/${SKILL_NAME}` that addresses the `skill-judge` findings just captured. The prompt should explicitly name `TARGET_SKILL_PATH` as the absolute path of the SKILL.md to modify, so the plan references the file at that resolved path (whichever Step 1 probe matched — repo-local when available, plugin-installation when only probe 3 hit) when `/im` consumes it. This is best-effort guidance to `/design` (and in turn `/im` / `/implement`) — whether `/implement` honors an absolute path in the plan over other resolution heuristics depends on that skill's own behavior. Capture the full response to `$DESIGN_OUT` via the Skill tool call.
 
 > **Continue after child returns.** When `/design` returns, execute the no-plan detector and then either exit the loop or continue to 3.i — do NOT end the turn.
 
@@ -118,7 +118,7 @@ gh issue comment "${ISSUE_NUM}" --body-file "$PLAN_COMMENT_FILE"
 
 ### 3.i — Run /im
 
-Invoke the Skill tool with skill `"im"` (bare name first; fallback `"larch:im"`) via the Skill tool. Pass the full plan text (from `$DESIGN_OUT`) as args so `/im` runs the design + implement + review + version bump + PR + merge pipeline on the plan.
+Invoke the Skill tool with skill `"im"` (bare name first; fallback `"larch:im"`) via the Skill tool. Pass the full plan text (from `$DESIGN_OUT`) as args so `/im` runs the design + implement + review + version bump + PR + merge pipeline on the plan. Because the plan composed in 3.d names `TARGET_SKILL_PATH`, `/im`'s implementation step is likely to edit the file at that resolved path; however, this is soft guidance — the final target is determined by `/implement`'s own path resolution.
 
 > **Continue after child returns.** When `/im` returns, increment the iteration counter and decide whether to loop or exit — do NOT end the turn.
 
