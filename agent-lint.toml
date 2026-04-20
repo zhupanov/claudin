@@ -47,6 +47,15 @@ suppress = [
 # Step 3 feature-description template and is therefore not excluded; the
 # test script is referenced only from Makefile's test-render-skill target,
 # matching the same Makefile-only pattern as the entries above.
+#
+# scripts/lib-count-commits.sh is a sourced-only shell library (no shebang,
+# not invokable directly). It is referenced from scripts/check-bump-version.sh
+# and scripts/verify-skill-called.sh via `source` directives only — agent-lint
+# does not follow `source` directives in sibling scripts, so the library
+# would be false-flagged as dead. scripts/test-verify-skill-called.sh is the
+# regression harness for scripts/verify-skill-called.sh and is referenced
+# only from Makefile, matching the same Makefile-only pattern as the other
+# test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -54,4 +63,6 @@ exclude = [
   "scripts/test-deny-edit-write.sh",
   "scripts/test-post-scaffold-hints.sh",
   "skills/create-skill/scripts/test-render-skill-md.sh",
+  "scripts/lib-count-commits.sh",
+  "scripts/test-verify-skill-called.sh",
 ]

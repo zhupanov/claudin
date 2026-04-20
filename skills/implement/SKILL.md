@@ -501,13 +501,20 @@ Parse the output for `HAS_BUMP` and `COMMITS_BEFORE`.
 **If `HAS_BUMP=true`**:
 
 1. Invoke `/bump-version` via the Skill tool.
-2. Verify a new commit was created:
+
+2. **Capture the reasoning file path**: when `/bump-version` is invoked via the Skill tool, the `IMPLEMENT_TMPDIR` environment variable does not always propagate to the skill's bash environment, so `classify-bump.sh` may write `bump-version-reasoning.md` to its default location (`${TMPDIR:-/tmp}`) rather than to `$IMPLEMENT_TMPDIR`. The authoritative path is always emitted on stdout as `REASONING_FILE=<path>`. Parse that value and save it as `BUMP_REASONING_FILE` for use by step 3b below, Step 9a (PR body template), and the Rebase + Re-bump Sub-procedure step 6 (PR body refresh).
+
+3. Verify a new commit was created:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode post --before-count $COMMITS_BEFORE
    ```
    Parse for `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`. If `VERIFIED=false`, print: `**⚠ /bump-version did not create exactly one commit. Expected $EXPECTED, got $COMMITS_AFTER.**`
 
-3. **Capture the reasoning file path**: when `/bump-version` is invoked via the Skill tool, the `IMPLEMENT_TMPDIR` environment variable does not always propagate to the skill's bash environment, so `classify-bump.sh` may write `bump-version-reasoning.md` to its default location (`${TMPDIR:-/tmp}`) rather than to `$IMPLEMENT_TMPDIR`. The authoritative path is always emitted on stdout as `REASONING_FILE=<path>`. Parse that value and save it as `BUMP_REASONING_FILE` for use by Step 9a (PR body template) and the Rebase + Re-bump Sub-procedure step 6 (PR body refresh).
+3b. **Sentinel-file defense-in-depth** (per #160). Run the generic post-invocation verifier against the reasoning-file sentinel. This is complementary to step 3's commit-delta check — it catches the case where `/bump-version` silently no-ops without writing its reasoning artifact, whereas step 3 catches the case where no commit was created. Both checks run unconditionally; neither short-circuits the other.
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file "$BUMP_REASONING_FILE"
+   ```
+   Parse for `VERIFIED` and `REASON`. If `VERIFIED=false`, print: `**⚠ /bump-version sentinel check failed (REASON=<token>). Continuing.**` and append the warning to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`. **Do NOT bail** — the commit-delta check (step 3) remains the hard gate; the sentinel is advisory (defense-in-depth for skipped-skill detection). Freshness limitation: the sentinel check is only meaningful when `BUMP_REASONING_FILE` was freshly parsed from the current `/bump-version` invocation's stdout in step 2 — a stale file from a prior run at the same path would satisfy the check. This is the intended scope (the goal is to catch "skill totally skipped", not "skill reused stale artifact").
 
 **Important**: At PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 8a after `/bump-version` returns. No additional commits may occur between Step 8a and Step 9. Note: after PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the shared **Rebase + Re-bump Sub-procedure** — see before Step 10). The branch history between PR creation and merge may therefore temporarily contain zero or multiple bump commits; the invariant that matters is "the terminal bump commit on HEAD must be based on latest `origin/main` at merge time", enforced strictly by Step 12 and best-effort by Step 10.
 
@@ -797,6 +804,12 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
      - **`VERIFIED=false` AND `COMMITS_AFTER != COMMITS_BEFORE`** (unexpected state — `/bump-version` created more than one commit, or somehow decreased the count):
        - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Bailing to 12d.**` Bail to 12d.
        - **step10 family**: log warning and break to Step 11.
+
+     After the commit-delta check completes (regardless of VERIFIED outcome above), also run the reasoning-file sentinel check (per #160 — mirrors Step 8 step 3b):
+     ```bash
+     ${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file "$BUMP_REASONING_FILE"
+     ```
+     where `$BUMP_REASONING_FILE` is the `REASONING_FILE=<path>` value parsed from this sub-procedure's `/bump-version` invocation's stdout. Parse for `VERIFIED` and `REASON`. If `VERIFIED=false`, print `**⚠ 12: CI+merge loop — bump sentinel check failed (REASON=<token>). Continuing.**` (or the step10 equivalent) and log to `Warnings`. **Do NOT bail** — the commit-delta check is the hard gate; the sentinel is advisory (catches the "skill totally skipped" case that commit-delta already handles via its own BUMP_TYPE=NONE branch, so this is truly defense-in-depth).
 
    **Rationale**: Step 8's permissive warnings are safe because Step 8 is pre-PR — no merge can happen based on a missing bump. Step 12 is pre-merge — missing bump means stale merge. Step 10 is post-PR but pre-merge (Step 12 does the merge) — any bump failure in Step 10 is recoverable by Step 12's mandatory re-bump, so Step 10 can afford to be permissive. **Step 12 is the last-chance enforcement point; Step 10 is best-effort optimization that improves freshness during the Slack-wait phase.**
 
