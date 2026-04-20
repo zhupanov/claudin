@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.5] - 2026-04-20
+
+### Fixed
+
+- `/loop-improve-skill` — prevent silent exit after iteration 1 on minor `/skill-judge` findings or self-judged token/context budget pressure (closes #214). Expanded top banner with an **Anti-self-curtailment** clause enumerating the four authoritative exits. Strengthened Step 3.d's `/design` prompt with three contract clauses requiring a plan for minor/nit findings, forbidding budget-based self-curtailment, and forbidding no-plan sentinels when findings exist. Tightened the no-plan sentinel detector so a first-line sentinel match is terminal only when no structured plan marker (`^#{1,6}\s`, `^[1-9]\d?\.\s`, `^[-*+]\s`) follows — the 5 sentinel strings remain byte-identical. Added a one-shot rescue re-invocation of `/design --auto` when the first response is non-empty, non-sentinel, non-refusal prose with no plan shape; replacement semantics ensure at most one plan comment per iteration. Added explicit Step 3.d ordering invariant and a dedicated `EXIT_REASON` for the `/design` refusal/error exit.
+
 ## [4.2.4] - 2026-04-20
 
 ### Changed
