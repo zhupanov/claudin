@@ -41,11 +41,7 @@ The validator enforces:
 
 ## Principles
 
-These principles apply to every new skill scaffolded by `/create-skill`. They are forwarded verbatim into the feature description handed to `/im` (see Step 3), so the implementing agent follows them while building out the scaffolded skill. They are guidance, not mechanically enforced — no lint runs against them.
-
-- **A — Express content and logic as bash scripts.** Any non-trivial step belongs in a `.sh` file: shared at `${CLAUDE_PLUGIN_ROOT}/scripts/` when two or more skills can reuse it, or private at `${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/` when it is skill-specific. Prefer reuse — grep existing `scripts/` before creating a new one. See `AGENTS.md` Editing rules for canonical script-ownership bullets.
-- **B — No direct command calls via the Bash tool.** Every shell command invoked from a SKILL.md step must be a call to a `.sh` wrapper. Do NOT inline pipelines, loops, or multi-line `bash -c` strings into the SKILL.md. Wrappers keep the SKILL.md scannable, centralize error handling and logging, and make the step auditable without reading prompt prose.
-- **C — No consecutive Bash tool calls.** When a step needs two or more shell actions, combine them into a single coordinator `.sh` that invokes the individual scripts internally (or calls them via `source`). The SKILL.md step should issue exactly one Bash tool call per logical unit of work. Rationale: each Bash tool call is a separate inspectable artifact; stacking them fragments the audit trail and encourages copy-paste drift.
+Principles for every skill scaffolded by `/create-skill` are documented in `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md`. They still apply to every scaffolded skill; Section III (larch mechanical rules A/B/C) is forwarded as a compact excerpt into the `/im` feature description handed off by Step 3.
 
 ## Step 3 — Delegate to /im
 
@@ -71,7 +67,8 @@ Use ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/render-skill-md.sh to writ
 
 After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN>. The hints script is the single source of truth for the post-scaffold doc-sync checklist — execute every reminder it emits (README catalog + feature matrix row, .claude/settings.json dual-form Skill permission entries, docs/workflow-lifecycle.md orchestration-hierarchy / delegation-topology / standalone-usage updates, docs/agents.md and docs/review-agents.md when applicable, AGENTS.md Canonical sources when the new skill introduces a shared script or itself becomes a canonical source). Include the hints output verbatim in the PR body under a "Post-scaffold sync checklist" section.
 
-Implementation principles (MUST follow — sourced from /create-skill's ## Principles section):
+Implementation principles (MUST follow — sourced from ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md):
+  MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full file) before writing any code. Larch mechanical rules A/B/C below override any general writing-style guidance from that doc.
   A. Express content and logic as bash scripts. Shared at ${CLAUDE_PLUGIN_ROOT}/scripts/ when reusable across skills; private at ${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/ when skill-specific. Grep existing scripts/ before creating a new one.
   B. No direct command calls via the Bash tool. Every shell command invoked from the scaffolded SKILL.md must be a call to a .sh wrapper. Do NOT inline pipelines, loops, or multi-line bash -c strings into SKILL.md.
   C. No consecutive Bash tool calls. When a step needs two or more shell actions, combine them into a single coordinator .sh that invokes the individual scripts internally. The scaffolded SKILL.md step should issue exactly one Bash tool call per logical unit of work.

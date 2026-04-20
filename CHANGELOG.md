@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.4] - 2026-04-20
+
+### Changed
+
+- `/create-skill` — factor the inline `## Principles` section into a new canonical doc at `skills/shared/skill-design-principles.md` (~120 lines, 9 sections) merging the battle-tested larch A/B/C mechanical rules with higher-level principles extrapolated from the `skill-judge` and `skill-creator` plugins (knowledge delta, progressive disclosure, anti-patterns with WHY, description-as-activation-surface, freedom calibration, pattern recognition, verifiable quality criteria). The new doc declares Section III (larch mechanical rules) overrides Section IV (general writing-style guidance) to resolve the collision between `skill-creator`'s "avoid rigid MUSTs" advice and larch's harness-enforced A/B/C invariants.
+- `skills/create-skill/SKILL.md` — body `## Principles` shrinks to a pointer paragraph (heading preserved for grep friendliness); Step 3 `/im` feature-description template keeps the compact A/B/C one-liners (HYBRID resolution from dialectic — mechanical invariants survive context pressure) AND adds an explicit `MUST read skills/shared/skill-design-principles.md (full file) before writing any code` line; replaces the stale `sourced from /create-skill's ## Principles section` attribution with the full `${CLAUDE_PLUGIN_ROOT}` path to the new doc.
+- `AGENTS.md` — add an Editing-rules bullet for `skills/shared/skill-design-principles.md` (scope, precedence, consumers, update trigger — Section III edits must mirror the Step 3 compact A/B/C excerpt in the same PR) and a Canonical-sources bullet. Generator path (`render-skill-md.sh`, `post-scaffold-hints.sh`) and README deliberately untouched — scaffold-pointer and README-link deferred to follow-up issues per dialectic DECISION_2. Closes #206.
+
 ## [4.2.3] - 2026-04-20
 
 ### Changed
