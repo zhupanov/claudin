@@ -125,6 +125,7 @@ The banner MUST appear in these orchestrator SKILL.md files:
 - `skills/implement/SKILL.md`
 - `skills/review/SKILL.md`
 - `skills/loop-review/SKILL.md`
+- `skills/loop-improve-skill/SKILL.md`
 
 The banner MUST NOT appear in pure-delegator SKILL.md files:
 

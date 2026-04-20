@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-04-20
+
+### Added
+
+- `/loop-improve-skill <skill-name>` — iteratively improve an existing larch skill. Creates a tracking GitHub issue, then loops `/skill-judge` → post judgment → `/design` → (exit if no plan materializes) → post plan → `/im`, up to 10 iterations. Each iteration's judgment and design plan are posted as issue comments for an audit trail. Registered in README Skills catalog, `.claude/settings.json` permissions, and the anti-halt banner harness.
+
 ## [4.0.21] - 2026-04-19
 
 ### Changed
