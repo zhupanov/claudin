@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.16] - 2026-04-19
+
+### Changed
+
+- `scripts/lint-skill-invocations.py` now enforces the sub-skill-invocation style guide at two levels (closes #180). The existing total-omission check is preserved unchanged. A new line-local per-invocation check flags lines matching `INVOCATION_LINE_REGEX` — direct imperative `Invoke`/`re-invoke` (optionally `the` + a bounded `**bold-span**`) immediately followed by a backticked `` `/<name>` ``, optionally followed by `skill` — that lack `via the Skill tool` on the same line. Sub-procedure references and helper-script citations are exempt by construction; lines inside fenced code blocks are exempt. Per-invocation messages emit absolute file line numbers (frontmatter offset preserved) so editor jump-to-line works. `lint_file()` returns `list[str]` instead of `str | None`; `extract_frontmatter_and_body()` additionally returns the body's absolute file start line.
+- `scripts/test-lint-skill-invocations.sh` adds 9 black-box cases (m–u) covering pure Pattern A, Pattern B per-invocation passes, bare invoke with absolute line assertion, multiple violations, code-fence exemption, total-omission + per-invocation in same file, helper-script citation exemption, sub-procedure exemption, and `re-invoke` in scope.
+- `skills/implement/SKILL.md` (8 lines) and `skills/loop-review/SKILL.md` (1 line) updated to add `via the Skill tool` to direct-invocation phrasings the new check surfaces. `AGENTS.md` documents the two-check contract; `skills/shared/subskill-invocation.md` carries a one-line note about line-local enforcement.
+
 ## [4.0.15] - 2026-04-19
 
 ### Changed

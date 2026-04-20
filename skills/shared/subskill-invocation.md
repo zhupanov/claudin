@@ -31,6 +31,8 @@ Invoke `/implement` via the Skill tool:
 
 The step heading + explicit Skill-tool line + variant bullets shape makes the invocation impossible to miss and keeps the argument list scannable. Do **not** collapse Pattern B into a single paragraph — see `## Avoid conditional phrasing for sub-skill invocations` below.
 
+`scripts/lint-skill-invocations.py` mechanically enforces line-local co-location: every direct-invocation line that says ``Invoke `/<name>`'' (with optional `the` and a bounded `**bold-span**`) must also contain `via the Skill tool` on the same line.
+
 ## allowed-tools narrowing heuristic
 
 Set `allowed-tools` to the minimum needed by the parent skill itself — never mirror the child skill's broader tool set. Three tiers cover every larch skill:

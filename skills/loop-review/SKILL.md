@@ -254,11 +254,11 @@ For each classified finding in this slice:
 - This is the last slice.
 - Accumulated FILE findings reference more than 10 distinct files (keeps each batch's Phase 2 dedup window under `/issue`'s 30-candidate cap).
 
-**When flushing — invoke `/issue`:**
+**When flushing — invoke `/issue` via the Skill tool:**
 
 If `$LR_TMPDIR/findings-accumulated.md` contains zero `###`-prefixed headings (all slices were clean or all findings were held/dropped), skip the `/issue` invocation entirely.
 
-Otherwise, invoke the `/issue` skill via the Skill tool with:
+Otherwise, invoke `/issue` via the Skill tool with:
 
 ```
 --input-file $LR_TMPDIR/findings-accumulated.md --label loop-review
