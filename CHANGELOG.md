@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.13] - 2026-04-20
+
+### Changed
+
+- `/implement` — add `### Follow-up Work Principle` subsection at the top of `## Execution Issues Tracking` generalizing the rule: durable, actionable follow-up work identified during design, implementation, or review MUST be tracked as a GitHub issue (auto-filed via Step 9a.1 when the item fits the OOS pipeline, or manually via `/issue` otherwise) and the PR body references that issue — not buried as prose alone. Retitle the existing `Mandatory dual-write` subsection as `Mechanical enforcement of the principle: Pre-existing Code Issues dual-write` (schema, dedup rule, sanitize rule, worked example byte-identical); update two in-file cross-references to the new title. Add one reminder line pointing back to the principle inside the Implementation Deviations PR-body block (the three carve-out-covered blocks — Rejected Plan Review Suggestions, Rejected Code Review Suggestions, Non-accepted OOS observations — explicitly exclude the reminder to respect the voting panel's rejection decisions). Explicit carve-outs for non-accepted/rejected findings staying as PR-narrative, `repo_unavailable=true` as blocked-filing state for both auto and manual paths, and security findings routed exclusively through SECURITY.md's private disclosure flow. `skills/shared/voting-protocol.md:217` reframed to call the main-agent dual-write path the mechanical enforcement of the principle for the `Pre-existing Code Issues` category; trigger scope preserved (no mechanical extension). Closes #237.
+
 ## [4.2.12] - 2026-04-20
 
 ### Changed
