@@ -10,6 +10,10 @@ permissions:
   contents: read
 
 jobs:
+  # Linters only: pre-commit over all files (shellcheck, markdownlint,
+  # jsonlint, actionlint, agent-lint, agnix, lint-skill-invocations).
+  # Test harnesses run in the separate `test-harnesses` job below so
+  # harness failures and linter failures can be re-run independently.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -26,8 +30,26 @@ jobs:
             pre-commit-
       - name: Install pre-commit and PyYAML
         run: pip install pre-commit==4.2.0 pyyaml==6.0.2
-      - name: Run all linters
-        run: make lint
+      - name: Run pre-commit linters
+        run: make lint-only
+
+  # Regression harnesses (the 22 `test-*` bash scripts in Makefile). Runs
+  # in parallel with the `lint` job so a harness failure can be diagnosed
+  # and re-run without waiting on pre-commit, and vice versa. PyYAML is
+  # required because test-lint-skill-invocations invokes the python lint
+  # directly (outside the pre-commit venv).
+  test-harnesses:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: pip install pyyaml==6.0.2
+      - name: Run test harnesses
+        run: make test-harnesses
 
   agent-lint:
     runs-on: ubuntu-latest
