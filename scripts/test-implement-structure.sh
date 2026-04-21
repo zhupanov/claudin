@@ -25,8 +25,9 @@
 #      (e.g., the NEVER List) but the actual Cursor/Codex quick-review prompt strings
 #      regress. Design FINDING_2.
 #  (7) Four `skills/implement/references/*.md` files exist with expected names.
-#  (8) Each reference/*.md contains `**Consumer**:`, `**Contract**:`, `**When to load**:`
-#      header lines.
+#  (8) Each `references/*.md` contains `**Consumer**:`, `**Contract**:`, `**When to load**:`
+#      header lines. Scans every *.md under references/ (not just the four expected
+#      refs) so new reference files added in the future are covered automatically.
 #  (9) Zero occurrences of `see Step N below` / `see Step N above` patterns inside any
 #      references/*.md — progressive-disclosure invariant (references must not
 #      back-reference parent SKILL.md step numbers with direction words).
@@ -141,17 +142,26 @@ for ref in "${expected_refs[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# (8) Each reference/*.md contains the Consumer/Contract/When-to-load header triplet.
+# (8) Each references/*.md contains the Consumer/Contract/When-to-load header triplet.
+#     Scans every *.md under references/ (not just the four expected refs) so new
+#     reference files added in the future are covered automatically — the contract
+#     documented in the header and AGENTS.md says "references/*.md" generally.
 # ---------------------------------------------------------------------------
 contract_headers=(
   '**Consumer**:'
   '**Contract**:'
   '**When to load**:'
 )
-for ref in "${expected_refs[@]}"; do
+shopt -s nullglob
+contract_ref_files=( "$REFS_DIR"/*.md )
+shopt -u nullglob
+[[ "${#contract_ref_files[@]}" -gt 0 ]] \
+  || fail "(8) no .md files found under $REFS_DIR — cannot validate the Consumer/Contract/When-to-load header triplet"
+
+for ref_path in "${contract_ref_files[@]}"; do
   for hdr in "${contract_headers[@]}"; do
-    grep -Fq "$hdr" "$REFS_DIR/$ref" \
-      || fail "(8) references/$ref lacks '$hdr' header"
+    grep -Fq "$hdr" "$ref_path" \
+      || fail "(8) references/$(basename "$ref_path") lacks '$hdr' header"
   done
 done
 
