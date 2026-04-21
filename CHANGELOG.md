@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.5] - 2026-04-20
+
+### Changed
+
+- `.claude/skills/relevant-checks/SKILL.md` — added `## Mindset` frame (phase-based changed-file vs full-repo split), `## Failure-mode taxonomy` 4-row decision table keyed to observable `run-checks.sh` banners and exit paths, and `## Anti-patterns (NEVER)` section with three bullets (no `--no-verify` bypass, deletions-only branches still run the full-repo phase, exit 0 does not guarantee every phase ran — enumerates the three reduced-coverage exit-0 outcomes). Trimmed the `/lint, /test, /format` migration note from the frontmatter description. Appended one sentence to `## How it works` naming `.pre-commit-config.yaml` as the authoritative hook catalogue. Doc-only — no changes to `scripts/run-checks.sh`. Part of the iterative `/loop-improve-skill` pass on `/relevant-checks` (closes #245).
+
 ## [4.3.4] - 2026-04-20
 
 ### Added
