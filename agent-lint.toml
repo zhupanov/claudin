@@ -17,6 +17,15 @@ suppress = [
   # apply to this use case. See AGENTS.md "Editing rules" for the anti-halt
   # banner convention.
   "nested-ref-deep",
+  # tools-unknown (S040) is suppressed because agent-lint 2.3.2's built-in
+  # tool registry predates the `Monitor` tool (introduced in Claude Code
+  # after the agent-lint release shipped). `Monitor` is a first-party
+  # Claude Code tool used by `skills/loop-improve-skill/SKILL.md` (closes
+  # #291) for passive log-tailing observability over the driver's output
+  # file. Suppression is global because agent-lint 2.3.2 does not support
+  # per-file or per-token exceptions for this rule. Revisit when agent-lint
+  # is upgraded — once the registry includes Monitor, remove this entry.
+  "tools-unknown",
 ]
 
 # scripts/test-sessionstart-health.sh is the regression test for the
@@ -147,6 +156,16 @@ suppress = [
 # Makefile (test-implement-structure target) and AGENTS.md, matching the
 # same Makefile-only pattern as the other test-* harnesses above.
 #
+# scripts/test-loop-improve-skill-skill-md.sh is the structural regression
+# harness for skills/loop-improve-skill/SKILL.md (closes #291 — the live-
+# streaming pattern: background Bash launch + Monitor attach, visible log-
+# path emission, filter-regex parity with driver.sh breadcrumb helpers).
+# Companion to scripts/test-loop-improve-skill-driver.sh: the driver harness
+# pins driver.sh contract tokens; this harness pins the SKILL.md contract
+# tokens introduced by the #291 pattern. It is referenced only from Makefile
+# (test-loop-improve-skill-skill-md target) and AGENTS.md, matching the
+# Makefile-only pattern as the other test-* harnesses above.
+#
 # scripts/test-loop-improve-skill-halt-rate.sh is the opt-in halt-rate
 # regression probe for /larch:loop-improve-skill (closes #278). Referenced
 # only from Makefile (halt-rate-probe target, NOT a lint prerequisite) and
@@ -182,6 +201,7 @@ exclude = [
   "scripts/test-implement-structure.sh",
   "scripts/test-subskill-anchors.sh",
   "scripts/test-loop-improve-skill-driver.sh",
+  "scripts/test-loop-improve-skill-skill-md.sh",
   "scripts/test-parse-skill-judge-grade.sh",
   "scripts/test-loop-improve-skill-halt-rate.sh",
   "scripts/lib-loop-improve-halt-ledger.sh",

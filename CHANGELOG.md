@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.5] - 2026-04-21
+
+### Changed
+
+- `/loop-improve-skill`: stream driver output live via `Monitor` (closes #291). SKILL.md flips the synchronous foreground driver launch to `run_in_background=true` with combined stdout/stderr redirected to a stable log file under `/tmp/` (env-overridable via `LOOP_DRIVER_LOG_FILE`, validated to `/tmp/` or `/private/tmp/` prefix with `..`-component rejection), then attaches `Monitor` (`persistent: true`) tailing the file with `grep --line-buffered -E '^(✅|> **🔶|**⚠)'`. Log path is surfaced to the user via a visible `📄 Full driver log: <path>` line before Monitor attaches and re-emitted on completion, so the full unfiltered output stays accessible post-run. Path resolution uses a single synchronous Bash call emitting `RESOLVED_LOG_FILE=<path>` since Bash tool calls do not share shell state. Driver.sh is byte-identical; skill remains a pure DELEGATOR (anti-halt banner-free). Companion updates: `AGENTS.md` + `SECURITY.md` describe the new `Bash, Monitor` tool surface and log-file retention boundary (outside `LOOP_TMPDIR`, under `/tmp/` only); `scripts/test-loop-improve-skill-halt-rate.sh` extracts the driver-log path from `claude -p` stdout and reads breadcrumbs from that file via a new `extract_driver_log_path()` helper; new structural harness `scripts/test-loop-improve-skill-skill-md.sh` wired into `make lint` asserts frontmatter, visible log-path lines, the byte-verbatim filter literal, and filter/driver breadcrumb-helper parity; `agent-lint.toml` globally suppresses `tools-unknown` (S040) because agent-lint 2.3.2's registry predates the `Monitor` tool — removal trigger documented.
+
 ## [5.0.4] - 2026-04-21
 
 ### Changed
