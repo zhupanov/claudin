@@ -10,8 +10,10 @@
 #
 # Subcommands:
 #   comment    — Post a comment on an issue.
-#                With --lock: verify last comment is "GO" before posting,
-#                then re-read to detect concurrent duplicate locks.
+#                With --lock: verify last comment is "GO", DELETE that GO
+#                comment, then post the new comment (typically "IN PROGRESS").
+#                Re-reads afterward to detect concurrent duplicate locks via
+#                "IN PROGRESS" comments created after the deleted GO timestamp.
 #   close      — Close an issue. Optionally post a comment first.
 #                With --pr-url: update the issue body with the PR link before closing.
 #   update-body — Append a PR link to the issue body (idempotent).
@@ -51,24 +53,46 @@ cmd_comment() {
         exit 2
     fi
 
-    # --lock: verify last comment is still "GO" before posting
+    local go_ts=""
+
+    # --lock: verify last comment is "GO", capture its id + timestamp, then
+    # delete it so the GO sentinel does not remain on the issue after locking.
     if [ "$lock" = true ]; then
-        local last_comment
-        last_comment=$(gh api --paginate "repos/${REPO}/issues/${issue}/comments" \
-            --jq '.[-1].body // empty' 2>/dev/null | tail -1) || {
+        local comments_json
+        comments_json=$(gh api --paginate --slurp "repos/${REPO}/issues/${issue}/comments" 2>/dev/null | jq 'add // []') || {
             echo "LOCK_ACQUIRED=false"
             echo "ERROR=Failed to read comments for lock verification"
             exit 1
         }
 
+        local last_body last_id
+        last_body=$(echo "$comments_json" | jq -r '.[-1].body // empty')
+        last_id=$(echo "$comments_json" | jq -r '.[-1].id // empty')
+        go_ts=$(echo "$comments_json" | jq -r '.[-1].created_at // empty')
+
         local trimmed
-        trimmed=$(echo "$last_comment" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        trimmed=$(echo "$last_body" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
         if [ "$trimmed" != "GO" ]; then
             echo "LOCK_ACQUIRED=false"
             echo "ERROR=Last comment is no longer GO (found: ${trimmed:-empty})"
             exit 1
         fi
+
+        if [[ -z "$last_id" ]] || [[ -z "$go_ts" ]]; then
+            echo "LOCK_ACQUIRED=false"
+            echo "ERROR=Failed to extract GO comment id/timestamp for deletion"
+            exit 1
+        fi
+
+        # Delete the GO comment. The post-check below uses $go_ts (captured
+        # above) as the duplicate-detection sentinel in place of a surviving
+        # GO anchor.
+        gh api -X DELETE "repos/${REPO}/issues/comments/${last_id}" >/dev/null 2>&1 || {
+            echo "LOCK_ACQUIRED=false"
+            echo "ERROR=Failed to delete GO comment on issue #$issue"
+            exit 1
+        }
     fi
 
     # Post the comment
@@ -90,14 +114,12 @@ cmd_comment() {
             exit 1
         }
 
-        # Count IN PROGRESS comments posted after the last GO comment
+        # Count IN PROGRESS comments created strictly after the deleted GO's
+        # timestamp. Two concurrent runners that both raced the pre-check will
+        # see count > 1 here.
         local lock_count
-        lock_count=$(echo "$comments_json" | jq '
-            [to_entries
-             | (map(select(.value.body == "GO")) | last.key // -1) as $last_go
-             | .[]
-             | select(.key > $last_go and .value.body == "IN PROGRESS")
-            ] | length')
+        lock_count=$(echo "$comments_json" | jq --arg ts "$go_ts" '
+            [.[] | select(.body == "IN PROGRESS" and .created_at > $ts)] | length')
 
         if [ "$lock_count" -gt 1 ]; then
             echo "LOCK_ACQUIRED=false"
