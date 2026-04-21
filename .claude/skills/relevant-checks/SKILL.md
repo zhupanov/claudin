@@ -6,67 +6,67 @@ allowed-tools: Bash
 
 # Relevant Checks
 
-Run validation checks scoped to files modified on current branch. Repo-specific skill — each repo define own `/relevant-checks` with checks fit repo.
+Run validation checks scoped to files modified on the current branch. This is a repo-specific skill — each repository defines its own `/relevant-checks` with checks appropriate for that repo.
 
 ## Mindset
 
-Before diagnose failure, classify by phase: **changed-file phase** (`pre-commit run --files`) or **full-repo phase** (`agent-lint --pedantic`). Two phases of `run-checks.sh` not strictly "mechanical vs structural" — `.pre-commit-config.yaml` already route some structural hooks (e.g., agnix on SKILL.md/CLAUDE.md) through changed-file phase. Phase split: what script applied to changed files vs. what applied to whole repo. On **deletions-only branch**, changed-file phase skipped entirely (empty `files[]`) while full-repo phase still run.
+Before diagnosing a failure, classify it by phase: **changed-file phase** (`pre-commit run --files`) or **full-repo phase** (`agent-lint --pedantic`). The two phases of `run-checks.sh` are not strictly "mechanical vs structural" — `.pre-commit-config.yaml` already routes some structural hooks (e.g., agnix on SKILL.md/CLAUDE.md) through the changed-file phase. The phase-based split is: what the script applied to the changed files vs. what it applied to the whole repo. On a **deletions-only branch**, the changed-file phase is skipped entirely (empty `files[]`) while the full-repo phase still runs.
 
-**Maintenance rule.** Before edit `run-checks.sh` or skill, ask: change alter anything Failure-mode taxonomy table or NEVER list pin to — observable banners, exit paths, `WARNING:`/`ERROR:` lines, or script comment labels / branch names (e.g., `files[] empty but MODIFIED_FILES non-empty` branch)? If yes, update both script and doc in same commit — script source of truth, but doc decision table and NEVER bullets pinned to specific strings from it.
+**Maintenance rule.** Before editing `run-checks.sh` or this skill, ask: does the change alter anything the Failure-mode taxonomy table or the NEVER list pins to — observable banners, exit paths, `WARNING:`/`ERROR:` lines, or script comment labels / branch names (e.g., the `files[] empty but MODIFIED_FILES non-empty` branch)? If yes, update both the script and the doc in the same commit — the script is the source of truth, but the doc's decision table and NEVER bullets are pinned to specific strings from it.
 
-Skill DESCRIBES `run-checks.sh` behavior — NOT define new policy. If want add NEVER bullet or taxonomy row whose WHY not observable script branch or banner, reconsider: drift risk higher than doc value.
+This skill DESCRIBES `run-checks.sh` behavior — it does NOT define new policy. If you find yourself wanting to add a NEVER bullet or taxonomy row whose WHY is not an observable script branch or banner, reconsider: the drift risk is higher than the doc value.
 
-**Re-run after structural edits.** After fix that edit structure-adjacent files (SKILL.md, AGENTS.md, CHANGELOG.md, harness scripts, or anything `agent-lint` scan), re-invoke `/relevant-checks` even if changed-file phase passed first time — full-repo `agent-lint` pass may flag cross-file invariants (dangling references, orphaned harnesses, frontmatter mismatches) that changed-file phase cannot see in isolation.
+**Re-run after structural edits.** After a fix that edits structure-adjacent files (SKILL.md, AGENTS.md, CHANGELOG.md, harness scripts, or anything `agent-lint` scans), re-invoke `/relevant-checks` even if the changed-file phase passed the first time — the full-repo `agent-lint` pass may flag cross-file invariants (dangling references, orphaned harnesses, frontmatter mismatches) that the changed-file phase cannot see in isolation.
 
 ## How it works
 
-Changed files collected from branch diff, staged changes, unstaged changes, untracked files. Union passed to `pre-commit run --files`, which route each file to appropriate linter hooks based on file type. Deleted files filtered out automatically. See `.pre-commit-config.yaml` for authoritative hook list applied to changed-file phase — consulted at invocation time by `pre-commit`, evolve independently of skill.
+Changed files are collected from the branch diff, staged changes, unstaged changes, and untracked files. The union is passed to `pre-commit run --files`, which routes each file to the appropriate linter hooks based on file type. Deleted files are filtered out automatically. See `.pre-commit-config.yaml` for the authoritative hook list applied to the changed-file phase — it is consulted at invocation time by `pre-commit` and evolves independently of this skill.
 
-After pre-commit linting succeed, `run-checks.sh` also invoke `agent-lint` (if on PATH) to catch structural regressions on full repo. Same linter CI's `agent-lint` job run, so devs catch structural breakage locally before push. If pre-commit fail, agent-lint skipped — only run when basic linting pass.
+After pre-commit linting succeeds, `run-checks.sh` additionally invokes `agent-lint` (if available on PATH) to catch structural regressions on the full repository. This is the same linter that CI's `agent-lint` job runs, so developers can catch structural breakage locally before pushing. If pre-commit fails, agent-lint is skipped — only run when basic linting passes.
 
 ## Usage
 
-Run private check script:
+Run the private check script:
 
 ```bash
 $PWD/.claude/skills/relevant-checks/scripts/run-checks.sh
 ```
 
-Script auto-detect which files modified on current branch, filter to existing files, run `pre-commit run --files` on them. Pre-commit handle file-type routing internally — only hooks whose file patterns match changed files execute.
+The script automatically detects which files were modified on the current branch, filters to existing files, and runs `pre-commit run --files` on them. Pre-commit handles file-type routing internally — only hooks whose file patterns match the changed files will execute.
 
 ## Retry semantics
 
-If script exit non-zero, one or more checks failed. Caller should:
+If the script exits non-zero, one or more checks failed. The caller should:
 
-1. Diagnose failure from script output
-2. Fix issue
-3. Re-invoke `/relevant-checks` to confirm fix
+1. Diagnose the failure from the script output
+2. Fix the issue
+3. Re-invoke `/relevant-checks` to confirm the fix
 
-Pre-commit run all applicable hooks even if earlier ones fail, so see all failures at once.
+Pre-commit runs all applicable hooks even if earlier ones fail, so you can see all failures at once.
 
 ## Failure-mode taxonomy
 
-When `run-checks.sh` exit non-zero, classify by how exit:
+When `run-checks.sh` exits non-zero, classify by how it exited:
 
 | Exit path | Failure class | Remediation |
 |-----------|---------------|-------------|
-| Line `ERROR: pre-commit not found` printed, immediate exit 1 | Missing `pre-commit` binary | Install binary (`pip install pre-commit`, or package manager), re-invoke. `make setup` only wire hook via `pre-commit install` and still need binary exist first. |
-| Line `ERROR: not inside a git repository` printed, immediate exit 1 | Not git worktree | `cd` into repo (or re-clone); re-invoke. |
-| `=== Running pre-commit ...` banner printed, script exit non-zero **before** any `=== Running agent-lint ===` banner | Changed-file phase failure (file-scoped lint) | Read hook diffs/output, fix file(s), re-invoke. |
-| `=== Running agent-lint ===` banner printed, script exit non-zero **after** it | Full-repo phase failure (structural) | Follow specific `agent-lint` finding — typical fixes update frontmatter, references, harnesses, or docs in same PR; re-invoke. |
+| Line `ERROR: pre-commit not found` printed, immediate exit 1 | Missing `pre-commit` binary | Install the binary (`pip install pre-commit`, or your package manager), then re-invoke. `make setup` only wires the hook via `pre-commit install` and still requires the binary to exist first. |
+| Line `ERROR: not inside a git repository` printed, immediate exit 1 | Not a git worktree | `cd` into the repo (or re-clone); re-invoke. |
+| `=== Running pre-commit ...` banner printed, script exits non-zero **before** any `=== Running agent-lint ===` banner | Changed-file phase failure (file-scoped lint) | Read hook diffs/output, fix the file(s), re-invoke. |
+| `=== Running agent-lint ===` banner printed, script exits non-zero **after** it | Full-repo phase failure (structural) | Follow the specific `agent-lint` finding — typical fixes update frontmatter, references, harnesses, or docs in the same PR; re-invoke. |
 
-Note: `WARNING: agent-lint not found on PATH — skipping` non-fatal — script still exit 0 on changed-file-phase success even without `agent-lint` installed. Install before merge if CI's `agent-lint` job run.
+Note: `WARNING: agent-lint not found on PATH — skipping` is non-fatal — the script still exits 0 on changed-file-phase success even without `agent-lint` installed. Install it before merging if CI's `agent-lint` job runs.
 
 ## Anti-patterns (NEVER)
 
-- **NEVER substitute `git commit --no-verify` for `/relevant-checks`.** **Why:** `--no-verify` only skip local git `pre-commit` hook (optional, separate install); does NOT run or replace skill's checks. Always run `/relevant-checks` before merge.
-- **NEVER assume deletions-only branch has nothing to check.** **Why:** `run-checks.sh` skip changed-file phase (empty `files[]`) but still run full-repo `agent-lint` phase — see `files[] empty but MODIFIED_FILES non-empty` branch. Deletions most common source of structural regressions (dangling references, orphaned harnesses).
-- **NEVER read `/relevant-checks` exit 0 as "every gate ran green".** **Why:** exit 0 only guarantee each phase that *ran* passed — does NOT guarantee every phase ran. Reduced-coverage exit-0 outcomes to watch for:
+- **NEVER substitute `git commit --no-verify` for `/relevant-checks`.** **Why:** `--no-verify` only skips the local git `pre-commit` hook (an optional, separate install); it does NOT run or replace this skill's checks. Always run `/relevant-checks` before the merge.
+- **NEVER assume a deletions-only branch has nothing to check.** **Why:** `run-checks.sh` skips the changed-file phase (empty `files[]`) but still runs the full-repo `agent-lint` phase — see the `files[] empty but MODIFIED_FILES non-empty` branch. Deletions are the most common source of structural regressions (dangling references, orphaned harnesses).
+- **NEVER read `/relevant-checks` exit 0 as "every gate ran green".** **Why:** exit 0 only guarantees that each phase that *ran* passed — it does NOT guarantee that every phase ran. Reduced-coverage exit-0 outcomes to watch for:
 
   | Case | Observable signal | Coverage implication |
   |------|-------------------|----------------------|
   | No modified files detected | `No modified files detected — no checks to run.` → exit 0 | Zero phases ran (common on detached HEAD or freshly-reset tree) |
   | Deletions-only + `agent-lint` absent | `No existing modified files to check (all changes are deletions).` followed by `WARNING: agent-lint not found on PATH — skipping` | Zero phases ran |
-  | `agent-lint` absent, changed-file phase ran | `WARNING: agent-lint not found on PATH — skipping` after successful pre-commit pass | Changed-file phase only; no structural coverage |
+  | `agent-lint` absent, changed-file phase ran | `WARNING: agent-lint not found on PATH — skipping` after a successful pre-commit pass | Changed-file phase only; no structural coverage |
 
-  CI's `agent-lint` job (and re-invocation once modified files exist on-branch) authoritative gate — exit 0 from `/relevant-checks` alone never substitute for it.
+  CI's `agent-lint` job (and a re-invocation once modified files exist on-branch) is the authoritative gate — exit 0 from `/relevant-checks` alone never substitutes for it.

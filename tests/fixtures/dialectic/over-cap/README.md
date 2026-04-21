@@ -1,3 +1,3 @@
 # over-cap
 
-6 contested decisions surfaced by synthesis phase; top-`min(5, N)` cap limit debate to first 5. D6 no debater files, no ballot entry, no judge votes. Listed in resolution manifest for auditability.
+6 contested decisions were surfaced by the synthesis phase; the top-`min(5, N)` cap limits debate to the first 5. D6 has no debater files, no ballot entry, and no judge votes. It's listed in the resolution manifest for auditability.

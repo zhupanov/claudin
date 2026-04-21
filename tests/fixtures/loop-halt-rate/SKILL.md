@@ -5,7 +5,7 @@ description: "Throwaway fixture skill used by scripts/test-loop-improve-skill-ha
 
 # loop-halt-rate (fixture)
 
-Greet user once. Fixture skeletal on purpose — lack structure, mechanical rules, progress reporting real larch skill carry. `/skill-judge` grade below A, make `/loop-improve-skill` iterate — what halt-rate harness need to exercise Step-3.j halt surface.
+Greet the user once. This fixture is intentionally skeletal — it lacks the structure, mechanical rules, and progress reporting a real larch skill carries. `/skill-judge` will consistently grade it well below A, causing `/loop-improve-skill` to iterate, which is exactly what the halt-rate harness needs to exercise the Step-3.j halt surface.
 
 ## Step 1
 

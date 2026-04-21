@@ -1,59 +1,59 @@
 # Progress Reporting Contract
 
-Shared format rules for step progress output across all larch skills. Each skill keep own **Step Name Registry** (map step numbers to short names) and reference this contract for format.
+Shared formatting rules for step progress output across all larch skills. Each skill maintains its own **Step Name Registry** (mapping step numbers to short names) and references this contract for formatting.
 
 ## Breadcrumb Format
 
-Every progress line follow:
+Every progress line follows:
 
 ```
 {icon} {step_number}: {breadcrumb_path}[ — {payload}]
 ```
 
-- **`{icon}`**: One of icons below, show line type.
-- **`{step_number}`**: Full numeric step designation with any parent prefix (e.g., `1.2a.5` when `/design` step `2a.5` called from `/implement` step `1`).
-- **`{breadcrumb_path}`**: Human-readable path root to current step, segments joined by ` | `. Built from `STEP_PATH_PREFIX | step_short_name` when nested, or just `step_short_name` when standalone.
+- **`{icon}`**: One of the icons below, indicating the line type.
+- **`{step_number}`**: The full numeric step designation including any parent prefix (e.g., `1.2a.5` when `/design` step `2a.5` is called from `/implement` step `1`).
+- **`{breadcrumb_path}`**: Human-readable path from root to current step, segments joined by ` | `. Built from `STEP_PATH_PREFIX | step_short_name` when nested, or just `step_short_name` when standalone.
 - **`{payload}`**: Optional description, outcome, or reason — appended after ` — `.
 
 ## Icon Taxonomy
 
 | Icon | Line type | When to use |
 |------|-----------|-------------|
-| `🔶` | Step start | Enter new step |
-| `✅` | Completion | Step done with info payload |
+| `🔶` | Step start | Entering a new step |
+| `✅` | Completion | Step completed with informational payload |
 | `⏩` | Sub-step skip | Optimization or workflow-conditional skip (quick mode, no changes, etc.) |
-| `⏭️` | Precondition skip | Whole step skip due to missing precondition (repo unavailable, Slack not configured, merge not set) |
-| `⚠` | Warning | Non-fatal issue in step |
-| `🔃` | Rebase | Rebase op |
-| `⏳` | Intermediate | Progress update in long-running step |
+| `⏭️` | Precondition skip | Entire step skipped due to missing precondition (repo unavailable, Slack not configured, merge not set) |
+| `⚠` | Warning | Non-fatal issue within a step |
+| `🔃` | Rebase | Rebase-related operation |
+| `⏳` | Intermediate | Progress update within a long-running step |
 | `⚡` | Quick mode | Special quick-mode announcements |
 
-**Semantic distinction**: `⏩` and `⏭️` separate on purpose. `⏩` mean light skip in normal flow; `⏭️` mean precondition fail that bypass whole major step.
+**Semantic distinction**: `⏩` and `⏭️` are intentionally separate. `⏩` indicates a lightweight skip within the normal flow; `⏭️` indicates a precondition failure that causes an entire major step to be bypassed.
 
 ## Step Start Formatting
 
-Step start lines (`🔶`) get special visual treatment so easy to spot:
+Step start lines (`🔶`) get special visual treatment to make them easy to spot:
 
-1. **Separator line**: Print line of 80 `━` chars right before every step start line.
-2. **Bold text**: Render whole step start line bold using `**...**` markdown.
-3. **Blockquote**: Wrap bold line in markdown blockquote (`>`) for color differ.
+1. **Separator line**: Print a line of 80 `━` characters immediately before every step start line.
+2. **Bold text**: Render the entire step start line in bold using `**...**` markdown.
+3. **Blockquote**: Wrap the bold line in a markdown blockquote (`>`) for color differentiation.
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 > **🔶 2: implementation**
 ```
 
-Only `🔶` step start lines get separator, blockquote, bold. Completion (`✅`), skip (`⏩`/`⏭️`), warning (`⚠`), and other lines do NOT get separators, blockquotes, or bold.
+Only `🔶` step start lines get the separator, blockquote, and bold treatment. Completion (`✅`), skip (`⏩`/`⏭️`), warning (`⚠`), and other lines do NOT get separators, blockquotes, or bold.
 
 ## Elapsed Time
 
-Every line that mark **end** of step or work item must include elapsed time — whether done ok, skipped, failed, or timed out. Apply to: `✅`, `⏩`, `⏭️`, and step-ending `⚠` lines.
+Every line that marks the **end** of a step or work item must include elapsed time — whether it completed successfully, was skipped, failed, or timed out. This applies to: `✅`, `⏩`, `⏭️`, and step-ending `⚠` lines.
 
-**Step-ending `⚠`** mean any `⚠` with step-number prefix (e.g., `⚠ 7a: ...`, `⚠ 14: ...`). Unnumbered bail lines (e.g., `⚠ Rebase onto main failed. Bailing to cleanup.`) not need elapsed time.
+**Step-ending `⚠`** means any `⚠` that contains a step-number prefix (e.g., `⚠ 7a: ...`, `⚠ 14: ...`). Unnumbered bail lines (e.g., `⚠ Rebase onto main failed. Bailing to cleanup.`) do not require elapsed time.
 
 ### Step progress lines
 
-Append elapsed time in parens at end of line, short form. Timer start when step logically begin (its `🔶` start line, or step entry if no `🔶` line).
+Append the elapsed time in parentheses at the end of the line, using short form. The timer starts when the step logically began (its `🔶` start line, or entry into the step if no `🔶` line exists).
 
 ```
 ✅ 2a.5: dialectic — 2 voted, 1 fallback (1m42s)
@@ -64,65 +64,65 @@ Append elapsed time in parens at end of line, short form. Timer start when step 
 
 ### Compact status tables (`📊` lines)
 
-For reviewer/agent status tables, include elapsed time right after each `✅` and `❌`. Timer for each entry start when that agent/reviewer launched.
+For reviewer/agent status tables, include elapsed time immediately after each `✅` and `❌`. The timer for each entry starts when that agent/reviewer was launched.
 
-Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict review) use 3-reviewer composition:
-
-```
-📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
-```
-
-Negotiation-Protocol skills `/loop-review` and `/research` both use 3-lane composition (per slice in `/loop-review`; per phase in `/research` — Phase 1 research, Phase 2 validation).
-
-For review-shaped lanes (`/loop-review` Step 3c and `/research` Phase 2 validation), attribution is `Code` / `Codex` / `Cursor`:
+Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict review) use the 3-reviewer composition:
 
 ```
 📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-For `/research` Phase 1 (research not review), table labelled `Agents` and keep slot names:
+Negotiation-Protocol skills `/loop-review` and `/research` both use a 3-lane composition (per slice in `/loop-review`; per phase in `/research` — Phase 1 research, Phase 2 validation).
+
+For review-shaped lanes (`/loop-review` Step 3c and `/research` Phase 2 validation), the attribution is `Code` / `Codex` / `Cursor`:
+
+```
+📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
+```
+
+For `/research` Phase 1 (research rather than review), the table is labelled `Agents` and retains the slot names:
 
 ```
 📊 Agents: | Claude: ✅ 2m31s | Cursor: ⏳ | Codex: ✅ 3m5s |
 ```
 
-When external unavailable in review-shaped panel, single Claude fallback lane appear in its slot (attributed `Code`). When external unavailable in `/research` Phase 1, Claude fallback keep slot name (entry stay labelled `Cursor` or `Codex` on status table because fallback agent is plain research subagent, not `code-reviewer` subagent — fill same research slot).
+When an external is unavailable in a review-shaped panel, a single Claude fallback lane appears in its slot (attributed as `Code`). When an external is unavailable in `/research` Phase 1, the Claude fallback keeps the slot name (the entry stays labelled `Cursor` or `Codex` on the status table because the fallback agent is a plain research subagent, not a `code-reviewer` subagent — it fills the same research slot).
 
-`⏳` (in-progress) and `⊘` (skipped/unavailable) not include timing.
+`⏳` (in-progress) and `⊘` (skipped/unavailable) do not include timing.
 
 ### Time format
 
-Use shortest form:
-- Under 1 min: `45s`
-- 1–59 min: `2m31s`
-- 1+ hour: `1h3m` (seconds always dropped in hours tier)
+Use the shortest representation:
+- Under 1 minute: `45s`
+- 1–59 minutes: `2m31s`
+- 1+ hours: `1h3m` (seconds are always omitted in the hours tier)
 
-Drop zero parts: use `2m` not `2m0s`, use `1h` not `1h0m`.
+Omit zero components: use `2m` not `2m0s`, use `1h` not `1h0m`.
 
 ## `--step-prefix` Encoding
 
-When parent skill invoke child skill (e.g., `/implement` → `/design`), it pass step context via `--step-prefix` using this encoding:
+When a parent skill invokes a child skill (e.g., `/implement` → `/design`), it passes step context via `--step-prefix` using this encoding:
 
 ```
 --step-prefix "NUM_PREFIX::TEXT_PATH"
 ```
 
-- **`NUM_PREFIX`**: Numeric prefix to prepend to child step numbers (e.g., `"1."` mean child step `2a` become `1.2a`).
-- **`TEXT_PATH`**: Human-readable breadcrumb segment(s) from parent (e.g., `"design plan"`).
-- **Delimiter**: Split on first `::` to separate numeric from text parts.
-- **Backward compat**: If `::` absent, treat whole value as numeric-only prefix. Text path default empty — breadcrumbs show only leaf step name.
+- **`NUM_PREFIX`**: The numeric prefix to prepend to the child's step numbers (e.g., `"1."` means child step `2a` becomes `1.2a`).
+- **`TEXT_PATH`**: The human-readable breadcrumb segment(s) from the parent (e.g., `"design plan"`).
+- **Delimiter**: Split on the first `::` to separate numeric from textual parts.
+- **Backward compatibility**: If `::` is absent, treat the entire value as a numeric-only prefix. The text path defaults to empty — breadcrumbs show only the leaf step name.
 
 ### Parsing in child skills
 
-Child skills parse `--step-prefix` into two mental vars:
+Child skills parse `--step-prefix` into two mental variables:
 
-- `STEP_NUM_PREFIX`: Everything before first `::` (or whole value if `::` absent).
-- `STEP_PATH_PREFIX`: Everything after first `::` (or empty if `::` absent).
+- `STEP_NUM_PREFIX`: Everything before the first `::` (or the entire value if `::` absent).
+- `STEP_PATH_PREFIX`: Everything after the first `::` (or empty if `::` absent).
 
-When output step:
+When outputting a step:
 
 - **Step number**: `{STEP_NUM_PREFIX}{local_step_number}` (e.g., `1.` + `2a.5` = `1.2a.5`)
-- **Breadcrumb path**: If `STEP_PATH_PREFIX` non-empty: `{STEP_PATH_PREFIX} | {step_short_name}`. Else: just `{step_short_name}`.
+- **Breadcrumb path**: If `STEP_PATH_PREFIX` is non-empty: `{STEP_PATH_PREFIX} | {step_short_name}`. Otherwise: just `{step_short_name}`.
 
 ### Examples
 
@@ -154,4 +154,4 @@ Standalone `/design` (no `--step-prefix`):
 
 ## Section headers and structured output
 
-Do NOT prefix section headers (e.g., `## Implementation Plan`), structured output headers, artifact labels, or compact reviewer status tables with breadcrumb format. Breadcrumbs apply only to progress status lines.
+Do NOT prefix section headers (e.g., `## Implementation Plan`), structured output headers, artifact labels, or compact reviewer status tables with breadcrumb formatting. Breadcrumbs apply only to progress status lines.

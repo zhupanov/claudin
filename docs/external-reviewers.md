@@ -1,67 +1,67 @@
 # External Reviewers
 
-Codex and Cursor join Claude subagents as reviewers and voters in Larch workflow. Doc cover shared integration.
+Codex and Cursor participate alongside Claude subagents as both reviewers and voters in the Larch workflow. This document covers the shared integration procedures.
 
 ## Availability Checks
 
-Start of each skill, binary check find which external tools installed:
+At the start of each skill, a binary check determines which external tools are installed:
 
-- **Codex** not found → warning printed, skill proceed without
-- **Cursor** not found → warning printed, skill proceed without
+- If **Codex** is not found, a warning is printed and the skill proceeds without it
+- If **Cursor** is not found, a warning is printed and the skill proceeds without it
 
-Skills degrade gracefully when external tools gone. When Codex or Cursor missing, Claude replacement subagents fill slots to keep per-skill lane counts across most phases. Counts: 3 for plan/code review (1 Claude + 1 Codex + 1 Cursor), `/research` (both phases), `/loop-review` (Negotiation Protocol, per slice); 5 for `/design` sketch phase; 3 for voting panels and `/design` dialectic judge panel. Voting use step-function threshold: 3 voters need 2+ YES, 2 voters need unanimous YES, fewer than 2 eligible voters → voting skipped, all findings auto-accepted.
+Skills gracefully degrade when external tools are unavailable. When Codex or Cursor is not found, Claude replacement subagents fill their slots to maintain per-skill lane counts across most phases. The counts are: 3 for plan/code review (1 Claude + 1 Codex + 1 Cursor), `/research` (both phases), and `/loop-review` (Negotiation Protocol, per slice); 5 for the `/design` sketch phase; 3 for voting panels and for the `/design` dialectic judge panel. Voting uses a step-function threshold: 3 voters require 2+ YES votes, 2 voters require unanimous YES, and fewer than 2 eligible voters causes voting to be skipped with all findings accepted automatically.
 
-**Exception: dialectic debate buckets (`/design` Step 2a.5) do NOT use replacement-first.** When assigned external tool (Cursor for odd-indexed decisions, Codex for even) gone, bucket **skipped entirely** and `Disposition: bucket-skipped` resolution written — Claude subagents never substituted into debate path. Carve-out apply only to **debate execution phase** of dialectic; post-debate **judge panel** use replacement-first normal. See [Dialectic-specific behavior](#dialectic-specific-behavior) below and `skills/shared/dialectic-protocol.md` for full reason.
+**Exception: dialectic debate buckets (`/design` Step 2a.5) do NOT use replacement-first.** When the assigned external tool (Cursor for odd-indexed decisions, Codex for even) is unavailable, the bucket is **skipped entirely** and a `Disposition: bucket-skipped` resolution is written — Claude subagents are never substituted into the debate path. This carve-out applies only to the **debate execution phase** of dialectic; the post-debate **judge panel** uses replacement-first normally. See [Dialectic-specific behavior](#dialectic-specific-behavior) below and `skills/shared/dialectic-protocol.md` for the full rationale.
 
 ## Launching External Reviewers
 
-External reviewers launched via `run-external-reviewer.sh` wrapper script. Give:
+External reviewers are launched via the `run-external-reviewer.sh` wrapper script, which provides:
 
-- **Timeout enforcement** — kill process after configurable timeout
-- **Sentinel file creation** — write `.done` file with exit code when process done
-- **Output capture** — capture stdout to output file
-- **Elapsed time tracking** — report how long review took
+- **Timeout enforcement** — Kills the process after a configurable timeout
+- **Sentinel file creation** — Writes a `.done` file containing the exit code when the process completes
+- **Output capture** — Captures stdout to a specified output file
+- **Elapsed time tracking** — Reports how long the review took
 
-During review and voting phases, reviewers launched with `run_in_background: true` so run concurrent with other work. (Negotiation rounds in `/research` and `/loop-review` run sync.)
+During review and voting phases, reviewers are launched with `run_in_background: true` so they run concurrently with other work. (Negotiation rounds in `/research` and `/loop-review` run synchronously.)
 
 ## Launch Order
 
-External reviewers always launched in specific order to max parallelism — **slowest first**:
+External reviewers are always launched in a specific order to maximize parallelism — **slowest first**:
 
 1. **Cursor** (slowest) — launched first
 2. **Codex** — launched second
 3. **Claude subagents** (fastest) — launched last
 
-All launches in single message for true parallel execution.
+All launches happen in a single message to ensure true parallel execution.
 
 ## Sentinel File Monitoring
 
-Wrapper script write `.done` sentinel file when process done. Only reliable way detect completion:
+The wrapper script writes a `.done` sentinel file when the process completes. This is the only reliable way to detect completion:
 
-- **No read output files until sentinel exist** — Cursor buffer all stdout until exit, output file empty until process finish
-- **Poll sentinels** with `wait-for-reviewers.sh` script, check every 5 seconds, print compact progress dots
-- Sentinel files hold exit code (e.g., `0` for success)
+- **Do not read output files until the sentinel exists** — Cursor buffers all stdout until exit, so its output file is empty until the process finishes
+- **Poll for sentinels** using the `wait-for-reviewers.sh` script, which checks every 5 seconds and prints compact progress dots
+- Sentinel files contain the exit code (e.g., `0` for success)
 
 ## Output Validation
 
-After sentinel file exist, output validated:
+After the sentinel file exists, the output is validated:
 
-1. Read output file
-2. Check non-empty and hold substantive content (numbered findings or `NO_ISSUES_FOUND`)
-3. If empty despite exit code 0, **retry once** with fresh invocation (output file get `-retry` suffix)
-4. If still empty after retry, or exit code non-zero, print warning and proceed without that reviewer findings
+1. Read the output file
+2. Check that it is non-empty and contains substantive content (numbered findings or `NO_ISSUES_FOUND`)
+3. If empty despite exit code 0, **retry once** with a fresh invocation (output file gets a `-retry` suffix)
+4. If still empty after retry, or if the exit code is non-zero, print a warning and proceed without that reviewer's findings
 
 ## Timeout Handling
 
-External reviewers have configurable timeouts (typical 600-900 seconds). If reviewer exceed timeout:
+External reviewers have configurable timeouts (typically 600-900 seconds). If a reviewer exceeds its timeout:
 
-- Process killed by wrapper script
-- Sentinel file record non-zero exit code
-- Warning printed, skill proceed without that reviewer
+- The process is killed by the wrapper script
+- The sentinel file records a non-zero exit code
+- A warning is printed and the skill proceeds without that reviewer
 
 ## Roles Across the Workflow
 
-External reviewers join multiple phases:
+External reviewers participate in multiple phases:
 
 | Phase | Role | Skills | Fallback behavior |
 |---|---|---|---|
@@ -75,14 +75,14 @@ External reviewers join multiple phases:
 
 ## Dialectic-specific behavior
 
-`/design` Step 2a.5 run **dialectic debate + judge panel** phase. Fallback semantics differ from every other reviewer phase. Both debate phase and judge panel specified in detail at `skills/shared/dialectic-protocol.md`. Integration points with shared external-reviewer infrastructure:
+`/design` Step 2a.5 runs a **dialectic debate + judge panel** phase whose fallback semantics differ from every other reviewer phase. Both the debate phase and the judge panel are specified in detail at `skills/shared/dialectic-protocol.md`; the integration points with the shared external-reviewer infrastructure are:
 
-1. **Debaters never fall back to Claude** (carve-out): Cursor run both sides of odd-indexed decisions; Codex run both sides of even-indexed decisions; if assigned tool gone at launch, bucket skipped, `Disposition: bucket-skipped` resolution written — synthesis decision stand for that point. Intentional divergence (see GitHub issue #98): debater outputs adversarial prose whose style leak tool identity; sub Claude subagent into debate path would bias downstream judge panel.
-2. **Dialectic-scoped shadow flags**: dialectic phase use `dialectic_codex_available` / `dialectic_cursor_available` flags snapshotted at entry. These flags **never written back** to orchestrator-wide `codex_available` / `cursor_available` flags. Cursor or Codex timeout during dialectic debate therefore no lock that tool out of Step 3 plan review.
-3. **`--write-health /dev/null`**: every `collect-reviewer-results.sh` call in dialectic phase (both debate collection and judge collection) pass `--write-health /dev/null` so dialectic phase **never update** `${SESSION_ENV_PATH}.health`. Debate-time failures stay scoped to this phase.
-4. **Judge panel use replacement-first**: when Cursor or Codex unhealthy at judge launch, Claude Code Reviewer subagent replace that slot so panel always 3 judges. Judges adjudicate between pre-authored defenses and no write adversarial prose, so debater carve-out no apply here.
-5. **Judge-phase health re-probe**: `scripts/check-reviewers.sh --probe` run sync right before launching judges. Debate-time failures must not lock tool out of judge role — judgment happen minutes after debate, tool state can recover.
+1. **Debaters never fall back to Claude** (carve-out): Cursor runs both sides of odd-indexed decisions; Codex runs both sides of even-indexed decisions; if the assigned tool is unavailable at launch time, the bucket is skipped and a `Disposition: bucket-skipped` resolution is written — the synthesis decision stands for that point. This is intentional divergence (see GitHub issue #98): debater outputs are adversarial prose whose style can leak tool identity; substituting a Claude subagent into the debate path would bias the downstream judge panel.
+2. **Dialectic-scoped shadow flags**: the dialectic phase uses `dialectic_codex_available` / `dialectic_cursor_available` flags snapshotted at entry. These flags are **never written back** to the orchestrator-wide `codex_available` / `cursor_available` flags. A Cursor or Codex timeout during a dialectic debate therefore does not lock that tool out of Step 3 plan review.
+3. **`--write-health /dev/null`**: every `collect-reviewer-results.sh` invocation in the dialectic phase (both debate collection and judge collection) passes `--write-health /dev/null` so the dialectic phase **never updates** `${SESSION_ENV_PATH}.health`. Debate-time failures stay scoped to this phase.
+4. **Judge panel uses replacement-first**: when Cursor or Codex is unhealthy at judge launch time, a Claude Code Reviewer subagent replaces that slot so the panel is always 3 judges. Judges adjudicate between pre-authored defenses and don't write adversarial prose, so the debater carve-out doesn't apply here.
+5. **Judge-phase health re-probe**: `scripts/check-reviewers.sh --probe` is run synchronously immediately before launching judges. Debate-time failures must not lock a tool out of the judge role — judgment happens minutes after debate, and tool state can recover.
 
 ### Regression guard
 
-`scripts/dialectic-smoke-test.sh` is offline regression guard for dialectic parser, tally rules, and structural invariants in `skills/shared/dialectic-protocol.md`. Fixtures live under `tests/fixtures/dialectic/`. Run local via `make smoke-dialectic`; CI run same command in `smoke-dialectic` job. When change protocol Parser tolerance or Threshold Rules sections, update smoke test and/or fixtures in same PR.
+`scripts/dialectic-smoke-test.sh` is the offline regression guard for the dialectic parser, tally rules, and structural invariants documented in `skills/shared/dialectic-protocol.md`. Fixtures live under `tests/fixtures/dialectic/`. Run locally via `make smoke-dialectic`; CI runs the same command in the `smoke-dialectic` job. When changing the protocol's Parser tolerance or Threshold Rules sections, update the smoke test and/or fixtures in the same PR.

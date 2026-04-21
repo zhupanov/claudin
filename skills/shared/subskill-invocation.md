@@ -1,14 +1,14 @@
 # Sub-skill Invocation Conventions
 
-Canonical style guide for larch skills delegate to other skills via `Skill` tool. Cited throughout by `/create-skill` scaffold and `AGENTS.md`. When author new skill invoke another skill, follow patterns below. When change convention here, update cited source-example skills in same PR (or file follow-up issue) so examples stay in sync with rules.
+Canonical style guide for larch skills that delegate to other skills via the `Skill` tool. Cited throughout by `/create-skill`'s scaffold and by `AGENTS.md`. When you author a new skill that invokes another skill, follow the patterns below. When you change a convention here, update the cited source-example skills in the same PR (or file a follow-up issue) so the examples stay in sync with the rules.
 
 ## Two invocation patterns
 
-Every larch skill invoke another skill use exactly one of two first-class shapes. Pick one match intent.
+Every larch skill that invokes another skill uses exactly one of two first-class shapes. Pick the one that matches your intent.
 
 ### Pattern A — Pure delegator (bulleted)
 
-Use when parent skill mostly forward to child with preset flags or light argument assembly. Appear in `skills/im/SKILL.md § Behavior`, `skills/imaq/SKILL.md § Behavior`, and `skills/create-skill/SKILL.md § Step 3 — Delegate to /im`. Canonical form:
+Used when the parent skill mostly forwards to a child with preset flags or light argument assembly. Appears in `skills/im/SKILL.md § Behavior`, `skills/imaq/SKILL.md § Behavior`, and `skills/create-skill/SKILL.md § Step 3 — Delegate to /im`. Canonical form:
 
 ```
 Invoke the Skill tool:
@@ -16,13 +16,13 @@ Invoke the Skill tool:
 - args: --merge $ARGUMENTS
 ```
 
-Keep block together. Bare-name-first rule important — see `## Bare-name-then-fully-qualified fallback` below.
+Keep the block together. The bare-name-first rule is important — see `## Bare-name-then-fully-qualified fallback` below.
 
-Note: `/create-skill` forward to `/im` (not directly to `/implement`); `/im` in turn forward to `/implement --merge` per own Pattern A definition. Chained delegation give `/create-skill` auto-merge semantics while keep each hop minimal pure forwarder.
+Note: `/create-skill` forwards to `/im` (not directly to `/implement`); `/im` in turn forwards to `/implement --merge` per its own Pattern A definition. The chained delegation gives `/create-skill` auto-merge semantics while keeping each hop as a minimal pure forwarder.
 
 ### Pattern B — Stateful orchestrator (inline)
 
-Use when parent run setup, forward `--session-env`, invoke child, then parse structured output to continue. Appear in `skills/fix-issue/SKILL.md § Step 6 — Execute` (parent step heading + explicit "Invoke `/implement` via the Skill tool" line + SIMPLE/HARD variant bullets) and `skills/implement/SKILL.md § Step 1 — Ensure Design Plan Exists`, `skills/implement/SKILL.md § Step 5 — Code Review`, `skills/implement/SKILL.md § Step 8 — Version Bump` (around `/design`, `/review`, `/bump-version` calls). Canonical form:
+Used when the parent runs setup, forwards `--session-env`, invokes the child, and then parses structured output to continue. Appears in `skills/fix-issue/SKILL.md § Step 6 — Execute` (parent step heading + explicit "Invoke `/implement` via the Skill tool" line + SIMPLE/HARD variant bullets) and in `skills/implement/SKILL.md § Step 1 — Ensure Design Plan Exists`, `skills/implement/SKILL.md § Step 5 — Code Review`, `skills/implement/SKILL.md § Step 8 — Version Bump` (around `/design`, `/review`, `/bump-version` calls). Canonical form:
 
 ```
 Invoke `/implement` via the Skill tool:
@@ -31,13 +31,13 @@ Invoke `/implement` via the Skill tool:
 - **HARD**:   `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh <feature description>`
 ```
 
-Step heading + explicit Skill-tool line + variant bullets shape make invocation impossible miss and keep argument list scannable. Do **not** collapse Pattern B into single paragraph — see `## Avoid conditional phrasing for sub-skill invocations` below.
+The step heading + explicit Skill-tool line + variant bullets shape makes the invocation impossible to miss and keeps the argument list scannable. Do **not** collapse Pattern B into a single paragraph — see `## Avoid conditional phrasing for sub-skill invocations` below.
 
-`scripts/lint-skill-invocations.py` mechanically enforce line-local co-location: every direct-invocation line say ``Invoke `/<name>`'' (with optional `the` and bounded `**bold-span**`) must also contain `via the Skill tool` on same line.
+`scripts/lint-skill-invocations.py` mechanically enforces line-local co-location: every direct-invocation line that says ``Invoke `/<name>`'' (with optional `the` and a bounded `**bold-span**`) must also contain `via the Skill tool` on the same line.
 
 ## allowed-tools narrowing heuristic
 
-Set `allowed-tools` to minimum need by parent skill itself — never mirror child skill's broader tool set. Three tiers cover every larch skill:
+Set `allowed-tools` to the minimum needed by the parent skill itself — never mirror the child skill's broader tool set. Three tiers cover every larch skill:
 
 | Tier | `allowed-tools` | Example (with stable anchor) |
 |---|---|---|
@@ -45,19 +45,19 @@ Set `allowed-tools` to minimum need by parent skill itself — never mirror chil
 | Delegator that validates first | `Bash, Skill` | `skills/create-skill/SKILL.md` frontmatter — runs validation scripts before delegating |
 | Hybrid orchestrator | `Skill` plus whatever the parent needs | `skills/implement/SKILL.md`, `skills/fix-issue/SKILL.md`, `skills/loop-review/SKILL.md`, `skills/review/SKILL.md`, `skills/alias/SKILL.md`, `skills/research/SKILL.md` — parent runs setup, file I/O, git ops, and in `/alias`'s case a post-delegation sentinel-file verification. |
 
-`allowed-tools: Skill` alone **neither necessary nor sufficient** classify skill as pure delegator — some delegators need `Bash` for input validation. Conversely, skill with `Skill` in allowed list not automatically delegator; hybrid orchestrators include `Skill` as one tool among many.
+`allowed-tools: Skill` alone is **neither necessary nor sufficient** to classify a skill as a pure delegator — some delegators need `Bash` for input validation. Conversely, a skill with `Skill` in its allowed list is not automatically a delegator; hybrid orchestrators include `Skill` as one tool among many.
 
-When in doubt, start narrow and widen only for tools parent actually use. If skill add `Skill` to `allowed-tools`, also confirm frontmatter include every other tool parent invoke (Bash, Read, Edit, Glob, Grep, etc.). Omit needed tool produce silent runtime denials — not error messages — so narrowing heuristic must pair with concrete accounting of parent tool usage.
+When in doubt, start narrow and widen only for tools the parent actually uses. If your skill adds `Skill` to `allowed-tools`, also confirm the frontmatter includes every other tool your parent invokes (Bash, Read, Edit, Glob, Grep, etc.). Omitting a needed tool produces silent runtime denials — not error messages — so the narrowing heuristic must be paired with a concrete accounting of parent tool usage.
 
 ## Post-invocation verification
 
-**Scope**: rule apply to **orchestrators continue execution based on child skill's side effects** — e.g., parent read child's output decide next step. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) exempt — once delegate, do nothing further, so nothing verify.
+**Scope**: this rule applies to **orchestrators that continue execution based on a child skill's side effects** — e.g., a parent that reads the child's output to decide the next step. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) are exempt — once they delegate, they do nothing further, so there is nothing to verify.
 
-For every mandatory sub-skill call inside orchestrator's step, pair call with **mechanical check parent cannot satisfy without child's side effects**. Check must read filesystem, parse stdout, or compare counters — never rely on child's prose acknowledgement. If child silently skip or internally bail, check must notice.
+For every mandatory sub-skill call inside an orchestrator's step, pair the call with a **mechanical check that the parent cannot satisfy without the child's side effects**. The check must read the filesystem, parse stdout, or compare counters — never rely on the child's prose acknowledgement. If the child silently skipped or internally bailed, the check must notice.
 
 Canonical examples:
 
-- **Commit-count delta around `/bump-version`** — orchestrator capture pre-count, invoke skill, then compare with post-count:
+- **Commit-count delta around `/bump-version`** — the orchestrator captures a pre-count, invokes the skill, then compares with a post-count:
 
   ```bash
   ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
@@ -71,27 +71,27 @@ Canonical examples:
   # VERIFIED=false when STATUS != ok, independent of the numeric comparison.
   ```
 
-  See `skills/implement/SKILL.md § Step 8 — Version Bump` for full recipe. `--mode post` **requires** `--before-count $COMMITS_BEFORE` — call `--mode post` without it error out at script level.
+  See `skills/implement/SKILL.md § Step 8 — Version Bump` for the full recipe. `--mode post` **requires** `--before-count $COMMITS_BEFORE` — calling `--mode post` without it errors out at the script level.
 
-- **Parsed stdout machine value after `/issue`** — orchestrator read `ISSUES_CREATED=<N>` / `ISSUES_FAILED=<N>` / per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL` lines from `/issue` stdout. Without parsed values, parent cannot file created issue links into PR body. See `skills/implement/SKILL.md § 9a.1 — Create OOS GitHub Issues`.
+- **Parsed stdout machine value after `/issue`** — the orchestrator reads `ISSUES_CREATED=<N>` / `ISSUES_FAILED=<N>` / per-issue `ISSUE_N_NUMBER`/`ISSUE_N_URL` lines from `/issue`'s stdout. Without those parsed values, the parent cannot file the created issue links into the PR body. See `skills/implement/SKILL.md § 9a.1 — Create OOS GitHub Issues`.
 
-- **Sentinel file** — `/design` write `$DESIGN_TMPDIR/accepted-plan-findings.md`; `/implement` read it (or notice absence) to know whether reflect findings in PR body.
+- **Sentinel file** — `/design` writes `$DESIGN_TMPDIR/accepted-plan-findings.md`; `/implement` reads it (or notices its absence) to know whether to reflect findings in the PR body.
 
-If cannot name concrete mechanical check, call not actually mandatory — reclassify as Pattern A (pure delegation) or restructure so child's side effect observable.
+If you cannot name a concrete mechanical check, the call is not actually mandatory — reclassify it as Pattern A (pure delegation) or restructure so the child's side effect is observable.
 
-See `## Anti-halt continuation reminder` below — two sections govern same call-site boundary from complementary directions (verification ask "did child run?"; anti-halt ask "did parent continue?").
+See `## Anti-halt continuation reminder` below — the two sections govern the same call-site boundary from complementary directions (verification asks "did the child run?"; anti-halt asks "did the parent continue?").
 
 ## Anti-halt continuation reminder
 
-**Scope**: rule apply to same orchestrator set as `## Post-invocation verification` above — stateful orchestrators (`/fix-issue`, `/implement`, `/review`, `/loop-review`, `/alias`, `/research`) run additional steps after child `Skill` tool call return. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) exempt — once delegate, do nothing further. (`/loop-improve-skill` classified as pure delegator because runtime driver live in `skills/loop-improve-skill/scripts/driver.sh` — subprocess-driven bash driver not use `Skill` tool chain children.) Two sections complementary: `## Post-invocation verification` ask **"did child run?"**; this section ask **"did parent continue?"** Both failure modes distinct and real (see GitHub issue #177 for originating report).
+**Scope**: this rule applies to the same orchestrator set as `## Post-invocation verification` above — stateful orchestrators (`/fix-issue`, `/implement`, `/review`, `/loop-review`, `/alias`, `/research`) that run additional steps after a child `Skill` tool call returns. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) are exempt — once they delegate, they do nothing further. (`/loop-improve-skill` is classified as a pure delegator because its runtime driver lives in `skills/loop-improve-skill/scripts/driver.sh` — a subprocess-driven bash driver that does not use the `Skill` tool to chain children.) The two sections are complementary: `## Post-invocation verification` asks **"did the child run?"**; this section asks **"did the parent continue?"** Both failure modes are distinct and real (see GitHub issue #177 for the originating report).
 
-**The rule**: after every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) return, main agent MUST immediately continue with parent skill's NEXT step. Child's cleanup / summary output NOT end-of-turn. In long sessions where child produce many tokens (e.g., `/design` with 3 reviewers + voting easily produce 15k+ tokens), main agent's attention can drift to child's local "mission accomplished" framing and lose parent orchestration frame. Short standardized banner at top of every orchestrator plus short per-Skill-call-site micro-reminders reinforce rule where attention most at risk.
+**The rule**: after every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, the main agent MUST immediately continue with the parent skill's NEXT step. The child's cleanup / summary output is NOT end-of-turn. In long sessions where the child produces many tokens (e.g., `/design` with 3 reviewers + voting easily produces 15k+ tokens), the main agent's attention can drift to the child's local "mission accomplished" framing and lose the parent orchestration frame. A short, standardized banner at the top of every orchestrator plus short per-Skill-call-site micro-reminders reinforce the rule where attention is most at risk.
 
-**Carve-out (critical)**: rule strictly subordinate to any explicit non-sequential control-flow directive in parent skill — include `skip to Step N`, `bail to cleanup`, `jump back to Step Na`, `loop back to Step 3a`, `fall through to 12c`, `break out of the loop`, or any other explicit redirect. Normal numerically-sequential `proceed to Step N+1` directive default continuation path anti-halt reinforces — NOT exception.
+**Carve-out (critical)**: the rule is strictly subordinate to any explicit non-sequential control-flow directive in the parent skill — including `skip to Step N`, `bail to cleanup`, `jump back to Step Na`, `loop back to Step 3a`, `fall through to 12c`, `break out of the loop`, or any other explicit redirect. A normal numerically-sequential `proceed to Step N+1` directive is the default continuation path that anti-halt reinforces — NOT an exception.
 
-**Loop-internal carve-out**: when parent's step explicitly loop (e.g., `/loop-review`'s Step 3f → 3g → 3a slice loop), "next step" of parent IS loop-continuation directive, not first textually-following section header. Use loop-aware micro-reminder variant at loop-internal child-Skill call sites.
+**Loop-internal carve-out**: when the parent's step explicitly loops (e.g., `/loop-review`'s Step 3f → 3g → 3a slice loop), the "next step" of the parent IS the loop-continuation directive, not the first textually-following section header. Use the loop-aware micro-reminder variant at loop-internal child-Skill call sites.
 
-**Generic `/relevant-checks` clause**: every `/relevant-checks` invocation anywhere in orchestrator SKILL.md covered by rule without require per-site micro-reminder at every call site. Parent must resume after `/relevant-checks` return — whether mean advance to next numbered step, re-run `/relevant-checks` after fix, or commit fixed files.
+**Generic `/relevant-checks` clause**: every `/relevant-checks` invocation anywhere in an orchestrator SKILL.md is covered by this rule without requiring a per-site micro-reminder at every call site. The parent must resume after `/relevant-checks` returns — whether that means advancing to the next numbered step, re-running `/relevant-checks` after a fix, or committing the fixed files.
 
 ### Canonical banner (top of each orchestrator SKILL.md, after the title body, before `## Progress Reporting`)
 
@@ -99,11 +99,11 @@ See `## Anti-halt continuation reminder` below — two sections govern same call
 **Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 ````
 
-Substring `**Anti-halt continuation reminder.**` contract token assert by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`.
+The substring `**Anti-halt continuation reminder.**` is a contract token asserted by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`.
 
 ### Canonical micro-reminder (per Skill-tool call site — branch-specific placement)
 
-Place micro-reminder **inside specific branch actually invoke child** — not at top of step whose body may skip invocation on some branches (e.g., `/implement` Step 1 quick-mode skip `/design`; Step 5 quick-mode skip `/review`; Step 8 `HAS_BUMP=false` skip `/bump-version`). Reminder belong next to real Skill-tool call, inside branch emit it.
+Place the micro-reminder **inside the specific branch that actually invokes the child** — not at the top of a step whose body may skip the invocation on some branches (e.g., `/implement` Step 1 quick-mode skips `/design`; Step 5 quick-mode skips `/review`; Step 8 `HAS_BUMP=false` skips `/bump-version`). The reminder belongs next to the real Skill-tool call, inside the branch that emits it.
 
 Standard variant:
 
@@ -117,11 +117,11 @@ Loop-aware variant (for loop-internal call sites like `/loop-review`'s `/issue` 
 > **Continue after child returns (loop-internal).** When the child Skill returns, continue the loop per the parent's explicit loop-back directive — do NOT exit the loop unless the exit condition fires. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 ````
 
-Substring `Continue after child returns` contract token assert by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh` (match both standard and loop-internal variants).
+The substring `Continue after child returns` is a contract token asserted by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh` (matches both the standard and loop-internal variants).
 
 ### Scope list
 
-Banner MUST appear in these orchestrator SKILL.md files:
+The banner MUST appear in these orchestrator SKILL.md files:
 
 - `skills/fix-issue/SKILL.md`
 - `skills/implement/SKILL.md`
@@ -130,64 +130,64 @@ Banner MUST appear in these orchestrator SKILL.md files:
 - `skills/alias/SKILL.md`
 - `skills/research/SKILL.md`
 
-Banner MUST NOT appear in pure-delegator SKILL.md files:
+The banner MUST NOT appear in pure-delegator SKILL.md files:
 
 - `skills/im/SKILL.md`
 - `skills/imaq/SKILL.md`
 - `skills/create-skill/SKILL.md`
 - `skills/loop-improve-skill/SKILL.md`
 
-Both presence and absence enforce by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`, wired into `make lint` via `test-anti-halt` target.
+Both presence and absence are enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`, wired into `make lint` via the `test-anti-halt` target.
 
 ## Session-env handoff
 
-Environment variables **do not propagate reliably across `Skill` invocations** — treat every `Skill` call as fresh bash environment. For any state must cross skill boundaries (reviewer health flags, repo name, slack-ok, session tmpdir), use session-env file:
+Environment variables **do not propagate reliably across `Skill` invocations** — treat every `Skill` call as a fresh bash environment. For any state that must cross skill boundaries (reviewer health flags, repo name, slack-ok, session tmpdir), use a session-env file:
 
-1. Parent write `session-env.sh` file via `${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$PARENT_TMPDIR/session-env.sh" --slack-ok <v> --repo <v> ...`.
-2. Parent pass `--session-env "$PARENT_TMPDIR/session-env.sh"` to child.
-3. Child read file via `${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh ... --caller-env "$SESSION_ENV_PATH"`.
+1. The parent writes a `session-env.sh` file via `${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$PARENT_TMPDIR/session-env.sh" --slack-ok <v> --repo <v> ...`.
+2. The parent passes `--session-env "$PARENT_TMPDIR/session-env.sh"` to the child.
+3. The child reads the file via `${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh ... --caller-env "$SESSION_ENV_PATH"`.
 
-Canonical producers and consumers in live tree:
+Canonical producers and consumers in the live tree:
 
-- `skills/fix-issue/SKILL.md § Step 0 — Setup` write `$FIX_ISSUE_TMPDIR/session-env.sh` and pass to `/implement`.
-- `skills/implement/SKILL.md § Step 0 — Session Setup` accept `--session-env` from parent and propagate fresh `$IMPLEMENT_TMPDIR/session-env.sh` to `/design` and `/review` via `--session-env` on each invocation.
-- `skills/design/SKILL.md § Step 0 — Session Setup` and `skills/review/SKILL.md § Step 0 — Session Setup` both accept `--session-env` as `--caller-env` forward.
+- `skills/fix-issue/SKILL.md § Step 0 — Setup` writes `$FIX_ISSUE_TMPDIR/session-env.sh` and passes it to `/implement`.
+- `skills/implement/SKILL.md § Step 0 — Session Setup` accepts `--session-env` from its parent and propagates a fresh `$IMPLEMENT_TMPDIR/session-env.sh` to `/design` and `/review` via `--session-env` on each invocation.
+- `skills/design/SKILL.md § Step 0 — Session Setup` and `skills/review/SKILL.md § Step 0 — Session Setup` both accept `--session-env` as an `--caller-env` forward.
 
 ### Security — never `source` a session-env file
 
-**Do NOT `source` `session-env.sh`.** Parse line-by-line with `KEY=VALUE` matching. File cross trust boundary (written by one skill, consumed by another), so `source` would execute arbitrary shell if any line contain `$(...)`, backticks, or command substitution. Canonical safe-parse pattern live in `${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh` (the `--caller-env` reader).
+**Do NOT `source` `session-env.sh`.** Parse it line-by-line with `KEY=VALUE` matching. The file crosses a trust boundary (written by one skill, consumed by another), so `source` would execute arbitrary shell if any line contained `$(...)`, backticks, or command substitution. The canonical safe-parse pattern lives in `${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh` (the `--caller-env` reader).
 
-Note: current writer (`${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh`) does **not** perform value-side escaping — emit raw `KEY=value` lines. Safety today depend on (a) safe line-by-line parser on read side and (b) narrowly-constrained value set (fixed schema of known keys: `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`, each drawn from bounded domain). When skill add new fields to session-env file, constrain value set at source (e.g., boolean flags, validated owner/repo strings) rather than rely on parser hardening — and never widen writer emit arbitrary user-supplied text without explicit escaping + regression coverage.
+Note: the current writer (`${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh`) does **not** perform value-side escaping — it emits raw `KEY=value` lines. Safety today depends on (a) the safe line-by-line parser on the read side and (b) a narrowly-constrained value set (fixed schema of known keys: `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`, each drawn from a bounded domain). When your skill adds new fields to a session-env file, constrain the value set at the source (e.g., boolean flags, validated owner/repo strings) rather than relying on parser hardening — and never widen the writer to emit arbitrary user-supplied text without explicit escaping + regression coverage.
 
-When skill consume session-env file, always route through `session-setup.sh --caller-env` rather than ad-hoc `while read` loops so safe-parse invariant centralized.
+When your skill consumes a session-env file, always route through `session-setup.sh --caller-env` rather than ad-hoc `while read` loops so the safe-parse invariant is centralized.
 
 ### Health sidecar
 
-Cross-skill reviewer health state use `.health` sidecar next to `session-env.sh`. Child skills run external reviewers (`/design`, `/review`) update sidecar via `collect-reviewer-results.sh --write-health "${SESSION_ENV_PATH}.health"`; parent read it after each `Skill` return and re-write `session-env.sh` persist any newly-unhealthy flags. See `skills/implement/SKILL.md § Cross-Skill Health Propagation`.
+Cross-skill reviewer health state uses a `.health` sidecar next to `session-env.sh`. Child skills that run external reviewers (`/design`, `/review`) update the sidecar via `collect-reviewer-results.sh --write-health "${SESSION_ENV_PATH}.health"`; the parent reads it after each `Skill` return and re-writes `session-env.sh` to persist any newly-unhealthy flags. See `skills/implement/SKILL.md § Cross-Skill Health Propagation`.
 
 ## Avoid conditional phrasing for sub-skill invocations
 
-**Scope**: rule target **Skill-tool invocation itself** — not orchestration preconditions. Guards like "If `slack_available=false`, skip Slack" and "If `merge=false`, skip the merge loop" normal orchestration preconditions and remain fine; rule below specifically about how render sub-skill invocation.
+**Scope**: this rule targets the **Skill-tool invocation itself** — not orchestration preconditions. Guards like "If `slack_available=false`, skip Slack" and "If `merge=false`, skip the merge loop" are normal orchestration preconditions and remain fine; the rule below is specifically about how you render a sub-skill invocation.
 
-Worst shape, and one get skipped most often, single-line conditional paragraph like:
+The worst shape, and the one that gets skipped most often, is a single-line conditional paragraph like:
 
 > If the classification is HARD, call `/implement --auto --merge --session-env $TMPDIR/session-env.sh <description>`; otherwise call `/implement --auto --quick --merge --session-env $TMPDIR/session-env.sh <description>`.
 
-Prose conditionals bury invocation and reliably slip past executing model — especially mid-run. Rewrite as explicit two-branch step, each branch own numbered sub-step with own `🔶` breadcrumb (or as Pattern B's heading + variant bullets shape), so Skill-tool call visual center of step.
+Prose conditionals bury the invocation and reliably slip past the executing model — especially mid-run. Rewrite as an explicit two-branch step, each branch its own numbered sub-step with its own `🔶` breadcrumb (or as Pattern B's heading + variant bullets shape), so the Skill-tool call is the visual center of the step.
 
 ## Bare-name-then-fully-qualified fallback
 
-Skill resolution from consumer repo differ from resolution inside larch plugin repo itself. In consumer repo with plugin installed, `"implement"` resolve correctly — but in repo where plugin installed under different namespace, bare name may miss. Always use two-step fallback:
+Skill resolution from a consumer repo differs from resolution inside the larch plugin repo itself. In a consumer repo with the plugin installed, `"implement"` resolves correctly — but in a repo where the plugin is installed under a different namespace, the bare name may miss. Always use the two-step fallback:
 
-- **First**: try bare name — `"implement"`, `"design"`, `"review"`.
-- **Second** (only if no skill matched): try fully-qualified name — `"larch:implement"`, `"larch:design"`, `"larch:review"`.
+- **First**: try the bare name — `"implement"`, `"design"`, `"review"`.
+- **Second** (only if no skill matched): try the fully-qualified name — `"larch:implement"`, `"larch:design"`, `"larch:review"`.
 
-Never start with fully-qualified name — couple caller to plugin namespace and break in repos install plugin under different name. Alias generator at `${CLAUDE_PLUGIN_ROOT}/skills/alias/scripts/generate-alias.sh` emit fallback automatically for every alias — see generated `## Behavior` section inside `HEREDOC_BODY` block (lines 72-86) of script; follow same shape when author invocation by hand.
+Never start with the fully-qualified name — it couples the caller to the plugin namespace and breaks in repos that install the plugin under a different name. The alias generator at `${CLAUDE_PLUGIN_ROOT}/skills/alias/scripts/generate-alias.sh` emits this fallback automatically for every alias — see the generated `## Behavior` section inside the `HEREDOC_BODY` block (lines 72-86) of that script; follow the same shape when authoring an invocation by hand.
 
 ---
 
 ## Cross-references
 
-- `AGENTS.md § Editing rules` — declare this file as canonical source for sub-skill invocation conventions.
+- `AGENTS.md § Editing rules` — declares this file as the canonical source for sub-skill invocation conventions.
 - `skills/shared/progress-reporting.md` — adjacent contract for step-progress formatting.
-- `skills/shared/reviewer-templates.md` — canonical source for Code Reviewer archetype (parallel shared-doc pattern).
+- `skills/shared/reviewer-templates.md` — canonical source for the Code Reviewer archetype (parallel shared-doc pattern).

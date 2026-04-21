@@ -1,14 +1,14 @@
 # Collaborative Sketches
 
-Collaborative sketch phase = diverge-then-converge in `/design`. 5 agents independently propose architecture before full plan written. Stop anchoring bias — one perspective lock direction before alternatives seen.
+The collaborative sketch phase is a diverge-then-converge process in `/design` where 5 agents independently propose architectural approaches before the full implementation plan is written. This prevents anchoring bias — where a single perspective locks in the direction before alternatives are considered.
 
 ## Why Sketches Exist
 
-No sketch phase = first idea win. 5 agents explore design space independently. Surface different views early — while architecture still movable — not at review when plan already anchored.
+Without the sketch phase, the first idea considered tends to dominate the plan. By having 5 agents independently explore the design space, the system surfaces different perspectives early — when they can still influence the architectural direction — rather than waiting for review when the plan is already anchored.
 
 ## The 5 Sketch Agents
 
-Sketch phase always use exactly 5 agents: 1 Claude subagent (orchestrator inline sketch) + 4 external slots (2 Cursor + 2 Codex) carrying four non-general personalities. Each external slot have Claude subagent fallback when tool down.
+The sketch phase always uses exactly 5 agents: 1 Claude subagent (the orchestrator's inline sketch) plus 4 external slots (2 Cursor + 2 Codex) that carry the four non-general personalities. Each external slot has a Claude subagent fallback that activates when the respective tool is unavailable.
 
 | Agent | Harness | Role | Focus |
 |---|---|---|---|
@@ -20,15 +20,15 @@ Sketch phase always use exactly 5 agents: 1 Claude subagent (orchestrator inline
 
 ### Important Distinction
 
-5 sketch agents **completely separate** from 3 plan-review agents that judge plan later in `/design` Step 3. Sketch agents explore design space (5 views); plan reviewers validate final plan (3-reviewer panel: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Different roles, different prompts, different purpose.
+The 5 sketch agents are **completely separate** from the 3 plan-review agents that evaluate the plan later in `/design` Step 3. The sketch agents explore the design space (5 perspectives); the plan reviewers validate the resulting plan (3-reviewer panel: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). They have different roles, different prompts, and serve different purposes.
 
 ## Per-Slot Fallback
 
-Cursor or Codex down → affected slot fall back to Claude subagent carrying **same personality prompt** as original external slot. Keep always-5-agents and always-5-personalities invariants regardless of tool health.
+When Cursor or Codex is unavailable, each affected slot falls back to a Claude subagent carrying the **same personality prompt** as the original external slot. This preserves the always-5-agents invariant and the always-5-personalities invariant regardless of external tool availability.
 
 ## Fallback Behavior by Phase
 
-Handling of unavailable external tools differ by phase:
+The handling of unavailable external tools differs across workflow phases:
 
 | Phase | Unavailable Tool Handling |
 |---|---|
@@ -81,14 +81,14 @@ flowchart TD
     style CHECK fill:#f6ad55,color:#000
 ```
 
-1. **Parallel launch** — All external + per-slot Claude fallback sketches launch at same time. Both Cursor slots first (slowest), then both Codex, then any Claude fallback. Orchestrator write own General sketch last, before reading others, keep independence.
+1. **Parallel launch** — All external and per-slot Claude fallback sketches are launched simultaneously. Both Cursor slots first (slowest), then both Codex slots, then any Claude fallback sketches. The orchestrating agent writes its own General sketch last, before reading any others, to preserve independence.
 
-2. **Each agent produces** 2-3 paragraph sketch covering:
+2. **Each agent produces** a 2-3 paragraph sketch covering:
    - Key architectural decisions and approach
    - Which files/modules to modify and why
    - Main tradeoffs to consider
 
-3. **Synthesis** — After all 5 sketches return, orchestrator produce synthesis that:
+3. **Synthesis** — After all 5 sketches return, the orchestrating agent produces a synthesis that:
    - Identifies where approaches agree (likely the majority)
    - Identifies divergence points and makes reasoned calls with justification
    - Notes which ideas from each sketch are incorporated
@@ -98,31 +98,31 @@ flowchart TD
    - Notes **Innovation/Exploration** alternatives sourced from Codex slot 1 that are worth preserving as options
    - Lists contested decisions in a structured format for the dialectic debate phase
 
-4. **Dialectic debate and adjudication** (`/design` only) — Synthesis find contested decisions (points where sketches really diverged) → up to 5 (priority order) go to structured thesis/antithesis debates run on Cursor and Codex via deterministic per-decision bucketing. Per contested decision, thesis agent defend synthesis choice, antithesis argue strongest alternative. Both run parallel with codebase access. Successful debates then forwarded to **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, Claude replacements when externals down) casting `THESIS` / `ANTI_THESIS` votes per decision. Orchestrator write resolutions as panel direct, record `Disposition: voted | fallback-to-synthesis | bucket-skipped | over-cap` per decision. Step skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below; adjudication protocol in `skills/shared/dialectic-protocol.md`.
+4. **Dialectic debate and adjudication** (`/design` only) — If the synthesis identifies contested decisions (points where sketches genuinely diverged), up to 5 (in priority order) are submitted to structured thesis/antithesis debates run on Cursor and Codex via deterministic per-decision bucketing. For each contested decision, a thesis agent defends the synthesis choice and an antithesis agent argues for the strongest alternative. Both run in parallel with codebase access. Successful debates are then forwarded to a **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unavailable) that casts `THESIS` / `ANTI_THESIS` votes on each decision. The orchestrator writes resolutions as directed by the panel, recording `Disposition: voted | fallback-to-synthesis | bucket-skipped | over-cap` per decision. This step is skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below for details; the adjudication protocol is defined in `skills/shared/dialectic-protocol.md`.
 
-5. **Full plan** — Synthesis + any dialectic resolutions feed full implementation plan, then submitted to 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) for validation.
+5. **Full plan** — The synthesis and any dialectic resolutions inform the complete implementation plan, which is then submitted to the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) for validation.
 
 ## Dialectic Debate (/design only)
 
 > **Note**: This phase applies only to `/design`. `/research` does not include a dialectic debate step.
 
-Dialectic debate add reasoning depth on contested points without killing breadth-of-views from sketch phase. Fix specific weakness in convergence: when synthesis find divergence points, orchestrator otherwise unilaterally resolve them — exactly where confirmation bias creep in. Since Phase 3, adjudication between two defenses delegated to 3-judge panel, not orchestrator, further decorrelate adjudication signal from agent that made synthesis.
+The dialectic debate phase adds reasoning depth on contested points without replacing the breadth-of-perspectives from the sketch phase. It addresses a specific weakness in the convergence step: when the synthesis identifies divergence points, the orchestrator would otherwise unilaterally resolve them — exactly where confirmation bias can creep in. Since Phase 3, adjudication between the two defenses is delegated to a 3-judge panel rather than the orchestrator, further decorrelating the adjudication signal from the agent that produced the synthesis.
 
 ### When It Runs
 
-Dialectic debate run only when synthesis in Step 2a.4 find real contested decisions — points where multiple sketches propose fundamentally different approaches. All 5 sketches agree → debate skipped entirely.
+The dialectic debate runs only when the synthesis in Step 2a.4 identifies genuine contested decisions — points where multiple sketches proposed fundamentally different approaches. If all 5 sketches agreed, the debate is skipped entirely.
 
 ### How It Works
 
-Per contested decision (up to 5, prioritized by impact):
+For each contested decision (up to 5, prioritized by impact):
 
-1. **thesis agent** defend approach chosen by synthesis, argue why right call given codebase + requirements
-2. **antithesis agent** attack that choice, argue strongest alternative, poke hidden assumptions, surface risks synthesis glossed over
+1. A **thesis agent** defends the approach chosen by the synthesis, arguing why it's the right call given the codebase and requirements
+2. An **antithesis agent** attacks that choice, arguing for the strongest alternative, poking at hidden assumptions, and surfacing risks the synthesis glossed over
 
-Both agents run parallel, produce tagged structured output. **eligibility gate** require both sides report `STATUS=OK` from collector + pass structural quality checks (5 required tags, single `RECOMMEND:` line, role-vs-RECOMMEND consistency, evidence citation) before decision forwarded to judge ballot. Either side fail gate → decision `Disposition` = `fallback-to-synthesis`, synthesis decision stands for that point.
+Both agents run in parallel and produce tagged structured output. An **eligibility gate** requires both sides to report `STATUS=OK` from the collector and pass structural quality checks (5 required tags, single `RECOMMEND:` line, role-vs-RECOMMEND consistency, evidence citation) before the decision is forwarded to the judge ballot. If either side fails the gate, the decision's `Disposition` is `fallback-to-synthesis` and the synthesis decision stands for that point.
 
-After eligibility gate, successful debates go to **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, Claude replacements when externals unhealthy — replacement-first, panel always 3). Panel read attribution-stripped ballot (Defense A / Defense B with deterministic position-order rotation across decisions) + cast one binary vote per decision: `THESIS` (side defending synthesis choice wins) or `ANTI_THESIS` (alternative wins). Orchestrator write resolutions as panel vote tally direct: 3 judges → majority 2+ wins; 2 judges → unanimous required (1-1 tie → `fallback-to-synthesis`); <2 judges → `fallback-to-synthesis`. See `skills/shared/dialectic-protocol.md` for authoritative protocol.
+After the eligibility gate, successful debates go to a **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unhealthy — replacement-first, panel always at 3). The panel reads an attribution-stripped ballot (Defense A / Defense B with deterministic position-order rotation across decisions) and casts one binary vote per decision: `THESIS` (the side defending the synthesis choice wins) or `ANTI_THESIS` (the alternative wins). The orchestrator writes resolutions as directed by the panel's vote tally: 3 judges → majority 2+ wins; 2 judges → unanimous required (1-1 tie → `fallback-to-synthesis`); <2 judges → `fallback-to-synthesis`. See `skills/shared/dialectic-protocol.md` for the authoritative protocol.
 
 ### Scope of Resolutions
 
-Dialectic resolutions **binding for Step 2b** (plan generation) only. May be overridden by accepted findings from Step 3 plan review. Final plan stay sole canonical output.
+Dialectic resolutions are **binding for Step 2b** (plan generation) only. They may be superseded by accepted findings from the Step 3 plan review. The finalized plan remains the sole canonical output.
