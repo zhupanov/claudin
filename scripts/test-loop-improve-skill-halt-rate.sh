@@ -179,6 +179,17 @@ cleanup_all() {
 }
 trap cleanup_all EXIT
 
+# Driver-log path extractor — shared helper (dedup per #291 review FINDING_3).
+# Parses the `📄 Full driver log: <path>` or `📄 Full driver log (retained): <path>`
+# line that post-#291 SKILL.md emits to claude -p's stdout. Returns the last
+# such path on stdout, or empty on no match / parse failure. Always returns 0
+# so callers can `var=$(extract_driver_log_path "$src")` safely under set -e.
+extract_driver_log_path() {
+    local src="$1"
+    grep -oE '📄 Full driver log( \(retained\))?: (/private)?/tmp/[^[:space:]]+' "$src" 2>/dev/null \
+        | tail -1 | sed -E 's/^📄 Full driver log( \(retained\))?: //' || true
+}
+
 # Log-classification helper: writes three lines to stdout — status, last_completed, clause.
 #
 # Post-#291: the SKILL.md for /loop-improve-skill now launches driver.sh in
@@ -223,11 +234,10 @@ classify_run() {
     # Resolve the breadcrumb source. Post-#291 SKILL.md prints a visible
     # `📄 Full driver log: <path>` line to claude -p's stdout BEFORE launching
     # the background driver (and a `📄 Full driver log (retained): <path>`
-    # line on completion). Either form carries the driver log path; we accept
-    # both via an alternation on the trailing ` (retained)` suffix.
+    # line on completion). Either form carries the driver log path — shared
+    # helper extract_driver_log_path() handles both.
     local driver_log="" breadcrumb_src=""
-    driver_log=$(grep -oE '📄 Full driver log( \(retained\))?: (/private)?/tmp/[^[:space:]]+' "$run_log" 2>/dev/null \
-                 | tail -1 | sed -E 's/^📄 Full driver log( \(retained\))?: //' || true)
+    driver_log=$(extract_driver_log_path "$run_log")
     if [[ -n "$driver_log" && -s "$driver_log" ]]; then
         breadcrumb_src="$driver_log"
     else
@@ -379,8 +389,7 @@ for (( i=1; i<=RUNS; i++ )); do
     LOOP_TMPDIR=""
     probe_driver_log=""
     if [[ -s "$run_log" ]]; then
-        probe_driver_log=$(grep -oE '📄 Full driver log( \(retained\))?: (/private)?/tmp/[^[:space:]]+' "$run_log" 2>/dev/null \
-                           | tail -1 | sed -E 's/^📄 Full driver log( \(retained\))?: //' || true)
+        probe_driver_log=$(extract_driver_log_path "$run_log")
     fi
     tmpdir_search_src="$run_log"
     if [[ -n "$probe_driver_log" && -s "$probe_driver_log" ]]; then

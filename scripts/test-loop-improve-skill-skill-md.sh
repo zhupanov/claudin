@@ -22,9 +22,10 @@
 #      `run_in_background: true` AND the Monitor persistence directive
 #      literal `persistent: true` (both load-bearing per #291 design).
 #   E) SKILL.md body contains the filter-regex byte-verbatim:
-#      `tail -F $LOG_FILE | grep --line-buffered -E '^(✅|> \*\*🔶|\*\*⚠)'`
+#      `tail -F "$LOG_FILE" | grep --line-buffered -E '^(✅|> \*\*🔶|\*\*⚠)'`
 #      (inside a fenced code block — the issue's explicit acceptance
-#      criterion).
+#      criterion, updated to the double-quoted-$LOG_FILE form by the
+#      round-1 code-review fix for whitespace tolerance in the path).
 #   F) Filter-regex parity with driver.sh breadcrumb helpers: for each of the
 #      three alternatives in the filter regex (`✅`, `> \*\*🔶`, `\*\*⚠`),
 #      driver.sh MUST contain a corresponding `printf` line that emits a
@@ -135,8 +136,10 @@ fi
 # --- Assertion E: filter regex byte-verbatim in SKILL.md ------------------
 
 # The filter literal — pinned exactly as the issue's acceptance criterion.
+# $LOG_FILE is double-quoted to tolerate whitespace in user-supplied
+# LOOP_DRIVER_LOG_FILE overrides (accepted code-review finding, #291).
 # shellcheck disable=SC2016  # $LOG_FILE is intentionally literal — this is the byte-verbatim SKILL.md contract token, not a command substitution.
-FILTER_LITERAL='tail -F $LOG_FILE | grep --line-buffered -E '"'"'^(✅|> \*\*🔶|\*\*⚠)'"'"''
+FILTER_LITERAL='tail -F "$LOG_FILE" | grep --line-buffered -E '"'"'^(✅|> \*\*🔶|\*\*⚠)'"'"''
 if ! grep -qF -- "$FILTER_LITERAL" "$SKILL_MD"; then
   fail "E: SKILL.md body does not contain the exact filter literal:"
   fail "   $FILTER_LITERAL"
