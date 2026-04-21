@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.9] - 2026-04-20
+
+### Fixed
+
+- `scripts/test-implement-structure.sh` — assertion (9) regex `see Step [0-9]+[a-z.]* (below|above)` could not consume a digit after the `a.` segment, so dotted substep back-references like `see Step 9a.1 below` or `see Step 3c.2 above` evaded the guard (`/implement` already uses dotted substep numbering). Broaden the step-number token to `[0-9][0-9a-z.]*` so bare digits, letter-suffix forms, and dotted substep forms are all caught; the narrow guard (direction word required) is preserved. Closes #253.
+
 ## [4.3.8] - 2026-04-20
 
 ### Fixed
