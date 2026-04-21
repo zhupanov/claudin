@@ -51,8 +51,19 @@ from pathlib import Path
 
 import yaml
 
-PATTERN_A_PHRASE = "Invoke the Skill tool"
-PATTERN_B_PHRASE = "via the Skill tool"
+# Canonical phrases — first element is the original style-guide form, the
+# caveman-compressed variant (with the leading article "the" dropped) is the
+# second element. Both are accepted; error messages reference the canonical
+# form for readability.
+PATTERN_A_PHRASES = (
+    "Invoke the Skill tool",
+    "Invoke Skill tool",
+    "Call the Skill tool",
+    "Call Skill tool",
+)
+PATTERN_B_PHRASES = ("via the Skill tool", "via Skill tool")
+PATTERN_A_PHRASE = PATTERN_A_PHRASES[0]
+PATTERN_B_PHRASE = PATTERN_B_PHRASES[0]
 
 # Per-invocation regex: matches imperative "Invoke" or "re-invoke" with the
 # backticked /<name> as the immediate object. The optional bold-span slot
@@ -133,7 +144,7 @@ def allowed_tools_contains_skill(frontmatter_text: str) -> bool:
 
 
 def body_has_invocation_phrase(body: str) -> bool:
-    return PATTERN_A_PHRASE in body or PATTERN_B_PHRASE in body
+    return any(p in body for p in PATTERN_A_PHRASES + PATTERN_B_PHRASES)
 
 
 def body_per_invocation_violations(
@@ -155,7 +166,7 @@ def body_per_invocation_violations(
             continue
         if in_fence:
             continue
-        if INVOCATION_LINE_REGEX.search(line) and PATTERN_B_PHRASE not in line:
+        if INVOCATION_LINE_REGEX.search(line) and not any(p in line for p in PATTERN_B_PHRASES):
             absolute_line = body_start_line + body_line_idx
             violations.append((absolute_line, line))
     return violations

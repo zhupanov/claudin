@@ -1,49 +1,49 @@
 # Point Competition
 
-Reviewers earn points based on how their findings perform in the [voting process](voting-process.md). The competition incentivizes high-quality, actionable findings and discourages noise.
+Reviewer earn point from finding perform in [voting process](voting-process.md). Competition reward good finding, punish noise.
 
 ## Scoring Rules
 
-Each finding's vote outcome determines the points awarded to the reviewer(s) who proposed it:
+Each finding vote outcome decide point for reviewer who propose:
 
 | Vote Result | Points | Description |
 |---|---|---|
-| **Accepted** (2+ YES) | +1 | The finding was validated by the voting panel |
-| **Neutral** (exactly 1 YES) | 0 | Insufficient support, but not dismissed |
-| **Exonerated** (0 YES, 1+ EXONERATE) | 0 | Legitimate concern, but not actionable in this PR |
-| **Rejected** (0 YES, 0 EXONERATE) | -1 | Finding was unanimously dismissed by the panel |
+| **Accepted** (2+ YES) | +1 | Panel validate finding |
+| **Neutral** (exactly 1 YES) | 0 | Not enough support, not dismissed |
+| **Exonerated** (0 YES, 1+ EXONERATE) | 0 | Real concern, not actionable this PR |
+| **Rejected** (0 YES, 0 EXONERATE) | -1 | Panel unanimous dismiss |
 
-If a deduplicated finding was proposed by multiple reviewers (merged during deduplication), all contributing reviewers receive the same points for that finding.
+If dedup merge finding from many reviewer, all contributor get same point.
 
 ## Out-of-Scope Scoring
 
-Out-of-scope (OOS) observations use **asymmetric reward-only scoring** — accepted OOS earns +1 (the same upside as in-scope findings), but unanimously-rejected OOS carries no penalty. This deliberate asymmetry encourages reviewers to surface observations freely, since a dismissed observation costs nothing. Accepted OOS still requires 2+ YES votes, so the acceptance threshold filters out noise.
+OOS use **asymmetric reward-only scoring** — accepted OOS +1 (same as in-scope), rejected OOS no penalty. Asymmetry push reviewer surface observation free, dismiss cost nothing. Accepted OOS still need 2+ YES, so threshold filter noise.
 
 | OOS Vote Result | Points | Description |
 |---|---|---|
-| **OOS Accepted** (2+ YES) | +1 | Reviewer surfaced an issue worth tracking as a GitHub issue |
-| **OOS Neutral** (exactly 1 YES) | 0 | Insufficient support, but not dismissed |
-| **OOS Exonerated** (0 YES, 1+ EXONERATE) | 0 | Legitimate observation, but not worth filing an issue |
-| **OOS Rejected** (0 YES, 0 EXONERATE) | 0 | No penalty — reviewers are encouraged to surface observations freely |
+| **OOS Accepted** (2+ YES) | +1 | Reviewer surface issue worth GitHub tracking |
+| **OOS Neutral** (exactly 1 YES) | 0 | Not enough support, not dismissed |
+| **OOS Exonerated** (0 YES, 1+ EXONERATE) | 0 | Real observation, not worth file issue |
+| **OOS Rejected** (0 YES, 0 EXONERATE) | 0 | No penalty — surface free |
 
 ## OOS Issue Filing
 
-Out-of-scope items go on the same voting ballot as in-scope findings, labeled with `[OUT_OF_SCOPE]`:
+OOS item go on same ballot as in-scope, label `[OUT_OF_SCOPE]`:
 
 ```text
 OOS_1: [OUT_OF_SCOPE] Code — <description>
 ```
 
-Voters decide whether each OOS item deserves a GitHub issue:
+Voter decide if OOS deserve GitHub issue:
 
-- **2+ YES** → Accepted: filed as a GitHub issue by `/implement` for future attention, reviewer earns +1
-- **Fewer than 2 YES** → Not accepted: remains an observation reported in the PR body
+- **2+ YES** → Accepted: `/implement` file GitHub issue, reviewer get +1
+- **Fewer than 2 YES** → Not accepted: stay observation in PR body
 
-**OOS items are never implemented in the current PR.** Accepted OOS items result in GitHub issue creation only — this cleanly separates "fix now" (in-scope findings) from "fix later" (OOS observations).
+**OOS never implement in current PR.** Accepted OOS only create GitHub issue — clean split "fix now" (in-scope) from "fix later" (OOS).
 
 ## Scoreboard
 
-After voting completes, a scoreboard is printed showing each reviewer's performance:
+After vote done, scoreboard print each reviewer performance:
 
 | Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Accepted | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
@@ -53,13 +53,13 @@ After voting completes, a scoreboard is printed showing each reviewer's performa
 
 ## Future Plans
 
-In future iterations, token allocation will be weighted proportionally to reviewer scores — higher-scoring reviewers will receive more tokens, allowing them to conduct deeper analysis.
+Future: token allocation weight by reviewer score — high score get more token for deep analysis.
 
 ## Where Scoring Applies
 
-The competition scoring system is active in skills that use the [voting protocol](voting-process.md):
+Competition score active in skill use [voting protocol](voting-process.md):
 
-- **`/design`** — Plan review findings are scored after the voting panel adjudicates
-- **`/review`** — Code review findings (round 1) are scored after voting
+- **`/design`** — Plan review finding score after panel adjudicate
+- **`/review`** — Code review finding (round 1) score after vote
 
-Skills that use the negotiation protocol (`/research`, `/loop-review`) do not use competition scoring.
+Skill use negotiation protocol (`/research`, `/loop-review`) no use competition score.

@@ -7,29 +7,29 @@ allowed-tools: Bash, Skill
 
 # Alias Skill
 
-This skill follows the Process pattern: numbered steps, checkpointed delegation, fail-closed verification.
+Skill follow Process pattern: numbered steps, checkpointed delegation, fail-closed verification.
 
-Create a project-level alias skill in `.claude/skills/` that forwards to an existing larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (implementation, code review, version bump, PR), then verifies the artifact landed on disk.
+Make project-level alias skill in `.claude/skills/` forward to existing larch skill with preset flags. Delegate to `/implement --quick --auto` for full pipeline (implementation, code review, version bump, PR), then verify artifact land on disk.
 
-Example: `/alias i implement --merge` creates `.claude/skills/i/SKILL.md` so that `/i <feature>` is equivalent to `/implement --merge <feature>`.
+Example: `/alias i implement --merge` make `.claude/skills/i/SKILL.md` so `/i <feature>` same as `/implement --merge <feature>`.
 
-Example with merge: `/alias --merge i implement --merge` creates the same alias AND merges the PR after CI passes.
+Example with merge: `/alias --merge i implement --merge` make same alias AND merge PR after CI pass.
 
 ## NEVER
 
-1. **NEVER create an alias that targets `/alias`** — no alias-to-alias recursion. **Why:** would multiply indirection and break the flat forwarding contract. Enforced by Step 2 check #5.
-2. **NEVER let an alias name shadow an existing larch skill** — neither in `skills/` (public) nor `.claude/skills/` (dev-only). **Why:** shadowing silently reroutes `/<name>` invocations. Enforced by Step 2 check #2 via dynamic probe.
-3. **NEVER auto-remediate when `VERIFIED=false` in Step 4** — do NOT retry `/implement`, roll back, or delete the PR. **Why:** under `--merge` the PR may already be merged; retry would create a divergent PR. Human judgment required.
-4. **NEVER assume success on `VERIFIED=false` just because `/implement` returned.** **Why:** `/implement` can return cleanly while writing the file to the wrong path, skipping the generator, or failing silently — the sentinel-file gate is the only authoritative signal.
-5. **NEVER parse `--merge` tokens after the first positional argument as flags for `/alias`.** **Why:** `--merge` has a dual role (consumed by `/alias` when before the first positional; passed through to the alias's preset flags otherwise); conflating the two is a silent footgun.
+1. **NEVER make alias target `/alias`** — no alias-to-alias recursion. **Why:** multiply indirection, break flat forward contract. Step 2 check #5 enforce.
+2. **NEVER let alias name shadow existing larch skill** — not `skills/` (public) nor `.claude/skills/` (dev-only). **Why:** shadow silent reroute `/<name>` invocation. Step 2 check #2 enforce via dynamic probe.
+3. **NEVER auto-remediate when `VERIFIED=false` in Step 4** — do NOT retry `/implement`, roll back, or delete PR. **Why:** under `--merge` PR maybe already merged; retry make divergent PR. Human judgment need.
+4. **NEVER assume success on `VERIFIED=false` just because `/implement` return.** **Why:** `/implement` can return clean while write file wrong path, skip generator, or fail silent — sentinel-file gate only authoritative signal.
+5. **NEVER parse `--merge` token after first positional arg as flag for `/alias`.** **Why:** `--merge` dual role (consume by `/alias` when before first positional; pass through to alias preset flags else); conflate two = silent footgun.
 
-**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `bail`, `skip to Step N`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule. **Do NOT load** that reference for routine invocations — the inline rule above is sufficient. Load it only when debugging a child-Skill halt symptom or when adding a new child-Skill invocation to this file.
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/implement`) return, IMMEDIATELY continue with this skill NEXT numbered step — do NOT end turn on child cleanup output. Rule strict subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `bail`, `skip to Step N`). Normal sequential `proceed to Step N+1` instruction = default continuation this rule reinforce, NOT exception. Every `/relevant-checks` invocation anywhere in file covered by rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for canonical rule. **Do NOT load** that reference for routine invocation — inline rule above enough. Load only when debug child-Skill halt symptom or when add new child-Skill invocation to file.
 
 ## Step 1 — Parse Arguments
 
-Parse flags from the start of `$ARGUMENTS` before treating the remainder as positional arguments. Stop at the first non-flag token (a token not starting with `--`). Only `--merge` appearing before the first positional argument is consumed as a flag for `/alias` itself; any `--merge` in the preset-flags remainder is passed through verbatim to the alias.
+Parse flag from start of `$ARGUMENTS` before treat remainder as positional arg. Stop at first non-flag token (token not start with `--`). Only `--merge` appear before first positional arg consumed as flag for `/alias` self; any `--merge` in preset-flags remainder pass through verbatim to alias.
 
-- `--merge`: Set `alias_merge=true`. Default: `alias_merge=false`. When true, `--merge` is forwarded to the `/implement` invocation so the resulting PR is also merged.
+- `--merge`: Set `alias_merge=true`. Default: `alias_merge=false`. When true, `--merge` forward to `/implement` invocation so result PR also merge.
 
 **`--merge` dual-role reference**:
 
@@ -38,16 +38,16 @@ Parse flags from the start of `$ARGUMENTS` before treating the remainder as posi
 | Before first positional token | Consumed by /alias (sets `alias_merge=true`) |
 | After first positional token | Pass-through to the generated alias's preset flags |
 
-After flag stripping, parse the remaining positional arguments:
+After flag strip, parse remain positional arg:
 - First token = **alias name**
-- Second token = **target skill name** (without `/` prefix)
-- Remainder = **preset flags** (may be empty — a pure rename shortcut is valid)
+- Second token = **target skill name** (no `/` prefix)
+- Remainder = **preset flags** (can empty — pure rename shortcut valid)
 
-If fewer than 2 positional tokens are provided, print: `**ERROR: Usage: /alias [--merge] <alias-name> <target-skill> [preset-flags...]**` and abort.
+If fewer than 2 positional token given, print: `**ERROR: Usage: /alias [--merge] <alias-name> <target-skill> [preset-flags...]**` and abort.
 
 ## Step 2 — Validate
 
-All validation uses Bash since `${CLAUDE_PLUGIN_ROOT}` is a shell variable not resolvable in Read/Glob.
+All validation use Bash since `${CLAUDE_PLUGIN_ROOT}` = shell variable not resolvable in Read/Glob.
 
 | # | Check | Rule | On fail |
 |---|-------|------|---------|
@@ -60,7 +60,7 @@ All validation uses Bash since `${CLAUDE_PLUGIN_ROOT}` is a shell variable not r
 
 ### Check 2 — reserved-name dynamic probe
 
-Fail-closed on unset `${CLAUDE_PLUGIN_ROOT}`, then probe both plugin-tree roots for a directory collision:
+Fail-closed on unset `${CLAUDE_PLUGIN_ROOT}`, then probe both plugin-tree root for directory collision:
 
 ```bash
 if [[ -z "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
@@ -75,7 +75,7 @@ if test -d "${CLAUDE_PLUGIN_ROOT}/skills/<alias-name>" \
 fi
 ```
 
-One conceptual rule — "alias cannot shadow any larch skill" — replacing the prior static enumeration that was drifting as new skills shipped.
+One conceptual rule — "alias cannot shadow any larch skill" — replace prior static enumeration that drift as new skills ship.
 
 ### Error strings (reference)
 
@@ -93,11 +93,11 @@ One conceptual rule — "alias cannot shadow any larch skill" — replacing the 
 
 ### Before delegating, ask
 
-- **What does `/implement` need to build this deterministically?** `/implement` has no codebase context about `/alias` — it will research and guess unless the feature description cites the generator script path, its required flags, the version source, and the write target. The explicit recipe below supplies all four.
-- **What could make the Step 4 verification silently pass when it shouldn't?** Nothing — the `verify-skill-called.sh --sentinel-file` gate reads a child-produced artifact (`.claude/skills/<alias-name>/SKILL.md`) that the outer orchestrator cannot synthesize. A parent-writable gate would not be load-bearing.
-- **Why no retry on `VERIFIED=false`?** Under `--merge` the PR may already be merged by the time control returns; any automated retry would create a divergent PR. Step 4 surfaces branch-specific diagnostic messages instead, leaving recovery to human judgment.
+- **What `/implement` need to build this deterministic?** `/implement` no codebase context about `/alias` — will research and guess unless feature description cite generator script path, require flags, version source, write target. Explicit recipe below supply all four.
+- **What could make Step 4 verification silent pass when should not?** Nothing — `verify-skill-called.sh --sentinel-file` gate read child-produced artifact (`.claude/skills/<alias-name>/SKILL.md`) that outer orchestrator cannot synthesize. Parent-writable gate not load-bearing.
+- **Why no retry on `VERIFIED=false`?** Under `--merge` PR maybe already merged by time control return; any auto retry make divergent PR. Step 4 surface branch-specific diagnostic message instead, leave recovery to human judgment.
 
-Construct an explicit feature description for `/implement`. The description MUST cite the generator script path, its required flags, the version source, and the write target so `/implement` has a complete, deterministic build recipe — no codebase research required:
+Build explicit feature description for `/implement`. Description MUST cite generator script path, require flags, version source, write target so `/implement` have complete, deterministic build recipe — no codebase research need:
 
 ```
 Add /<alias-name> alias for /<target-skill> <preset-flags>.
@@ -114,21 +114,21 @@ Generate the alias skill by running:
 If jq fails or plugin.json is malformed, proceed with an empty --version value (the generator handles this — the footer simply omits the vX.Y.Z suffix).
 ```
 
-Omit the `<preset-flags>` segment from the leading sentence when empty (pure rename shortcut).
+Omit `<preset-flags>` segment from lead sentence when empty (pure rename shortcut).
 
-Print: `**Alias /<alias-name> -> /<target-skill> <preset-flags> — delegating to /implement --quick --auto [--merge]**` (omit `<preset-flags>` and `--merge` parts if empty/false respectively).
+Print: `**Alias /<alias-name> -> /<target-skill> <preset-flags> — delegating to /implement --quick --auto [--merge]**` (omit `<preset-flags>` and `--merge` parts if empty/false).
 
-Invoke the Skill tool:
-- Try skill: `"implement"` first (bare name). If no skill matches, try skill: `"larch:implement"` (fully-qualified plugin name).
+Invoke Skill tool:
+- Try skill: `"implement"` first (bare name). If no skill match, try skill: `"larch:implement"` (full-qualified plugin name).
 - args: `"--quick --auto [--merge] <feature-description>"`
 
-Only include `--merge` in the args if `alias_merge=true`.
+Only include `--merge` in args if `alias_merge=true`.
 
-> **Continue after child returns.** When `/implement` returns, execute Step 4 — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. **Do NOT load** that reference for routine `/implement` returns — load only when adding a new child-Skill invocation to this file or when debugging a halt symptom.
+> **Continue after child returns.** When `/implement` return, execute Step 4 — do NOT end turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. **Do NOT load** that reference for routine `/implement` return — load only when add new child-Skill invocation to file or debug halt symptom.
 
 ## Step 4 — Verify
 
-After `/implement` returns, verify the alias SKILL.md actually landed on disk. Run from repo root (resolved robustly regardless of agent cwd):
+After `/implement` return, verify alias SKILL.md actual land on disk. Run from repo root (resolve robust regardless of agent cwd):
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
@@ -139,7 +139,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd -P)
 Parse stdout for `VERIFIED=true|false` and `REASON=<token>`.
 
 - **If `VERIFIED=true`**: print `✅ /alias — created .claude/skills/<alias-name>/SKILL.md` and exit 0.
-- **If `VERIFIED=false`**: print a fail-closed error and exit 1. Branch the message on `alias_merge`:
+- **If `VERIFIED=false`**: print fail-closed error and exit 1. Branch message on `alias_merge`:
   - **If `alias_merge=false`** (PR created but not merged):
     ```
     **ERROR: /implement returned but .claude/skills/<alias-name>/SKILL.md was not written (REASON=<token>). DO NOT merge the PR. Inspect the PR/branch manually — /implement may have written the file elsewhere, skipped the generator, or failed silently.**
@@ -148,7 +148,7 @@ Parse stdout for `VERIFIED=true|false` and `REASON=<token>`.
     ```
     **ERROR: /implement returned but .claude/skills/<alias-name>/SKILL.md was not written (REASON=<token>). The PR may have already been merged — do not assume success. Inspect the PR/branch/merged-main manually; a revert or follow-up PR may be required.**
     ```
-  Do not attempt auto-remediation — `/implement` has already created (and possibly merged) the PR, so any recovery requires human judgment.
+  No auto-remediation — `/implement` already create (and maybe merge) PR, so any recovery need human judgment.
 
 ### Authoritative exit states
 

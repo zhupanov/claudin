@@ -2,29 +2,29 @@
 
 **Consumer**: `/design` Step 3 — Voting Panel launch + Finalize + Track Rejected.
 
-**Contract**: 3-voter panel (Claude Code Reviewer subagent + Codex + Cursor), YES/NO/EXONERATE ballot, 2+ YES threshold, proportionality rule. Claude subagent voter replacement when external tool unavailable so the panel always remains at 3.
+**Contract**: 3-voter panel (Claude Code Reviewer subagent + Codex + Cursor), YES/NO/EXONERATE ballot, 2+ YES threshold, proportionality rule. Claude subagent voter replace when external tool unavailable, so panel stay at 3.
 
 ---
 
 ## Competition notice
 
-> **Competition notice**: Your findings will be voted on by a 3-agent panel (Claude Code Reviewer subagent, Codex, Cursor) using YES/NO/EXONERATE. Each finding that receives 2+ YES votes earns you +1 point. Findings with exactly 1 YES earn 0 points. Findings with 0 YES but at least 1 EXONERATE earn 0 points (the panel recognized your concern as legitimate). Findings with 0 YES and 0 EXONERATE cost you -1 point. Focus on high-quality, actionable findings. Concerns that are valid but not actionable in this PR may still be exonerated rather than penalized. Out-of-scope observations use **asymmetric scoring** — accepted OOS items (2+ YES) earn +1 point and are filed as GitHub issues; all other OOS outcomes (including unanimous rejection) score 0.
+> **Competition notice**: Findings voted on by 3-agent panel (Claude Code Reviewer subagent, Codex, Cursor) using YES/NO/EXONERATE. Finding with 2+ YES = +1 point. Exactly 1 YES = 0. 0 YES but ≥1 EXONERATE = 0 (panel saw concern as legit). 0 YES and 0 EXONERATE = -1 point. Focus high-quality, actionable findings. Valid-but-not-actionable concerns may get exonerated, not penalized. Out-of-scope use **asymmetric scoring** — accepted OOS (2+ YES) = +1 and filed as GitHub issue; all other OOS outcomes (incl. unanimous reject) = 0.
 
 ---
 
 ## Voter prompts
 
-- **Voter 1**: **Claude Code Reviewer subagent** — fresh Agent tool invocation (subagent_type: `code-reviewer`) with the voting prompt. Instruct: `"You are a senior code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
-- **Voter 2**: Codex — via `run-external-reviewer.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `codex_available` is false, launch a Claude subagent voter instead per the Voting Protocol.
-- **Voter 3**: Cursor — via `run-external-reviewer.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `cursor_available` is false, launch a Claude subagent voter instead per the Voting Protocol.
+- **Voter 1**: **Claude Code Reviewer subagent** — fresh Agent tool invocation (subagent_type: `code-reviewer`) with voting prompt. Instruct: `"You are a senior code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
+- **Voter 2**: Codex — via `run-external-reviewer.sh` with ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to voter prompt). If `codex_available` false, launch Claude subagent voter per Voting Protocol.
+- **Voter 3**: Cursor — via `run-external-reviewer.sh` with ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to voter prompt). If `cursor_available` false, launch Claude subagent voter per Voting Protocol.
 
-For Codex, Cursor, and their Claude replacement voters, instruct each: `"You are a senior engineer on a voting panel deciding which proposed plan modifications should be accepted. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
+For Codex, Cursor, and Claude replacement voters, instruct each: `"You are a senior engineer on a voting panel deciding which proposed plan modifications should be accepted. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
 
 ---
 
 ## Ballot file handling
 
-**Ballot file handling**: Use the Write tool (not `cat` with heredoc or Bash) to write the ballot to `$DESIGN_TMPDIR/ballot.txt`. For Codex and Cursor voter prompts, reference the ballot file path (e.g., "Read the ballot from $DESIGN_TMPDIR/ballot.txt") instead of inlining the ballot content. This avoids permission prompts from `cat > file << 'EOF'` or `BALLOT=$(cat file)` patterns.
+**Ballot file handling**: Use Write tool (not `cat` with heredoc or Bash) to write ballot to `$DESIGN_TMPDIR/ballot.txt`. For Codex and Cursor voter prompts, reference ballot file path (e.g., "Read the ballot from $DESIGN_TMPDIR/ballot.txt") instead of inlining ballot. Avoid permission prompts from `cat > file << 'EOF'` or `BALLOT=$(cat file)`.
 
 ---
 

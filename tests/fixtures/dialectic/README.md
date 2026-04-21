@@ -1,6 +1,6 @@
 # Dialectic Smoke Test Fixtures
 
-Offline golden fixtures consumed by `scripts/dialectic-smoke-test.sh` (invoked via `make smoke-dialectic`). Each fixture exercises a specific protocol branch of `/design` Step 2a.5.
+Offline golden fixtures for `scripts/dialectic-smoke-test.sh` (via `make smoke-dialectic`). Each fixture hit specific protocol branch of `/design` Step 2a.5.
 
 ## Protocol coverage matrix
 
@@ -15,7 +15,7 @@ Offline golden fixtures consumed by `scripts/dialectic-smoke-test.sh` (invoked v
 
 ## Manifest schema (`expected.txt`)
 
-Each fixture's `expected.txt` declares the expected parser outcome for every `DECISION_N` present:
+Each fixture `expected.txt` declare expected parser outcome for every `DECISION_N` present:
 
 ```
 # comments start with #
@@ -27,10 +27,10 @@ DECISION_2 expected_disposition=fallback-to-synthesis expected_tally=THESIS=1,AN
 DECISION_3 expected_disposition=bucket-skipped
 ```
 
-- `expected_disposition` ∈ `{voted, fallback-to-synthesis, bucket-skipped, over-cap}` — the four canonical values per `skills/shared/dialectic-protocol.md` Consumer Contract.
-- `expected_tally` is required when `expected_disposition=voted`; optional otherwise (for `fallback-to-synthesis` it may match the actual 2-voter 1-1 case).
-- For `bucket-skipped` and `over-cap`, the smoke test accepts a 0/0 no-vote computed state as equivalent (orchestrator-level decisions are not derivable from judge votes alone).
+- `expected_disposition` ∈ `{voted, fallback-to-synthesis, bucket-skipped, over-cap}` — four canonical values per `skills/shared/dialectic-protocol.md` Consumer Contract.
+- `expected_tally` required when `expected_disposition=voted`; optional else (for `fallback-to-synthesis` may match actual 2-voter 1-1 case).
+- For `bucket-skipped` and `over-cap`, smoke test accept 0/0 no-vote computed state as equivalent (orchestrator-level decisions not derivable from judge votes alone).
 
 ## Non-runtime surface
 
-`tests/` is **not** part of the plugin runtime surface (AGENTS.md declares `skills/`, `agents/`, `hooks/`, `scripts/`, `.claude-plugin/` as runtime; "everything else is supplementary"). These fixtures are pure data; editing them has no effect on consumer behavior.
+`tests/` **not** part of plugin runtime surface (AGENTS.md declare `skills/`, `agents/`, `hooks/`, `scripts/`, `.claude-plugin/` as runtime; "everything else is supplementary"). Fixtures pure data; edit them no effect on consumer behavior.
