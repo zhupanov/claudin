@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026-04-21
+
+### Added
+
+- `/compress-skill` — new skill that rewrites an existing skill's Markdown prose to reduce size while preserving meaning. Discovers the transitive `.md` set via BFS from `SKILL.md`, following both inline Markdown links and path-shaped backticked references (e.g. `` `${CLAUDE_PLUGIN_ROOT}/skills/<name>/references/foo.md` ``), restricted to the skill's own directory tree so shared docs and callee sub-skills are excluded. Applies Strunk & White's *Elements of Style* adapted for technical writing — preserves YAML frontmatter, fenced code blocks, headings, link targets, inline code, file paths, and numeric values verbatim; only prose is rewritten. Emits a per-file before/after byte and line delta report. Standalone skill — does not delegate to `/im`. Adds `skills/compress-skill/` with `SKILL.md` plus four scripts (`setup.sh`, `discover-md-set.sh`/`.py`, `measure-set.sh`, `report-deltas.sh`); wires `Skill(compress-skill)` / `Skill(larch:compress-skill)` / `Bash($PWD/skills/compress-skill/scripts/*)` into `.claude/settings.json`; updates `README.md` (installation blurb, Skills catalog row, strict-permissions example) and `docs/workflow-lifecycle.md` (Standalone Usage entry).
+
 ## [5.1.4] - 2026-04-21
 
 ### Fixed
