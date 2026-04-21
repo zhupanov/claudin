@@ -139,7 +139,28 @@ Parse `VERIFIED` and `REASON` from stdout. Branch:
 
   The inner's argument-validation failure path (`bad_args`) does NOT surface here because the inner deliberately does not write the completion sentinel when argument validation fails (writing through an unvalidated `LOOP_TMPDIR` would defeat the security check). That case collapses to the `VERIFIED=false` branch below as `REASON=missing_path`, which is the correct diagnostic.
 
-- **`VERIFIED=false`**: the halt-detected branch. Set `EXIT_REASON="iteration sentinel missing — iter ${ITER} did not complete (REASON=<token>)"` and break to Step 5. This path catches both the case where the inner halted partway through an iteration (never reached its Step 4) — the exact failure mode of #231, now mechanically detected at the outer's gate — and the case where the inner aborted during argument validation (per the note above).
+- **`VERIFIED=false`**: the halt-detected branch. Before setting `EXIT_REASON`, scan `$LOOP_TMPDIR` for per-substep `.done` sentinels to pinpoint where the inner halted (closes #247 — converts the previously-opaque intra-iteration halt into an observable halt-location diagnostic surfaced in the close-out comment). The inner writes these sentinels in strict order: `iter-${ITER}-3j.done`, `iter-${ITER}-3jv.done`, `iter-${ITER}-3d-pre-detect.done`, `iter-${ITER}-3d-post-detect.done`, `iter-${ITER}-3d-plan-post.done`, `iter-${ITER}-3i.done`. The highest-rank non-empty sentinel present identifies the last-completed substep.
+
+  ```bash
+  LAST_COMPLETED="none"
+  for s in 3j 3jv 3d-pre-detect 3d-post-detect 3d-plan-post 3i; do
+    if [[ -s "$LOOP_TMPDIR/iter-${ITER}-${s}.done" ]]; then
+      LAST_COMPLETED="$s"
+    fi
+  done
+  ```
+
+  Map `LAST_COMPLETED` to a halt-location clause. The literal `last-completed=<substep>` fragment is a contract token asserted by `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-improve-skill-continuation.sh` — do NOT change its shape without updating the harness in the same edit:
+
+  - `none` → `halted at or before /skill-judge at 3.j`
+  - `3j` → `halted at or before grade parse at 3.j.v`
+  - `3jv` → `halted at or before /design at 3.d`
+  - `3d-pre-detect` → `halted during no-plan detector or before rescue at 3.d`
+  - `3d-post-detect` → `halted at or before plan-post at 3.d`
+  - `3d-plan-post` → `halted at or before /im at 3.i`
+  - `3i` → `halted between 3.i verify and Step 4 close-out`
+
+  Then set `EXIT_REASON="iteration sentinel missing — iter ${ITER} <halt-location clause> (REASON=<token>, last-completed=${LAST_COMPLETED})"` and break to Step 5. This path catches both the case where the inner halted partway through an iteration (never reached its Step 4) — the exact failure mode of #231, now mechanically detected at the outer's gate with per-substep granularity per #247 — and the case where the inner aborted during argument validation (per the note above — `last-completed=none` in that case).
 
 ### 4.n — Iteration Advance
 

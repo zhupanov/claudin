@@ -42,6 +42,10 @@
 #     - cleanup-tmpdir.sh                      (Step 6 cleanup).
 #     - max iterations (10) reached           (the normal-completion exit literal — FINDING_7).
 #     - iteration sentinel missing             (the halt-detected exit literal).
+#     - last-completed=                        (#247 ledger-scan contract token — enriched halt diagnostic).
+#     - halted at or before /skill-judge       (#247 halt-location clause for LAST_COMPLETED=none).
+#     - halted at or before /design            (#247 halt-location clause for LAST_COMPLETED=3jv).
+#     - halted at or before /im                (#247 halt-location clause for LAST_COMPLETED=3d-plan-post).
 #     - grade_a_achieved                       (NEW — terminal happy-path ITER_STATUS).
 #     - grade A achieved                       (NEW — EXIT_REASON token).
 #     - parse-skill-judge-grade.sh             (NEW — Step 5a final-judge parser invocation).
@@ -203,6 +207,13 @@ check_contains "$OUTER" "/loop-improve-skill-iter" "outer delegates to /loop-imp
 check_contains "$OUTER" "cleanup-tmpdir.sh" "outer cleans up LOOP_TMPDIR"
 check_contains "$OUTER" "max iterations (10) reached" "outer has max-iteration exit literal"
 check_contains "$OUTER" "iteration sentinel missing" "outer has halt-detected exit literal"
+
+echo ""
+echo "--- Outer SKILL.md #247 enriched halt-diagnostic literals ---"
+check_contains "$OUTER" "last-completed="                "outer emits last-completed= contract token (#247 ledger scan)"
+check_contains "$OUTER" "halted at or before /skill-judge" "outer has LAST_COMPLETED=none halt-location clause (#247)"
+check_contains "$OUTER" "halted at or before /design"      "outer has LAST_COMPLETED=3jv halt-location clause (#247)"
+check_contains "$OUTER" "halted at or before /im"          "outer has LAST_COMPLETED=3d-plan-post halt-location clause (#247)"
 
 echo ""
 echo "--- Outer SKILL.md grade-A termination contract literals ---"
