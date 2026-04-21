@@ -204,3 +204,7 @@ A numbered list of pre-existing issues or concerns beyond the scope of this PR t
 If no in-scope issues found, say "No in-scope issues found." If no out-of-scope observations, omit that section entirely. Do NOT edit any files.
 ```
 <!-- END GENERATED_BODY -->
+
+## Update triggers
+
+This file is the canonical source for the Code Reviewer archetype. `agents/code-reviewer.md` is generated from it via `scripts/generate-code-reviewer-agent.sh` — do not hand-edit the agent file. Edit the template above and run `bash scripts/generate-code-reviewer-agent.sh` to regenerate; the `agent-sync` CI job enforces that the committed agent file matches generator output.
