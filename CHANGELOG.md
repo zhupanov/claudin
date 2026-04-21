@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.12] - 2026-04-20
+
+### Fixed
+
+- `skills/loop-improve-skill/SKILL.md` — outer Step 4.v `VERIFIED=false` branch now scans `$LOOP_TMPDIR` for per-substep `.done` sentinels (`3j`, `3jv`, `3d-pre-detect`, `3d-post-detect`, `3d-plan-post`, `3i`) and emits an enriched `EXIT_REASON` with a 7-way halt-location clause pinpointing which substep the inner iteration halted at. Converts the previously-opaque "iteration sentinel missing" diagnostic into an observable halt-location surfaced in the close-out comment. The `LAST_COMPLETED=none` clause disambiguates halt-before-/skill-judge from argument-validation failure via REASON token. Harness extended to assert all 7 halt-location clauses against drift. Closes #247.
+
 ## [4.3.11] - 2026-04-20
 
 ### Fixed
