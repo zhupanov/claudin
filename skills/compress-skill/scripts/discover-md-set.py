@@ -19,9 +19,12 @@ Rules:
     (e.g. `README.md`) are skipped to avoid false positives.
   - Expand `${CLAUDE_PLUGIN_ROOT}` (inferred from SKILL_DIR ancestors — the
     parent whose child is `skills/`) and `$PWD` / `${PWD}` before resolution.
-  - Strip optional `#fragment` (and `§ heading` / `%20` style anchors when
-    they appear inside backticked spans — `foo.md § Step 3` is a common larch
-    citation form).
+  - Strip optional `#fragment` and any whitespace suffix (`foo.md § Step 3`
+    — a common larch citation form inside backticked spans — is reduced to
+    `foo.md`). Percent-encoded path segments (`%20`, etc.) are NOT decoded;
+    link targets with unencoded whitespace (`](My File.md)`) are not matched
+    by `MD_LINK_RE` and are therefore missed on purpose — larch SKILL.md
+    paths never contain spaces.
   - Resolve relative targets against the referring file's directory.
   - Canonicalize via os.path.realpath.
   - Keep only paths inside SKILL_DIR (exact match or subpath).
@@ -61,10 +64,13 @@ def infer_plugin_root(skill_dir: str) -> str:
     return os.environ.get('CLAUDE_PLUGIN_ROOT', '')
 
 
+PLUGIN_ROOT_TOKENS = ('${CLAUDE_PLUGIN_ROOT}', '$CLAUDE_PLUGIN_ROOT')
+
+
 def expand_tokens(target: str, plugin_root: str, pwd: str) -> str:
     """Expand ${CLAUDE_PLUGIN_ROOT}, $CLAUDE_PLUGIN_ROOT, ${PWD}, $PWD."""
     out = target
-    for token in ('${CLAUDE_PLUGIN_ROOT}', '$CLAUDE_PLUGIN_ROOT'):
+    for token in PLUGIN_ROOT_TOKENS:
         if plugin_root:
             out = out.replace(token, plugin_root)
     for token in ('${PWD}', '$PWD'):
@@ -72,12 +78,16 @@ def expand_tokens(target: str, plugin_root: str, pwd: str) -> str:
     return out
 
 
+def has_plugin_root_token(target: str) -> bool:
+    return any(token in target for token in PLUGIN_ROOT_TOKENS)
+
+
 def strip_anchor(target: str) -> str:
     """Strip trailing `#fragment` and ` § heading` / multi-space suffixes."""
     target = target.split('#', 1)[0]
     # larch citation form: `path.md § Heading` — split on whitespace, keep first.
-    target = target.split()[0] if target.split() else target
-    return target
+    parts = target.split()
+    return parts[0] if parts else target
 
 
 def looks_like_path(target: str) -> bool:
@@ -155,6 +165,18 @@ def main() -> int:
         order.append(current)
         base = os.path.dirname(current)
         for target in extract_md_refs(current, plugin_root, pwd):
+            # Fail-closed: if a reference contains ${CLAUDE_PLUGIN_ROOT} but
+            # the plugin root could not be inferred from the skill-dir layout
+            # AND the env var is unset, silently skipping would drop real
+            # references from the compression set. Report and abort instead.
+            if has_plugin_root_token(target) and not plugin_root:
+                print(
+                    f'ERROR=Reference uses ${{CLAUDE_PLUGIN_ROOT}} but plugin root could not be inferred '
+                    f'from skill-dir ancestors and $CLAUDE_PLUGIN_ROOT is unset. Referring file: {current}; '
+                    f'target: {target}',
+                    file=sys.stderr,
+                )
+                return 1
             if os.path.isabs(target):
                 resolved = target
             else:

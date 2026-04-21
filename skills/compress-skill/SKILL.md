@@ -11,10 +11,15 @@ Rewrite an existing skill's Markdown prose to reduce size while preserving meani
 
 ## Scope
 
-- **In scope**: `.md` files inside the target skill's directory (`SKILL.md`, `references/*.md`, and any `.md` file reachable from SKILL.md via Markdown link syntax that resolves to a path inside the skill dir).
-- **Out of scope**: sub-skills invoked via the Skill tool (separate skills — never compressed from here), shared larch files (`skills/shared/*.md`, top-level `*.md` like `AGENTS.md`, `README.md`, `SECURITY.md`), any `.md` reached by a link whose resolved path is outside the target skill directory.
+- **In scope**: `.md` files inside the target skill's directory (`SKILL.md`, `references/*.md`, and any `.md` file reachable from SKILL.md via either Markdown link syntax `](path.md)` **or** path-shaped backticked references like `` `${CLAUDE_PLUGIN_ROOT}/skills/<name>/references/foo.md` ``, that resolve to a path inside the skill dir). Both forms are followed because larch SKILL.md files cite most sibling references via backticks rather than Markdown links.
+- **Out of scope**: sub-skills invoked via the Skill tool (separate skills — never compressed from here), shared larch files (`skills/shared/*.md`, top-level `*.md` like `AGENTS.md`, `README.md`, `SECURITY.md`), any `.md` reached by a reference whose resolved path is outside the target skill directory.
 
-The directory-tree restriction is the mechanical filter: links to files outside the skill dir are skipped, which naturally excludes shared docs and callee skills.
+The directory-tree restriction is the mechanical filter: references to files outside the skill dir are skipped, which naturally excludes shared docs and callee skills.
+
+**Known limitations**:
+
+- Link targets containing unencoded spaces (e.g. `](My File.md)`) are not followed — the regex stops at whitespace. larch SKILL.md paths never use spaces, so this does not affect any in-corpus file.
+- Reference-style Markdown links (`[text][ref]` + `[ref]: path.md`) are not followed — only inline links `](path.md)` and path-shaped backticked spans are extracted. No larch SKILL.md or reference uses this syntax today; if a future skill starts using it, extend `discover-md-set.py` to collect link-definition lines alongside inline links.
 
 ## Flags
 
@@ -81,7 +86,7 @@ Print: `> **🔶 0: setup — <SKILL_NAME> at <SKILL_DIR>**`
 
 ## Step 1 — Discover Transitive `.md` Set
 
-Starting from `SKILL.md`, walk Markdown link targets of the form `](path.md)` (with optional `#anchor`), resolve each relative to the referring file's directory, canonicalize, and keep only those whose resolved path lies inside `SKILL_DIR`. Links inside fenced code blocks are ignored.
+Starting from `SKILL.md`, walk both Markdown link targets of the form `](path.md)` and path-shaped backticked references (`` `…/path.md` ``, with `${CLAUDE_PLUGIN_ROOT}` and `$PWD` expanded). Optional `#anchor` fragments and `§ heading` suffixes are stripped. Each target is resolved relative to the referring file's directory, canonicalized, and kept only when its path lies inside `SKILL_DIR`. References inside fenced code blocks (``` or ~~~) are ignored.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/discover-md-set.sh --skill-dir "$SKILL_DIR" --output "$COMPRESS_TMPDIR/md-set.list"

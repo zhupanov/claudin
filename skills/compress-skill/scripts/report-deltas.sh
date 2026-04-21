@@ -53,7 +53,10 @@ while IFS= read -r -d '' path; do
   fi
   before_bytes=$(lookup_before_bytes "$path")
   before_lines=$(lookup_before_lines "$path")
-  [[ -n "$before_bytes" ]] || { echo "ERROR=No before entry for $path in $BEFORE" >&2; exit 1; }
+  # Both fields must be present: a corrupted before.tsv row missing the line
+  # count would otherwise let bash coerce the empty string to 0 in the delta
+  # arithmetic, silently producing a wrong report.
+  [[ -n "$before_bytes" && -n "$before_lines" ]] || { echo "ERROR=Malformed or missing before entry for $path in $BEFORE" >&2; exit 1; }
   after_bytes=$(wc -c <"$path" | tr -d '[:space:]')
   after_lines=$(wc -l <"$path" | tr -d '[:space:]')
   delta_bytes=$(( after_bytes - before_bytes ))
