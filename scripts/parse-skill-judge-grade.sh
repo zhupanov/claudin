@@ -20,6 +20,16 @@
 #   D8_NUM=<int> D8_DEN=<int>
 #   OVERALL_GRADE=A|B|C|D|F  (when PARSE_STATUS=ok, derived from total %)
 #
+# IMPORTANT: GRADE_A and OVERALL_GRADE measure DIFFERENT things and may
+# diverge. GRADE_A=true requires per-dimension A on every D1..D8 (the
+# integer thresholds below). OVERALL_GRADE is computed purely from the
+# aggregate TOTAL_NUM/TOTAL_DEN against /skill-judge's percentage scale
+# (A 90%+, B 80-89, C 70-79, D 60-69, F <60). A skill can have
+# OVERALL_GRADE=A while GRADE_A=false (e.g., D1=17/20 plus all other
+# dimensions at max gives ~97.5% total but D1 falls short of its
+# per-dim threshold). The /loop-improve-skill termination contract
+# uses GRADE_A (the strict per-dim form), not OVERALL_GRADE.
+#
 # Exit codes:
 #   0 — always on parseable invocation (fail-closed contract is on stdout).
 #   1 — argument errors (missing arg, etc.).
@@ -36,11 +46,12 @@
 #   D1 ≥ 18/20  D2 ≥ 14/15  D3 ≥ 14/15  D4 ≥ 14/15
 #   D5 ≥ 14/15  D6 ≥ 14/15  D7 ≥ 9/10   D8 ≥ 14/15
 #
-# Grammar pinned to /skill-judge SKILL.md "### Step 5: Generate Report"
-# template (cached plugin install). Locates FIRST `## Dimension Scores`
-# heading; following section MUST contain a pipe table whose data rows
+# Grammar pinned to the FIRST `## Dimension Scores` heading in the
+# /skill-judge output (sourced from the "Step 5: Generate Report"
+# template in the upstream /skill-judge SKILL.md, cached plugin install).
+# The following section MUST contain a pipe table whose data rows
 # start with `| D<N>` (1..8 in order) where the 2nd and 3rd cells are
-# integer score/max. Anything else → PARSE_STATUS=bad_row.
+# integer score/max with score <= max. Anything else → PARSE_STATUS=bad_row.
 
 set -euo pipefail
 
@@ -159,6 +170,14 @@ while IFS= read -r ROW; do
     exit 0
   fi
 
+  # Sanity: score must not exceed max. A row like `D1 | 30 | 20` would
+  # otherwise inflate TOTAL_NUM and could falsely pass the per-dim
+  # threshold check, producing GRADE_A=true on impossible scores.
+  if [[ "$SCORE_CELL" -gt "$MAX_CELL" ]]; then
+    emit_failure bad_row
+    exit 0
+  fi
+
   DIM_NUMS[EXPECTED_DIM - 1]="$SCORE_CELL"
   DIM_DENS[EXPECTED_DIM - 1]="$MAX_CELL"
   TOTAL_NUM=$((TOTAL_NUM + SCORE_CELL))
@@ -203,14 +222,14 @@ fi
 # Compute overall grade letter from total percentage. /skill-judge scale:
 # A 90%+, B 80-89, C 70-79, D 60-69, F <60.
 TOTAL_DEN=120
-PCT10=$((TOTAL_NUM * 1000 / TOTAL_DEN))  # tenths of percent ×10 (i.e. permille)
-if [[ "$PCT10" -ge 900 ]]; then
+PERMILLE=$((TOTAL_NUM * 1000 / TOTAL_DEN))  # parts per thousand
+if [[ "$PERMILLE" -ge 900 ]]; then
   OVERALL_GRADE=A
-elif [[ "$PCT10" -ge 800 ]]; then
+elif [[ "$PERMILLE" -ge 800 ]]; then
   OVERALL_GRADE=B
-elif [[ "$PCT10" -ge 700 ]]; then
+elif [[ "$PERMILLE" -ge 700 ]]; then
   OVERALL_GRADE=C
-elif [[ "$PCT10" -ge 600 ]]; then
+elif [[ "$PERMILLE" -ge 600 ]]; then
   OVERALL_GRADE=D
 else
   OVERALL_GRADE=F

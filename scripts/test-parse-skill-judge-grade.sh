@@ -278,6 +278,69 @@ assert_kv "$OUT" "PARSE_STATUS" "bad_row" "case-m"
 assert_kv "$OUT" "GRADE_A" "false" "case-m"
 
 echo ""
+echo "--- Case (o): score exceeds max (D1=30/20) — must reject ---"
+FO="$TMPROOT/over-max.md"
+cat > "$FO" <<'EOF'
+## Dimension Scores
+
+| Dimension | Score | Max | Notes |
+|-----------|-------|-----|-------|
+| D1: Knowledge Delta | 30 | 20 | |
+| D2: Mindset | 14 | 15 | |
+| D3: Anti-Pattern Quality | 14 | 15 | |
+| D4: Specification Compliance | 14 | 15 | |
+| D5: Progressive Disclosure | 14 | 15 | |
+| D6: Freedom Calibration | 14 | 15 | |
+| D7: Pattern Recognition | 9 | 10 | |
+| D8: Practical Usability | 14 | 15 | |
+EOF
+OUT="$($PARSER "$FO")"
+assert_kv "$OUT" "PARSE_STATUS" "bad_row" "case-o"
+assert_kv "$OUT" "GRADE_A" "false" "case-o"
+
+echo ""
+echo "--- Case (p): OVERALL_GRADE=B at lower B boundary (96/120 = 80%) ---"
+# 96 = 18+13+13+13+12+13+5+9; D-thresholds varied to land below per-dim A
+# but yield total of exactly 96/120. (Each cell ≤ its max.)
+FP="$TMPROOT/grade-b.md"
+write_full_table "$FP" 18 13 13 13 12 13 5 9
+OUT="$($PARSER "$FP")"
+assert_kv "$OUT" "PARSE_STATUS" "ok" "case-p"
+assert_kv "$OUT" "TOTAL_NUM" "96" "case-p"
+assert_kv "$OUT" "OVERALL_GRADE" "B" "case-p"
+assert_kv "$OUT" "GRADE_A" "false" "case-p"
+
+echo ""
+echo "--- Case (q): OVERALL_GRADE=C at lower C boundary (84/120 = 70%) ---"
+FQ="$TMPROOT/grade-c.md"
+write_full_table "$FQ" 14 11 12 11 11 12 4 9
+# Total = 14+11+12+11+11+12+4+9 = 84
+OUT="$($PARSER "$FQ")"
+assert_kv "$OUT" "PARSE_STATUS" "ok" "case-q"
+assert_kv "$OUT" "TOTAL_NUM" "84" "case-q"
+assert_kv "$OUT" "OVERALL_GRADE" "C" "case-q"
+
+echo ""
+echo "--- Case (r): OVERALL_GRADE=D at lower D boundary (72/120 = 60%) ---"
+FR="$TMPROOT/grade-d.md"
+write_full_table "$FR" 12 10 10 10 9 10 3 8
+# Total = 12+10+10+10+9+10+3+8 = 72
+OUT="$($PARSER "$FR")"
+assert_kv "$OUT" "PARSE_STATUS" "ok" "case-r"
+assert_kv "$OUT" "TOTAL_NUM" "72" "case-r"
+assert_kv "$OUT" "OVERALL_GRADE" "D" "case-r"
+
+echo ""
+echo "--- Case (s): OVERALL_GRADE=F well below D boundary (40/120 ≈ 33%) ---"
+FS="$TMPROOT/grade-f.md"
+write_full_table "$FS" 5 5 5 5 5 5 5 5
+# Total = 40
+OUT="$($PARSER "$FS")"
+assert_kv "$OUT" "PARSE_STATUS" "ok" "case-s"
+assert_kv "$OUT" "TOTAL_NUM" "40" "case-s"
+assert_kv "$OUT" "OVERALL_GRADE" "F" "case-s"
+
+echo ""
 echo "--- Case (n): wrong max for D1 (max=15 instead of 20) ---"
 FN="$TMPROOT/wrong-max.md"
 cat > "$FN" <<'EOF'

@@ -76,7 +76,7 @@ Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no match
 ${SKILL_NAME} (absolute SKILL.md path: ${TARGET_SKILL_PATH}) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.
 ```
 
-> **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call gh-comment Bash block immediately, then proceed to Step 3.d — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call gh-comment Bash block immediately, then proceed to Step 3.j.v (the new grade-parse sub-step) — do NOT end the turn and do NOT skip directly to 3.d. The grade-A short-circuit and grade-history append both live in 3.j.v; bypassing it would silently break the strive-for-grade-A termination contract. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 Transcribe the judge's response to `$JUDGE_OUT` (full body, one write via the Bash tool).
 
@@ -110,18 +110,18 @@ Append one line to `$LOOP_TMPDIR/grade-history.txt`:
 - When `PARSE_STATUS=ok`: `iter=${ITER} total=${TOTAL_NUM}/${TOTAL_DEN} non_a=${NON_A_DIMS} parse_status=ok`
 - When `PARSE_STATUS!=ok`: `iter=${ITER} total=N/A non_a=N/A parse_status=${PARSE_STATUS}` (literal `N/A` — the parser does not emit `TOTAL_NUM` / `TOTAL_DEN` / `NON_A_DIMS` on non-ok statuses).
 
-Branch on `GRADE_A`:
-
-- **`GRADE_A=true`**: the target skill already grades A on every dimension D1..D8. Set `ITER_STATUS=grade_a_achieved` and skip directly to Step 4 (bypass 3.d and 3.i — there is nothing to improve this iteration). The outer's Step 4.v will recognize `grade_a_achieved` as a terminal happy-path exit and break out of the loop.
-- **`GRADE_A=false`**: continue to Step 3.d. The Non-A dimensions (`NON_A_DIMS`) and per-dim deficits will be passed to /design's prompt (see Step 3.d below) so /design focuses its plan on the specific point shortfalls — this directly counters the historical failure mode where Non-A findings were deemed "not worth implementing".
-
-Write the per-substep sentinel before transitioning:
+Write the per-substep sentinel **before** branching (so both grade-A short-circuit and grade-non-A continuation paths execute the write unconditionally — no path can skip the sentinel by jumping to Step 4 prematurely):
 
 ```bash
 printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3jv.done"
 ```
 
 The `printf 'done\n'` (not `touch`) is load-bearing for the same reason as the 3.j sentinel — non-empty file required for any future verify-skill-called.sh check.
+
+Branch on `GRADE_A`:
+
+- **`GRADE_A=true`**: the target skill already grades A on every dimension D1..D8. Set `ITER_STATUS=grade_a_achieved` and skip directly to Step 4 (bypass 3.d and 3.i — there is nothing to improve this iteration). The outer's Step 4.v will recognize `grade_a_achieved` as a terminal happy-path exit and break out of the loop.
+- **`GRADE_A=false`**: continue to Step 3.d. The Non-A dimensions (`NON_A_DIMS`) and per-dim deficits will be passed to /design's prompt (see Step 3.d below) so /design focuses its plan on the specific point shortfalls — this directly counters the historical failure mode where Non-A findings were deemed "not worth implementing".
 
 ## Step 3.d — Run /design
 

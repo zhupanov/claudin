@@ -221,6 +221,8 @@ Compose `$LOOP_TMPDIR/closeout-body.md` in a single Bash block. The body has fou
       else
         printf 'Final /skill-judge assessment unavailable: see Grade History above for the last successful judge parse. Last in-loop judge: `iter-%s-judge.txt`.\n\n' "${IT}"
       fi
+      printf '## Final Assessment\n\n'
+      printf 'Captured by the post-iter-cap re-judge at Step 5a. The full /skill-judge report is in `final-judge.txt` under the loop tmpdir; the parsed KV summary is in `final-grade.txt`.\n\n'
       ;;
     *)
       printf '## Infeasibility Justification\n\n'
@@ -240,11 +242,14 @@ Compose `$LOOP_TMPDIR/closeout-body.md` in a single Bash block. The body has fou
 Post the close-out body. If the `gh` post fails for any reason, print a warning and continue to Step 6 — never skip cleanup:
 
 ```bash
-if ! gh issue comment "${ISSUE_NUM}" --body-file "$LOOP_TMPDIR/closeout-body.md"; then
-  printf '**⚠ 5: close out — gh comment failed (exit %s). Continuing to cleanup.**\n' "$?"
-fi
+gh issue comment "${ISSUE_NUM}" --body-file "$LOOP_TMPDIR/closeout-body.md" || {
+  GH_RC=$?
+  printf '**⚠ 5: close out — gh comment failed (exit %s). Continuing to cleanup.**\n' "$GH_RC"
+}
 printf 'done\n' > "$LOOP_TMPDIR/closeout.sentinel"
 ```
+
+The exit code MUST be captured via `|| { GH_RC=$?; ... }` rather than `if ! gh ...; then printf ... "$?"`. Inside the then-branch of `if ! cmd`, `$?` reflects the negated condition's result (always `0`), losing the actual `gh` exit code — making it impossible to distinguish auth failures (typically 4) from rate-limit (typically 1) from network errors (typically 128) in the warning message.
 
 Print: `✅ 5: close out — issue #${ISSUE_NUM}, exit: ${EXIT_REASON}`
 
