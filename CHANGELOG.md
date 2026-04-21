@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-04-21
+
+### Added
+
+- `/simplify-skill <skill-name>` — new pure-delegator skill that refactors an existing larch skill for stronger adherence to `skills/shared/skill-design-principles.md` and reduced SKILL.md token footprint. Resolves the target skill directory, enumerates in-scope `.md` files (excluding `scripts/`, `tests/`, sibling sub-skills invoked via the `Skill` tool, and `skills/shared/`), and delegates a pinned behavior-preserving refactor feature description to `/im`. PR body includes a `## Token budget` section tracking SKILL.md line/char deltas.
+- `skills/simplify-skill/scripts/build-feature-description.sh` — helper that validates the target name (bare form, no plugin-qualified `<a>:<b>` shape), resolves the target dir (plugin tree first, then consumer `.claude/skills/`, then `${CLAUDE_PLUGIN_ROOT}/.claude/skills/`), fail-closes on enumeration errors, and emits the full feature-description prose to a temp file. `/im` receives the prose as its `args`.
+
+### Changed
+
+- `scripts/test-anti-halt-banners.sh` `DELEGATORS` array + `skills/shared/subskill-invocation.md` `### Scope list` "banner MUST NOT appear" list + "Pure forwarders" parentheticals all extended with `skills/simplify-skill/SKILL.md`. Cross-validated by `scripts/test-orchestrator-scope-sync.sh`.
+- `docs/workflow-lifecycle.md` Delegation Topology mermaid + bullet list + Standalone Usage bullet now document `/simplify-skill`. Exempt-list parentheticals also pick up `/loop-improve-skill` (pre-existing doc gap closed while that line was open for editing).
+
 ## [5.0.7] - 2026-04-21
 
 ### Changed
