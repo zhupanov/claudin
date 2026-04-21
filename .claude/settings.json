@@ -181,15 +181,6 @@
     ]
   },
   "enabledPlugins": {
-    "skill-judge@agent-toolkit": true,
-    "caveman@caveman": true
-  },
-  "extraKnownMarketplaces": {
-    "caveman": {
-      "source": {
-        "source": "github",
-        "repo": "JuliusBrussee/caveman"
-      }
-    }
+    "skill-judge@agent-toolkit": true
   }
 }
