@@ -1,0 +1,3 @@
+# scripts/sessionstart-health.sh — contract
+
+`${CLAUDE_PLUGIN_ROOT}/scripts/sessionstart-health.sh` is the SessionStart preflight hook that probes `jq` and `git` on `PATH` at session start and injects an advisory into session context when either is missing. `${CLAUDE_PLUGIN_ROOT}/scripts/test-sessionstart-health.sh` is its regression test, wired into `make lint` via the `test-sessionstart` target (run manually via `bash ${CLAUDE_PLUGIN_ROOT}/scripts/test-sessionstart-health.sh`). The hook MUST always exit 0 (SessionStart is non-blocking by spec) and the `additionalContext` string MUST remain fixed ASCII literals — see the invariant comment in the script.

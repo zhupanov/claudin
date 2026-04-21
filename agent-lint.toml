@@ -14,8 +14,8 @@ suppress = [
   # banner carries the operative one-sentence rule inline — the canonical
   # reference is a discoverability aid, not a mandatory cross-ref chain.
   # The rule's stated concern ("humans/LLMs chasing chained refs") does not
-  # apply to this use case. See AGENTS.md "Editing rules" for the anti-halt
-  # banner convention.
+  # apply to this use case. See `skills/shared/subskill-invocation.md`
+  # (normative home of the anti-halt banner convention).
   "nested-ref-deep",
   # tools-unknown (S040) is suppressed because agent-lint 2.3.2's built-in
   # tool registry predates the `Monitor` tool (introduced in Claude Code
@@ -37,14 +37,15 @@ suppress = [
 #
 # scripts/audit-edit-write.sh and scripts/test-audit-edit-write.sh are the
 # dev-only opt-in PostToolUse audit hook pair — structurally referenced from
-# Makefile (test target), docs/dev-hook-audit.md (enable snippet), AGENTS.md,
-# and SECURITY.md, but NOT from hooks/hooks.json or .claude/settings.json by
-# design (issue #155: contributors opt in locally via gitignored
-# .claude/settings.local.json). agent-lint's G004/dead-script rule only scans
-# SKILL.md / CLAUDE.md / hooks.json / settings.json for invocation refs and
-# does not follow CLAUDE.md @-imports or Makefile targets, so these two
-# scripts would be false-flagged. Excluded here rather than force-registered
-# to preserve the dev-only opt-in contract.
+# Makefile (test target), docs/dev-hook-audit.md (enable snippet),
+# scripts/audit-edit-write.md (sibling contract), and SECURITY.md, but NOT
+# from hooks/hooks.json or .claude/settings.json by design (issue #155:
+# contributors opt in locally via gitignored .claude/settings.local.json).
+# agent-lint's G004/dead-script rule only scans SKILL.md / CLAUDE.md /
+# hooks.json / settings.json for invocation refs and does not follow CLAUDE.md
+# @-imports or Makefile targets, so these two scripts would be false-flagged.
+# Excluded here rather than force-registered to preserve the dev-only opt-in
+# contract.
 #
 # scripts/test-deny-edit-write.sh is the regression harness for
 # scripts/deny-edit-write.sh (the skill-scoped PreToolUse deny hook for
@@ -58,8 +59,10 @@ suppress = [
 # reminder emitter invoked by /create-skill). The hints script itself IS
 # structurally referenced from skills/create-skill/SKILL.md Step 3 and is
 # therefore not excluded; the test script is referenced only from Makefile
-# (test-post-scaffold-hints target) and AGENTS.md, matching the same
-# Makefile-only pattern as the test-deny-edit-write.sh entry above.
+# (test-post-scaffold-hints target) and
+# skills/create-skill/scripts/post-scaffold-hints.md (sibling contract),
+# matching the same Makefile-only pattern as the test-deny-edit-write.sh
+# entry above.
 #
 # skills/create-skill/scripts/test-render-skill-md.sh is the regression
 # harness for render-skill-md.sh (the scaffold generator). The generator
@@ -75,20 +78,22 @@ suppress = [
 # would be false-flagged as dead. scripts/test-verify-skill-called.sh is the
 # regression harness for scripts/verify-skill-called.sh and is referenced
 # only from Makefile, matching the same Makefile-only pattern as the other
-# test-* harnesses above.
+# test-* harnesses above. Both are documented in scripts/verify-skill-called.md
+# (sibling contract).
 #
 # scripts/test-check-bump-version.sh is the regression harness for
 # scripts/check-bump-version.sh (#172). It is referenced only from Makefile
-# (test-check-bump-version target) and AGENTS.md, matching the same
-# Makefile-only pattern as the other test-* harnesses above.
+# (test-check-bump-version target) and scripts/check-bump-version.md
+# (sibling contract), matching the same Makefile-only pattern as the other
+# test-* harnesses above.
 #
 # scripts/test-lint-skill-invocations.sh is the regression harness for
 # scripts/lint-skill-invocations.py (the skill-invocation documentation lint).
 # The lint script itself IS structurally referenced from .pre-commit-config.yaml
 # (local hook `lint-skill-invocations`) and is therefore not excluded; the test
 # harness is referenced only from Makefile (test-lint-skill-invocations target)
-# and AGENTS.md, matching the same Makefile-only pattern as the other test-*
-# harnesses above.
+# and scripts/lint-skill-invocations.md (sibling contract), matching the same
+# Makefile-only pattern as the other test-* harnesses above.
 #
 # skills/fix-issue/scripts/test-parse-prose-blockers.sh is the regression
 # harness for skills/fix-issue/scripts/parse-prose-blockers.sh (the prose-
@@ -97,8 +102,8 @@ suppress = [
 # Step 1 eligibility description and from fetch-eligible-issue.sh's
 # prose_open_blockers function, and is therefore not excluded; the test
 # harness is referenced only from Makefile (test-parse-prose-blockers target)
-# and AGENTS.md, matching the same Makefile-only pattern as the other test-*
-# harnesses above.
+# and skills/fix-issue/scripts/parse-prose-blockers.md (sibling contract),
+# matching the same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
@@ -108,16 +113,17 @@ suppress = [
 # loop-improve-skill-iter skill is no longer named; /loop-improve-skill
 # is now a pure delegator whose runtime lives in scripts/driver.sh (#273).
 # It is structurally referenced from Makefile (test-anti-halt target) and
-# AGENTS.md, matching the same Makefile-only pattern as the other test-*
-# harnesses above.
+# skills/shared/subskill-invocation.md (normative scope-list source),
+# matching the same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-subskill-anchors.sh is the regression harness for every
 # `<path>/SKILL.md § <heading>` citation in skills/shared/subskill-invocation.md
 # (closes #236). The harness enforces heading-anchor resolution against the
 # referenced SKILL.md files — a contract orthogonal to the invocation-wording
 # contract enforced by scripts/lint-skill-invocations.py. It is referenced
-# only from Makefile (test-subskill-anchors target) and AGENTS.md, matching
-# the same Makefile-only pattern as the other test-* harnesses above.
+# only from Makefile (test-subskill-anchors target) and
+# scripts/test-subskill-anchors.md (sibling contract), matching the same
+# Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-loop-improve-skill-driver.sh is the regression harness for
 # skills/loop-improve-skill/scripts/driver.sh (the Option B bash-driver
@@ -131,8 +137,8 @@ suppress = [
 # prompt.txt, redact-secrets.sh in gh-comment pipeline) plus a small number of
 # behavioral smoke fixtures with stubbed `claude` and `gh` on PATH. It is
 # referenced only from Makefile (test-loop-improve-skill-driver target) and
-# AGENTS.md, matching the same Makefile-only pattern as the other test-*
-# harnesses above.
+# scripts/test-loop-improve-skill-driver.md (sibling contract), matching the
+# same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-parse-skill-judge-grade.sh is the regression harness for
 # scripts/parse-skill-judge-grade.sh (the /skill-judge output parser
@@ -141,8 +147,9 @@ suppress = [
 # skills/loop-improve-skill/scripts/driver.sh (both the in-loop Phase 1.v
 # grade parse and the Step 5a final post-iter-cap re-evaluation) and is
 # therefore not excluded; the test harness is referenced only from
-# Makefile (test-parse-skill-judge-grade target) and AGENTS.md, matching
-# the same Makefile-only pattern as the other test-* harnesses above.
+# Makefile (test-parse-skill-judge-grade target) and
+# scripts/parse-skill-judge-grade.md (sibling contract), matching the
+# same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-implement-structure.sh is the structural regression harness
 # for skills/implement/SKILL.md and skills/implement/references/ invariants
@@ -153,7 +160,8 @@ suppress = [
 # binding, the CI-parity focus-area enum check, reference-file contract
 # headers (Consumer/Contract/When-to-load), and the no-`see Step N
 # below|above` invariant in references/*.md. It is referenced only from
-# Makefile (test-implement-structure target) and AGENTS.md, matching the
+# Makefile (test-implement-structure target) and
+# scripts/test-implement-structure.md (sibling contract), matching the
 # same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-loop-improve-skill-skill-md.sh is the structural regression
@@ -163,13 +171,15 @@ suppress = [
 # Companion to scripts/test-loop-improve-skill-driver.sh: the driver harness
 # pins driver.sh contract tokens; this harness pins the SKILL.md contract
 # tokens introduced by the #291 pattern. It is referenced only from Makefile
-# (test-loop-improve-skill-skill-md target) and AGENTS.md, matching the
-# Makefile-only pattern as the other test-* harnesses above.
+# (test-loop-improve-skill-skill-md target) and
+# scripts/test-loop-improve-skill-skill-md.md (sibling contract), matching
+# the Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-loop-improve-skill-halt-rate.sh is the opt-in halt-rate
 # regression probe for /larch:loop-improve-skill (closes #278). Referenced
 # only from Makefile (halt-rate-probe target, NOT a lint prerequisite) and
-# AGENTS.md; matches the Makefile-only pattern as the other harnesses above.
+# scripts/test-loop-improve-skill-halt-rate.md (sibling contract); matches
+# the Makefile-only pattern as the other harnesses above.
 # scripts/lib-loop-improve-halt-ledger.sh is the sourced-only helper that
 # classify_halt_location lives in; referenced only via `source` from the
 # halt-rate probe and its test harness, which agent-lint does not follow.
@@ -182,7 +192,8 @@ suppress = [
 # DELEGATORS arrays in scripts/test-anti-halt-banners.sh and the bulleted
 # scope lists under "### Scope list" in skills/shared/subskill-invocation.md.
 # Referenced only from Makefile (test-orchestrator-scope-sync target) and
-# AGENTS.md; matches the Makefile-only pattern as the other harnesses above.
+# scripts/test-orchestrator-scope-sync.md (sibling contract); matches the
+# Makefile-only pattern as the other harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -207,4 +218,11 @@ exclude = [
   "scripts/lib-loop-improve-halt-ledger.sh",
   "scripts/test-lib-loop-improve-halt-ledger.sh",
   "scripts/test-orchestrator-scope-sync.sh",
+  # Skill-local sibling .md files — co-located contract docs for scripts
+  # under skills/<name>/scripts/. Not orchestrator references (not cited
+  # from the owning SKILL.md by design — contributors discover them by
+  # editing the sibling .sh). Excluded from S030/orphaned-skill-files.
+  "skills/issue/scripts/parse-input.md",
+  "skills/fix-issue/scripts/parse-prose-blockers.md",
+  "skills/create-skill/scripts/post-scaffold-hints.md",
 ]

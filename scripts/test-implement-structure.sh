@@ -145,7 +145,7 @@ done
 # (8) Each references/*.md contains the Consumer/Contract/When-to-load header triplet.
 #     Scans every *.md under references/ (not just the four expected refs) so new
 #     reference files added in the future are covered automatically — the contract
-#     documented in the header and AGENTS.md says "references/*.md" generally.
+#     documented in the header and scripts/test-implement-structure.md (sibling contract) covers "references/*.md" generally.
 # ---------------------------------------------------------------------------
 contract_headers=(
   '**Consumer**:'
@@ -175,7 +175,7 @@ done
 #     /implement's dotted substep numbering (closes #253).
 #     Scans every *.md under references/ (not just the four expected refs) so new
 #     reference files added in the future are covered automatically — the contract
-#     documented in the header and AGENTS.md says "references/*.md" generally.
+#     documented in the header and scripts/test-implement-structure.md (sibling contract) covers "references/*.md" generally.
 # ---------------------------------------------------------------------------
 shopt -s nullglob
 ref_files=( "$REFS_DIR"/*.md )
