@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.4] - 2026-04-21
+
+### Changed
+
+- `/create-skill`: prose-only improvement along six skill-judge dimensions of `skills/create-skill/SKILL.md`. Adds `## Design Mindset` (expert pre-scaffold prompts keyed to real forks), `## Anti-patterns` (8 NEVER bullets grounded in `/create-skill` pipeline failures), `## Decision Tables` (path mode + template + troubleshooting + skill-tool resolution), replaces the thin `## Principles` pointer with a `MANDATORY — READ ENTIRE FILE` directive plus two chronologically-ordered `Do NOT Load` branches, rewrites the frontmatter `description:` within the 250-char agent-lint cap, and trims the Step 3 `/im` feature-description template by dropping the `--plugin` enumeration block already emitted by `post-scaffold-hints.sh`. No scripts or references/ layer touched; Pattern A invocation block byte-stable (cited by `skills/shared/subskill-invocation.md`); delegator classification preserved.
+
 ## [5.0.3] - 2026-04-21
 
 ### Added
