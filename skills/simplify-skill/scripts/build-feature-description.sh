@@ -87,17 +87,30 @@ TARGET_SKILL_MD="${TARGET_DIR}/SKILL.md"
 INCLUDED=()
 INCLUDED+=("$TARGET_SKILL_MD")
 
-# find -type f -name '*.md' -not -path '*/scripts/*' -not -path '*/tests/*'
-# Use a portable loop; macOS find supports these flags in bash 3.2.
+# Fail-closed enumeration: run find to a temp file so its exit status is
+# observable, then iterate. Suppressing stderr and piping directly into a
+# process substitution hides permission/IO errors and can produce a partial
+# list that the caller treats as a complete enumeration (STATUS=ok).
+FIND_OUTPUT="$(mktemp -t simplify-skill-find.XXXXXX)"
+if ! find "$TARGET_DIR" -type f -name '*.md' \
+  -not -path '*/scripts/*' -not -path '*/tests/*' \
+  > "$FIND_OUTPUT"; then
+  rm -f "$FIND_OUTPUT"
+  echo "ERROR=find failed while enumerating .md files under $TARGET_DIR" >&2
+  exit 1
+fi
+# macOS find supports these flags in bash 3.2.
 while IFS= read -r f; do
   # Skip SKILL.md itself (already in the list).
   [[ "$f" == "$TARGET_SKILL_MD" ]] && continue
   INCLUDED+=("$f")
-done < <(find "$TARGET_DIR" -type f -name '*.md' \
-  -not -path '*/scripts/*' -not -path '*/tests/*' \
-  2>/dev/null | sort)
+done < <(LC_ALL=C sort < "$FIND_OUTPUT")
+rm -f "$FIND_OUTPUT"
 
-# Colon-join for stdout emission.
+# Colon-join for stdout emission. Contract note: paths must not contain `:`.
+# On macOS/Linux skill trees this holds by construction — skill directories
+# are kebab-case and paths never embed a colon. Filing a follow-up is the
+# right move only if some future tooling breaks that assumption.
 INCLUDED_JOINED=""
 for f in "${INCLUDED[@]}"; do
   if [[ -z "$INCLUDED_JOINED" ]]; then
