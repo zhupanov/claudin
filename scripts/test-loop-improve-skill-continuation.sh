@@ -14,6 +14,7 @@
 #   Inner skills/loop-improve-skill-iter/SKILL.md MUST contain:
 #     - Per-substep sentinel literals:
 #         iter-${ITER}-3j.done
+#         iter-${ITER}-3j-armed.marker         (NEW — Step 3.j State C pre-invocation armed marker; closes #262)
 #         iter-${ITER}-3jv.done                (NEW — Step 3.j.v grade-parse)
 #         iter-${ITER}-3d-pre-detect.done
 #         iter-${ITER}-3d-post-detect.done
@@ -21,6 +22,13 @@
 #         iter-${ITER}-3i.done
 #         iter-${ITER}-done.sentinel
 #         iter-${ITER}-infeasibility.md        (NEW — written on no_plan / design_refusal / im_verification_failed halts)
+#     - Step 3.j ordering invariant (closes #262): the iter-${ITER}-3j-armed.marker
+#       literal MUST appear on a lower line number than the bare-name /skill-judge
+#       Skill-tool invocation literal (`skill "skill-judge"`) in source order. The
+#       line-order check asserts the State C "armed marker before Skill call" half
+#       of the Step 3.j ordering invariant, which is the core correctness property
+#       of #262 (halt between Skill-call return and post-call Bash must be detectable
+#       as State B on resume).
 #     - At least one printf 'done\n' > ... literal (non-empty sentinel write —
 #       NOT touch, which would make verify-skill-called.sh --sentinel-file
 #       return VERIFIED=false empty_file).
@@ -166,6 +174,8 @@ echo "--- Inner SKILL.md sentinel literals ---"
 # shellcheck disable=SC2016
 check_contains "$INNER" 'iter-${ITER}-3j.done'               "inner 3.j sentinel literal"
 # shellcheck disable=SC2016
+check_contains "$INNER" 'iter-${ITER}-3j-armed.marker'       "inner 3.j armed-marker sentinel literal (#262)"
+# shellcheck disable=SC2016
 check_contains "$INNER" 'iter-${ITER}-3jv.done'              "inner 3.j.v grade-parse sentinel literal"
 # shellcheck disable=SC2016
 check_contains "$INNER" 'iter-${ITER}-3d-pre-detect.done'    "inner 3.d pre-rescue-detector sentinel literal"
@@ -179,6 +189,39 @@ check_contains "$INNER" 'iter-${ITER}-3i.done'               "inner 3.i sentinel
 check_contains "$INNER" 'iter-${ITER}-done.sentinel'         "inner iteration-complete sentinel literal"
 # shellcheck disable=SC2016
 check_contains "$INNER" 'iter-${ITER}-infeasibility.md'      "inner infeasibility justification file literal"
+
+echo ""
+echo "--- Inner SKILL.md Step 3.j ordering invariant (closes #262) ---"
+# The armed-marker write MUST appear before the bare-name /skill-judge Skill-tool
+# invocation in source order. This enforces the core State C ordering: a halt
+# between Skill-call return and the post-call Bash block must be detectable as
+# State B on resume (which requires the armed marker to have been written first).
+#
+# Needle choice is load-bearing: anchor on the redirect-to-path shape
+# (`> "$LOOP_TMPDIR/iter-${ITER}-3j-armed.marker"`) which is unique to the
+# pre-invocation printf write in State C. Do NOT anchor on the bare filename
+# `iter-${ITER}-3j-armed.marker` — that literal also appears in State B's prose
+# existence test (`[[ -e "$LOOP_TMPDIR/iter-${ITER}-3j-armed.marker" ]]`), so
+# head -n1 would match the prose line ABOVE the real write and let a reordering
+# of the pre-invocation Bash block BELOW the Skill invocation pass undetected.
+# The `> "$...armed.marker"` shape specifically matches the redirect target of
+# `printf 'done\n'` and nothing else in the file.
+#
+# Single-quoted needles are intentional — we assert literal shell-placeholder
+# strings, not expanded values.
+# shellcheck disable=SC2016
+ARMED_LINE=$(grep -n -F -- '> "$LOOP_TMPDIR/iter-${ITER}-3j-armed.marker"' "$INNER" | head -n1 | cut -d: -f1 || true)
+# The bare-name Pattern A invocation form is the double-quoted literal
+# `"skill-judge"` on the `Invoke the Skill tool ...` line. Search for the
+# double-quoted token directly (not `skill "skill-judge"` with a space
+# separator) because the SKILL.md renders `"skill-judge"` inside markdown
+# backticks, so the byte preceding `"` is a backtick (`), not a space.
+JUDGE_LINE=$(grep -n -F -- '"skill-judge"' "$INNER" | head -n1 | cut -d: -f1 || true)
+if [[ -n "$ARMED_LINE" && -n "$JUDGE_LINE" && "$ARMED_LINE" -lt "$JUDGE_LINE" ]]; then
+  pass "inner Step 3.j: armed-marker write precedes /skill-judge Skill invocation (armed=$ARMED_LINE, judge=$JUDGE_LINE)"
+else
+  fail "inner Step 3.j ordering: armed-marker write MUST precede /skill-judge Skill invocation (armed=$ARMED_LINE, judge=$JUDGE_LINE)"
+fi
 
 echo ""
 echo "--- Inner SKILL.md mechanical gate literals ---"

@@ -68,7 +68,21 @@ Establish canonical per-iteration file names under `$LOOP_TMPDIR`:
 
 Print: `> **🔶 3.j: judge**`
 
-**Idempotency short-circuit.** If `$LOOP_TMPDIR/iter-${ITER}-3j.done` already exists and is non-empty, print `⏩ 3.j: judge — already done (idempotent resume)` and skip to Step 3.j.v (NOT directly to 3.d — the new grade-A short-circuit lives in 3.j.v and must run on every resume).
+**Idempotency decision (three-state machine, closes #262).** On entry to Step 3.j, evaluate the on-disk ledger in this order and branch accordingly. This replaces the earlier single-state short-circuit: prior halt between Skill-tool return and the post-call Bash block would have re-run the Skill-tool call on resume, duplicating expensive judge work and producing a duplicate `gh issue comment`.
+
+- **State A (already done)** — if `[[ -s "$LOOP_TMPDIR/iter-${ITER}-3j.done" ]]` (the completion sentinel exists AND is non-empty), print `⏩ 3.j: judge — already done (idempotent resume)` and skip to Step 3.j.v (NOT directly to 3.d — the new grade-A short-circuit lives in 3.j.v and must run on every resume).
+
+- **State B (rescue path)** — if `[[ -e "$LOOP_TMPDIR/iter-${ITER}-3j-armed.marker" ]]` AND `[[ ! -s "$LOOP_TMPDIR/iter-${ITER}-3j.done" ]]` AND `[[ -s "$JUDGE_OUT" ]]`, the Skill-tool call ran previously and its response was transcribed to `$JUDGE_OUT` before the halt. Print `⏩ 3.j: judge — rescue path (reusing captured judge output; skipping Skill-tool call)`, skip directly to the post-call Bash block below, and do NOT re-run the Skill tool. Residual caveat: if the prior halt occurred after the `gh issue comment` was already posted but before `iter-${ITER}-3j.done` was written, the rescue path will re-post the same comment body — this narrower halt window is tracked as a follow-up OOS.
+
+- **State C (full path)** — otherwise, run the pre-invocation Bash block, the Skill-tool call, the transcription, and the post-call Bash block in source order.
+
+**Ordering invariant (State C).** Within a single iteration's full-path execution of Step 3.j, the armed-marker write MUST precede the Skill-tool call, which MUST precede the `$JUDGE_OUT` transcription, which MUST precede the post-call Bash block. The armed-marker-before-Skill-call half of this invariant is mechanically enforced by the line-order assertion in `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-improve-skill-continuation.sh` (armed-marker literal must appear on a lower line number than the bare-name Skill invocation literal in inner SKILL.md source order).
+
+**Pre-invocation Bash block (State C only).** Write the armed marker immediately before invoking `/skill-judge`, in its own fenced block separate from the post-call block:
+
+```bash
+printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3j-armed.marker"
+```
 
 Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no matching skill", retry with `"skill-judge:skill-judge"`. Pass the following string as args so the judge reads the current on-disk contents from the path resolved by the outer:
 
@@ -76,11 +90,11 @@ Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no match
 ${SKILL_NAME} (absolute SKILL.md path: ${TARGET_SKILL_PATH}) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.
 ```
 
-> **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call gh-comment Bash block immediately, then proceed to Step 3.j.v (the new grade-parse sub-step) — do NOT end the turn and do NOT skip directly to 3.d. The grade-A short-circuit and grade-history append both live in 3.j.v; bypassing it would silently break the strive-for-grade-A termination contract. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When `/skill-judge` returns, transcribe its response to `$JUDGE_OUT` immediately, then execute 3.j's post-call gh-comment Bash block, then proceed to Step 3.j.v (the new grade-parse sub-step) — do NOT end the turn and do NOT skip directly to 3.d. The grade-A short-circuit and grade-history append both live in 3.j.v; bypassing it would silently break the strive-for-grade-A termination contract. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
-Transcribe the judge's response to `$JUDGE_OUT` (full body, one write via the Bash tool).
+Transcribe the judge's response to `$JUDGE_OUT` (full body, one write via the Bash tool). A single `>` redirect, never append — State B's reuse gate depends on `$JUDGE_OUT` being non-empty if and only if a prior full-path transcription completed.
 
-Post the captured judgment to the tracking issue (single Bash block):
+**Post-call Bash block (runs after both State B rescue and State C full paths):**
 
 ```bash
 JUDGE_COMMENT_FILE="$LOOP_TMPDIR/iter-${ITER}-judge-comment.md"
@@ -89,7 +103,7 @@ gh issue comment "${ISSUE_NUM}" --body-file "$JUDGE_COMMENT_FILE"
 printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3j.done"
 ```
 
-The `printf 'done\n' > ...` (not `touch`) is load-bearing — `verify-skill-called.sh --sentinel-file` requires the file to be non-empty (`-s` check in `${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh`). An empty sentinel would cause the outer's gate to misclassify this iteration as a halt.
+The `printf 'done\n' > ...` (not `touch`) is load-bearing — `verify-skill-called.sh --sentinel-file` requires the file to be non-empty (`-s` check in `${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh`). An empty sentinel would cause the outer's gate to misclassify this iteration as a halt. The same `printf 'done\n' > ...` convention applies to the armed marker written in the pre-invocation Bash block above, keeping sentinel culture uniform across the Step 3.j ledger even though no `verify-skill-called.sh --sentinel-file` check currently targets the armed marker directly.
 
 ## Step 3.j.v — Grade Parse (grade-A short-circuit)
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.16] - 2026-04-20
+
+### Fixed
+
+- `skills/loop-improve-skill-iter/SKILL.md` — Step 3.j now runs a three-state idempotency machine keyed on the on-disk ledger (State A `3j.done` non-empty skips entirely; State B armed-marker + `3j.done` absent + `$JUDGE_OUT` non-empty reuses captured judge output and runs only the post-call gh-comment + sentinel write; State C otherwise runs the full path, writing `iter-${ITER}-3j-armed.marker` in its own pre-invocation Bash block before the Skill-tool call). Previously a halt between Skill-tool return and the post-call Bash block that writes `3j.done` caused resume to re-invoke `/skill-judge` (duplicate expensive judge work + duplicate `gh issue comment`). `scripts/test-loop-improve-skill-continuation.sh` gains a line-order assertion that mechanically enforces the State C "armed marker before Skill call" invariant (needle anchored on the redirect-target shape `> "$LOOP_TMPDIR/iter-${ITER}-3j-armed.marker"`, unique to the pre-invocation printf write). `AGENTS.md` bullet enumerates the new sentinel and describes the ordering assertion. Closes #262.
+
 ## [4.3.14] - 2026-04-20
 
 ### Fixed
