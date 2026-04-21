@@ -114,6 +114,16 @@ suppress = [
 # (test-loop-improve-skill-continuation target) and AGENTS.md, matching the
 # same Makefile-only pattern as the other test-* harnesses above.
 #
+# scripts/test-parse-skill-judge-grade.sh is the regression harness for
+# scripts/parse-skill-judge-grade.sh (the /skill-judge output parser
+# consumed by /loop-improve-skill's grade-gated termination contract).
+# The parser itself IS structurally referenced from
+# skills/loop-improve-skill/SKILL.md (Step 5 iter-cap branch) and
+# skills/loop-improve-skill-iter/SKILL.md (Step 3.j.v) and is therefore
+# not excluded; the test harness is referenced only from Makefile
+# (test-parse-skill-judge-grade target) and AGENTS.md, matching the same
+# Makefile-only pattern as the other test-* harnesses above.
+#
 # scripts/test-implement-structure.sh is the structural regression harness
 # for skills/implement/SKILL.md and skills/implement/references/ invariants
 # (closes #234). Companion to scripts/test-implement-rebase-macro.sh: the
@@ -143,4 +153,5 @@ exclude = [
   "scripts/test-implement-structure.sh",
   "scripts/test-subskill-anchors.sh",
   "scripts/test-loop-improve-skill-continuation.sh",
+  "scripts/test-parse-skill-judge-grade.sh",
 ]
