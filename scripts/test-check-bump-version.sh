@@ -427,8 +427,8 @@ assert_stdout_contains "5b post-recovered: COMMITS_AFTER=3 (true count)" "$post_
 # With the coerced BEFORE=0 and true AFTER=3, the numeric check would
 # naturally set VERIFIED=false — but a correct caller skips the comparison
 # because the pre-check STATUS was non-ok. This test documents the raw
-# signals; the SKILL.md step 4 "Pre-check STATUS guard" branches on the
-# pre-check STATUS, not on this post-check's VERIFIED value.
+# signals; the rebase-rebump-subprocedure.md step 4 "Pre-check STATUS guard"
+# branches on the pre-check STATUS, not on this post-check's VERIFIED value.
 assert_stdout_contains "5b post-recovered: script-level VERIFIED reflects naive arithmetic" "$post_out" "VERIFIED=false"
 
 # --- Section 6: argument-error paths -----------------------------------------
