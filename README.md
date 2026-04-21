@@ -227,6 +227,48 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 | `make smoke-dialectic` | Run the offline fixture-driven smoke test for `/design` Step 2a.5 (dialectic parser + tally + structural-invariant guard). Exercises `scripts/dialectic-smoke-test.sh` against `tests/fixtures/dialectic/`. |
 | `make test-block-submodule` | Run the regression harness for `scripts/block-submodule-edit.sh` (the PreToolUse hook that denies edits inside submodules). Exercises `scripts/test-block-submodule-edit.sh` end-to-end against a temporary superproject + submodule fixture. |
 | `make test-deny-edit-write` | Run the regression harness for `scripts/deny-edit-write.sh` (the skill-scoped PreToolUse hook registered by `/research` that permits `Edit`/`Write`/`NotebookEdit` only when the target path resolves under canonical `/tmp`, denies otherwise). Exercises `scripts/test-deny-edit-write.sh` — repo-deny, `/tmp`-allow, traversal-deny, relative-deny, `notebook_path` allow/deny, fail-closed on empty path, malformed JSON, idempotency, and `jq`-absent fallback byte-identity. |
+| `make test-lib-halt-ledger` | Run the offline regression harness for `scripts/lib-loop-improve-halt-ledger.sh` (the sourced-only halt-location classifier consumed by the halt-rate probe). Exercises `scripts/test-lib-loop-improve-halt-ledger.sh` — empty dir, nonexistent dir, each per-substep sentinel, multi-iteration highest-iter scan, and empty-sentinel-treated-as-missing cases. A `make lint` prerequisite. |
+| `make halt-rate-probe` | Run the **opt-in** halt-rate regression probe for `/larch:loop-improve-skill` (closes #278). Exercises `scripts/test-loop-improve-skill-halt-rate.sh` end-to-end against a throwaway fixture skill to measure how often the loop halts mid-turn after `/skill-judge` returns (the recurring failure from #273). **Not a `make lint` prerequisite** — too slow and non-deterministic for CI. See "Halt-rate regression harness" below for the output contract and caveats. |
+
+### Halt-rate regression harness
+
+Opt-in probe that measures how often `/larch:loop-improve-skill` halts mid-iteration. Closes #278; tracks the halt-problem umbrella #273. Invocation:
+
+```bash
+make halt-rate-probe
+# or with custom flags:
+bash scripts/test-loop-improve-skill-halt-rate.sh --runs 10 --timeout-per-run 2400
+```
+
+**Flags**: `--runs N` (default 5), `--timeout-per-run SEC` (default 1800), `--keep-tmpdirs` (skip cleanup for forensics).
+
+**Prerequisites**: `claude` CLI on `PATH` (headless mode) + GNU `timeout` (macOS: `brew install coreutils`, then `gtimeout` is detected automatically). The harness provisions a per-run bare git origin under `mktemp -d`, copies the fixture skill from `tests/fixtures/loop-halt-rate/SKILL.md`, PATH-shims `gh` to a no-op stub (so no live GitHub side effects), then invokes `claude --plugin-dir <larch-root> -p "/larch:loop-improve-skill loop-halt-rate"` bounded by `timeout --kill-after=10`.
+
+**Output contract** (stdout — automation should grep these tokens):
+
+```
+RUN <i>: status=<completed_by_outer|halt_mid_turn|halt_detected_by_outer|timeout|error> last_completed=<token> clause="<halt-location clause>" elapsed=<s>s
+...
+HALT_RATE=<halted>/<total>
+PROBE_STATUS=ok|skipped_no_claude|error
+PER_STATUS_BREAKDOWN: completed=<n> halt_mid_turn=<n> halt_detected_by_outer=<n> timeout=<n> error=<n>
+PER_LOCATION_BREAKDOWN: none=<n> 3j=<n> 3jv=<n> 3d-pre-detect=<n> 3d-post-detect=<n> 3d-plan-post=<n> 3i=<n> done=<n>
+```
+
+- `HALT_RATE` numerator = `halt_mid_turn + halt_detected_by_outer`. Denominator = total measured runs excluding `error` (infrastructure failures that prevented measurement).
+- `halt_mid_turn` is the halt-of-interest from #273: the outer skill itself ended its turn before reaching its Step 5 close-out.
+- `halt_detected_by_outer` means the inner halted but the outer's #231 mechanical gate caught it (observable halt with `EXIT_REASON=iteration sentinel missing`).
+- `completed_by_outer` includes all normal loop exits: `grade_a_achieved`, `max iterations (10) reached`, and infeasibility exits like `im_verification_failed`. `/im` is expected to fail under the stubbed `gh` — this is NOT the halt-of-interest; the halt-of-interest fires much earlier, at `/skill-judge` return.
+- `PROBE_STATUS=skipped_no_claude` is emitted (and the harness exits non-zero) when the `claude` binary is absent, per issue #278's explicit contract.
+- `PER_LOCATION_BREAKDOWN` tokens correspond to the `LAST_COMPLETED` taxonomy in `skills/loop-improve-skill/SKILL.md` §#247.
+
+**Caveats**:
+
+- Runtime is highly variable (~5-30min per run). Budget accordingly.
+- The fixture is a minimal deliberately-deficient skill; measured halt rate is a *lower bound* on production halt rate — real target skills produce longer reviewer chains that amplify the turn-end cue. Document this when publishing comparative numbers.
+- Each run consumes real Claude API tokens + external reviewer (Cursor/Codex) latency.
+- `gh` is PATH-shimmed to a no-op stub — no live GitHub issue creation, no PR creation, no live CI. `/im` will typically fail with `ITER_STATUS=im_verification_failed` (classified as `completed_by_outer`, not a halt).
+- Not wired into `make lint` by design — opt-in only.
 
 ## Environment Variables
 

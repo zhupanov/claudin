@@ -135,6 +135,17 @@ suppress = [
 # below|above` invariant in references/*.md. It is referenced only from
 # Makefile (test-implement-structure target) and AGENTS.md, matching the
 # same Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/test-loop-improve-skill-halt-rate.sh is the opt-in halt-rate
+# regression probe for /larch:loop-improve-skill (closes #278). Referenced
+# only from Makefile (halt-rate-probe target, NOT a lint prerequisite) and
+# AGENTS.md; matches the Makefile-only pattern as the other harnesses above.
+# scripts/lib-loop-improve-halt-ledger.sh is the sourced-only helper that
+# classify_halt_location lives in; referenced only via `source` from the
+# halt-rate probe and its test harness, which agent-lint does not follow.
+# scripts/test-lib-loop-improve-halt-ledger.sh is the offline regression
+# harness for the ledger lib, referenced only from Makefile
+# (test-lib-halt-ledger target).
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -154,4 +165,7 @@ exclude = [
   "scripts/test-subskill-anchors.sh",
   "scripts/test-loop-improve-skill-continuation.sh",
   "scripts/test-parse-skill-judge-grade.sh",
+  "scripts/test-loop-improve-skill-halt-rate.sh",
+  "scripts/lib-loop-improve-halt-ledger.sh",
+  "scripts/test-lib-loop-improve-halt-ledger.sh",
 ]

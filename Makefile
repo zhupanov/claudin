@@ -1,9 +1,9 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-continuation test-parse-skill-judge-grade smoke-dialectic
+.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-continuation test-parse-skill-judge-grade test-lib-halt-ledger smoke-dialectic halt-rate-probe
 
-lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-continuation test-parse-skill-judge-grade
+lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-continuation test-parse-skill-judge-grade test-lib-halt-ledger
 	pre-commit run --all-files
 
 test-redact:
@@ -63,8 +63,16 @@ test-loop-improve-skill-continuation:
 test-parse-skill-judge-grade:
 	bash scripts/test-parse-skill-judge-grade.sh
 
+test-lib-halt-ledger:
+	bash scripts/test-lib-loop-improve-halt-ledger.sh
+
 smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh
+
+# Opt-in halt-rate regression probe (closes #278). NOT a lint prerequisite —
+# too slow and non-deterministic for CI. See README "Halt-rate regression harness".
+halt-rate-probe:
+	bash scripts/test-loop-improve-skill-halt-rate.sh
 
 shellcheck:
 	pre-commit run shellcheck --all-files
