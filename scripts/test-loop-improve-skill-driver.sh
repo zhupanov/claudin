@@ -81,6 +81,31 @@ check_contains 'grade A achieved after final post-iter-cap'   'post-cap A reclas
 check_contains 'Infeasibility Justification'                   'close-out infeasibility section heading'
 check_contains 'Grade History'                                 'close-out Grade History section heading'
 check_contains 'claude -p'                                     'claude -p subprocess invocation'
+# FINDING_7: every child claude invocation must pass --plugin-dir so contributor
+# dev-mode (claude --plugin-dir .) or shadowed-repo installs still resolve the
+# target skills from the larch plugin tree.
+check_contains '--plugin-dir'                                  'claude -p --plugin-dir argument (FINDING_7)'
+# shellcheck disable=SC2016
+check_contains '"$CLAUDE_PLUGIN_ROOT"'                         'CLAUDE_PLUGIN_ROOT passed as --plugin-dir value'
+# FINDING_7: fully-qualified slash-command names for larch-shipped children
+# (design, im) so they never resolve against a user-local shadow.
+check_contains '/larch:design'                                 'fully-qualified /larch:design invocation'
+check_contains '/larch:im'                                     'fully-qualified /larch:im invocation'
+# FINDING_10: stderr MUST NOT merge into stdout (which is posted publicly) —
+# invoke_claude_p redirects stdout and stderr to separate files; the .stderr
+# sidecar stays in LOOP_TMPDIR for diagnostics only.
+# shellcheck disable=SC2016
+check_contains '2> "$stderr_file"'                             'stderr redirected to separate file (FINDING_10)'
+# shellcheck disable=SC2016
+check_contains 'local stderr_file="${out_file}.stderr"'        '.stderr sidecar naming (FINDING_10)'
+# FINDING_9: the /im plan body is piped via STDIN (not argv) so large plans do
+# not exceed macOS ARG_MAX = 262144.
+# shellcheck disable=SC2016
+check_contains '< "$prompt_file"'                              'prompt-file fed via STDIN (FINDING_9)'
+# FINDING_11: the driver honors LOOP_IMPROVE_SKIP_PREFLIGHT=1 so the fixture
+# harness can exercise control-flow under a non-git-repo mktemp'd workdir.
+check_contains 'LOOP_IMPROVE_SKIP_PREFLIGHT'                   'opt-in preflight-skip env var (FINDING_11)'
+check_contains '--skip-preflight'                              'session-setup.sh --skip-preflight forwarding (FINDING_11)'
 
 # -----------------------------------------------------------------------
 # Tier 1b — Syntax check
@@ -194,20 +219,34 @@ IBODY
 
   cat > "$stub_dir/claude" <<CLAUDE_EOF
 #!/usr/bin/env bash
-# claude stub — picks body by prompt prefix.
+# claude stub — picks body by prompt prefix. Supports the FINDING_7/9 contract:
+# claude -p --plugin-dir <root>  (prompt is read from STDIN, not argv).
 if [[ "\$1" == "--version" ]]; then
   echo "claude stub 0.0.0"
   exit 0
 fi
-# Args: -p "<prompt>"
-shift  # -p
-prompt="\$1"
+# Skip any leading flags until we've consumed -p and --plugin-dir.
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in
+    -p) shift ;;
+    --plugin-dir) shift 2 ;;
+    --*) shift ;;
+    *) break ;;
+  esac
+done
+# Prompt may be on stdin (FINDING_9) or as a positional arg (legacy fallback).
+if [[ \$# -gt 0 ]]; then
+  prompt="\$1"
+else
+  prompt="\$(cat)"
+fi
+# Match against the leading slash-command token.
 case "\$prompt" in
-  "/skill-judge"*)
+  "/skill-judge"*|"/larch:skill-judge"*)
     bash "$fixture_tmp/judge-body.sh" ;;
-  "/design"*)
+  "/design"*|"/larch:design"*)
     bash "$fixture_tmp/design-body.sh" ;;
-  "/im"*)
+  "/im"*|"/larch:im"*)
     bash "$fixture_tmp/im-body.sh" ;;
   *)
     printf 'unknown-prompt-stub\n' ;;
@@ -223,6 +262,7 @@ CLAUDE_EOF
     cd "$work_dir"
     PATH="$stub_dir:$PATH" \
     CLAUDE_PLUGIN_ROOT="$REPO_ROOT" \
+    LOOP_IMPROVE_SKIP_PREFLIGHT=1 \
       bash "$DRIVER" testskill
   ) > "$driver_log" 2>&1 || rc=$?
 

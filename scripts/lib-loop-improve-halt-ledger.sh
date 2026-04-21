@@ -5,12 +5,12 @@
 # for per-substep sentinel files and emits KV classification on stdout.
 #
 # Canonical-source sync: the LAST_COMPLETED token taxonomy and the byte-preserved
-# HALT_LOCATION_CLAUSE strings mirror skills/loop-improve-skill/SKILL.md §#247
-# (the "LAST_COMPLETED mapping" table). Any change to that table MUST be
-# reflected here in the same PR, and paired with updates to:
+# HALT_LOCATION_CLAUSE strings are owned by the clause_for_last_completed()
+# function below — this library is the canonical taxonomy source (the prior
+# mapping table in skills/loop-improve-skill/SKILL.md §#247 no longer exists;
+# the outer skill was rewritten as scripts/driver.sh under #273). Any change
+# to the taxonomy MUST be paired with updates to:
 #   - scripts/test-lib-loop-improve-halt-ledger.sh (this lib's regression harness)
-#   - scripts/test-loop-improve-skill-continuation.sh (literal-pin harness for
-#     the outer skill's halt-diagnostic emission)
 #
 # This library is sourced only; it has no shebang and must not be executed
 # directly. Consumers:

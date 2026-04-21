@@ -137,11 +137,28 @@ fi
 
 breadcrumb_inprogress "2: session setup"
 
-SETUP_OUT="$("${CLAUDE_PLUGIN_ROOT}"/scripts/session-setup.sh \
-  --prefix claude-loop-improve \
-  --skip-branch-check \
-  --skip-slack-check \
-  --skip-repo-check)"
+# FINDING_11 opt-in: LOOP_IMPROVE_SKIP_PREFLIGHT=1 adds --skip-preflight so the
+# regression harness can exercise the driver's control-flow under a mktemp'd
+# fixture workdir (which is not a real git repo with an origin/main). Never
+# enable in production.
+SETUP_EXTRA_FLAGS=()
+if [[ "${LOOP_IMPROVE_SKIP_PREFLIGHT:-}" == "1" ]]; then
+  SETUP_EXTRA_FLAGS+=("--skip-preflight")
+fi
+
+# FINDING_8: guard command substitution so a non-zero exit surfaces through a
+# breadcrumb rather than silently aborting under `set -e`.
+SETUP_OUT=""
+if ! SETUP_OUT="$("${CLAUDE_PLUGIN_ROOT}"/scripts/session-setup.sh \
+    --prefix claude-loop-improve \
+    --skip-branch-check \
+    --skip-slack-check \
+    --skip-repo-check \
+    ${SETUP_EXTRA_FLAGS[@]+"${SETUP_EXTRA_FLAGS[@]}"} 2>&1)"; then
+  printf '%s\n' "$SETUP_OUT" >&2
+  breadcrumb_warn "2: session setup — session-setup.sh exited non-zero. Aborting."
+  exit 1
+fi
 
 LOOP_TMPDIR="$(printf '%s\n' "$SETUP_OUT" | awk -F= '/^SESSION_TMPDIR=/{print substr($0, index($0,"=")+1); exit}')"
 
@@ -162,10 +179,6 @@ case "$LOOP_TMPDIR" in
     breadcrumb_warn "2: session setup — LOOP_TMPDIR '$LOOP_TMPDIR' contains '..' path component. Aborting."
     exit 1 ;;
 esac
-if [[ "$LOOP_TMPDIR" == *"/.."* ]]; then
-  breadcrumb_warn "2: session setup — LOOP_TMPDIR '$LOOP_TMPDIR' contains '..' path component. Aborting."
-  exit 1
-fi
 
 # One-shot forensic capture (advisory only; failure ignored)
 claude --version > "$LOOP_TMPDIR/claude-version.txt" 2>/dev/null || true
@@ -206,29 +219,50 @@ breadcrumb_done "3: create issue — #${ISSUE_NUM}"
 # --------------------------------------------------------------------------
 
 # invoke_claude_p <prompt-file> <out-file> <phase-label> <timeout-seconds>
-# Reads the prompt from <prompt-file> (so the full prompt is a file on disk,
-# not an argv element — keeps argv small and avoids shell-quoting surprises),
-# passes it to `claude -p <prompt>` via a here-doc, captures stdout to
-# <out-file>. cd's to REPO_ROOT first.
+#
+# Reads the prompt from <prompt-file> and passes it to
+# `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` via STDIN (FINDING_9: avoids
+# argv ARG_MAX exhaustion on large plans; macOS ARG_MAX default is 262144).
+#
+# Stdout is captured to <out-file>; stderr is captured to <out-file>.stderr
+# (FINDING_10: stderr MUST NOT be posted to public gh issue comments — it can
+# contain filesystem paths, hostnames, or raw API-key shapes that escape the
+# redact-secrets.sh patterns). The .stderr file stays in $LOOP_TMPDIR for
+# diagnostics and is removed with the rest of the tmpdir by the EXIT trap.
+#
+# Uses a background-poll pattern (no external `timeout`/`gtimeout` dependency)
+# so the function works on macOS defaults. cd's to REPO_ROOT first.
+#
+# Returns: the child claude's exit code (0 on success; 124 on timeout).
 invoke_claude_p() {
   local prompt_file="$1"
   local out_file="$2"
   local label="$3"
   local timeout_s="${4:-1200}"
+  local stderr_file="${out_file}.stderr"
 
-  local prompt
-  prompt="$(cat "$prompt_file")"
+  : > "$out_file"
+  : > "$stderr_file"
 
-  # Use run-external-reviewer.sh for uniform monitoring + timeout + stdout capture.
-  # (Sidesteps reimplementing the poll/kill logic inline.)
   (
     cd "$REPO_ROOT"
-    "${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh" \
-      --tool "claude-${label}" \
-      --output "$out_file" \
-      --timeout "$timeout_s" \
-      --capture-stdout \
-      -- claude -p "$prompt"
+    claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
+      < "$prompt_file" > "$out_file" 2> "$stderr_file" &
+    local pid=$!
+    local elapsed=0
+    while kill -0 "$pid" 2>/dev/null; do
+      if [[ "$elapsed" -ge "$timeout_s" ]]; then
+        kill "$pid" 2>/dev/null || true
+        sleep 5
+        kill -9 "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+        printf 'claude-%s: TIMED OUT after %ss\n' "$label" "$timeout_s" >> "$stderr_file"
+        exit 124
+      fi
+      sleep 10
+      elapsed=$(( elapsed + 10 ))
+    done
+    wait "$pid"
   )
 }
 
@@ -274,11 +308,29 @@ detect_plan_status() {
     return 0
   fi
 
-  # First non-blank line: trim + case-fold
+  # First non-blank line: trim + case-fold + strip markdown emphasis wrappers
+  # (leading/trailing `*` and `_` runs) + strip trailing punctuation
+  # (., !, ?, ;, ,). Handles "No plan.", "**No plan**", "*no plan*", etc.
+  # (FINDING_2: exact-string sentinel match fails on trailing punctuation;
+  # emphasis wrappers are a common /design rendering artifact.)
   local first_line
   first_line="$(awk 'NF {print; exit}' "$design_out" \
     | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
     | tr '[:upper:]' '[:lower:]')"
+  # Strip leading + trailing runs of `*` and `_` (markdown emphasis wrappers).
+  first_line="$(printf '%s' "$first_line" | sed -E 's/^[*_]+//; s/[*_]+$//')"
+  # Re-strip whitespace that may have been inside the emphasis wrappers.
+  first_line="$(printf '%s' "$first_line" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  # Iteratively strip trailing punctuation.
+  while :; do
+    case "$first_line" in
+      *.|*!|*\?|*\;|*,)
+        first_line="${first_line%?}"
+        ;;
+      *)
+        break ;;
+    esac
+  done
 
   # Structural markers — anchored regex on any line
   local has_structural="no"
@@ -373,17 +425,14 @@ while [[ $ITER -le 10 ]]; do
   # Build prompt via printf (single call — the whole body is fixed-format).
   # NOTE: the /skill-judge invocation prompt is transplanted verbatim from
   # the pre-rewrite inner Step 3.j prompt text.
-  printf '/skill-judge %s (absolute SKILL.md path: %s) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.\n' \
+  printf '/skill-judge:skill-judge %s (absolute SKILL.md path: %s) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.\n' \
     "${SKILL_NAME}" "${TARGET_SKILL_PATH}" > "$JUDGE_PROMPT"
 
   invoke_claude_p "$JUDGE_PROMPT" "$JUDGE_OUT" "judge" 1200 || {
-    breadcrumb_warn "4.${ITER}.j: judge — claude -p failed. Continuing to next iteration (loop treats subprocess failure as no-op for this phase)."
+    breadcrumb_warn "4.${ITER}.j: judge — claude -p failed. Aborting loop (proceeding to close-out)."
     EXIT_REASON="subprocess failure at /skill-judge iteration ${ITER}"
     break
   }
-
-  # Wait for output via collect-reviewer-results.sh (validates non-empty / retries once).
-  "${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh" --timeout 1260 "$JUDGE_OUT" >/dev/null 2>&1 || true
 
   if [[ ! -s "$JUDGE_OUT" ]]; then
     breadcrumb_warn "4.${ITER}.j: judge — empty output from /skill-judge subprocess. Aborting loop."
@@ -465,7 +514,7 @@ while [[ $ITER -le 10 ]]; do
   }
 
   {
-    printf '/design Improve /%s at %s' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
+    printf '/larch:design Improve /%s at %s' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
     if [[ "$PARSE_STATUS" == "ok" && "$GRADE_A" == "false" ]]; then
       printf ' focused on %s (the Non-A dimensions from this iteration'"'"'s /skill-judge).' "${NON_A_DIMS}"
       printf '\n\nNon-A dimensions from this iteration'"'"'s /skill-judge: %s.\n' "${NON_A_DIMS}"
@@ -489,7 +538,6 @@ while [[ $ITER -le 10 ]]; do
     write_infeasibility "$ITER" "design_refusal" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
     break
   }
-  "${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh" --timeout 1860 "$DESIGN_OUT" >/dev/null 2>&1 || true
 
   PLAN_STATUS="$(detect_plan_status "$DESIGN_OUT")"
 
@@ -502,13 +550,12 @@ while [[ $ITER -le 10 ]]; do
       breadcrumb_inprogress "4.${ITER}.d: design — rescue (no structural markers; re-invoking /design --auto)"
       RESCUE_PROMPT="$LOOP_TMPDIR/iter-${ITER}-design-rescue-prompt.txt"
       {
-        printf '/design --auto Re-emit a concrete plan for /%s at %s.\n\n' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
+        printf '/larch:design --auto Re-emit a concrete plan for /%s at %s.\n\n' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
         # shellcheck disable=SC2016  # backticks inside literal prose, not command substitution
         printf 'Your previous response had no structured-plan markers (no markdown headings, numbered list counters, or bulleted items). Focus this re-attempt exclusively on the single highest-leverage /skill-judge finding from this iteration. The re-attempt MUST use /design'"'"'s standard plan schema: a top-level `## Implementation Plan` section with `Files to modify/create`, `Approach`, `Edge cases`, `Testing strategy`, and `Failure modes` subheadings. No preamble prose. No budget excuses. No no-plan sentinels.\n\n'
         printf 'Non-A dimensions were: %s.\n' "${NON_A_DIMS}"
       } > "$RESCUE_PROMPT"
       invoke_claude_p "$RESCUE_PROMPT" "$DESIGN_OUT" "design-rescue" 1800 || true
-      "${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh" --timeout 1860 "$DESIGN_OUT" >/dev/null 2>&1 || true
       PLAN_STATUS="$(detect_plan_status "$DESIGN_OUT")"
     fi
   fi
@@ -545,9 +592,11 @@ while [[ $ITER -le 10 ]]; do
   IM_PROMPT="$LOOP_TMPDIR/iter-${ITER}-im-prompt.txt"
   IM_OUT="$LOOP_TMPDIR/iter-${ITER}-im.txt"
 
-  # /im takes the plan text as its argument
+  # /larch:im takes the plan text as its argument. FINDING_9: the prompt is
+  # sent to claude -p via STDIN (see invoke_claude_p), so the full plan body
+  # does NOT have to fit into argv (macOS default ARG_MAX = 262144).
   {
-    printf '/im '
+    printf '/larch:im '
     cat "$DESIGN_OUT"
   } > "$IM_PROMPT"
 
@@ -557,7 +606,6 @@ while [[ $ITER -le 10 ]]; do
     write_infeasibility "$ITER" "im_verification_failed" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
     break
   }
-  "${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh" --timeout 3660 "$IM_OUT" >/dev/null 2>&1 || true
 
   # Mechanical gate: verify-skill-called.sh --stdout-line '^✅ 18: cleanup'
   VERIFY_OUT="$("${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh" \
@@ -595,11 +643,10 @@ if [[ "$EXIT_REASON" == "max iterations (10) reached" ]]; then
   FINAL_JUDGE_OUT="$LOOP_TMPDIR/final-judge.txt"
   FINAL_GRADE_OUT="$LOOP_TMPDIR/final-grade.txt"
 
-  printf '/skill-judge %s (absolute SKILL.md path: %s) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.\n' \
+  printf '/skill-judge:skill-judge %s (absolute SKILL.md path: %s) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.\n' \
     "${SKILL_NAME}" "${TARGET_SKILL_PATH}" > "$FINAL_PROMPT"
 
   if invoke_claude_p "$FINAL_PROMPT" "$FINAL_JUDGE_OUT" "final-judge" 1200; then
-    "${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh" --timeout 1260 "$FINAL_JUDGE_OUT" >/dev/null 2>&1 || true
     if [[ -s "$FINAL_JUDGE_OUT" ]]; then
       "${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh" "$FINAL_JUDGE_OUT" > "$FINAL_GRADE_OUT"
       F_PARSE="$(awk -F= '/^PARSE_STATUS=/{print $2; exit}' "$FINAL_GRADE_OUT")"

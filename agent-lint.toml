@@ -93,9 +93,11 @@ suppress = [
 #
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
-# presence in 8 orchestrator SKILL.md files (fix-issue, implement, review,
-# loop-review, loop-improve-skill, loop-improve-skill-iter, alias, research)
-# and absence in 3 pure-delegator SKILL.md files (im, imaq, create-skill).
+# presence in 6 orchestrator SKILL.md files (fix-issue, implement, review,
+# loop-review, alias, research) and absence in 4 pure-delegator SKILL.md
+# files (im, imaq, create-skill, loop-improve-skill). The retired
+# loop-improve-skill-iter skill is no longer named; /loop-improve-skill
+# is now a pure delegator whose runtime lives in scripts/driver.sh (#273).
 # It is structurally referenced from Makefile (test-anti-halt target) and
 # AGENTS.md, matching the same Makefile-only pattern as the other test-*
 # harnesses above.
@@ -127,11 +129,11 @@ suppress = [
 # scripts/parse-skill-judge-grade.sh (the /skill-judge output parser
 # consumed by /loop-improve-skill's grade-gated termination contract).
 # The parser itself IS structurally referenced from
-# skills/loop-improve-skill/SKILL.md (Step 5 iter-cap branch) and
-# skills/loop-improve-skill-iter/SKILL.md (Step 3.j.v) and is therefore
-# not excluded; the test harness is referenced only from Makefile
-# (test-parse-skill-judge-grade target) and AGENTS.md, matching the same
-# Makefile-only pattern as the other test-* harnesses above.
+# skills/loop-improve-skill/scripts/driver.sh (both the in-loop Phase 1.v
+# grade parse and the Step 5a final post-iter-cap re-evaluation) and is
+# therefore not excluded; the test harness is referenced only from
+# Makefile (test-parse-skill-judge-grade target) and AGENTS.md, matching
+# the same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-implement-structure.sh is the structural regression harness
 # for skills/implement/SKILL.md and skills/implement/references/ invariants
