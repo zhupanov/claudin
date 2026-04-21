@@ -263,7 +263,7 @@ Print `✅ 9: cleanup — fix-issue complete! (<elapsed>)`
 
 ## Known Limitations
 
-- **Stale IN PROGRESS lock**: If the skill crashes after Step 2, the issue remains locked with `IN PROGRESS` as the last comment. Recovery: manually delete the `IN PROGRESS` comment and re-add `GO` to re-enable the issue for automated processing.
+- **Stale IN PROGRESS lock**: Step 2 deletes the `GO` comment and posts `IN PROGRESS` (so the `GO` sentinel no longer remains after locking). If the skill crashes after Step 2 completes, the issue's last comment is `IN PROGRESS` — recovery: manually delete the `IN PROGRESS` comment and re-add `GO`. If it crashes mid-Step-2 (between deleting `GO` and posting `IN PROGRESS`), the issue has neither sentinel — recovery: manually re-add `GO`.
 - **Single-runner assumption**: The comment-based locking (Step 2) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
 - **Dependency check degrades silently on API failure**: The blocked-by check (Step 1) treats unreachable or erroring dependency-API responses as "no blockers known" to avoid hard-blocking the automation. If GitHub's issue-dependencies endpoint is returning 5xx or an unexpected payload, a blocked issue could temporarily be eligible. The GO sentinel still applies, so the blast radius is limited to whatever the reviewer intended to allow via `GO`.
 - **Prose-dependency check shares the same fail-open posture**: A parser regression, body/comment fetch failure, or per-reference state lookup failure all degrade to "no prose blockers known" for that candidate. The offline harness (`test-parse-prose-blockers.sh`, run via `make lint`) is the primary guard against parser regressions.
