@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.1] - 2026-04-21
+
+### Changed
+
+- CI split: `make lint` is now composed of two split targets, `lint-only` (pre-commit over all files) and `test-harnesses` (the 22 `test-*` bash regression harnesses). `.github/workflows/ci.yaml` replaces the single `lint` job with two parallel jobs (`lint` → `make lint-only` and `test-harnesses` → `make test-harnesses`) so harness regressions and linter regressions surface on independent job tiles and can be re-run independently. Local `make lint` behavior is unchanged.
+
 ## [5.1.0] - 2026-04-21
 
 ### Added
