@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.6] - 2026-04-20
+
+### Changed
+
+- `/loop-improve-skill` + `/loop-improve-skill-iter` — termination contract is now grade-gated: the loop strives for per-dimension grade A on every `/skill-judge` dimension D1..D8 (integer thresholds D1>=18/20, D2-D6+D8>=14/15, D7>=9/10) and exits happy when achieved. The three existing halt paths (`no_plan` / `design_refusal` / `im_verification_failed`) are now treated as infeasibility halts that MUST produce a written justification (`iter-${ITER}-infeasibility.md`); on iter-cap the outer's Step 5 runs one final `/skill-judge` for post-cap grade capture and may reclassify as a happy post-cap-A exit. The close-out tracking-issue comment becomes a multi-section body (summary + Grade History + Infeasibility Justification + Final Assessment). New shared parser `scripts/parse-skill-judge-grade.sh` (fail-closed contract: any non-ok PARSE_STATUS forces GRADE_A=false; bash 3.2 compatible) with companion 17-case harness `scripts/test-parse-skill-judge-grade.sh` wired into `make lint`. The `/design` prompt at Step 3.d now includes a Non-A dimensions focus block listing per-dim deficits when grade parsing succeeds — directly counters the historical failure mode where Non-A findings were deemed "not worth implementing". Preserves: iter cap 10, per-iter sentinel verification, security boundaries, exactly-one anti-halt banner per SKILL.md, #231 halt-detection, idempotent resume.
+
 ## [4.3.5] - 2026-04-20
 
 ### Changed
