@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.3] - 2026-04-21
+
+### Changed
+
+- `AGENTS.md` shrinks from 44k to 4.4k chars (10x reduction). Per-script and test-harness contract bullets under `## Editing rules` move verbatim to sibling `<basename>.md` files co-located with each primary script (e.g., `scripts/redact-secrets.md` beside `scripts/redact-secrets.sh`); 22 new sibling `.md` files are created under `scripts/`, `skills/issue/scripts/`, `skills/fix-issue/scripts/`, `skills/create-skill/scripts/`, and `skills/simplify-skill/scripts/`. AGENTS.md keeps only cross-cutting rules, Common editing tasks, the Canonical sources list (preserved verbatim to satisfy `scripts/test-post-scaffold-hints.sh`'s literal assertion), Conventions, plus a new co-location convention sentence under Editing rules. Canonical-.md-source bullets move into their respective canonical files as trailing "Update triggers" sections in `skills/shared/reviewer-templates.md`, `skills/shared/subskill-invocation.md`, and `skills/shared/skill-design-principles.md` — no sibling `.md` is created for an `.md` file. Stale prose pointers updated in `skills/shared/skill-design-principles.md:39` (owning-contract-doc pattern acknowledged), `skills/shared/subskill-invocation.md:191` (§ Editing rules → § Canonical sources), and 14 comment occurrences in `agent-lint.toml`. `scripts/test-implement-structure.sh` comments cite sibling `.md`. Five skill-local sibling `.md` files added to `agent-lint.toml` exclude list (S030/orphaned-skill-files).
+
 ## [5.1.2] - 2026-04-21
 
 ### Removed
