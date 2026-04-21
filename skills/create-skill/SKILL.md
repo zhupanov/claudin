@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: "Use when creating a new larch skill. Validates name and description, then delegates to /im --quick --auto to scaffold via render-skill-md.sh (auto-merges by default). Writes under .claude/skills/ by default; --plugin writes under skills/."
+description: "Use when scaffolding a new larch skill (new SKILL.md). Validates name and description, then delegates to /im --quick --auto which runs render-skill-md.sh and auto-merges. Default: .claude/skills/; --plugin: skills/."
 argument-hint: "[--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>  (--merge is a backward-compat no-op; /im auto-merges)"
 allowed-tools: Bash, Skill
 ---
@@ -39,9 +39,69 @@ The validator enforces:
 - When `--plugin` is set, the CWD must be the larch plugin repo (`.claude-plugin/plugin.json` + `skills/implement/SKILL.md` present).
 - Description is non-empty, ≤ 1024 chars, contains no XML tags, no backticks, no `$(`, no heredoc terminators or frontmatter breakers, no newlines or control characters.
 
+## Design Mindset
+
+Before scaffolding, ask yourself:
+
+- **Before picking `--multi-step` vs minimal:** does the new skill have ≥2 distinct phases that each need their own `## Step N` heading, or is it a single-call forwarder? One-shot delegators read cleaner as `minimal`; the `multi-step` template only earns its scaffolding when there is genuine sequencing.
+- **Before choosing a name:** will this name graze a harness keyword? `validate-args.sh` probes the Anthropic/larch-static list + plugin skills + local `.claude/skills/` — but a name that approximates a common verb (`review`, `test`, `run`) or an Anthropic-adjacent prefix (`claude-*`) risks ambiguous `Skill` permission matching even when the static check passes.
+- **Before writing the description:** will `description` alone disambiguate this skill from every other installed skill the harness might surface? The harness matches triggers against the description first; a vague or name-echo description is the #1 cause of a skill that installs but never fires.
+- **Before inlining prompt logic:** would a shared script at `${CLAUDE_PLUGIN_ROOT}/scripts/` or a skill-private `scripts/` file be a better home? Mechanical rule A (see Principles) says non-trivial shell logic always belongs in a `.sh`. Inline Bash in `SKILL.md` is the #1 source of copy-paste drift across sibling skills.
+- **Before forwarding to `/im`:** is the scaffold complete enough to merge, or does the new skill still need a follow-up PR to land its real logic? `/im` auto-merges — a half-scaffolded skill becomes a live trigger the moment the PR lands.
+
+## Anti-patterns
+
+- **NEVER** write a `description:` field that starts with the skill's name or a generic verb (e.g. "Create a skill that…", "foo skill"). **Why**: the harness matches triggers against the description; a name-echo description never fires on anything except the skill's own slash command. Start with `Use when…` + the real trigger.
+- **NEVER** paste the full `skill-design-principles.md` into the scaffolded `SKILL.md`. **Why**: Section II progressive disclosure — `SKILL.md` is the always-loaded body layer; copying principles burns tokens on every invocation. Reference via a `MANDATORY — READ ENTIRE FILE` pointer in the feature-description handoff instead.
+- **NEVER** inline multi-line `bash -c` strings, pipelines, or `for`-loops inside `SKILL.md` Bash-tool calls. **Why**: Mechanical rule B — wrappers centralize error handling and make each step auditable. Inline shell is the #1 source of sibling-skill copy-paste drift.
+- **NEVER** emit two back-to-back Bash tool calls inside one logical step. **Why**: Mechanical rule C — each Bash call is a separate audit artifact; consecutive calls fragment the trail and hide partial failures (call 1 succeeds, call 2 fails silently, step still appears to have "made progress").
+- **NEVER** bypass `validate-args.sh` by calling `render-skill-md.sh` directly from Step 3. **Why**: the validator is the only guard against reserved-name collisions and heredoc-breaking descriptions — skipping it lets a malformed skill land in the target repo before `/im` creates a PR that is impossible to merge cleanly.
+- **NEVER** reuse a kebab name whose sibling just retired. **Why**: `validate-args.sh` scans `${CLAUDE_PLUGIN_ROOT}/skills/*` at scaffold time but does NOT see in-flight PRs or recently-deleted directories still on origin — the resulting double-merge conflict surfaces only in CI, after the PR has been opened.
+- **NEVER** forward `--merge` through `/create-skill` expecting it to be a hard gate. **Why**: `/im` already auto-merges; `--merge` on `/create-skill` is a no-op retained for backward compat. Treating it as load-bearing leads to surprise when callers omit it and merge still happens.
+- **NEVER** rewrite the Step 3 `/im` feature-description template as freeform prose. **Why**: downstream `/im --quick --auto` relies on the literal `render-skill-md.sh --name … --description …` invocation shape to parse its delegation intent. Freeform prose causes `/im` to guess at argument binding and produce a silently-wrong scaffold.
+
 ## Principles
 
-Principles for every skill scaffolded by `/create-skill` are documented in `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md`. They still apply to every scaffolded skill; Section III (larch mechanical rules A/B/C) is forwarded as a compact excerpt into the `/im` feature description handed off by Step 3.
+**MANDATORY — READ ENTIRE FILE** before emitting the Step 3 `/im` feature description: `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md`. It is the canonical source of the knowledge-delta rule (Section I), the progressive-disclosure layering (Section II), the larch mechanical rules A/B/C (Section III — overrides Section IV on conflict), and the writing-style guidance (Sections IV–IX). Section III is forwarded as a compact excerpt into the Step 3 `/im` feature description, but every scaffolded skill must follow the full file.
+
+**Do NOT Load** `skill-design-principles.md` when Step 2 validation fails (`VALID=false` in `validate-args.sh` output) — the skill will not be written, so the principles are irrelevant to the abort message. Print the `ERROR=` line and stop.
+
+**Do NOT Load** `skill-design-principles.md` when Step 1 parse aborts (`ERROR=` in `parse-args.sh` output) — `NAME`/`DESCRIPTION` are not yet defined, so the principles cannot be applied to any concrete scaffold. Print the error and stop.
+
+## Decision Tables
+
+### Path mode
+
+| Scenario | CWD | Flag | `TARGET_DIR` |
+|----------|-----|------|--------------|
+| Consumer repo adding a project-local skill | any | (default) | `.claude/skills/<NAME>/` |
+| larch plugin repo adding a first-class skill | `.claude-plugin/plugin.json` + `skills/implement/SKILL.md` present | `--plugin` | `skills/<NAME>/` |
+
+### Template
+
+| Skill shape | Flag | Scaffold |
+|-------------|------|----------|
+| Single step — pure delegator or one-shot | (default) | `minimal` |
+| Two or more distinct steps with per-step headings | `--multi-step` | `multi-step` |
+
+### Troubleshooting
+
+| Symptom | Most likely cause | Fix |
+|---------|-------------------|-----|
+| `validate-args.sh` emits `VALID=false` with `ERROR=…is reserved` | Name collides with Anthropic/larch-static list or an existing plugin/local skill | Pick a different name; rerun |
+| `validate-args.sh` emits `ERROR=Description contains an XML tag pattern` | Description contains `<…>` (often an angle-bracketed placeholder) | Rephrase without angle brackets |
+| `/im` auto-merges but the live skill never fires | Description was name-echo or generic | Edit the landed skill's `description:` to start with `Use when…` |
+| `parse-args.sh` emits `ERROR=Unknown argument` | Flag typo (e.g. `--multi_step`) or flag placed after positional args | Use canonical hyphenated flags before positional arguments |
+| Scaffold commits but PR cannot merge | Name collision with in-flight PR (not caught by `validate-args.sh`) | Rename locally, rebase, force-push |
+
+### Skill-tool resolution (Step 3)
+
+| Attempt order | Skill name | Condition to fall through |
+|---------------|------------|---------------------------|
+| 1 | `im` (bare) | No bare match in the harness |
+| 2 | `larch:im` (fully-qualified plugin name) | — terminal |
+
+This ordering matches the bare-name-then-fully-qualified rule in `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md`.
 
 ## Step 3 — Delegate to /im
 
@@ -65,25 +125,12 @@ Use ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/render-skill-md.sh to writ
     --local-token "<LOCAL_TOKEN>" --plugin-token "${CLAUDE_PLUGIN_ROOT}" \
     --multi-step <MULTI_STEP>
 
-After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN>. The hints script is the single source of truth for the post-scaffold doc-sync checklist — execute every reminder it emits (README catalog + feature matrix row, .claude/settings.json dual-form Skill permission entries, docs/workflow-lifecycle.md orchestration-hierarchy / delegation-topology / standalone-usage updates, docs/agents.md and docs/review-agents.md when applicable, AGENTS.md Canonical sources when the new skill introduces a shared script or itself becomes a canonical source). Include the hints output verbatim in the PR body under a "Post-scaffold sync checklist" section.
+After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN>. The hints script is the single source of truth for the post-scaffold doc-sync checklist — execute every reminder it emits verbatim (README catalog row, .claude/settings.json dual-form Skill permission entries with `sort -u`, docs/workflow-lifecycle.md orchestration/delegation/standalone updates, docs/agents.md, docs/review-agents.md, and AGENTS.md Canonical sources when applicable). Include the hints output verbatim in the PR body under a "Post-scaffold sync checklist" section.
 
-Implementation principles (MUST follow — sourced from ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md):
-  MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full file) before writing any code. Larch mechanical rules A/B/C below override any general writing-style guidance from that doc.
-  A. Express content and logic as bash scripts. Shared at ${CLAUDE_PLUGIN_ROOT}/scripts/ when reusable across skills; private at ${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/ when skill-specific. Grep existing scripts/ before creating a new one.
-  B. No direct command calls via the Bash tool. Every shell command invoked from the scaffolded SKILL.md must be a call to a .sh wrapper. Do NOT inline pipelines, loops, or multi-line bash -c strings into SKILL.md.
-  C. No consecutive Bash tool calls. When a step needs two or more shell actions, combine them into a single coordinator .sh that invokes the individual scripts internally. The scaffolded SKILL.md step should issue exactly one Bash tool call per logical unit of work.
-
-If --plugin, also (these rules are also emitted by post-scaffold-hints.sh — follow its output as canonical):
-  - Add a row for /<NAME> to README.md Skills catalog and feature matrix.
-  - Add three permission entries to .claude/settings.json permissions.allow, then re-sort the whole permissions.allow block by strict ASCII code-point order (e.g. via `sort -u`) so the new entries interleave correctly with existing ones (do NOT assume the new entries always append; `Skill(larch:<NAME>)` may sort before `Skill(loop-review)`, `Skill(research)`, or `Skill(review)` depending on <NAME>):
-      - Bash entry for the new skill's scripts directory (using the working-directory shell variable prefix + skills/<NAME>/scripts/*).
-      - Skill(<NAME>) entry (bare name).
-      - Skill(larch:<NAME>) entry (fully-qualified plugin name).
-  - Rationale: larch's `.claude/settings.json` runs under `defaultMode: "bypassPermissions"` so both Skill forms are cosmetic in the plugin-dev harness, but they document the dual-form convention consumers running in strict permissions must adopt. See the README subsection "Strict-permissions consumers — Skill permission entries" for the consumer-side rationale and the canonical copy-paste block.
-  - Add /<NAME> to docs/workflow-lifecycle.md — either to the Skill Orchestration Hierarchy mermaid (if /<NAME> is a stateful orchestrator that invokes other skills) or to the Delegation Topology subsection (if /<NAME> is a pure forwarder/delegator). Also add a Standalone Usage bullet.
-  - When applicable (new skill spawns subagents via the Agent tool), update docs/agents.md.
-  - When applicable (new skill alters reviewer composition or archetypes), update docs/review-agents.md.
-  - When applicable (new skill introduces a shared script used by multiple skills, or is itself a canonical source), add a bullet to AGENTS.md Canonical sources.
+MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full file) before writing any code. Section III mechanical rules A/B/C below override Section IV writing-style guidance on conflict:
+  A. Content and logic live in .sh scripts — shared at ${CLAUDE_PLUGIN_ROOT}/scripts/ when reusable, private at ${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/ otherwise. Grep existing scripts/ before creating a new one.
+  B. No direct Bash-tool commands in SKILL.md — every shell command is a .sh wrapper call; no inline pipelines, loops, or multi-line `bash -c`.
+  C. No consecutive Bash-tool calls per step — combine multi-action steps into one coordinator .sh that invokes the individual scripts internally.
 ```
 
 Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug]**` (omit `--debug` if `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and is not forwarded.
