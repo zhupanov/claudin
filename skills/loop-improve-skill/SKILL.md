@@ -152,7 +152,7 @@ Parse `VERIFIED` and `REASON` from stdout. Branch:
 
   Map `LAST_COMPLETED` to a halt-location clause. The literal `last-completed=<substep>` fragment is a contract token asserted by `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-improve-skill-continuation.sh` — do NOT change its shape without updating the harness in the same edit:
 
-  - `none` → `halted at or before /skill-judge at 3.j`
+  - `none` → `halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)`
   - `3j` → `halted at or before grade parse at 3.j.v`
   - `3jv` → `halted at or before /design at 3.d`
   - `3d-pre-detect` → `halted during no-plan detector or before rescue at 3.d`
@@ -160,7 +160,7 @@ Parse `VERIFIED` and `REASON` from stdout. Branch:
   - `3d-plan-post` → `halted at or before /im at 3.i`
   - `3i` → `halted between 3.i verify and Step 4 close-out`
 
-  Then set `EXIT_REASON="iteration sentinel missing — iter ${ITER} <halt-location clause> (REASON=<token>, last-completed=${LAST_COMPLETED})"` and break to Step 5. This path catches both the case where the inner halted partway through an iteration (never reached its Step 4) — the exact failure mode of #231, now mechanically detected at the outer's gate with per-substep granularity per #247 — and the case where the inner aborted during argument validation (per the note above — `last-completed=none` in that case).
+  Then set `EXIT_REASON="iteration sentinel missing — iter ${ITER} <halt-location clause> (REASON=<token>, last-completed=${LAST_COMPLETED})"` and break to Step 5. This path catches both the case where the inner halted partway through an iteration (never reached its Step 4) — the exact failure mode of #231, now mechanically detected at the outer's gate with per-substep granularity per #247 — and the case where the inner aborted during argument validation (the `last-completed=none` clause explicitly disambiguates via the argument-validation parenthetical; distinguish via `REASON=missing_path` for argument-validation vs `REASON=empty_file`/`not_regular_file` for partial-write halts).
 
 ### 4.n — Iteration Advance
 

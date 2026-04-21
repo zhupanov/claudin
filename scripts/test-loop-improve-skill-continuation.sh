@@ -44,8 +44,12 @@
 #     - iteration sentinel missing             (the halt-detected exit literal).
 #     - last-completed=                        (#247 ledger-scan contract token — enriched halt diagnostic).
 #     - halted at or before /skill-judge       (#247 halt-location clause for LAST_COMPLETED=none).
+#     - halted at or before grade parse        (#247 halt-location clause for LAST_COMPLETED=3j).
 #     - halted at or before /design            (#247 halt-location clause for LAST_COMPLETED=3jv).
+#     - halted during no-plan detector         (#247 halt-location clause for LAST_COMPLETED=3d-pre-detect).
+#     - halted at or before plan-post          (#247 halt-location clause for LAST_COMPLETED=3d-post-detect).
 #     - halted at or before /im                (#247 halt-location clause for LAST_COMPLETED=3d-plan-post).
+#     - halted between 3.i verify and Step 4   (#247 halt-location clause for LAST_COMPLETED=3i).
 #     - grade_a_achieved                       (NEW — terminal happy-path ITER_STATUS).
 #     - grade A achieved                       (NEW — EXIT_REASON token).
 #     - parse-skill-judge-grade.sh             (NEW — Step 5a final-judge parser invocation).
@@ -212,8 +216,12 @@ echo ""
 echo "--- Outer SKILL.md #247 enriched halt-diagnostic literals ---"
 check_contains "$OUTER" "last-completed="                "outer emits last-completed= contract token (#247 ledger scan)"
 check_contains "$OUTER" "halted at or before /skill-judge" "outer has LAST_COMPLETED=none halt-location clause (#247)"
+check_contains "$OUTER" "halted at or before grade parse" "outer has LAST_COMPLETED=3j halt-location clause (#247)"
 check_contains "$OUTER" "halted at or before /design"      "outer has LAST_COMPLETED=3jv halt-location clause (#247)"
+check_contains "$OUTER" "halted during no-plan detector"   "outer has LAST_COMPLETED=3d-pre-detect halt-location clause (#247)"
+check_contains "$OUTER" "halted at or before plan-post"    "outer has LAST_COMPLETED=3d-post-detect halt-location clause (#247)"
 check_contains "$OUTER" "halted at or before /im"          "outer has LAST_COMPLETED=3d-plan-post halt-location clause (#247)"
+check_contains "$OUTER" "halted between 3.i verify and Step 4" "outer has LAST_COMPLETED=3i halt-location clause (#247)"
 
 echo ""
 echo "--- Outer SKILL.md grade-A termination contract literals ---"
