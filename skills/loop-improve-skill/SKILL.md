@@ -11,14 +11,20 @@ Iteratively improve an existing skill. Creates a tracking GitHub issue, then del
 
 Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
 
-**Anti-halt continuation reminder.** After every child `Skill` tool call (`/loop-improve-skill-iter`) returns, IMMEDIATELY continue with this skill's NEXT numbered sub-step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., loop exit on `no plan`, `max iterations reached`, `bail to Step 4`, `iteration sentinel missing`). A normal sequential continuation is the default this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+**Anti-halt continuation reminder.** After every child `Skill` tool call (`/loop-improve-skill-iter`, and the Step 5 final-judge `/skill-judge` invocation on the iter-cap path) returns, IMMEDIATELY continue with this skill's NEXT numbered sub-step — do NOT end the turn on the child's cleanup output. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., loop exit on `grade A achieved`, infeasibility halt with justification, `max iterations (10) reached`, `iteration sentinel missing`, `bail to Step 4`). A normal sequential continuation is the default this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+
+**Termination contract: strive for grade A.** The loop's primary success exit is `ITER_STATUS=grade_a_achieved`, set by the inner at Step 3.j.v when `${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh` reports per-dimension grade A on every dimension D1..D8 (integer thresholds D1>=18/20, D2-D6+D8>=14/15, D7>=9/10; equivalent to score/max >= 0.90 each). The loop continues iterating until either (a) grade A is achieved on all dimensions, or (b) further automated progress toward grade A is genuinely infeasible (no_plan / design_refusal / im_verification_failed) and the inner has written a justification to `$LOOP_TMPDIR/iter-${ITER}-infeasibility.md`, or (c) the 10-iteration cap is reached. Token/context budget is NOT a valid exit condition.
 
 Authoritative loop exits fall into two categories, each triggering one of the Step 4.v branches below:
 
-1. **Sentinel verified** (`VERIFIED=true`): the inner reached its Step 4 close-out and wrote `iter-${ITER}-status.txt`. Read that file to learn `ITER_STATUS`. Happy path (`completed`) loops on; any other value (`no_plan`, `design_refusal`, `im_verification_failed`, or any unexpected value) maps to a category-specific `EXIT_REASON` and breaks to Step 5.
+1. **Sentinel verified** (`VERIFIED=true`): the inner reached its Step 4 close-out and wrote `iter-${ITER}-status.txt`. Read that file to learn `ITER_STATUS`. Branch on value:
+   - `completed`: happy path, loop on.
+   - `grade_a_achieved`: terminal happy-path exit — break to Step 5 with `EXIT_REASON="grade A achieved on all dimensions at iteration ${ITER}"`.
+   - `no_plan`, `design_refusal`, `im_verification_failed`: infeasibility halts — break to Step 5 with the corresponding category-specific `EXIT_REASON`. The inner has already written `iter-${ITER}-infeasibility.md` with the justification; Step 5 embeds it in the close-out comment.
+   - any other value: defensive — `EXIT_REASON="inner returned unexpected ITER_STATUS=<value> at iteration ${ITER}"`, break to Step 5.
 2. **Sentinel missing** (`VERIFIED=false`): the inner halted partway through an iteration. The outer writes a diagnostic `EXIT_REASON="iteration sentinel missing — ..."` and breaks to Step 5. This is the mechanical halt-detection branch that fixes #231.
 
-Additionally, after a successful iteration the outer increments `ITER` and compares against the 10-round cap; exceeding it sets `EXIT_REASON="max iterations (10) reached"` and breaks to Step 5 — the normal-completion exit.
+Additionally, after a successful iteration the outer increments `ITER` and compares against the 10-round cap; exceeding it sets `EXIT_REASON="max iterations (10) reached"` and breaks to Step 5 — Step 5 then runs one final `/skill-judge` to capture the post-iter-cap grade and auto-generate an infeasibility justification listing the remaining non-A dimensions (or, if the final judge shows grade A, reclassifies the exit as a happy-path post-cap A exit).
 
 Token/context budget is NOT a valid loop exit; the split-skill structure converts the old self-curtailment failure mode into an observable missing-sentinel diagnostic.
 
@@ -81,7 +87,7 @@ Compose the issue body: one short paragraph describing the loop (up to 10 iterat
 ```bash
 ISSUE_BODY_FILE="$LOOP_TMPDIR/issue-body.md"
 {
-  printf 'Iteratively improve /%s via /loop-improve-skill. Runs up to 10 rounds of /skill-judge + /design + /im, delegated to /loop-improve-skill-iter. Exits early when /design produces no plan.\n\n' "${SKILL_NAME}"
+  printf 'Iteratively improve /%s via /loop-improve-skill. Runs up to 10 rounds of /skill-judge + /design + /im, delegated to /loop-improve-skill-iter. Exits when every /skill-judge dimension reaches grade A, or when an infeasibility halt (no_plan / design_refusal / im_verification_failed, with written justification appended below) or the 10-iteration cap is reached.\n\n' "${SKILL_NAME}"
   printf 'Target: %s\n' "${TARGET_SKILL_PATH}"
 } > "$ISSUE_BODY_FILE"
 gh issue create --title "Improve /${SKILL_NAME} skill via loop-improve-skill" --body-file "$ISSUE_BODY_FILE"
@@ -125,7 +131,8 @@ Parse `VERIFIED` and `REASON` from stdout. Branch:
   ```
   Parse `ITER_STATUS=<value>`. Branch on value:
   - `completed`: happy path. Increment `ITER` (see 4.n below).
-  - `no_plan`: set `EXIT_REASON="no plan at iteration ${ITER}"` and break to Step 5.
+  - `grade_a_achieved`: terminal happy-path exit. Set `EXIT_REASON="grade A achieved on all dimensions at iteration ${ITER}"` and break to Step 5. The skill graded A on every dimension D1..D8 at this iteration's `/skill-judge` run; no further automated work is needed.
+  - `no_plan`: set `EXIT_REASON="no plan at iteration ${ITER}"` and break to Step 5. The inner has written `iter-${ITER}-infeasibility.md`; Step 5 will embed it in the close-out comment.
   - `design_refusal`: set `EXIT_REASON="/design refusal or error at iteration ${ITER}"` and break to Step 5.
   - `im_verification_failed`: set `EXIT_REASON="/im did not reach canonical completion line at iteration ${ITER}"` and break to Step 5.
   - any other value: set `EXIT_REASON="inner returned unexpected ITER_STATUS=<value> at iteration ${ITER}"` and break to Step 5.
@@ -142,13 +149,107 @@ Otherwise, loop back to the `## Step 4 — Loop` header for the next iteration.
 
 ## Step 5 — Close Out
 
-Post a final summary comment. Do NOT close the issue.
+Post a final multi-section summary comment to the tracking issue. Do NOT close the issue. The close-out body composes (in order): a one-line summary, a `## Grade History` section from `$LOOP_TMPDIR/grade-history.txt`, a `## Infeasibility Justification` section (only on infeasibility/iter-cap exits), and an optional `## Final Assessment` pointer (iter-cap path only).
+
+Set `IT` once for use throughout this step:
 
 ```bash
 IT=$(( ITER > 10 ? 10 : ITER ))
-gh issue comment "${ISSUE_NUM}" --body "Loop finished. Iterations run: ${IT}. Exit reason: ${EXIT_REASON}."
+```
+
+### 5a — Final /skill-judge re-evaluation (iter-cap path only)
+
+If `EXIT_REASON="max iterations (10) reached"`, run one final `/skill-judge` so the close-out comment reflects the post-iter-cap grade (the last in-loop iteration's judge ran against the skill state BEFORE that iter's `/im` landed; on iter-cap there is no next iteration to re-judge).
+
+Invoke `/skill-judge` via the Skill tool (bare name first; on "no matching skill", retry with `"skill-judge:skill-judge"`). Pass the same prompt template the inner uses at Step 3.j:
+
+```
+${SKILL_NAME} (absolute SKILL.md path: ${TARGET_SKILL_PATH}) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.
+```
+
+> **Continue after child returns.** When `/skill-judge` returns, transcribe its full response to `$LOOP_TMPDIR/final-judge.txt` via a single Bash write, run `parse-skill-judge-grade.sh`, parse the KV output, and continue to 5b — do NOT end the turn.
+
+Capture the response and parse:
+
+```bash
+# Transcribe the final judge's full response to final-judge.txt via a single Bash write.
+cat > "$LOOP_TMPDIR/final-judge.txt" <<'JUDGE_EOF'
+<paste the verbatim /skill-judge response here>
+JUDGE_EOF
+${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh "$LOOP_TMPDIR/final-judge.txt" > "$LOOP_TMPDIR/final-grade.txt"
+```
+
+Parse `$LOOP_TMPDIR/final-grade.txt` for `PARSE_STATUS`, `GRADE_A`, `NON_A_DIMS`, `TOTAL_NUM`, `TOTAL_DEN`, per-dim values. Append a final line to `$LOOP_TMPDIR/grade-history.txt` tagged `iter=final`:
+
+- When `PARSE_STATUS=ok`: `iter=final total=${TOTAL_NUM}/${TOTAL_DEN} non_a=${NON_A_DIMS} parse_status=ok`
+- When `PARSE_STATUS!=ok`: `iter=final total=N/A non_a=N/A parse_status=${PARSE_STATUS}`
+
+Reclassification: if final-judge `PARSE_STATUS=ok` AND `GRADE_A=true`, override `EXIT_REASON="grade A achieved after final post-iter-cap re-evaluation"` — the iteration-cap was reached but the final state actually grades A on every dimension (rare but possible when the 10th iter's `/im` improved the skill enough to push it over the threshold).
+
+### 5b — Compose close-out body
+
+Compose `$LOOP_TMPDIR/closeout-body.md` in a single Bash block. The body has four sections (3 always present, 1 conditional):
+
+```bash
+{
+  printf 'Loop finished. Iterations run: %s. Exit reason: %s.\n\n' "${IT}" "${EXIT_REASON}"
+
+  printf '## Grade History\n\n'
+  if [[ -s "$LOOP_TMPDIR/grade-history.txt" ]]; then
+    printf '```\n'
+    cat "$LOOP_TMPDIR/grade-history.txt"
+    printf '```\n\n'
+  else
+    printf '(no grade parses captured)\n\n'
+  fi
+
+  # Infeasibility Justification section: present on infeasibility ITER_STATUS
+  # exits, on iteration-sentinel-missing exits, and on iter-cap WHERE the
+  # final-judge re-evaluation did NOT show grade A. Absent on grade_a_achieved
+  # (terminal happy) and the reclassified post-cap A exit.
+  case "$EXIT_REASON" in
+    "grade A achieved on all dimensions at iteration "*|"grade A achieved after final post-iter-cap re-evaluation")
+      : # no Infeasibility Justification section
+      ;;
+    "max iterations (10) reached")
+      printf '## Infeasibility Justification\n\n'
+      printf 'After 10 iterations the skill still does not achieve grade A on every dimension.\n\n'
+      if [[ -s "$LOOP_TMPDIR/final-grade.txt" ]] && LC_ALL=C grep -q '^PARSE_STATUS=ok$' "$LOOP_TMPDIR/final-grade.txt"; then
+        FINAL_NON_A="$(LC_ALL=C grep '^NON_A_DIMS=' "$LOOP_TMPDIR/final-grade.txt" | head -1 | cut -d= -f2-)"
+        printf 'Non-A dimensions in the final post-iter-cap /skill-judge: %s.\n\n' "${FINAL_NON_A}"
+        printf 'See `final-judge.txt` (captured at Step 5a) and `grade-history.txt` for the per-iteration trajectory — whether the loop plateaued, regressed, or improved monotonically without reaching A informs whether the remaining gap is likely to yield to additional iterations or requires structural redesign.\n\n'
+      else
+        printf 'Final /skill-judge assessment unavailable: see Grade History above for the last successful judge parse. Last in-loop judge: `iter-%s-judge.txt`.\n\n' "${IT}"
+      fi
+      printf '## Final Assessment\n\n'
+      printf 'Captured by the post-iter-cap re-judge at Step 5a. The full /skill-judge report is in `final-judge.txt` under the loop tmpdir; the parsed KV summary is in `final-grade.txt`.\n\n'
+      ;;
+    *)
+      printf '## Infeasibility Justification\n\n'
+      if [[ -s "$LOOP_TMPDIR/iter-${IT}-infeasibility.md" ]]; then
+        cat "$LOOP_TMPDIR/iter-${IT}-infeasibility.md"
+        printf '\n'
+      else
+        printf 'Iteration %s did not produce a written justification (the inner skill may have halted before writing `iter-%s-infeasibility.md`). See `iter-%s-design.txt` and `iter-%s-im.txt` for context.\n\n' "${IT}" "${IT}" "${IT}" "${IT}"
+      fi
+      ;;
+  esac
+} > "$LOOP_TMPDIR/closeout-body.md"
+```
+
+### 5c — Post the comment
+
+Post the close-out body. If the `gh` post fails for any reason, print a warning and continue to Step 6 — never skip cleanup:
+
+```bash
+gh issue comment "${ISSUE_NUM}" --body-file "$LOOP_TMPDIR/closeout-body.md" || {
+  GH_RC=$?
+  printf '**⚠ 5: close out — gh comment failed (exit %s). Continuing to cleanup.**\n' "$GH_RC"
+}
 printf 'done\n' > "$LOOP_TMPDIR/closeout.sentinel"
 ```
+
+The exit code MUST be captured via `|| { GH_RC=$?; ... }` rather than `if ! gh ...; then printf ... "$?"`. Inside the then-branch of `if ! cmd`, `$?` reflects the negated condition's result (always `0`), losing the actual `gh` exit code — making it impossible to distinguish auth failures (typically 4) from rate-limit (typically 1) from network errors (typically 128) in the warning message.
 
 Print: `✅ 5: close out — issue #${ISSUE_NUM}, exit: ${EXIT_REASON}`
 

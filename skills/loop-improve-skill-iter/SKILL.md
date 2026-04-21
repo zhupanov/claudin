@@ -31,6 +31,7 @@ Step Name Registry:
 | 1 | parse-args |
 | 2 | setup paths |
 | 3.j | judge |
+| 3.j.v | grade parse |
 | 3.d | design |
 | 3.i | im |
 | 4 | inner close-out |
@@ -56,16 +57,18 @@ Print: `✅ 1: parse-args — ITER=${ITER}, target=/${SKILL_NAME}`
 
 Establish canonical per-iteration file names under `$LOOP_TMPDIR`:
 - `JUDGE_OUT="$LOOP_TMPDIR/iter-${ITER}-judge.txt"`
+- `GRADE_OUT="$LOOP_TMPDIR/iter-${ITER}-grade.txt"`
 - `DESIGN_OUT="$LOOP_TMPDIR/iter-${ITER}-design.txt"`
 - `IM_OUT="$LOOP_TMPDIR/iter-${ITER}-im.txt"`
 - `STATUS_FILE="$LOOP_TMPDIR/iter-${ITER}-status.txt"`
+- `INFEASIBILITY_FILE="$LOOP_TMPDIR/iter-${ITER}-infeasibility.md"`
 - `DONE_SENTINEL="$LOOP_TMPDIR/iter-${ITER}-done.sentinel"`
 
 ## Step 3.j — Run /skill-judge
 
 Print: `> **🔶 3.j: judge**`
 
-**Idempotency short-circuit.** If `$LOOP_TMPDIR/iter-${ITER}-3j.done` already exists and is non-empty, print `⏩ 3.j: judge — already done (idempotent resume)` and skip to Step 3.d.
+**Idempotency short-circuit.** If `$LOOP_TMPDIR/iter-${ITER}-3j.done` already exists and is non-empty, print `⏩ 3.j: judge — already done (idempotent resume)` and skip to Step 3.j.v (NOT directly to 3.d — the new grade-A short-circuit lives in 3.j.v and must run on every resume).
 
 Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no matching skill", retry with `"skill-judge:skill-judge"`. Pass the following string as args so the judge reads the current on-disk contents from the path resolved by the outer:
 
@@ -73,7 +76,7 @@ Invoke the Skill tool with skill `"skill-judge"` (bare name first). On "no match
 ${SKILL_NAME} (absolute SKILL.md path: ${TARGET_SKILL_PATH}) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.
 ```
 
-> **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call gh-comment Bash block immediately, then proceed to Step 3.d — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When `/skill-judge` returns, execute 3.j's post-call gh-comment Bash block immediately, then proceed to Step 3.j.v (the new grade-parse sub-step) — do NOT end the turn and do NOT skip directly to 3.d. The grade-A short-circuit and grade-history append both live in 3.j.v; bypassing it would silently break the strive-for-grade-A termination contract. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 Transcribe the judge's response to `$JUDGE_OUT` (full body, one write via the Bash tool).
 
@@ -88,13 +91,63 @@ printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3j.done"
 
 The `printf 'done\n' > ...` (not `touch`) is load-bearing — `verify-skill-called.sh --sentinel-file` requires the file to be non-empty (`-s` check in `${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh`). An empty sentinel would cause the outer's gate to misclassify this iteration as a halt.
 
+## Step 3.j.v — Grade Parse (grade-A short-circuit)
+
+Print: `> **🔶 3.j.v: grade parse**`
+
+**Idempotency short-circuit.** If `$LOOP_TMPDIR/iter-${ITER}-3jv.done` already exists and is non-empty, print `⏩ 3.j.v: grade parse — already done (idempotent resume)`, read cached `$GRADE_OUT` to recover `GRADE_A` / `NON_A_DIMS` / `PARSE_STATUS`, and branch as below without re-invoking the parser.
+
+This is the new grade-gated termination point. Parse `$JUDGE_OUT` for per-dimension scores via the shared parser:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh "$JUDGE_OUT" > "$GRADE_OUT"
+```
+
+Read `$GRADE_OUT` for `PARSE_STATUS`, `GRADE_A`, `NON_A_DIMS`, `TOTAL_NUM`, `TOTAL_DEN`, and per-dim `D<N>_NUM` / `D<N>_DEN`. The parser is fail-closed: any non-ok `PARSE_STATUS` forces `GRADE_A=false`, so the loop continues iterating rather than exiting on a parse failure.
+
+Append one line to `$LOOP_TMPDIR/grade-history.txt`:
+
+- When `PARSE_STATUS=ok`: `iter=${ITER} total=${TOTAL_NUM}/${TOTAL_DEN} non_a=${NON_A_DIMS} parse_status=ok`
+- When `PARSE_STATUS!=ok`: `iter=${ITER} total=N/A non_a=N/A parse_status=${PARSE_STATUS}` (literal `N/A` — the parser does not emit `TOTAL_NUM` / `TOTAL_DEN` / `NON_A_DIMS` on non-ok statuses).
+
+Write the per-substep sentinel **before** branching (so both grade-A short-circuit and grade-non-A continuation paths execute the write unconditionally — no path can skip the sentinel by jumping to Step 4 prematurely):
+
+```bash
+printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3jv.done"
+```
+
+The `printf 'done\n'` (not `touch`) is load-bearing for the same reason as the 3.j sentinel — non-empty file required for any future verify-skill-called.sh check.
+
+Branch on `GRADE_A`:
+
+- **`GRADE_A=true`**: the target skill already grades A on every dimension D1..D8. Set `ITER_STATUS=grade_a_achieved` and skip directly to Step 4 (bypass 3.d and 3.i — there is nothing to improve this iteration). The outer's Step 4.v will recognize `grade_a_achieved` as a terminal happy-path exit and break out of the loop.
+- **`GRADE_A=false`**: continue to Step 3.d. The Non-A dimensions (`NON_A_DIMS`) and per-dim deficits will be passed to /design's prompt (see Step 3.d below) so /design focuses its plan on the specific point shortfalls — this directly counters the historical failure mode where Non-A findings were deemed "not worth implementing".
+
 ## Step 3.d — Run /design
 
 Print: `> **🔶 3.d: design**`
 
 **Idempotency short-circuit.** If `$LOOP_TMPDIR/iter-${ITER}-3d-plan-post.done` already exists and is non-empty (plan already posted for this iteration in a prior partial run), print `⏩ 3.d: design — already done (idempotent resume)` and skip to Step 3.i.
 
-Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`). Pass a prompt asking for an improvement plan for `/${SKILL_NAME}` that addresses the `/skill-judge` findings just captured. The prompt MUST include these three contract clauses verbatim so `/design` produces a plan even for minor findings and never self-curtails on budget:
+Invoke the Skill tool with skill `"design"` (bare name first; fallback `"larch:design"`). Pass a prompt asking for an improvement plan for `/${SKILL_NAME}` that addresses the `/skill-judge` findings just captured.
+
+**Non-A dimensions focus block (conditional).** When the Step 3.j.v parse succeeded (`PARSE_STATUS=ok`) AND `GRADE_A=false`, the prompt MUST also include this block listing the specific point deficits that block grade A:
+
+```
+Non-A dimensions from this iteration's /skill-judge: ${NON_A_DIMS}.
+Per-dimension deficits (current/required):
+  D<N> at <D<N>_NUM>/<D<N>_DEN> (needs >=<threshold> for A; short by <delta>)
+  ... (one line per dim in NON_A_DIMS)
+Focus this iteration's plan on raising these dimensions to grade A.
+Treat this deficit list as the canonical set of must-address findings — do
+NOT self-curtail on the grounds that these are "minor". The loop's
+termination contract requires per-dimension A on ALL D1..D8; any non-A
+dimension is load-bearing for forward progress.
+```
+
+This block directly addresses the historical failure mode where /design declared "no plan" on Non-A findings deemed not worth implementing — the new termination contract treats every non-A dimension as load-bearing.
+
+The prompt MUST include these three contract clauses verbatim so `/design` produces a plan even for minor findings and never self-curtails on budget:
 
 - `/design` MUST produce a concrete, implementable plan for ANY actionable `/skill-judge` finding — including findings classified "minor", "nit", or cosmetic. Treat "minor" as "small plan", not as "no plan".
 - `/design` MUST NOT self-curtail citing token/context budget. Under any perceived pressure, narrow scope to the single highest-leverage finding and emit a compressed micro-plan that still conforms to the standard `/design` plan schema (`## Implementation Plan` with `Files to modify/create`, `Approach`, `Edge cases`, `Testing strategy`, and `Failure modes` when the change is non-trivial per `/design`'s own rules) — never emit a no-plan sentinel on budget grounds.
@@ -110,7 +163,7 @@ After the first `/design` returns, touch the pre-rescue-detector sentinel and ru
 printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3d-pre-detect.done"
 ```
 
-**No-plan detection (tightened).** Set `ITER_STATUS=no_plan` and skip to Step 4 if any of:
+**No-plan detection (tightened).** Set `ITER_STATUS=no_plan`, run the **Infeasibility justification write** sub-procedure documented before Step 4 below, and skip to Step 4 if any of:
 
 - `$DESIGN_OUT` is empty.
 - The first non-blank line of `$DESIGN_OUT`, trimmed and case-folded, matches one of these exact sentinels: `no plan`, `no improvements`, `nothing to improve`, `already optimal`, `skill is already high quality`, **AND** no structured plan marker appears on any subsequent line of `$DESIGN_OUT`. Match sentinels against the whole trimmed first non-blank line only — do NOT substring-search the body. A **structured plan marker** is any line matching one of these anchored regexes (line-start only):
@@ -120,7 +173,7 @@ printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3d-pre-detect.done"
 
   If ANY line after the sentinel-matching first line matches one of the marker regexes, the sentinel match does NOT fire.
 
-- `/design` returned an explicit refusal or error (a structured error response from the Skill tool, or a prose response whose entire body clearly says `/design` could not run). In this case set `ITER_STATUS=design_refusal` (not `no_plan`) and skip to Step 4.
+- `/design` returned an explicit refusal or error (a structured error response from the Skill tool, or a prose response whose entire body clearly says `/design` could not run). In this case set `ITER_STATUS=design_refusal` (not `no_plan`), run the **Infeasibility justification write** sub-procedure, and skip to Step 4.
 
 **Rescue re-invocation of /design (at most one per iteration).** When the tightened no-plan detector does NOT fire but `$DESIGN_OUT` appears ambiguous or budget-curtailed, run a single rescue `/design` call. Rescue triggers when ALL four conditions hold:
 
@@ -137,7 +190,7 @@ After the rescue Skill returns (if it ran), touch the post-rescue-detector senti
 printf 'done\n' > "$LOOP_TMPDIR/iter-${ITER}-3d-post-detect.done"
 ```
 
-Re-run the tightened no-plan detector on the (new) `$DESIGN_OUT`. If it fires, set `ITER_STATUS=no_plan` (or `ITER_STATUS=design_refusal` if rescue returned an explicit refusal/error) and skip to Step 4. Do NOT chain a second rescue — at most one rescue per iteration. If the four rescue conditions did not hold in the first place, skip the rescue entirely but still touch the post-rescue-detector sentinel (so the ledger is uniform — the sentinel means "the post-rescue-detector branch ran to completion", not "the rescue fired").
+Re-run the tightened no-plan detector on the (new) `$DESIGN_OUT`. If it fires, set `ITER_STATUS=no_plan` (or `ITER_STATUS=design_refusal` if rescue returned an explicit refusal/error), run the **Infeasibility justification write** sub-procedure, and skip to Step 4. Do NOT chain a second rescue — at most one rescue per iteration. If the four rescue conditions did not hold in the first place, skip the rescue entirely but still touch the post-rescue-detector sentinel (so the ledger is uniform — the sentinel means "the post-rescue-detector branch ran to completion", not "the rescue fired").
 
 **Ordering invariant for Step 3.d.** Within a single iteration, these actions occur in exactly this order, with no exceptions:
 
@@ -185,9 +238,31 @@ Parse `VERIFIED` and `REASON` from stdout. Behavior:
   ```
   Set `ITER_STATUS=completed` and proceed to Step 4.
 
-- **`VERIFIED=false`**: `/im` did not reach its canonical completion line (either halted, bailed internally, or the capture failed). Set `ITER_STATUS=im_verification_failed` and proceed to Step 4. Do NOT write the 3.i sentinel — the absent sentinel is an observable ledger state the outer (or a follow-up run) can use to diagnose.
+- **`VERIFIED=false`**: `/im` did not reach its canonical completion line (either halted, bailed internally, or the capture failed). Set `ITER_STATUS=im_verification_failed`, run the **Infeasibility justification write** sub-procedure documented before Step 4 below, and proceed to Step 4. Do NOT write the 3.i sentinel — the absent sentinel is an observable ledger state the outer (or a follow-up run) can use to diagnose.
 
 The `verify-skill-called.sh --stdout-line` gate is load-bearing: it is the only mechanism in the loop that verifies `/im` ran by reading a child-produced string rather than a parent-written artifact. Do NOT replace it with a `touch`-only fallback — per the Post-invocation verification rule in `subskill-invocation.md`, gates the parent can satisfy without the child's side effects are not real gates.
+
+## Infeasibility justification write (sub-procedure)
+
+Invoked from the three halt paths above (no_plan / design_refusal / im_verification_failed) BEFORE falling through to Step 4. Writes a structured markdown justification to `$INFEASIBILITY_FILE` so the outer's Step 5 close-out can embed it in the final tracking-issue comment. The outer's "strive for grade A" termination contract requires that any non-grade-A exit explain why further automated progress toward A is blocked.
+
+Compose the file in a single Bash block (heredoc; one redirect, no partial writes). Substitute the iteration's actual `ITER_STATUS`, `PARSE_STATUS`, `GRADE_A`, and `NON_A_DIMS` values captured at Step 3.j.v (recover from `$GRADE_OUT` if not in scope):
+
+```bash
+{
+  printf '## Infeasibility Justification — iteration %s\n\n' "${ITER}"
+  printf '**Status**: %s\n\n' "${ITER_STATUS}"
+  printf '**Reason**: <status-specific reason. For no_plan: "/design emitted no-plan sentinel despite Non-A dimensions ${NON_A_DIMS}". For design_refusal: "/design returned structured refusal: <one-line excerpt from $DESIGN_OUT>". For im_verification_failed: "/im did not reach its canonical completion line — see iter-${ITER}-im.txt; the iteration produced design output (iter-${ITER}-design.txt) but the implementation pipeline could not be verified as complete.">\n\n'
+  printf '**Context**:\n'
+  printf -- '- Grade parse at start of iteration: PARSE_STATUS=%s, GRADE_A=%s, non-A dimensions: %s\n' "${PARSE_STATUS}" "${GRADE_A}" "${NON_A_DIMS}"
+  printf -- '- Judge output: iter-%s-judge.txt\n' "${ITER}"
+  printf -- '- Design output (if any): iter-%s-design.txt\n' "${ITER}"
+  printf -- '- /im output (if any): iter-%s-im.txt\n\n' "${ITER}"
+  printf '**Why this blocks reaching grade A**: <one-paragraph justification tying the halt to why further automated progress toward grade A is blocked at this iteration. For no_plan: /design could not articulate a plan for the listed Non-A dimensions despite the Step 3.d focus block — without a plan there is no implementation candidate. For design_refusal: /design itself failed to run, so no plan could be produced. For im_verification_failed: a plan was produced but could not be landed safely (CI failure, merge conflict, or pipeline halt) — the failed plan would need a different approach to make progress.>\n'
+} > "$INFEASIBILITY_FILE"
+```
+
+Substitute concrete prose for the three angle-bracketed `<...>` placeholders based on which halt path invoked this sub-procedure. The outer's Step 5 close-out reads `$INFEASIBILITY_FILE` verbatim into the final comment under a `## Infeasibility Justification` heading. If the file write fails for any reason, the inner still falls through to Step 4 — the outer's Step 5 detects a missing file with infeasibility ITER_STATUS and uses fallback text citing the existing per-iter tmp files.
 
 ## Step 4 — Inner Close-Out
 
