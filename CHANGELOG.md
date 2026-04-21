@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-04-21
+
+### Changed
+
+- `/loop-improve-skill` rewritten as bash-driver topology per umbrella #273. **BREAKING**: removes the inner skill `/loop-improve-skill-iter` (hard delete). Driver at `skills/loop-improve-skill/scripts/driver.sh` invokes each child skill (`/skill-judge`, `/design`, `/im`) as a fresh `claude -p` subprocess, eliminating the ~70%+ halt rate previously observed at inner Step 3.j between child-return and post-call Bash. Halt class eliminated by construction.
+
+### Removed
+
+- `skills/loop-improve-skill-iter/` — inner single-iteration skill superseded by bash driver (#273).
+- `scripts/test-loop-improve-skill-continuation.sh` — regression harness for the split-skill topology, retired.
+
+### Added
+
+- `skills/loop-improve-skill/scripts/driver.sh` — bash driver owning loop control, subprocess invocation, grade parsing, audit-trail posting, infeasibility detection.
+- `scripts/test-loop-improve-skill-driver.sh` — structural + behavioral regression harness for the driver, wired into `make lint` via `test-loop-improve-skill-driver` target.
+
+### Notes
+
+- Observability tradeoff: partial runs are no longer resumable via sentinel ledger (halt class eliminated → resume machinery unnecessary). See SECURITY.md and docs/workflow-lifecycle.md.
+
 ## [4.3.17] - 2026-04-21
 
 ### Added

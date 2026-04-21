@@ -220,6 +220,19 @@ classify_run() {
     fi
 
     if [[ -n "$exit_reason_value" ]]; then
+        # NOTE: the 'iteration sentinel missing' branch below is a LEGACY
+        # code path from the pre-rewrite split-skill topology (outer
+        # /loop-improve-skill delegating to inner /loop-improve-skill-iter
+        # via the Skill tool, #231). Under the new bash-driver topology
+        # (skills/loop-improve-skill/scripts/driver.sh, #273) the driver
+        # never emits that exit reason, so this branch is expected to
+        # report 0. True mid-turn halts under the new topology manifest
+        # as `claude -p` subprocess exit-code failures, which the driver
+        # handles via break with category-specific EXIT_REASON (e.g.
+        # 'subprocess failure at /skill-judge iteration N'), classified
+        # as completed_by_outer. The branch is retained to preserve
+        # backward-compatibility if someone runs the probe against an
+        # older checkout.
         if printf '%s' "$exit_reason_value" | grep -q 'iteration sentinel missing'; then
             # Outer caught the halt. Extract last-completed from the diagnostic.
             local lc clause

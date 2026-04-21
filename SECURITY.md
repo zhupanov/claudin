@@ -40,3 +40,15 @@ Larch is a Claude Code plugin that runs within Claude Code's permission boundary
 **`/create-skill` description sanitization**: `/create-skill` accepts a free-form `<description>` that gets embedded into the generated skill's YAML frontmatter and into heredoc-in-shell output. `skills/create-skill/scripts/validate-args.sh` rejects descriptions containing patterns that could escape either layer: XML tags (`<...>`), backticks, command-substitution (`$(...)`), heredoc terminators (`EOF`, `HEREDOC`) or YAML frontmatter fences (`---`) as standalone tokens, and any newlines or ASCII control characters. The renderer always double-quotes the description in YAML and backslash-escapes inner quotes. This is defence-in-depth, not a sandbox — reviewers should still read generated `SKILL.md` files before accepting PRs.
 
 **Submodule edit guard anchor (`scripts/block-submodule-edit.sh`)**: The `PreToolUse` hook anchors its superproject-root detection to `CLAUDE_PROJECT_DIR` (with `$PWD` fallback for non-Claude-Code invocations), closing the cd-into-submodule bypass (issue #150) where a session that had `cd`'d into a submodule collapsed the guard's notion of "superproject root" to the submodule root, allowing same-submodule edits to slip past.
+
+## /loop-improve-skill subprocess invocation
+
+`/loop-improve-skill` spawns `claude -p` subprocesses for each child skill invocation (`/skill-judge`, `/design`, `/im`). Security posture:
+
+- Each subprocess runs in a fresh Claude session inheriting the parent's default model (driver omits `--model` for portability; forensic model/CLI version captured to `$LOOP_TMPDIR/claude-version.txt`).
+- Subprocess tool surface is governed by each child skill's own `allowed-tools` declaration; /loop-improve-skill itself declares only `Bash`.
+- `$LOOP_TMPDIR` is created under canonical `/tmp` or `/private/tmp` via `session-setup.sh`; validated to reject `..` path traversal; cleaned up via `cleanup-tmpdir.sh` at exit.
+- Captured child stdout is posted to the tracking GitHub issue via `gh issue comment`; content passes through `scripts/redact-secrets.sh` before posting.
+- Captured child stderr remains in `$LOOP_TMPDIR` for forensic inspection and is NEVER posted to public issues.
+- `gh` token visibility: driver uses the user's authenticated `gh` session; no token is logged or persisted beyond normal `gh` cache behavior.
+- Observability tradeoff: the Option B rewrite (umbrella #273) eliminates the halt class that previously required a sentinel-ledger resume machinery. As a consequence, partial runs are NOT resumable — a killed driver loses in-flight iteration state. This is an intentional simplification per the #273 design: the halt class that motivated resume machinery has been eliminated by construction.
