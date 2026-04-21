@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.4] - 2026-04-20
+
+### Added
+
+- `scripts/test-implement-structure.sh` — structural regression harness for `skills/implement/SKILL.md` and `skills/implement/references/` topology (closes #234). Nine assertions: three top-level headings (Load-Bearing Invariants / NEVER List / Rebase Checkpoint Macro), MANDATORY occurrence floor + per-reference filename binding, three byte-pinned verbosity literals, CI-parity focus-area enum check (mirrors `.github/workflows/ci.yaml` `agent-sync` job per-line enforcement), four expected `references/*.md` files exist, Consumer/Contract/When-to-load header triplet on every reference, and zero `see Step N below|above` patterns (case-insensitive) in any `references/*.md`. Wired into `make lint` via new `test-implement-structure` target. Companion to `scripts/test-implement-rebase-macro.sh`: macro harness owns Rebase Checkpoint Macro placement/registry; this harness owns top-level headings, MANDATORY ↔ reference binding, focus-area CI-parity, contract headers, and progressive-disclosure invariants in references/*.md.
+
 ## [4.3.3] - 2026-04-20
 
 ### Fixed
