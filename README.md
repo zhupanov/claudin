@@ -15,7 +15,7 @@ claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
 ```
 
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/im`, and `/imaq` slash commands become available in every Claude Code session.
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, and `/imaq` slash commands become available in every Claude Code session.
 
 To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
 
@@ -41,7 +41,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/im`, `/imaq` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
 | Agents | `code-reviewer` (unified archetype covering code quality, risk/integration, correctness, architecture, security) |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 | SessionStart hook | `sessionstart-health.sh` — at session start/resume/clear/compact, probes `jq` and `git` on `PATH`; if either is missing, injects an advisory into session context so the issue is visible before the first `Edit`/`Write`. Non-blocking (always exits 0); silent when both tools are present |
@@ -72,6 +72,7 @@ Larch's own copy at `.claude/skills/relevant-checks/` serves as a reference impl
 
 ```json
 "Skill(alias)",
+"Skill(compress-skill)",
 "Skill(create-skill)",
 "Skill(design)",
 "Skill(fix-issue)",
@@ -80,6 +81,7 @@ Larch's own copy at `.claude/skills/relevant-checks/` serves as a reference impl
 "Skill(implement)",
 "Skill(issue)",
 "Skill(larch:alias)",
+"Skill(larch:compress-skill)",
 "Skill(larch:create-skill)",
 "Skill(larch:design)",
 "Skill(larch:fix-issue)",
@@ -165,6 +167,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/alias`](skills/alias/SKILL.md) | `[--merge] <alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
 | [`/create-skill`](skills/create-skill/SKILL.md) | `[--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>` | Scaffold a new larch-style skill from a name and description. Validates the name (regex + reserved-name union + case-insensitive collision) and the description (length + XML / shell-dangerous pattern rejection), then delegates to `/im --quick --auto` which writes the scaffold via `skills/create-skill/scripts/render-skill-md.sh` and auto-merges the PR (via `/im`'s `--merge` pre-set). Default target is `.claude/skills/<name>/` (consumer mode); `--plugin` writes to `skills/<name>/`. `--multi-step` emits a multi-step scaffold; default is minimal. `--merge` is accepted as a backward-compat no-op since `/im` already auto-merges. (see `skills/shared/skill-design-principles.md`) |
 | [`/simplify-skill`](skills/simplify-skill/SKILL.md) | `[--debug] <skill-name>` | Refactor an existing larch skill for stronger adherence to `skills/shared/skill-design-principles.md` and to reduce SKILL.md token footprint. Resolves the target skill directory (plugin tree first, then consumer `.claude/skills/`), enumerates every `.md` file under it (excluding `scripts/` and `tests/`), does NOT follow sub-skills invoked via the `Skill` tool, and delegates the refactor to `/im` with a pinned behavior-preserving feature description that requires a `## Token budget` section in the PR body. Example: `/simplify-skill implement`. |
+| [`/compress-skill`](skills/compress-skill/SKILL.md) | `[--debug] <skill-name-or-path>` | Compress an existing skill's Markdown prose to reduce size while preserving meaning. Rewrites SKILL.md and every `.md` file transitively linked from it (restricted to the skill's own directory tree — shared docs and sub-skills are excluded), applying Strunk & White's *Elements of Style* adapted for technical writing. Structural elements (YAML frontmatter, fenced code blocks, headings, link targets, inline code, file paths, numeric values) are preserved verbatim; only prose is rewritten. Emits a per-file before/after byte and line delta report. |
 | [`/loop-improve-skill`](skills/loop-improve-skill/SKILL.md) | `<skill-name>` | Iteratively improve an existing larch skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via a bash driver that invokes each child skill as a fresh `claude -p` subprocess (halt class eliminated by construction, closes #273). Termination contract: strives for grade A on every `/skill-judge` dimension (D1..D8); exits happy when achieved, with written infeasibility justification when `/design` produces no plan, `/design` refuses, or `/im` cannot be verified, or with auto-generated infeasibility justification (post-iter-cap final `/skill-judge` re-evaluation listing remaining non-A dimensions) when the 10-iteration cap is reached. Justification is appended to the close-out tracking-issue comment. Example: `/loop-improve-skill design`. |
 | [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
 
