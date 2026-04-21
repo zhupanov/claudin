@@ -1,10 +1,10 @@
 # PR Body Template
 
-**Consumer**: `/implement` Step 9a — PR body composition. Also used by Rebase + Re-bump Sub-procedure step 6 for Version Bump Reasoning block refresh.
+**Consumer**: `/implement` Step 9a — PR body composition. Also consumed by the Rebase + Re-bump Sub-procedure step 6 for the Version Bump Reasoning block refresh.
 
-**Contract**: Byte-preserving extract of PR body markdown scaffold from `skills/implement/SKILL.md` L580–681 plus Voting Tally extraction guidance (L683–685) and Quick-mode PR body guidance (L687–699). Section headers and `<details><summary>` block structure must NOT drift — parsed by Rebase + Re-bump Sub-procedure step 6's `<details><summary>Version Bump Reasoning</summary>` marker search and Step 11's `<details><summary>Execution Issues</summary>` marker search. Blank lines after opening `<summary>` tags and before closing `</details>` tags load-bearing for GitHub Markdown render.
+**Contract**: Byte-preserving extraction of the PR body markdown scaffold from `skills/implement/SKILL.md` L580–681 plus Voting Tally extraction guidance (L683–685) and Quick-mode PR body guidance (L687–699). Section headers and `<details><summary>` block structure must NOT drift — they are parsed by the Rebase + Re-bump Sub-procedure step 6's `<details><summary>Version Bump Reasoning</summary>` marker search and by Step 11's `<details><summary>Execution Issues</summary>` marker search. Blank lines immediately after opening `<summary>` tags and before closing `</details>` tags are load-bearing for GitHub Markdown rendering.
 
-**When to load**: before write `$IMPLEMENT_TMPDIR/pr-body.md` in Step 9a, and before Rebase + Re-bump Sub-procedure step 6 PR body refresh. NOT load other step.
+**When to load**: before writing `$IMPLEMENT_TMPDIR/pr-body.md` in Step 9a, and before the Rebase + Re-bump Sub-procedure step 6 PR body refresh. Do NOT load in any other step.
 
 ---
 
@@ -117,24 +117,24 @@ Generated with [Claude Code](https://claude.com/claude-code)
 
 ## Voting Tally extraction guidance (from SKILL.md L683–685)
 
-Populate Run Statistics from conversation context: count accepted/rejected findings from /design Step 3 output, count review rounds and findings from /review output, count entries in `execution-issues.md` by category, note external reviewer availability from /design and /review preflight checks. Note: Run Statistics aggregates (N accepted, N rejected) intentionally coexist with detailed per-finding tally tables in voting tally sections — different purposes (quick summary vs. full audit trail).
+Populate Run Statistics from conversation context: count accepted/rejected findings from /design Step 3 output, count review rounds and findings from /review output, count entries in `execution-issues.md` by category, and note external reviewer availability from /design and /review preflight checks. Note: Run Statistics aggregates (N accepted, N rejected) intentionally coexist with the detailed per-finding tally tables in the voting tally sections — they serve different purposes (quick summary vs. full audit trail).
 
-**Voting tally extraction guidance**: For Plan Review Voting Tally, extract per-finding vote breakdown and Reviewer Competition Scoreboard printed during `/design` Step 3's voting output. Vote breakdown may be table or list — extract whatever format printed. Reviewer Competition Scoreboard follows format in `voting-protocol.md`. For Code Review Voting Tally, extract per-finding vote breakdown from `/review` Step 3d (round 1 summary output) and Reviewer Competition Scoreboard from `/review` Step 4 (Final Summary). Step 3d prints per-finding details; Step 4 prints consolidated scoreboard.
+**Voting tally extraction guidance**: For the Plan Review Voting Tally, extract the per-finding vote breakdown and Reviewer Competition Scoreboard printed during `/design` Step 3's voting output. The vote breakdown may be a table or a list — extract whatever format was printed. The Reviewer Competition Scoreboard follows the format defined in `voting-protocol.md`. For the Code Review Voting Tally, extract the per-finding vote breakdown from `/review` Step 3d (the round 1 summary output) and the Reviewer Competition Scoreboard from `/review` Step 4 (Final Summary). Step 3d prints the per-finding details; Step 4 prints the consolidated scoreboard.
 
 ---
 
 ## Quick-mode PR body guidance (from SKILL.md L687–699)
 
-**Quick-mode PR body guidance** (`quick_mode=true`): When populate PR body in quick mode, use these section rules:
+**Quick-mode PR body guidance** (`quick_mode=true`): When populating the PR body in quick mode, use these section-specific rules:
 - **Architecture Diagram**: Write "Quick mode — architecture diagram skipped."
 - **Code Flow Diagram**: Write "Quick mode — code flow diagram skipped."
-- **Final Design**: Use inline implementation plan from Step 1 (not from `/design`).
-- **Version Bump Reasoning**: Populate from `$BUMP_REASONING_FILE` (absolute path parsed from `classify-bump.sh`'s `REASONING_FILE=<path>` stdout line in Step 8, same as normal mode) if exists and non-empty, else standard fallback text from normal-mode template.
+- **Final Design**: Use the inline implementation plan produced in Step 1 (not from `/design`).
+- **Version Bump Reasoning**: Populate from `$BUMP_REASONING_FILE` (the absolute path parsed from `classify-bump.sh`'s `REASONING_FILE=<path>` stdout line in Step 8, identical to normal mode) if it exists and is non-empty, otherwise the standard fallback text from the normal-mode template.
 - **Rejected Plan Review Suggestions**: Write "Quick mode — no plan review was conducted."
 - **Plan Review Voting Tally**: Write "Quick mode — no plan review voting."
 - **Code Review Voting Tally (Round 1)**: Write "Quick mode — no voting panel. Main agent reviewed findings across up to 7 single-reviewer rounds (Cursor → Codex → Claude fallback chain)."
-- **Implementation Deviations**: Compare implementation to inline plan (same as normal mode).
+- **Implementation Deviations**: Compare implementation to the inline plan (same as normal mode).
 - **Out-of-Scope Observations**:
   - **Accepted OOS (GitHub issues filed)**: Populate from Step 9a.1's main-agent-surfaced items in `oos-accepted-main-agent.md`. If Step 9a.1 filed no issues (no main-agent OOS findings), write "No OOS items were accepted for issue filing."
   - **Non-accepted OOS observations**: Write "Quick mode — no reviewer voting panel. Main-agent OOS items (if any) are auto-filed per policy; see Accepted OOS above."
-- **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)". For "OOS issues filed", do NOT hardcode `N/A (quick mode)` — Step 9a.1 runs in quick mode now and writes actual count to this cell per sub-step 7b. Cell will be `<N> created, <M> deduplicated`, `0`, or `N/A (repo unavailable)` depending on Step 9a.1 outcome. Code review findings reflect quick review results.
+- **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)". For "OOS issues filed", do NOT hardcode `N/A (quick mode)` — Step 9a.1 runs in quick mode now and writes the actual count to this cell per its sub-step 7b. The cell will be `<N> created, <M> deduplicated`, `0`, or `N/A (repo unavailable)` depending on the Step 9a.1 outcome. Code review findings should reflect the quick review results.

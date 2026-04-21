@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.7] - 2026-04-21
+
+### Changed
+
+- Revert the bulk caveman-style prose compression released in 5.0.6 (restore ~50 `.md` files under `skills/`, `docs/`, `tests/fixtures/`, `.claude/skills/`, plus `AGENTS.md` and `README.md` to their pre-5.0.6 prose) and restore the stricter forms of the three accompanying harness loosenings: `scripts/lint-skill-invocations.py` again requires the canonical `Invoke the Skill tool` / `via the Skill tool` phrases (no shortened variants); `scripts/test-design-structure.sh` again requires `All 4 keys are required` with the `are` connective; `scripts/test-orchestrator-scope-sync.sh` again requires the `The` prefix on scope-list intro sentences. `agents/code-reviewer.md` is regenerated from the reverted (uncompressed) `skills/shared/reviewer-templates.md`. Additionally, the `caveman@caveman` plugin entry and the `caveman` entry in `extraKnownMarketplaces` are removed from `.claude/settings.json` (dev-only settings — no runtime surface impact).
+
 ## [5.0.6] - 2026-04-21
 
 ### Changed

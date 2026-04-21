@@ -1,16 +1,25 @@
 # Dev-only PostToolUse audit log
 
-Contributor-only debug aid. Record JSONL audit trail of every `Edit` and `Write` tool call Claude Code make in this project.
+Contributor-only debugging aid that records a JSONL audit trail of every
+`Edit` and `Write` tool invocation Claude Code makes in this project.
 
-`scripts/audit-edit-write.sh` ship as part of larch plugin (live in plugin install tree), but **not registered or enabled by default**. Only run when contributor opt in locally by add `PostToolUse` entry to `.claude/settings.local.json` (gitignored — see `.gitignore`).
+`scripts/audit-edit-write.sh` is shipped as part of the larch plugin
+(it lives in the plugin install tree), but it is **not registered or
+enabled by default**. It only runs when a contributor opts in locally
+by adding a `PostToolUse` entry to `.claude/settings.local.json`
+(which is gitignored — see `.gitignore`).
 
 ## Enable
 
-Paste one of two snippets below into `.claude/settings.local.json` (make file if not exist — rest of file stay untouched). Pick snippet that match how larch available:
+Paste one of the two snippets below into `.claude/settings.local.json`
+(create the file if it does not exist — the rest of the file can stay
+untouched). Pick the snippet that matches how you have larch available:
 
 ### In-repo dev (editing the larch repo itself)
 
-If larch contributor work inside clone of this repo and shell cwd is repo root, `$PWD/scripts/audit-edit-write.sh` resolve correctly:
+If you are a larch contributor working inside a clone of this repo and
+your shell cwd is the repo root, `$PWD/scripts/audit-edit-write.sh`
+resolves correctly:
 
 ```json
 {
@@ -33,7 +42,11 @@ If larch contributor work inside clone of this repo and shell cwd is repo root, 
 
 ### Installed plugin (larch installed into another project)
 
-If larch installed as plugin in consumer repo, `$PWD` is consumer project root and no resolve larch helper. Use `${CLAUDE_PLUGIN_ROOT}/scripts/audit-edit-write.sh` instead — same resolution pattern used by `hooks/hooks.json` for shipped PreToolUse hooks:
+If larch is installed as a plugin in a consumer repo, `$PWD` is the
+consumer project root and will not resolve the larch helper. Use
+`${CLAUDE_PLUGIN_ROOT}/scripts/audit-edit-write.sh` instead — this is
+the same resolution pattern used by `hooks/hooks.json` for the shipped
+PreToolUse hooks:
 
 ```json
 {
@@ -54,7 +67,9 @@ If larch installed as plugin in consumer repo, `$PWD` is consumer project root a
 }
 ```
 
-Restart Claude Code (or reload session). Later `Edit` / `Write` calls append JSONL line to `.claude/hook-audit.log` in project where Claude Code run (honor `CLAUDE_PROJECT_DIR`).
+Restart Claude Code (or reload the session). Subsequent `Edit` / `Write`
+tool calls will append a JSONL line to `.claude/hook-audit.log` in the
+project where Claude Code is running (honoring `CLAUDE_PROJECT_DIR`).
 
 ## Log format
 
@@ -66,7 +81,9 @@ One JSON object per line:
 | `event`   | string | Always `"PostToolUse"`                                   |
 | `payload` | object | Full hook stdin as emitted by Claude Code                |
 
-`payload` object is whatever Claude Code sent to hook on stdin — typically object with `tool_name`, `tool_input`, related metadata. No fields stripped or redacted.
+The `payload` object is whatever Claude Code sent to the hook on stdin
+— typically an object containing `tool_name`, `tool_input`, and
+related metadata. No fields are stripped or redacted.
 
 Example:
 
@@ -76,45 +93,62 @@ Example:
 
 ## Disable
 
-Remove `PostToolUse` entry from `.claude/settings.local.json` (or delete file if nothing else in it).
+Remove the `PostToolUse` entry from `.claude/settings.local.json`
+(or delete the file entirely if it contained nothing else).
 
 ## Rotate / clear the log
 
-Script only append. Clear without delete file:
+The script only appends. To clear without deleting the file:
 
 ```bash
 truncate -s 0 .claude/hook-audit.log
 ```
 
-Or remove outright:
+Or remove it outright:
 
 ```bash
 rm .claude/hook-audit.log
 ```
 
-No auto rotation — log grow until you clear.
+There is no automatic rotation — the log grows until you clear it.
 
 ## Privacy
 
-**Log sensitive.** `payload` capture `tool_input`, which include:
+**The log is sensitive.** The `payload` object captures `tool_input`,
+which includes:
 
-- **Full file paths** Claude Code edited or wrote (may leak private project layout, user dirs, temp file locations).
-- **Full file contents** for `Write` (`content` field), and **before/after strings** for `Edit` (`old_string` / `new_string` fields). May contain secrets, PII, proprietary code.
+- **Full file paths** Claude Code edited or wrote (may expose private
+  project layout, user directories, temp file locations).
+- **Full file contents** for `Write` (the `content` field), and the
+  **before/after strings** for `Edit` (the `old_string` / `new_string`
+  fields). These may contain secrets, personally identifiable
+  information, or proprietary code.
 
-Log gitignored by default (`.gitignore` list `.claude/hook-audit.log`), but raw file on disk is dev responsibility:
+The log is gitignored by default (`.gitignore` lists
+`.claude/hook-audit.log`), but the raw file on disk is the developer's
+responsibility:
 
-- **Never commit.**
-- **Never paste into issue, PR, screenshot, screen share.**
-- **Clear after debug**: `truncate -s 0 .claude/hook-audit.log`.
-- If enable hook on project with secrets (e.g. edit `.env`, private keys, credentials), treat log as secret-bearing artifact with same retention rules.
+- **Never commit it.**
+- **Never paste its contents into an issue, pull request, screenshot,
+  or screen share.**
+- **Clear it after debugging**: `truncate -s 0 .claude/hook-audit.log`.
+- If you enable this hook on a project that handles secrets (e.g.
+  editing `.env`, private keys, credentials), consider the log itself
+  a secret-bearing artifact with the same retention discipline.
 
-See `SECURITY.md` for project security posture on this audit log.
+See `SECURITY.md` for the project's security posture on this audit log.
 
 ## Concurrency note
 
-Under parallel tool use, two `PostToolUse` hook calls may run concurrent. Shell `>>` append best-effort: if two writes interleave bytes, **line can corrupt** (not just drop), making physically malformed JSON record.
+Under parallel tool use, two `PostToolUse` hook invocations may run
+concurrently. Shell `>>` append is best-effort: if two writes
+interleave their bytes, **a line can be corrupted** (not merely
+omitted), producing a physically malformed JSON record.
 
-Consumers parsing log should tolerate parse errors on individual lines, not abort on first error. Streaming `jq … file.log` does NOT skip malformed records — abort whole run at first parse error. Read one line at time instead, e.g.:
+Consumers parsing the log should tolerate parse errors on individual
+lines rather than aborting on the first error. A streaming `jq …
+file.log` does NOT skip malformed records — it aborts the whole run at
+the first parse error. Read one line at a time instead, e.g.:
 
 ```bash
 # Process each line independently; skip any that fail to parse.
@@ -123,10 +157,19 @@ while IFS= read -r line; do
 done < .claude/hook-audit.log
 ```
 
-Or use `jq -R 'fromjson? | select(.event == "PostToolUse")' .claude/hook-audit.log` — parse each input line as raw string first, silently drop lines where `fromjson` fail. `?` operator suppress parse error and emit nothing for that line, so `select` never see malformed record.
+Or use `jq -R 'fromjson? | select(.event == "PostToolUse")' .claude/hook-audit.log`
+which parses each input line as a raw string first and silently drops
+lines where `fromjson` fails to parse — the `?` operator suppresses
+the parse error and emits no output for that line, so `select` never
+sees a malformed record.
 
-Line locking (`flock`) intentionally not implemented — for contributor-local debug aid, added complexity outweigh occasional corrupt line.
+Line locking (`flock`) is intentionally not implemented — for a
+contributor-local debugging aid, the added complexity outweighs the
+occasional corrupted line.
 
 ## Testing
 
-`scripts/test-audit-edit-write.sh` is regression harness. Use `mktemp -d` plus `CLAUDE_PROJECT_DIR` override so test never touch repo real `.claude/hook-audit.log`. Wired into `make lint` via `test-audit-edit-write` target.
+`scripts/test-audit-edit-write.sh` is the regression harness. It uses
+`mktemp -d` plus `CLAUDE_PROJECT_DIR` override so the test never
+touches the repo's real `.claude/hook-audit.log`. Wired into
+`make lint` via the `test-audit-edit-write` target.

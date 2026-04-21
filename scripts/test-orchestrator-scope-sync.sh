@@ -31,18 +31,16 @@
 #     open is `^NAME=\($` and close is `^\)$` on their own lines.
 #
 #   - skills/shared/subskill-invocation.md contains a `### Scope list`
-#     heading, followed by prose, followed by a mode-selection sentence
-#     matching `^(The )?[Bb]anner MUST appear in these orchestrator SKILL\.md files:$`
-#     then bullets, then a mode-selection sentence matching
-#     `^(The )?[Bb]anner MUST NOT appear in pure-delegator SKILL\.md files:$`
+#     heading, followed by prose, followed by the literal sentence
+#     `The banner MUST appear in these orchestrator SKILL.md files:`
+#     then bullets, then the literal sentence
+#     `The banner MUST NOT appear in pure-delegator SKILL.md files:`
 #     then bullets, then the `## Session-env handoff` top-level heading
-#     which ends the scope-list section. The optional leading `The ` and
-#     case-insensitive initial `B|b` tolerate the caveman-compressed form
-#     (`Banner MUST …`) without regressing the original (`The banner MUST …`).
-#     Each bullet is `- ` + backticked `skills/<name>/SKILL.md`, anchored
-#     end-of-line (trailing whitespace tolerated — see FINDING_5 mitigation
-#     below). No `###` subsubheadings may appear under `### Scope list`
-#     (would partition the list silently if the parser exited on them).
+#     which ends the scope-list section. Each bullet is
+#     `- ` + backticked `skills/<name>/SKILL.md`, anchored end-of-line
+#     (trailing whitespace tolerated — see FINDING_5 mitigation below).
+#     No `###` subsubheadings may appear under `### Scope list` (would
+#     partition the list silently if the parser exited on them).
 #
 # PARSER DESIGN NOTES:
 #
@@ -126,8 +124,8 @@ extract_doc_list() {
     /^## / && in_scope { exit }
     !in_scope { next }
     # Mode-selection on the two pinned literal intro sentences.
-    /^(The )?[Bb]anner MUST appear in these orchestrator SKILL\.md files:$/ { mode="orch"; next }
-    /^(The )?[Bb]anner MUST NOT appear in pure-delegator SKILL\.md files:$/ { mode="deleg"; next }
+    /^The banner MUST appear in these orchestrator SKILL\.md files:$/ { mode="orch"; next }
+    /^The banner MUST NOT appear in pure-delegator SKILL\.md files:$/ { mode="deleg"; next }
     # Bullet extraction. Strip trailing whitespace first (FINDING_5) so
     # editor noise after the closing backtick does not silently drop a path.
     {

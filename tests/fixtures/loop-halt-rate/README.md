@@ -1,7 +1,7 @@
 # loop-halt-rate fixture
 
-Throwaway fixture skill used by `scripts/test-loop-improve-skill-halt-rate.sh` (closes #278).
+Throwaway fixture skill consumed by `scripts/test-loop-improve-skill-halt-rate.sh` (closes #278).
 
-Harness copy `SKILL.md` into per-run scratch git repo at `skills/loop-halt-rate/SKILL.md`, then invoke `/larch:loop-improve-skill loop-halt-rate` headless via `claude -p` under bare-origin provisioned repo with PATH-shimmed `gh`. Fixture skeletal on purpose so `/skill-judge` grade below A — force `/loop-improve-skill` iterate, exercise Step-3.j halt surface harness measure.
+The harness copies `SKILL.md` into a per-run scratch git repo at `skills/loop-halt-rate/SKILL.md`, then invokes `/larch:loop-improve-skill loop-halt-rate` headlessly via `claude -p` under a bare-origin provisioned repo with a PATH-shimmed `gh`. The fixture is deliberately skeletal so `/skill-judge` consistently grades it below A — forcing `/loop-improve-skill` to iterate and exercising the Step-3.j halt surface the harness is measuring.
 
-Do NOT expand fixture into "good" skill. Harness need deficiency. See `scripts/test-loop-improve-skill-halt-rate.sh` and `scripts/lib-loop-improve-halt-ledger.sh` (`clause_for_last_completed()`) for halt-location taxonomy.
+Do NOT expand this fixture into a "good" skill. The harness depends on its deficiency. See `scripts/test-loop-improve-skill-halt-rate.sh` and `scripts/lib-loop-improve-halt-ledger.sh` (`clause_for_last_completed()`) for the halt-location taxonomy.
