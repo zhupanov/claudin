@@ -45,6 +45,20 @@
 
 set -euo pipefail
 
+# Derive CLAUDE_PLUGIN_ROOT from script location when the harness did not
+# export it. When /loop-improve-skill is invoked as a Skill, Claude Code's
+# harness expands ${CLAUDE_PLUGIN_ROOT} in SKILL.md's Bash template into a
+# literal path before subprocess launch but does NOT export the variable to
+# the Bash environment. Under `set -u`, the first unguarded reference aborts
+# the driver at Step 2 session-setup. Deriving the value from the script's
+# own location keeps driver.sh self-sufficient regardless of invocation mode.
+# Layout: ${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh
+# so the plugin root is three directories up from the script.
+if [[ -z "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
+  CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
+  export CLAUDE_PLUGIN_ROOT
+fi
+
 # --------------------------------------------------------------------------
 # Breadcrumb helpers (match larch progress convention)
 # --------------------------------------------------------------------------
