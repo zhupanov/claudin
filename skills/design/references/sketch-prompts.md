@@ -1,10 +1,10 @@
 # Sketch Personality Prompts
 
-**Consumer**: `/design` Step 2a.2 — launch shell blocks for Cursor slot 1 (Architecture/Standards), Cursor slot 2 (Edge-cases/Failure-modes), Codex slot 1 (Innovation/Exploration), Codex slot 2 (Pragmatism/Safety), and their respective Claude fallback Agent-tool invocations.
+**Consumer**: `/design` Step 2a.2 — launch shell blocks for Cursor slot 1 (Architecture/Standards), Cursor slot 2 (Edge-cases/Failure-modes), Codex slot 1 (Innovation/Exploration), Codex slot 2 (Pragmatism/Safety), and Claude fallback Agent-tool invocations for each.
 
-**Binding convention**: launch shell blocks in SKILL.md use the placeholder tokens `<ARCH_PROMPT>`, `<EDGE_PROMPT>`, `<INNOVATION_PROMPT>`, `<PRAGMATIC_PROMPT>` as literal substitution markers. Substitute the byte-identical prompt body from this file at launch time.
+**Binding convention**: launch shell blocks in SKILL.md use placeholder tokens `<ARCH_PROMPT>`, `<EDGE_PROMPT>`, `<INNOVATION_PROMPT>`, `<PRAGMATIC_PROMPT>` as literal substitution markers. Substitute byte-identical prompt body from this file at launch time.
 
-**Effort-suffix convention**: the trailing "Work at your maximum reasoning effort level." is part of the prompt body below. Keep it for external (Cursor/Codex) launches. For Claude fallback Agent-tool invocations, strip the trailing suffix — Claude uses session-default effort.
+**Effort-suffix convention**: trailing "Work at your maximum reasoning effort level." part of prompt body below. Keep for external (Cursor/Codex) launches. For Claude fallback Agent-tool invocations, strip trailing suffix — Claude use session-default effort.
 
 ---
 

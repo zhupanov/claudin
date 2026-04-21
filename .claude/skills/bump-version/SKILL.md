@@ -6,57 +6,57 @@ allowed-tools: Bash, Read
 
 # Bump Version
 
-Classify and apply a semantic version bump for this PR. This is a development-only skill invoked by `/implement` Step 8. It produces exactly ONE commit: a version-only edit of `.claude-plugin/plugin.json`.
+Classify + apply semantic version bump for PR. Dev-only skill, invoked by `/implement` Step 8. Produces ONE commit: version-only edit of `.claude-plugin/plugin.json`.
 
 ## Classification rules
 
-The classifier inspects **only the public plugin surface** — `skills/**` and `agents/**`. Changes under `.claude/**`, `scripts/**`, `hooks/**`, `docs/**`, `.github/**`, `CHANGELOG.md`, etc. do not contribute to MAJOR/MINOR classification and default the bump to PATCH.
+Classifier inspect **only public plugin surface** — `skills/**` and `agents/**`. Changes under `.claude/**`, `scripts/**`, `hooks/**`, `docs/**`, `.github/**`, `CHANGELOG.md`, etc. no contribute to MAJOR/MINOR, default to PATCH.
 
-Severity hierarchy: **MAJOR > MINOR > PATCH** (highest wins).
+Severity: **MAJOR > MINOR > PATCH** (highest win).
 
 ### MAJOR — backward-incompatible changes
-Any of the following in `skills/**` or `agents/**`:
-- A deleted `skills/*/SKILL.md` or `agents/*.md`
-- A renamed `skills/*/SKILL.md` (git status `R`)
-- A changed `name:` frontmatter field in an existing SKILL.md
-- A `--<flag>` token removed from a SKILL.md's `argument-hint:` frontmatter field (token-set comparison; wording-only edits to the argument-hint that preserve all tokens do not count)
+Any below in `skills/**` or `agents/**`:
+- Deleted `skills/*/SKILL.md` or `agents/*.md`
+- Renamed `skills/*/SKILL.md` (git status `R`)
+- Changed `name:` frontmatter field in existing SKILL.md
+- `--<flag>` token removed from SKILL.md `argument-hint:` frontmatter (token-set compare; wording-only edits that keep all tokens no count)
 
 ### MINOR — backward-compatible additions
-Any of the following in `skills/**` or `agents/**` (only if not MAJOR):
-- A newly added `skills/*/SKILL.md` or `agents/*.md`
-- A `--<flag>` token added to a SKILL.md's `argument-hint:` frontmatter field
+Any below in `skills/**` or `agents/**` (only if not MAJOR):
+- New `skills/*/SKILL.md` or `agents/*.md`
+- `--<flag>` token added to SKILL.md `argument-hint:` frontmatter
 
 ### PATCH — everything else
-Default for all other changes. Every PR must bump at least PATCH per policy.
+Default for all else. Every PR must bump at least PATCH per policy.
 
 ## Caveat — escalation-only clause
 
-After `classify-bump.sh` computes its deterministic baseline, the main agent (you) reviews the full diff for **behavioral** changes that a reasonable client would judge as unexpectedly backward-incompatible relative to a skill's original intent — even when no signature changed.
+After `classify-bump.sh` compute deterministic baseline, main agent (you) review full diff for **behavioral** changes reasonable client judge unexpectedly backward-incompatible vs skill original intent — even when no signature change.
 
 **You may ONLY escalate severity (PATCH → MINOR → MAJOR). Never downgrade.**
 
-If you escalate, append a paragraph to the reasoning log file explaining why.
+If escalate, append paragraph to reasoning log file explain why.
 
 ## How it works
 
-1. The caller (`/implement` Step 8) invokes this skill.
-2. The skill runs `classify-bump.sh`, which:
-   - Fetches `origin/main` (best-effort, non-fatal on failure)
-   - Resolves `BASE` via `main` → `origin/main` fallback
-   - Validates `.claude-plugin/plugin.json` via `jq`
-   - Detects an **already-bumped branch** by checking whether HEAD itself is a commit with subject `^Bump version to [0-9]+\.[0-9]+\.[0-9]+$`. If HEAD is such a commit, emits `BUMP_TYPE=NONE` and exits 0 (no-op). If a bump exists earlier in the branch but additional commits have landed on top, a fresh bump is required.
-   - Computes `git diff -M --name-status $BASE HEAD -- skills agents` for file-level classification (added/deleted/renamed SKILL.md and agent files)
-   - For each modified SKILL.md, reads the old and new full file contents via `git show "$BASE:<path>"` and `git show "HEAD:<path>"`, extracts the first YAML frontmatter block between `---` markers, and compares the `name:` and `argument-hint:` fields. The `argument-hint:` comparison uses token sets: a `--<flag>` present in both old and new is treated as unchanged; only genuine additions or removals contribute to classification.
-   - Writes evidence to `${IMPLEMENT_TMPDIR:-${TMPDIR:-/tmp}}/bump-version-reasoning.md` (absolute path also emitted as `REASONING_FILE=<path>` on stdout)
-   - Emits `KEY=VALUE` lines on stdout: `CURRENT_VERSION`, `NEW_VERSION`, `BUMP_TYPE`, `REASONING_FILE`
-3. You (main agent) parse the output, read the reasoning log, review the diff, and apply the **escalation-only** caveat review. If you escalate, update `NEW_VERSION` accordingly and append reasoning to the log.
+1. Caller (`/implement` Step 8) invoke skill.
+2. Skill run `classify-bump.sh`, which:
+   - Fetch `origin/main` (best-effort, non-fatal on fail)
+   - Resolve `BASE` via `main` → `origin/main` fallback
+   - Validate `.claude-plugin/plugin.json` via `jq`
+   - Detect **already-bumped branch** by check whether HEAD itself commit with subject `^Bump version to [0-9]+\.[0-9]+\.[0-9]+$`. If HEAD such commit, emit `BUMP_TYPE=NONE` + exit 0 (no-op). If bump exist earlier in branch but more commits landed on top, fresh bump needed.
+   - Compute `git diff -M --name-status $BASE HEAD -- skills agents` for file-level classification (added/deleted/renamed SKILL.md + agent files)
+   - For each modified SKILL.md, read old + new full file contents via `git show "$BASE:<path>"` and `git show "HEAD:<path>"`, extract first YAML frontmatter block between `---` markers, compare `name:` + `argument-hint:` fields. `argument-hint:` compare use token sets: `--<flag>` present in both old + new treated unchanged; only genuine adds or removes contribute to classification.
+   - Write evidence to `${IMPLEMENT_TMPDIR:-${TMPDIR:-/tmp}}/bump-version-reasoning.md` (absolute path also emitted as `REASONING_FILE=<path>` on stdout)
+   - Emit `KEY=VALUE` lines on stdout: `CURRENT_VERSION`, `NEW_VERSION`, `BUMP_TYPE`, `REASONING_FILE`
+3. You (main agent) parse output, read reasoning log, review diff, apply **escalation-only** caveat review. If escalate, update `NEW_VERSION` + append reasoning to log.
 4. You invoke `apply-bump.sh --new-version <NEW_VERSION>`, which:
-   - First verifies the working tree is clean (fails on any staged or unstaged changes)
-   - Backs up `.claude-plugin/plugin.json`
-   - Rewrites the `version` field via `jq` (atomic via tmp + mv)
+   - First verify working tree clean (fail on any staged/unstaged change)
+   - Back up `.claude-plugin/plugin.json`
+   - Rewrite `version` field via `jq` (atomic via tmp + mv)
    - `git add` + `git commit -m "Bump version to <NEW_VERSION>"`
-   - Rolls back from backup on commit failure
-5. If `BUMP_TYPE=NONE`, skip the apply step and report "already bumped".
+   - Roll back from backup on commit fail
+5. If `BUMP_TYPE=NONE`, skip apply step + report "already bumped".
 
 ## Usage
 
@@ -64,11 +64,11 @@ If you escalate, append a paragraph to the reasoning log file explaining why.
 ${CLAUDE_PLUGIN_ROOT_PLACEHOLDER:-$PWD}/.claude/skills/bump-version/scripts/classify-bump.sh
 ```
 
-Parse the output for `CURRENT_VERSION`, `NEW_VERSION`, `BUMP_TYPE`, `REASONING_FILE`.
+Parse output for `CURRENT_VERSION`, `NEW_VERSION`, `BUMP_TYPE`, `REASONING_FILE`.
 
-If `BUMP_TYPE=NONE`, report the no-op and exit.
+If `BUMP_TYPE=NONE`, report no-op + exit.
 
-Otherwise, review the reasoning log and the branch diff. Decide whether to escalate. If escalating, compute the new version from `CURRENT_VERSION` + your escalated bump type and append your reasoning to the log file.
+Else, review reasoning log + branch diff. Decide whether escalate. If escalate, compute new version from `CURRENT_VERSION` + escalated bump type and append reasoning to log file.
 
 Then apply:
 
@@ -78,8 +78,8 @@ $PWD/.claude/skills/bump-version/scripts/apply-bump.sh --new-version <NEW_VERSIO
 
 ## Output contract
 
-The reasoning log at `${IMPLEMENT_TMPDIR:-${TMPDIR:-/tmp}}/bump-version-reasoning.md` is read by `/implement` Step 9a and embedded into the PR body under `<details><summary>Version Bump Reasoning</summary>`. The absolute path is also emitted on stdout by `classify-bump.sh` as `REASONING_FILE=<path>` — callers should prefer that structured output over reconstructing the path from env vars.
+Reasoning log at `${IMPLEMENT_TMPDIR:-${TMPDIR:-/tmp}}/bump-version-reasoning.md` read by `/implement` Step 9a + embedded into PR body under `<details><summary>Version Bump Reasoning</summary>`. Absolute path also emitted on stdout by `classify-bump.sh` as `REASONING_FILE=<path>` — callers should prefer that structured output over reconstructing path from env vars.
 
 ## Exit codes
-- `classify-bump.sh` — 0 on success (including `BUMP_TYPE=NONE`), non-zero on parse/validation failure
-- `apply-bump.sh` — 0 on successful commit, non-zero on dirty worktree or commit failure (rollback performed)
+- `classify-bump.sh` — 0 on success (including `BUMP_TYPE=NONE`), non-zero on parse/validation fail
+- `apply-bump.sh` — 0 on successful commit, non-zero on dirty worktree or commit fail (rollback done)

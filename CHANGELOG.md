@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.6] - 2026-04-21
+
+### Changed
+
+- Bulk caveman-style prose compression across ~50 `.md` files under `skills/` (except `skills/implement/SKILL.md` and `skills/design/SKILL.md`, kept uncompressed for readability of the two critical orchestrator skills), `docs/`, `tests/fixtures/`, `.claude/skills/`, plus `AGENTS.md` and `README.md`. Technical content (code fences, URLs, frontmatter, file paths, quoted error strings) preserved verbatim. Accompanying harness loosenings keep CI green against the compressed forms: `scripts/lint-skill-invocations.py` accepts `Invoke Skill tool` / `Call the Skill tool` / `Call Skill tool` / `via Skill tool` variants in addition to the original canonical phrases; `scripts/test-design-structure.sh` accepts `All 4 keys required` without the `are` connective; `scripts/test-orchestrator-scope-sync.sh` accepts the scope-list intro sentences with or without the leading `The` prefix (case-insensitive `B|b`). `agents/code-reviewer.md` is regenerated from the unchanged `GENERATED_BODY` block of `skills/shared/reviewer-templates.md` (the template's surrounding prose is compressed, but the generator-extracted block is not — keeps the agent file byte-identical to generator output so the `agent-sync` CI gate stays green).
+
 ## [5.0.5] - 2026-04-21
 
 ### Changed

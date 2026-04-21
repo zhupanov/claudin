@@ -58,8 +58,8 @@ grep -q 'dialectic-debate\.md' "$DIALEXEC_MD" \
 # Check 4: references/flags.md exists and contains load-bearing literals.
 [[ -f "$FLAGS_MD" ]] || fail "references/flags.md missing: $FLAGS_MD"
 
-grep -q 'All 4 keys are required' "$FLAGS_MD" \
-  || fail "references/flags.md lacks the --branch-info 4-key literal 'All 4 keys are required'"
+grep -qE 'All 4 keys (are )?required' "$FLAGS_MD" \
+  || fail "references/flags.md lacks the --branch-info 4-key literal 'All 4 keys [are] required'"
 
 # shellcheck disable=SC2016 # single quotes intentional — grep pattern is literal, includes backticks
 grep -q '`::` delimiter' "$FLAGS_MD" \
