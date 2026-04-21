@@ -380,7 +380,7 @@ assert_stdout_contains "4b: STATUS=git_error" "$out" "STATUS=git_error"
 # Regression guard for the pre-STATUS caller-side trap (surfaced during #172
 # code review). The script does not itself mix pre and post state — each
 # invocation is independent — but the observable signals MUST allow callers
-# (e.g., skills/implement/SKILL.md Rebase + Re-bump Sub-procedure step 4)
+# (e.g., skills/implement/references/rebase-rebump-subprocedure.md step 4)
 # to distinguish:
 #   (a) pre-degraded → COMMITS_BEFORE coerced to 0, STATUS non-ok
 #   (b) post-recovered → COMMITS_AFTER reflects true count N, STATUS=ok
