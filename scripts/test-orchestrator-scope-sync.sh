@@ -8,10 +8,10 @@
 #   (2) Bulleted scope lists under "### Scope list" in
 #       skills/shared/subskill-invocation.md — the human-readable contract.
 #
-# Drift between the two is silent today: adding or reclassifying a skill in
-# one place without the other goes undetected until a reviewer notices. This
-# harness mechanically enforces the invariant so edits to either source
-# immediately fail `make lint` until the other side is updated.
+# Without this harness, drift between the two would be silent: adding or
+# reclassifying a skill in one place without the other would go undetected
+# until a reviewer noticed. This harness mechanically enforces the invariant
+# so edits to either source fail `make lint` until the other side is updated.
 #
 # Invoked via:  bash scripts/test-orchestrator-scope-sync.sh
 # Wired into:   make lint (via the test-orchestrator-scope-sync Makefile
