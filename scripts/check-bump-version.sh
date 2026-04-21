@@ -39,8 +39,9 @@
 #
 # Commit counting uses local `main` if it exists, falling back to `origin/main`
 # if only the remote ref is present. This matches classify-bump.sh's base
-# resolution and ensures the /implement Rebase + Re-bump Sub-procedure's post-
-# verification check works correctly even when the repo has no local `main`
+# resolution and ensures the /implement's Rebase + Re-bump Sub-procedure step 4
+# (skills/implement/references/rebase-rebump-subprocedure.md) post-verification
+# check works correctly even when the repo has no local `main`
 # ref (e.g., some CI clones). Without the fallback, `git rev-list main..HEAD`
 # silently returns 0 and the post-check produces a false VERIFIED=false.
 #
