@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.7] - 2026-04-20
+
+### Changed
+
+- `.claude/skills/relevant-checks/SKILL.md` — polish pass from `/loop-improve-skill` iter-2 (#245): frontmatter description gains `pre-commit` and `agent-lint` as explicit trigger tokens and scopes "modified files" to the pre-commit phase only; `## Mindset` gains a **Maintenance rule** paragraph covering observable banners, exit paths, `WARNING:`/`ERROR:` lines, and script comment labels / branch names (e.g., the `files[] empty but MODIFIED_FILES non-empty` branch); `## How it works` drops the inline 5-bullet linter roster (which was incomplete — missing `lint-skill-invocations` and `agent-lint`) in favour of a single pointer to `.pre-commit-config.yaml`. Doc-only; `scripts/run-checks.sh` untouched.
+
 ## [4.3.6] - 2026-04-20
 
 ### Changed
