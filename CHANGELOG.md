@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.3] - 2026-04-20
+
+### Fixed
+
+- `scripts/lib-count-commits.sh`, `scripts/check-bump-version.sh`, `scripts/git-force-push.sh`, `scripts/git-sync-local-main.sh` — header comments cited `skills/implement/SKILL.md` as the inline home of the Rebase + Re-bump Sub-procedure, but PR #229 extracted it to `skills/implement/references/rebase-rebump-subprocedure.md`. Append the reference-file path as a parenthetical anchor adjacent to each existing step-number citation (preserving step numbers 3/4/5 which map 1:1 to the extracted file's numbering). Prose-only; zero runtime behavior change. Also makes `check-bump-version.sh`'s header carry an explicit `step 4` anchor so it matches the `step N (path)` pattern of the other three headers (plan-review FINDING_2, 2 YES / 1 NO). Closes #235.
+
 ## [4.3.1] - 2026-04-20
 
 ### Fixed
