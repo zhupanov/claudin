@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.1] - 2026-04-21
+
+### Fixed
+
+- `skills/loop-improve-skill/scripts/driver.sh`: derive `CLAUDE_PLUGIN_ROOT` from the script's own location when the harness did not export it, so the driver no longer aborts at Step 2 session-setup under `set -u` when invoked as a Skill (closes #288).
+
 ## [5.0.0] - 2026-04-21
 
 ### Changed
