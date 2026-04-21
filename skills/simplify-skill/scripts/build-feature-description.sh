@@ -62,10 +62,16 @@ fi
 
 # --- Resolve target directory ---
 
-# Prefer plugin tree (published skills) over consumer-repo dev skills.
+# Probe order:
+#   1. ${CLAUDE_PLUGIN_ROOT}/skills/<name>          — plugin-published skills
+#   2. $PWD/skills/<name>                           — in-plugin-repo layout (working inside larch itself)
+#   3. $PWD/.claude/skills/<name>                   — consumer-repo repo-local dev skills
+#   4. ${CLAUDE_PLUGIN_ROOT}/.claude/skills/<name>  — edge case: dev skills under plugin root
 TARGET_DIR=""
 if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]] && [[ -f "${CLAUDE_PLUGIN_ROOT}/skills/${NAME}/SKILL.md" ]]; then
   TARGET_DIR="${CLAUDE_PLUGIN_ROOT}/skills/${NAME}"
+elif [[ -f "$(pwd)/skills/${NAME}/SKILL.md" ]]; then
+  TARGET_DIR="$(pwd)/skills/${NAME}"
 elif [[ -f "$(pwd)/.claude/skills/${NAME}/SKILL.md" ]]; then
   TARGET_DIR="$(pwd)/.claude/skills/${NAME}"
 elif [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]] && [[ -f "${CLAUDE_PLUGIN_ROOT}/.claude/skills/${NAME}/SKILL.md" ]]; then
@@ -74,7 +80,7 @@ else
   printf 'STATUS=not_found\n'
   # Single quotes are intentional — we want to show the literal path tokens (${CLAUDE_PLUGIN_ROOT}, $PWD) to the user, not expand them.
   # shellcheck disable=SC2016
-  printf 'ERROR=Skill %s not found. Probed ${CLAUDE_PLUGIN_ROOT}/skills/%s/SKILL.md, $PWD/.claude/skills/%s/SKILL.md, and ${CLAUDE_PLUGIN_ROOT}/.claude/skills/%s/SKILL.md.\n' "$NAME" "$NAME" "$NAME" "$NAME"
+  printf 'ERROR=Skill %s not found. Probed ${CLAUDE_PLUGIN_ROOT}/skills/%s/SKILL.md, $PWD/skills/%s/SKILL.md, $PWD/.claude/skills/%s/SKILL.md, and ${CLAUDE_PLUGIN_ROOT}/.claude/skills/%s/SKILL.md.\n' "$NAME" "$NAME" "$NAME" "$NAME" "$NAME"
   exit 0
 fi
 
