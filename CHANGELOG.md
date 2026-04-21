@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.17] - 2026-04-21
+
+### Added
+
+- `scripts/test-loop-improve-skill-halt-rate.sh`, `scripts/lib-loop-improve-halt-ledger.sh`, `tests/fixtures/loop-halt-rate/`, plus `Makefile` `halt-rate-probe` / `test-lib-halt-ledger` targets and a README subsection — opt-in halt-rate regression harness for `/larch:loop-improve-skill` (closes #278 under halt-problem umbrella #273). Probe invokes the skill end-to-end N times against a throwaway fixture skill, parses outer's `✅ 5: close out` breadcrumb as primary classifier (filesystem sentinel forensics only for `halt_mid_turn` survivors), and emits `HALT_RATE` + `MEASURED_RUNS` + `PROBE_STATUS` + per-status + per-location breakdowns. Per-run isolation via `mktemp -d` scratch with bare-origin git provisioning and PATH-shimmed `gh`; `timeout --kill-after` wrapper handles both exit 124 and SIGKILL-escalation exit 137. Missing `claude` binary exits non-zero per #278 contract. Not wired into `make lint` (opt-in only).
+
 ## [4.3.16] - 2026-04-20
 
 ### Fixed
