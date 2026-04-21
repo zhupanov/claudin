@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.10] - 2026-04-20
+
+### Changed
+
+- `.claude/skills/relevant-checks/SKILL.md` — polish pass from `/loop-improve-skill` iter-3 (#245): `## Mindset` gains two additional paragraphs — a "doc DESCRIBES behavior, does NOT define policy" guardrail encoding the governing constraint explicitly, and a "Re-run after structural edits" frame capturing the full-repo-phase escalation discipline for cross-file invariants that the changed-file phase cannot detect. The third NEVER bullet's inline `(a)(b)(c)` enumeration of reduced-coverage exit-0 cases is converted to a 3-row micro-table (Case / Observable signal / Coverage implication) for triage-time scan-ability. Doc-only.
+
 ## [4.3.9] - 2026-04-20
 
 ### Fixed

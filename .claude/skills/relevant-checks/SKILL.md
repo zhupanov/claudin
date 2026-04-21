@@ -14,6 +14,10 @@ Before diagnosing a failure, classify it by phase: **changed-file phase** (`pre-
 
 **Maintenance rule.** Before editing `run-checks.sh` or this skill, ask: does the change alter anything the Failure-mode taxonomy table or the NEVER list pins to — observable banners, exit paths, `WARNING:`/`ERROR:` lines, or script comment labels / branch names (e.g., the `files[] empty but MODIFIED_FILES non-empty` branch)? If yes, update both the script and the doc in the same commit — the script is the source of truth, but the doc's decision table and NEVER bullets are pinned to specific strings from it.
 
+This skill DESCRIBES `run-checks.sh` behavior — it does NOT define new policy. If you find yourself wanting to add a NEVER bullet or taxonomy row whose WHY is not an observable script branch or banner, reconsider: the drift risk is higher than the doc value.
+
+**Re-run after structural edits.** After a fix that edits structure-adjacent files (SKILL.md, AGENTS.md, CHANGELOG.md, harness scripts, or anything `agent-lint` scans), re-invoke `/relevant-checks` even if the changed-file phase passed the first time — the full-repo `agent-lint` pass may flag cross-file invariants (dangling references, orphaned harnesses, frontmatter mismatches) that the changed-file phase cannot see in isolation.
+
 ## How it works
 
 Changed files are collected from the branch diff, staged changes, unstaged changes, and untracked files. The union is passed to `pre-commit run --files`, which routes each file to the appropriate linter hooks based on file type. Deleted files are filtered out automatically. See `.pre-commit-config.yaml` for the authoritative hook list applied to the changed-file phase — it is consulted at invocation time by `pre-commit` and evolves independently of this skill.
@@ -57,4 +61,12 @@ Note: `WARNING: agent-lint not found on PATH — skipping` is non-fatal — the 
 
 - **NEVER substitute `git commit --no-verify` for `/relevant-checks`.** **Why:** `--no-verify` only skips the local git `pre-commit` hook (an optional, separate install); it does NOT run or replace this skill's checks. Always run `/relevant-checks` before the merge.
 - **NEVER assume a deletions-only branch has nothing to check.** **Why:** `run-checks.sh` skips the changed-file phase (empty `files[]`) but still runs the full-repo `agent-lint` phase — see the `files[] empty but MODIFIED_FILES non-empty` branch. Deletions are the most common source of structural regressions (dangling references, orphaned harnesses).
-- **NEVER read `/relevant-checks` exit 0 as "every gate ran green".** **Why:** exit 0 only guarantees that each phase that *ran* passed — it does NOT guarantee that every phase ran. Reduced-coverage exit-0 outcomes to watch for: (a) **no modified files detected** (empty branch diff + empty staged/unstaged/untracked sets) — the script prints `No modified files detected — no checks to run.` and exits 0 with zero phases; (b) **deletions-only branch** — changed-file phase is skipped (empty `files[]`), and if `agent-lint` is also absent from `PATH` the full-repo phase is skipped too, leaving zero phases run; (c) **agent-lint absent from `PATH`** — any run where the script prints `WARNING: agent-lint not found on PATH — skipping` exits 0 on changed-file-phase success alone, with no structural coverage. CI's `agent-lint` job (and a re-invocation once modified files exist on-branch) is the authoritative gate — exit 0 from `/relevant-checks` alone never substitutes for it.
+- **NEVER read `/relevant-checks` exit 0 as "every gate ran green".** **Why:** exit 0 only guarantees that each phase that *ran* passed — it does NOT guarantee that every phase ran. Reduced-coverage exit-0 outcomes to watch for:
+
+  | Case | Observable signal | Coverage implication |
+  |------|-------------------|----------------------|
+  | No modified files detected | `No modified files detected — no checks to run.` → exit 0 | Zero phases ran (common on detached HEAD or freshly-reset tree) |
+  | Deletions-only + `agent-lint` absent | `No existing modified files to check (all changes are deletions).` followed by `WARNING: agent-lint not found on PATH — skipping` | Zero phases ran |
+  | `agent-lint` absent, changed-file phase ran | `WARNING: agent-lint not found on PATH — skipping` after a successful pre-commit pass | Changed-file phase only; no structural coverage |
+
+  CI's `agent-lint` job (and a re-invocation once modified files exist on-branch) is the authoritative gate — exit 0 from `/relevant-checks` alone never substitutes for it.
