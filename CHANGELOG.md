@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.11] - 2026-04-20
+
+### Fixed
+
+- `scripts/test-implement-structure.sh` — assertion (8) previously iterated the hard-coded `expected_refs` array when checking the `**Consumer**:` / `**Contract**:` / `**When to load**:` header triplet, so a new `skills/implement/references/*.md` added without the triplet would slip through CI unvalidated. Replaced with the `shopt -s nullglob` + `"$REFS_DIR"/*.md` + basename-in-message pattern used by assertion (9), and added the parallel "no .md files found" guard. Assertion (7) (canonical four-file presence check) is unchanged. Header and block comments updated to drop the "four hard-coded" implication. Closes #252.
+
 ## [4.3.10] - 2026-04-20
 
 ### Changed
