@@ -45,10 +45,13 @@ rm -rf "$tmpdir_a"
 out=$(classify_halt_location "/tmp/nonexistent-halt-ledger-$$-$RANDOM")
 assert_kv "(b) nonexistent dir" "$out" "ITER=none"
 assert_kv "(b) nonexistent dir - LAST_COMPLETED" "$out" "LAST_COMPLETED=none"
+assert_kv "(b) nonexistent dir - clause" "$out" "HALT_LOCATION_CLAUSE=halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)"
 
 # Case (c): empty string arg.
 out=$(classify_halt_location "")
 assert_kv "(c) empty arg" "$out" "ITER=none"
+assert_kv "(c) empty arg - LAST_COMPLETED" "$out" "LAST_COMPLETED=none"
+assert_kv "(c) empty arg - clause" "$out" "HALT_LOCATION_CLAUSE=halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)"
 
 # Case (d): iter-1 done sentinel present (completed).
 tmpdir_d=$(mktemp -d -t halt-ledger-test.XXXX)
@@ -131,13 +134,24 @@ assert_kv "(l) multi-iter both done - LAST_COMPLETED" "$out" "LAST_COMPLETED=don
 rm -rf "$tmpdir_l"
 
 # Case (m): empty sentinel file (size 0) — per SKILL.md, only non-empty sentinels count.
+# The highest-iter scan uses -e (file exists) so ITER=1 is emitted, but the
+# per-substep scan uses -s (non-empty) so LAST_COMPLETED stays 'none'. This
+# documents the split semantics so future edits do not silently shift either half.
 tmpdir_m=$(mktemp -d -t halt-ledger-test.XXXX)
 : > "$tmpdir_m/iter-1-3j.done"   # empty
 : > "$tmpdir_m/iter-1-done.sentinel"  # empty
 out=$(classify_halt_location "$tmpdir_m")
-# Empty done.sentinel → not treated as done; empty 3j → last_completed stays none
+assert_kv "(m) empty sentinels - ITER" "$out" "ITER=1"
 assert_kv "(m) empty sentinels - LAST_COMPLETED" "$out" "LAST_COMPLETED=none"
+assert_kv "(m) empty sentinels - clause" "$out" "HALT_LOCATION_CLAUSE=halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)"
 rm -rf "$tmpdir_m"
+
+# Case (n): clause_for_last_completed helper emits canonical strings.
+# Token `done` is quoted so shellcheck SC1010 doesn't flag it as a for/while terminator.
+assert_kv "(n) clause done" "LAST_COMPLETED=$(clause_for_last_completed "done")" "LAST_COMPLETED=completed iteration"
+assert_kv "(n) clause 3i" "LAST_COMPLETED=$(clause_for_last_completed 3i)" "LAST_COMPLETED=halted between 3.i verify and Step 4 close-out"
+assert_kv "(n) clause none" "LAST_COMPLETED=$(clause_for_last_completed none)" "LAST_COMPLETED=halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)"
+assert_kv "(n) clause unknown-defaults-to-none" "LAST_COMPLETED=$(clause_for_last_completed bogus)" "LAST_COMPLETED=halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)"
 
 echo "PASS=$PASS_COUNT FAIL=$FAIL_COUNT"
 if (( FAIL_COUNT > 0 )); then

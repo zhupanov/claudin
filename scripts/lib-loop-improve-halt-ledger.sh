@@ -16,6 +16,26 @@
 # directly. Consumers:
 #   - scripts/test-loop-improve-skill-halt-rate.sh (halt-rate probe)
 
+# clause_for_last_completed <token>
+#
+# Emits the exact canonical HALT_LOCATION_CLAUSE string for a given
+# LAST_COMPLETED token (stdout, no newline suffix). Shared between
+# classify_halt_location (sentinel-ledger scan path) and the halt-rate
+# probe's log-parsing path (halt_detected_by_outer classification) so
+# the two paths cannot drift.
+clause_for_last_completed() {
+    case "$1" in
+        done)           printf '%s' 'completed iteration' ;;
+        3j)             printf '%s' 'halted at or before grade parse at 3.j.v' ;;
+        3jv)            printf '%s' 'halted at or before /design at 3.d' ;;
+        3d-pre-detect)  printf '%s' 'halted during no-plan detector or before rescue at 3.d' ;;
+        3d-post-detect) printf '%s' 'halted at or before plan-post at 3.d' ;;
+        3d-plan-post)   printf '%s' 'halted at or before /im at 3.i' ;;
+        3i)             printf '%s' 'halted between 3.i verify and Step 4 close-out' ;;
+        none|*)         printf '%s' 'halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)' ;;
+    esac
+}
+
 # classify_halt_location <LOOP_TMPDIR>
 #
 # Iteration-agnostic: finds the highest ITER among any iter-<N>-*.done files
@@ -79,15 +99,7 @@ classify_halt_location() {
     done
 
     local clause
-    case "$last_completed" in
-        none)           clause='halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)' ;;
-        3j)             clause='halted at or before grade parse at 3.j.v' ;;
-        3jv)            clause='halted at or before /design at 3.d' ;;
-        3d-pre-detect)  clause='halted during no-plan detector or before rescue at 3.d' ;;
-        3d-post-detect) clause='halted at or before plan-post at 3.d' ;;
-        3d-plan-post)   clause='halted at or before /im at 3.i' ;;
-        3i)             clause='halted between 3.i verify and Step 4 close-out' ;;
-    esac
+    clause=$(clause_for_last_completed "$last_completed")
 
     printf 'ITER=%s\nLAST_COMPLETED=%s\nHALT_LOCATION_CLAUSE=%s\n' \
         "$highest_iter" "$last_completed" "$clause"

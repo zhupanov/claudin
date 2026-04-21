@@ -43,9 +43,9 @@ KEEP_TMPDIRS=0
 while (( $# > 0 )); do
     case "$1" in
         --runs)
-            RUNS="$2"; shift 2 ;;
+            RUNS="${2:?--runs requires a value}"; shift 2 ;;
         --timeout-per-run)
-            TIMEOUT_SEC="$2"; shift 2 ;;
+            TIMEOUT_SEC="${2:?--timeout-per-run requires a value}"; shift 2 ;;
         --keep-tmpdirs)
             KEEP_TMPDIRS=1; shift ;;
         -h|--help)
@@ -149,11 +149,11 @@ STUBEOF
 }
 
 # Per-status and per-location counters
-declare -a run_lines
 status_completed=0
 status_halt_mid_turn=0
 status_halt_detected=0
 status_timeout=0
+status_tool_failure=0
 status_error=0
 loc_done=0
 loc_3i=0
@@ -183,11 +183,11 @@ trap cleanup_all EXIT
 classify_run() {
     local run_log="$1" wrapper_exit="$2" loop_tmpdir="$3"
 
-    if [[ "$wrapper_exit" == "124" ]]; then
+    # timeout exit codes: 124 = TERM timeout; 137 = SIGKILL after --kill-after grace (128+9).
+    if [[ "$wrapper_exit" == "124" || "$wrapper_exit" == "137" ]]; then
         if [[ -n "$loop_tmpdir" && -d "$loop_tmpdir" ]]; then
-            local ledger_out
+            local ledger_out last_c clause
             ledger_out=$(classify_halt_location "$loop_tmpdir")
-            local last_c clause
             last_c=$(printf '%s\n' "$ledger_out" | sed -n 's/^LAST_COMPLETED=//p' | head -1)
             clause=$(printf '%s\n' "$ledger_out" | sed -n 's/^HALT_LOCATION_CLAUSE=//p' | head -1)
             printf 'STATUS=timeout\nLAST_COMPLETED=%s\nCLAUSE=%s\n' "${last_c:-none}" "${clause:-timeout_before_start}"
@@ -198,45 +198,45 @@ classify_run() {
     fi
 
     if [[ -z "$loop_tmpdir" ]]; then
-        printf 'STATUS=error\nLAST_COMPLETED=none\nCLAUSE=no_loop_tmpdir\n'
+        # Distinguish infrastructure error (no loop tmpdir emitted) from model halt.
+        # If wrapper exited non-zero AND no LOOP_TMPDIR, treat as tool_failure
+        # (neither a halt nor a measurement).
+        if [[ "$wrapper_exit" != "0" ]]; then
+            printf 'STATUS=tool_failure\nLAST_COMPLETED=none\nCLAUSE=claude_exit_%s_no_loop_tmpdir\n' "$wrapper_exit"
+        else
+            printf 'STATUS=error\nLAST_COMPLETED=none\nCLAUSE=no_loop_tmpdir\n'
+        fi
         return 0
     fi
 
-    # Look for outer EXIT_REASON line
-    local exit_reason_line
-    exit_reason_line=$(grep -E '^\s*(\*\*)?EXIT_REASON=' "$run_log" 2>/dev/null | tail -1 || true)
-    # Also tolerate "EXIT_REASON=..." embedded anywhere (outer prints it in Step 5 blockquote)
-    if [[ -z "$exit_reason_line" ]]; then
-        exit_reason_line=$(grep -o 'EXIT_REASON="[^"]*"' "$run_log" 2>/dev/null | tail -1 || true)
+    # Parse outer's Step 5 close-out breadcrumb (authoritative progress line):
+    #   ✅ 5: close out — issue #<N>, exit: <EXIT_REASON value>
+    # Also fall back to the closeout-body.md preamble "Loop finished. Iterations
+    # run: <N>. Exit reason: <...>." which claude -p's Bash-tool stdout captures.
+    local exit_reason_value=""
+    exit_reason_value=$(grep -oE '✅ 5: close out — issue #[0-9]+, exit: .*' "$run_log" 2>/dev/null | tail -1 | sed -E 's/^.*exit: //' || true)
+    if [[ -z "$exit_reason_value" ]]; then
+        exit_reason_value=$(grep -oE 'Loop finished\. Iterations run: [0-9]+\. Exit reason: .*' "$run_log" 2>/dev/null | tail -1 | sed -E 's/^.*Exit reason: //' | sed -E 's/\.$//' || true)
     fi
 
-    if [[ -n "$exit_reason_line" ]]; then
-        if printf '%s' "$exit_reason_line" | grep -q 'iteration sentinel missing'; then
+    if [[ -n "$exit_reason_value" ]]; then
+        if printf '%s' "$exit_reason_value" | grep -q 'iteration sentinel missing'; then
             # Outer caught the halt. Extract last-completed from the diagnostic.
-            local lc
-            lc=$(printf '%s' "$exit_reason_line" | grep -oE 'last-completed=[A-Za-z0-9-]+' | tail -1 | cut -d= -f2)
+            local lc clause
+            lc=$(printf '%s' "$exit_reason_value" | grep -oE 'last-completed=[A-Za-z0-9-]+' | tail -1 | cut -d= -f2)
             if [[ -z "$lc" ]]; then lc="none"; fi
-            local clause
-            case "$lc" in
-                none)           clause='halted at or before /skill-judge at 3.j (or inner aborted during argument validation — see REASON)' ;;
-                3j)             clause='halted at or before grade parse at 3.j.v' ;;
-                3jv)            clause='halted at or before /design at 3.d' ;;
-                3d-pre-detect)  clause='halted during no-plan detector or before rescue at 3.d' ;;
-                3d-post-detect) clause='halted at or before plan-post at 3.d' ;;
-                3d-plan-post)   clause='halted at or before /im at 3.i' ;;
-                3i)             clause='halted between 3.i verify and Step 4 close-out' ;;
-                *)              clause='unknown halt location' ;;
-            esac
+            clause=$(clause_for_last_completed "$lc")
             printf 'STATUS=halt_detected_by_outer\nLAST_COMPLETED=%s\nCLAUSE=%s\n' "$lc" "$clause"
         else
-            # Some other EXIT_REASON — normal loop exit (grade A, max iters, infeasibility, etc.)
+            # Normal loop exit (grade A, max iters, infeasibility, etc.)
             printf 'STATUS=completed_by_outer\nLAST_COMPLETED=done\nCLAUSE=completed iteration\n'
         fi
         return 0
     fi
 
-    # No EXIT_REASON and non-timeout exit → outer itself halted before Step 5.
-    # Scan LOOP_TMPDIR (which survived since Step 6 cleanup never ran).
+    # No close-out line found and non-timeout exit → outer itself halted before
+    # reaching Step 5. Scan LOOP_TMPDIR (which survives since Step 6 cleanup
+    # never ran) for sentinel forensics.
     if [[ -d "$loop_tmpdir" ]]; then
         local ledger_out last_c clause
         ledger_out=$(classify_halt_location "$loop_tmpdir")
@@ -244,8 +244,6 @@ classify_run() {
         clause=$(printf '%s\n' "$ledger_out" | sed -n 's/^HALT_LOCATION_CLAUSE=//p' | head -1)
         printf 'STATUS=halt_mid_turn\nLAST_COMPLETED=%s\nCLAUSE=%s\n' "${last_c:-none}" "${clause:-unknown}"
     else
-        # LOOP_TMPDIR path was emitted but directory is already gone — likely
-        # outer ran cleanup but never emitted EXIT_REASON (unusual).
         printf 'STATUS=halt_mid_turn\nLAST_COMPLETED=none\nCLAUSE=loop_tmpdir_already_cleaned\n'
     fi
 }
@@ -307,7 +305,6 @@ for (( i=1; i<=RUNS; i++ )); do
         git push -q origin main
     ) >"$scratch/provision.log" 2>&1 || {
         echo "RUN $i: status=error last_completed=none clause=\"provisioning_failed\" elapsed=0s"
-        run_lines+=("RUN $i: status=error last_completed=none clause=\"provisioning_failed\" elapsed=0s")
         status_error=$((status_error + 1))
         loc_none=$((loc_none + 1))
         continue
@@ -350,26 +347,34 @@ for (( i=1; i<=RUNS; i++ )); do
         halt_mid_turn)          status_halt_mid_turn=$((status_halt_mid_turn + 1)) ;;
         halt_detected_by_outer) status_halt_detected=$((status_halt_detected + 1)) ;;
         timeout)                status_timeout=$((status_timeout + 1)) ;;
+        tool_failure)           status_tool_failure=$((status_tool_failure + 1)) ;;
         error|*)                status_error=$((status_error + 1)) ;;
     esac
     bump_location "${last_c:-none}"
 
-    run_line="RUN $i: status=$run_status last_completed=${last_c:-none} clause=\"${clause:-unknown}\" elapsed=${elapsed}s"
-    run_lines+=("$run_line")
-    echo "$run_line"
+    echo "RUN $i: status=$run_status last_completed=${last_c:-none} clause=\"${clause:-unknown}\" elapsed=${elapsed}s"
 done
 
 # ---- Terminal output --------------------------------------------------------
 halted=$((status_halt_mid_turn + status_halt_detected))
 measured=$((status_completed + status_halt_mid_turn + status_halt_detected + status_timeout))
-# Errors are excluded from the numerator AND denominator of HALT_RATE (they are
-# infrastructure failures, not halt-measurement signal).
+# error and tool_failure runs are excluded from HALT_RATE's numerator AND
+# denominator — they are infrastructure failures, not halt-measurement signal.
+
+# Derive PROBE_STATUS: `ok` iff at least one measured run AND no infrastructure
+# errors; `error` otherwise (degraded signal — automation should check this
+# token before consuming HALT_RATE).
+probe_status="ok"
+if (( measured == 0 || status_error > 0 || status_tool_failure > 0 )); then
+    probe_status="error"
+fi
 
 echo ""
 printf 'HALT_RATE=%s/%s\n' "$halted" "$measured"
-printf 'PROBE_STATUS=ok\n'
-printf 'PER_STATUS_BREAKDOWN: completed=%s halt_mid_turn=%s halt_detected_by_outer=%s timeout=%s error=%s\n' \
-    "$status_completed" "$status_halt_mid_turn" "$status_halt_detected" "$status_timeout" "$status_error"
+printf 'MEASURED_RUNS=%s\n' "$measured"
+printf 'PROBE_STATUS=%s\n' "$probe_status"
+printf 'PER_STATUS_BREAKDOWN: completed=%s halt_mid_turn=%s halt_detected_by_outer=%s timeout=%s tool_failure=%s error=%s\n' \
+    "$status_completed" "$status_halt_mid_turn" "$status_halt_detected" "$status_timeout" "$status_tool_failure" "$status_error"
 printf 'PER_LOCATION_BREAKDOWN: none=%s 3j=%s 3jv=%s 3d-pre-detect=%s 3d-post-detect=%s 3d-plan-post=%s 3i=%s done=%s\n' \
     "$loc_none" "$loc_3j" "$loc_3jv" "$loc_3d_pre_detect" "$loc_3d_post_detect" "$loc_3d_plan_post" "$loc_3i" "$loc_done"
 

@@ -247,19 +247,23 @@ bash scripts/test-loop-improve-skill-halt-rate.sh --runs 10 --timeout-per-run 24
 **Output contract** (stdout — automation should grep these tokens):
 
 ```
-RUN <i>: status=<completed_by_outer|halt_mid_turn|halt_detected_by_outer|timeout|error> last_completed=<token> clause="<halt-location clause>" elapsed=<s>s
+RUN <i>: status=<completed_by_outer|halt_mid_turn|halt_detected_by_outer|timeout|tool_failure|error> last_completed=<token> clause="<halt-location clause>" elapsed=<s>s
 ...
-HALT_RATE=<halted>/<total>
+HALT_RATE=<halted>/<measured>
+MEASURED_RUNS=<measured>
 PROBE_STATUS=ok|skipped_no_claude|error
-PER_STATUS_BREAKDOWN: completed=<n> halt_mid_turn=<n> halt_detected_by_outer=<n> timeout=<n> error=<n>
+PER_STATUS_BREAKDOWN: completed=<n> halt_mid_turn=<n> halt_detected_by_outer=<n> timeout=<n> tool_failure=<n> error=<n>
 PER_LOCATION_BREAKDOWN: none=<n> 3j=<n> 3jv=<n> 3d-pre-detect=<n> 3d-post-detect=<n> 3d-plan-post=<n> 3i=<n> done=<n>
 ```
 
-- `HALT_RATE` numerator = `halt_mid_turn + halt_detected_by_outer`. Denominator = total measured runs excluding `error` (infrastructure failures that prevented measurement).
+- `HALT_RATE` numerator = `halt_mid_turn + halt_detected_by_outer`. Denominator = `MEASURED_RUNS` = runs excluding `error` and `tool_failure` (infrastructure failures that prevented measurement). Automation should check `PROBE_STATUS` before consuming `HALT_RATE`; the KV format `HALT_RATE=0/0` with `PROBE_STATUS=error` signals "no measurement" and must not be conflated with "zero halts observed".
 - `halt_mid_turn` is the halt-of-interest from #273: the outer skill itself ended its turn before reaching its Step 5 close-out.
-- `halt_detected_by_outer` means the inner halted but the outer's #231 mechanical gate caught it (observable halt with `EXIT_REASON=iteration sentinel missing`).
+- `halt_detected_by_outer` means the inner halted but the outer's #231 mechanical gate caught it — observable halt ending with the outer's `iteration sentinel missing` exit reason in the `✅ 5: close out` line.
 - `completed_by_outer` includes all normal loop exits: `grade_a_achieved`, `max iterations (10) reached`, and infeasibility exits like `im_verification_failed`. `/im` is expected to fail under the stubbed `gh` — this is NOT the halt-of-interest; the halt-of-interest fires much earlier, at `/skill-judge` return.
-- `PROBE_STATUS=skipped_no_claude` is emitted (and the harness exits non-zero) when the `claude` binary is absent, per issue #278's explicit contract.
+- `timeout` covers both `timeout --kill-after` TERM (exit 124) and SIGKILL escalation (exit 137 = 128+9).
+- `tool_failure` covers wrapper exits other than 0/124/137 where no LOOP_TMPDIR was ever emitted — claude itself crashed or the plugin failed to load.
+- `PROBE_STATUS=error` can be emitted from two paths with different exit codes — consumers should treat both the same way (don't consume `HALT_RATE` as signal), but should not rely on the exit code to distinguish: (a) **post-measurement** `PROBE_STATUS=error` with **exit 0** when `MEASURED_RUNS=0` OR any `error`/`tool_failure` run occurred; (b) **preflight** `PROBE_STATUS=error` with **exit 1** when a startup check fails (missing `timeout`/`gtimeout`, bad repo root, missing fixture). The stdout token is identical; check `PROBE_STATUS` before `HALT_RATE`.
+- `PROBE_STATUS=skipped_no_claude` is emitted (and the harness exits **non-zero**) when the `claude` binary is absent, per issue #278's explicit contract.
 - `PER_LOCATION_BREAKDOWN` tokens correspond to the `LAST_COMPLETED` taxonomy in `skills/loop-improve-skill/SKILL.md` §#247.
 
 **Caveats**:
