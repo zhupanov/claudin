@@ -180,6 +180,17 @@ cleanup_all() {
 trap cleanup_all EXIT
 
 # Log-classification helper: writes three lines to stdout — status, last_completed, clause.
+#
+# Post-#291: the SKILL.md for /loop-improve-skill now launches driver.sh in
+# background Bash with combined stdout/stderr redirected to a stable log file
+# at $LOG_FILE under /tmp (surfaced to the user via the visible line
+# `📄 Full driver log: <path>` which is printed from the SKILL.md body into
+# claude -p's stdout BEFORE the background launch). The driver's breadcrumbs
+# (SESSION_TMPDIR=, LOOP_TMPDIR=, ✅ 5: close out, etc.) no longer appear in
+# claude -p's stdout — they are written to $LOG_FILE instead. classify_run()
+# therefore first extracts the driver-log path from $run_log, then reads
+# breadcrumbs from that log file. Falls back to $run_log itself when the log
+# path is missing (older SKILL.md checkouts without the log-path line).
 classify_run() {
     local run_log="$1" wrapper_exit="$2" loop_tmpdir="$3"
 
@@ -209,14 +220,31 @@ classify_run() {
         return 0
     fi
 
+    # Resolve the breadcrumb source. Post-#291 SKILL.md prints a visible
+    # `📄 Full driver log: <path>` line to claude -p's stdout BEFORE launching
+    # the background driver (and a `📄 Full driver log (retained): <path>`
+    # line on completion). Either form carries the driver log path; we accept
+    # both via an alternation on the trailing ` (retained)` suffix.
+    local driver_log="" breadcrumb_src=""
+    driver_log=$(grep -oE '📄 Full driver log( \(retained\))?: (/private)?/tmp/[^[:space:]]+' "$run_log" 2>/dev/null \
+                 | tail -1 | sed -E 's/^📄 Full driver log( \(retained\))?: //' || true)
+    if [[ -n "$driver_log" && -s "$driver_log" ]]; then
+        breadcrumb_src="$driver_log"
+    else
+        # Older SKILL.md pre-#291, or log path could not be extracted / is empty:
+        # fall back to grepping claude -p's raw stdout (will match only for
+        # pre-#291 checkouts where driver stdout flowed to claude -p directly).
+        breadcrumb_src="$run_log"
+    fi
+
     # Parse outer's Step 5 close-out breadcrumb (authoritative progress line):
     #   ✅ 5: close out — issue #<N>, exit: <EXIT_REASON value>
     # Also fall back to the closeout-body.md preamble "Loop finished. Iterations
-    # run: <N>. Exit reason: <...>." which claude -p's Bash-tool stdout captures.
+    # run: <N>. Exit reason: <...>." which is captured in the same log file.
     local exit_reason_value=""
-    exit_reason_value=$(grep -oE '✅ 5: close out — issue #[0-9]+, exit: .*' "$run_log" 2>/dev/null | tail -1 | sed -E 's/^.*exit: //' || true)
+    exit_reason_value=$(grep -oE '✅ 5: close out — issue #[0-9]+, exit: .*' "$breadcrumb_src" 2>/dev/null | tail -1 | sed -E 's/^.*exit: //' || true)
     if [[ -z "$exit_reason_value" ]]; then
-        exit_reason_value=$(grep -oE 'Loop finished\. Iterations run: [0-9]+\. Exit reason: .*' "$run_log" 2>/dev/null | tail -1 | sed -E 's/^.*Exit reason: //' | sed -E 's/\.$//' || true)
+        exit_reason_value=$(grep -oE 'Loop finished\. Iterations run: [0-9]+\. Exit reason: .*' "$breadcrumb_src" 2>/dev/null | tail -1 | sed -E 's/^.*Exit reason: //' | sed -E 's/\.$//' || true)
     fi
 
     if [[ -n "$exit_reason_value" ]]; then
@@ -341,10 +369,26 @@ for (( i=1; i<=RUNS; i++ )); do
 
     # Recover LOOP_TMPDIR from the log: parse either SESSION_TMPDIR= or LOOP_TMPDIR=
     # restricted to the claude-loop-improve- prefix under canonical /tmp or /private/tmp.
+    #
+    # Post-#291: the driver's SESSION_TMPDIR/LOOP_TMPDIR breadcrumbs now flow
+    # to the driver log file under /tmp (path surfaced by SKILL.md as
+    # `📄 Full driver log: <path>`) rather than claude -p's stdout. Mirror the
+    # classify_run() strategy: extract the driver-log path from $run_log first,
+    # then grep breadcrumbs from that log. Fall back to grepping $run_log itself
+    # when the log path is missing (older SKILL.md checkouts).
     LOOP_TMPDIR=""
+    probe_driver_log=""
     if [[ -s "$run_log" ]]; then
+        probe_driver_log=$(grep -oE '📄 Full driver log( \(retained\))?: (/private)?/tmp/[^[:space:]]+' "$run_log" 2>/dev/null \
+                           | tail -1 | sed -E 's/^📄 Full driver log( \(retained\))?: //' || true)
+    fi
+    tmpdir_search_src="$run_log"
+    if [[ -n "$probe_driver_log" && -s "$probe_driver_log" ]]; then
+        tmpdir_search_src="$probe_driver_log"
+    fi
+    if [[ -s "$tmpdir_search_src" ]]; then
         # Restrict to /tmp or /private/tmp + claude-loop-improve- prefix; allow any non-whitespace tail.
-        LOOP_TMPDIR=$(grep -oE '(SESSION_TMPDIR|LOOP_TMPDIR)=(/private)?/tmp/claude-loop-improve-[^[:space:]]*' "$run_log" \
+        LOOP_TMPDIR=$(grep -oE '(SESSION_TMPDIR|LOOP_TMPDIR)=(/private)?/tmp/claude-loop-improve-[^[:space:]]*' "$tmpdir_search_src" \
                       | head -1 | cut -d= -f2- || true)
     fi
 
