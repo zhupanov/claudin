@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.2] - 2026-04-21
+
+### Removed
+
+- `CLAUDE.md`: delete the stale `All output caveman full.` instruction. The caveman plugin was uninstalled, so the directive no longer matches any available plugin and was incorrectly forcing caveman-style output in every session.
+
 ## [5.1.1] - 2026-04-21
 
 ### Changed
