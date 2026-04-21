@@ -158,8 +158,12 @@ while IFS=$'\t' read -r status old new_or_blank; do
           '
         }
 
-        OLD_FRONTMATTER=$(printf '%s\n' "$OLD_FILE" | extract_frontmatter)
-        NEW_FRONTMATTER=$(printf '%s\n' "$NEW_FILE" | extract_frontmatter)
+        # Use herestring instead of `printf | awk` because awk's `exit` on the
+        # closing `---` line causes SIGPIPE back to `printf` for large files;
+        # with `set -euo pipefail` the whole script would abort with exit 141.
+        # Herestrings don't create an intermediate pipe sensitive to SIGPIPE.
+        OLD_FRONTMATTER=$(extract_frontmatter <<< "$OLD_FILE")
+        NEW_FRONTMATTER=$(extract_frontmatter <<< "$NEW_FILE")
 
         # name: frontmatter field (scoped to frontmatter block only).
         OLD_NAME=$(printf '%s\n' "$OLD_FRONTMATTER" | awk '/^name: / { sub(/^name: */, ""); print; exit }')
