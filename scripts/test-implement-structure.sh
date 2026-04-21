@@ -79,12 +79,20 @@ count=$(grep -c '^## Rebase Checkpoint Macro$' "$SKILL_MD" || true)
 # (4) MANDATORY — READ ENTIRE FILE: at least 4 occurrences AND each expected
 #     reference filename appears on a MANDATORY line (step-to-reference binding).
 # ---------------------------------------------------------------------------
-occurrences=$(grep -o 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" | wc -l | tr -d ' ')
-[[ "$occurrences" -ge 4 ]] \
-  || fail "(4) expected at least 4 'MANDATORY — READ ENTIRE FILE' occurrences in SKILL.md, found $occurrences"
+# Use `|| true` to keep set -e + pipefail from aborting before the fail() diagnostic
+# when there are zero matches (grep -o exits 1 on no match, which propagates via pipefail).
+occurrences=$(grep -o 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" 2>/dev/null | wc -l | tr -d ' ' || true)
+if ! [[ "$occurrences" =~ ^[0-9]+$ ]] || (( occurrences < 4 )); then
+  fail "(4) expected at least 4 'MANDATORY — READ ENTIRE FILE' occurrences in SKILL.md, found ${occurrences:-0}"
+fi
 
+# Step-to-reference binding: each expected reference filename must appear on a
+# MANDATORY line in SKILL.md. Isolate MANDATORY lines first, then do a fixed-string
+# match against the filename so `.` in the filename is treated literally (not as ERE
+# "any character", which would false-pass on corrupted pointers like `pr-body-templateXmd`).
+mandatory_lines=$(grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" || true)
 for ref in "${expected_refs[@]}"; do
-  grep -Eq "MANDATORY — READ ENTIRE FILE.*${ref}" "$SKILL_MD" \
+  printf '%s\n' "$mandatory_lines" | grep -Fq "$ref" \
     || fail "(4) no 'MANDATORY — READ ENTIRE FILE' line in SKILL.md references '$ref' — step-to-reference binding broken"
 done
 
@@ -112,17 +120,17 @@ enum_hits=$(grep -n 'code-quality / risk-integration / correctness / architectur
 [[ -n "$enum_hits" ]] \
   || fail "(6) SKILL.md lacks the unquoted slash-separated focus-area enum ('code-quality / risk-integration / correctness / architecture') — CI's agent-sync guard would fail"
 
-found_security_line=false
+# Mirror CI's per-line enforcement: fail immediately on ANY enum line that lacks
+# 'security'. The CI loop at .github/workflows/ci.yaml L122-129 iterates every hit
+# and fails if any lacks 'security'. A simple "first match wins" here would silently
+# allow a future enum line without 'security' to pass the harness while CI fails.
 while IFS= read -r hit; do
   [[ -z "$hit" ]] && continue
   line_text="${hit#*:}"
-  if printf '%s\n' "$line_text" | grep -q 'security'; then
-    found_security_line=true
-    break
+  if ! printf '%s\n' "$line_text" | grep -q 'security'; then
+    fail "(6) focus-area enum line lacks 'security' on same line — CI's agent-sync guard would fail: $line_text"
   fi
 done <<< "$enum_hits"
-[[ "$found_security_line" == "true" ]] \
-  || fail "(6) no focus-area enum line in SKILL.md also contains 'security' — CI's agent-sync guard would fail"
 
 # ---------------------------------------------------------------------------
 # (7) Four expected references/*.md files exist.
@@ -151,15 +159,25 @@ done
 # (9) Zero 'see Step N below' / 'see Step N above' patterns in any references/*.md.
 #     Pattern is narrow: requires both a step number AND a direction word (below|above).
 #     Permits legitimate cross-refs like 'see Step 8' with no direction word.
+#     Case-insensitive: catches sentence-initial 'See Step 8 below' variants.
+#     Scans every *.md under references/ (not just the four expected refs) so new
+#     reference files added in the future are covered automatically — the contract
+#     documented in the header and AGENTS.md says "references/*.md" generally.
 # ---------------------------------------------------------------------------
+shopt -s nullglob
+ref_files=( "$REFS_DIR"/*.md )
+shopt -u nullglob
+[[ "${#ref_files[@]}" -gt 0 ]] \
+  || fail "(9) no .md files found under $REFS_DIR — cannot validate the 'see Step N below|above' invariant"
+
 match_files=""
-for ref in "${expected_refs[@]}"; do
-  if grep -qE 'see Step [0-9]+[a-z.]* (below|above)' "$REFS_DIR/$ref"; then
-    match_files="$match_files $ref"
+for ref_path in "${ref_files[@]}"; do
+  if grep -qiE 'see Step [0-9]+[a-z.]* (below|above)' "$ref_path"; then
+    match_files="$match_files $(basename "$ref_path")"
   fi
 done
 if [[ -n "$match_files" ]]; then
-  fail "(9) found forbidden 'see Step N below|above' patterns in:$match_files"
+  fail "(9) found forbidden 'see Step N below|above' patterns (case-insensitive) in:$match_files"
 fi
 
 echo "PASS: test-implement-structure.sh — all 9 structural invariants hold"
