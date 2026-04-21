@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.14] - 2026-04-20
+
+### Fixed
+
+- `README.md` — `/loop-improve-skill` feature-matrix row loop-exit enumeration was missing the outer sentinel-gate `VERIFIED=false` halt-detected branch (handled in outer SKILL.md Step 4.v); `docs/workflow-lifecycle.md` line 41 was already complete. Appended one sentence citing `verify-skill-called.sh --sentinel-file` so the two enumerations agree. Closes #261.
+
 ## [4.3.13] - 2026-04-20
 
 ### Fixed
