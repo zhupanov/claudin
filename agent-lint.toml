@@ -157,6 +157,13 @@ suppress = [
 # scripts/test-lib-loop-improve-halt-ledger.sh is the offline regression
 # harness for the ledger lib, referenced only from Makefile
 # (test-lib-halt-ledger target).
+#
+# scripts/test-orchestrator-scope-sync.sh is the cross-validation harness
+# (closes #285) that asserts exact set equality between the ORCHESTRATORS /
+# DELEGATORS arrays in scripts/test-anti-halt-banners.sh and the bulleted
+# scope lists under "### Scope list" in skills/shared/subskill-invocation.md.
+# Referenced only from Makefile (test-orchestrator-scope-sync target) and
+# AGENTS.md; matches the Makefile-only pattern as the other harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -179,4 +186,5 @@ exclude = [
   "scripts/test-loop-improve-skill-halt-rate.sh",
   "scripts/lib-loop-improve-halt-ledger.sh",
   "scripts/test-lib-loop-improve-halt-ledger.sh",
+  "scripts/test-orchestrator-scope-sync.sh",
 ]

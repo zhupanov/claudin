@@ -43,7 +43,7 @@ Set `allowed-tools` to the minimum needed by the parent skill itself — never m
 |---|---|---|
 | Pure delegator | `Skill` | `skills/im/SKILL.md` frontmatter (allowed-tools line) — forwards only |
 | Delegator that validates first | `Bash, Skill` | `skills/create-skill/SKILL.md` frontmatter — runs validation scripts before delegating |
-| Hybrid orchestrator | `Skill` plus whatever the parent needs | `skills/implement/SKILL.md`, `skills/fix-issue/SKILL.md`, `skills/loop-review/SKILL.md`, `skills/review/SKILL.md`, `skills/alias/SKILL.md` — parent runs setup, file I/O, git ops, and in `/alias`'s case a post-delegation sentinel-file verification. |
+| Hybrid orchestrator | `Skill` plus whatever the parent needs | `skills/implement/SKILL.md`, `skills/fix-issue/SKILL.md`, `skills/loop-review/SKILL.md`, `skills/review/SKILL.md`, `skills/alias/SKILL.md`, `skills/research/SKILL.md` — parent runs setup, file I/O, git ops, and in `/alias`'s case a post-delegation sentinel-file verification. |
 
 `allowed-tools: Skill` alone is **neither necessary nor sufficient** to classify a skill as a pure delegator — some delegators need `Bash` for input validation. Conversely, a skill with `Skill` in its allowed list is not automatically a delegator; hybrid orchestrators include `Skill` as one tool among many.
 
@@ -51,7 +51,7 @@ When in doubt, start narrow and widen only for tools the parent actually uses. I
 
 ## Post-invocation verification
 
-**Scope**: this rule applies to **orchestrators that continue execution based on a child skill's side effects** — e.g., a parent that reads the child's output to decide the next step. Pure forwarders (`/im`, `/imaq`, `/create-skill`) are exempt — once they delegate, they do nothing further, so there is nothing to verify.
+**Scope**: this rule applies to **orchestrators that continue execution based on a child skill's side effects** — e.g., a parent that reads the child's output to decide the next step. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) are exempt — once they delegate, they do nothing further, so there is nothing to verify.
 
 For every mandatory sub-skill call inside an orchestrator's step, pair the call with a **mechanical check that the parent cannot satisfy without the child's side effects**. The check must read the filesystem, parse stdout, or compare counters — never rely on the child's prose acknowledgement. If the child silently skipped or internally bailed, the check must notice.
 
@@ -83,7 +83,7 @@ See `## Anti-halt continuation reminder` below — the two sections govern the s
 
 ## Anti-halt continuation reminder
 
-**Scope**: this rule applies to the same orchestrator set as `## Post-invocation verification` above — stateful orchestrators (`/fix-issue`, `/implement`, `/review`, `/loop-review`, `/alias`) that run additional steps after a child `Skill` tool call returns. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) are exempt — once they delegate, they do nothing further. (`/loop-improve-skill` is classified as a pure delegator because its runtime driver lives in `skills/loop-improve-skill/scripts/driver.sh` — a subprocess-driven bash driver that does not use the `Skill` tool to chain children.) The two sections are complementary: `## Post-invocation verification` asks **"did the child run?"**; this section asks **"did the parent continue?"** Both failure modes are distinct and real (see GitHub issue #177 for the originating report).
+**Scope**: this rule applies to the same orchestrator set as `## Post-invocation verification` above — stateful orchestrators (`/fix-issue`, `/implement`, `/review`, `/loop-review`, `/alias`, `/research`) that run additional steps after a child `Skill` tool call returns. Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`) are exempt — once they delegate, they do nothing further. (`/loop-improve-skill` is classified as a pure delegator because its runtime driver lives in `skills/loop-improve-skill/scripts/driver.sh` — a subprocess-driven bash driver that does not use the `Skill` tool to chain children.) The two sections are complementary: `## Post-invocation verification` asks **"did the child run?"**; this section asks **"did the parent continue?"** Both failure modes are distinct and real (see GitHub issue #177 for the originating report).
 
 **The rule**: after every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, the main agent MUST immediately continue with the parent skill's NEXT step. The child's cleanup / summary output is NOT end-of-turn. In long sessions where the child produces many tokens (e.g., `/design` with 3 reviewers + voting easily produces 15k+ tokens), the main agent's attention can drift to the child's local "mission accomplished" framing and lose the parent orchestration frame. A short, standardized banner at the top of every orchestrator plus short per-Skill-call-site micro-reminders reinforce the rule where attention is most at risk.
 

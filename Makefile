@@ -1,9 +1,9 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-parse-skill-judge-grade test-lib-halt-ledger smoke-dialectic halt-rate-probe
+.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-parse-skill-judge-grade test-lib-halt-ledger smoke-dialectic halt-rate-probe
 
-lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-parse-skill-judge-grade test-lib-halt-ledger
+lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-parse-skill-judge-grade test-lib-halt-ledger
 	pre-commit run --all-files
 
 test-redact:
@@ -44,6 +44,9 @@ test-lint-skill-invocations:
 
 test-anti-halt:
 	bash scripts/test-anti-halt-banners.sh
+
+test-orchestrator-scope-sync:
+	bash scripts/test-orchestrator-scope-sync.sh
 
 test-design-structure:
 	bash scripts/test-design-structure.sh

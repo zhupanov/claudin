@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.3] - 2026-04-21
+
+### Added
+
+- `scripts/test-orchestrator-scope-sync.sh` — cross-validation harness that asserts exact set equality between the `ORCHESTRATORS`/`DELEGATORS` bash arrays in `scripts/test-anti-halt-banners.sh` and the bulleted scope lists under `### Scope list` in `skills/shared/subskill-invocation.md`. Fail-closed on empty parse; symmetric-diff output on drift. Wired into `make lint` via the `test-orchestrator-scope-sync` target (closes #285).
+
+### Fixed
+
+- `skills/shared/subskill-invocation.md`: aligned `## Post-invocation verification` pure-forwarders list (added `/loop-improve-skill`), `## Anti-halt continuation reminder` stateful-orchestrators list (added `/research`), and `## allowed-tools narrowing heuristic` hybrid-orchestrator example row (added `skills/research/SKILL.md`) with the `### Scope list` enumerations.
+- `skills/create-skill/scripts/render-skill-md.sh`: added `/loop-improve-skill` to the pure-delegators exempt list in both scaffold variants (lines 157, 195).
+- `AGENTS.md`: corrected the `test-anti-halt-banners.sh` orchestrator cardinality from "seven" to "six" to match the live `ORCHESTRATORS` array.
+
 ## [5.0.2] - 2026-04-21
 
 ### Changed
