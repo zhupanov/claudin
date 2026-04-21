@@ -5,11 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-04-21
+## [5.0.0] - 2026-04-21
 
 ### Changed
 
-- `/loop-improve-skill` rewritten as bash-driver topology per umbrella #273. Driver at `skills/loop-improve-skill/scripts/driver.sh` invokes each child skill (`/skill-judge`, `/design`, `/im`) as a fresh `claude -p` subprocess, eliminating the ~70%+ halt rate previously observed at inner Step 3.j between child-return and post-call Bash. Halt class eliminated by construction.
+- `/loop-improve-skill` rewritten as bash-driver topology per umbrella #273. **BREAKING**: removes the inner skill `/loop-improve-skill-iter` (hard delete). Driver at `skills/loop-improve-skill/scripts/driver.sh` invokes each child skill (`/skill-judge`, `/design`, `/im`) as a fresh `claude -p` subprocess, eliminating the ~70%+ halt rate previously observed at inner Step 3.j between child-return and post-call Bash. Halt class eliminated by construction.
 
 ### Removed
 
