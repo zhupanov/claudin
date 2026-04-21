@@ -127,8 +127,6 @@ The banner MUST appear in these orchestrator SKILL.md files:
 - `skills/implement/SKILL.md`
 - `skills/review/SKILL.md`
 - `skills/loop-review/SKILL.md`
-- `skills/loop-improve-skill/SKILL.md`
-- `skills/loop-improve-skill-iter/SKILL.md`
 - `skills/alias/SKILL.md`
 - `skills/research/SKILL.md`
 
@@ -137,6 +135,7 @@ The banner MUST NOT appear in pure-delegator SKILL.md files:
 - `skills/im/SKILL.md`
 - `skills/imaq/SKILL.md`
 - `skills/create-skill/SKILL.md`
+- `skills/loop-improve-skill/SKILL.md`
 
 Both presence and absence are enforced by `${CLAUDE_PLUGIN_ROOT}/scripts/test-anti-halt-banners.sh`, wired into `make lint` via the `test-anti-halt` target.
 

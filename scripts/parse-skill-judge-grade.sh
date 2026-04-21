@@ -2,9 +2,10 @@
 # parse-skill-judge-grade.sh — Parse /skill-judge output for per-dimension
 # grade-A status.
 #
-# Consumed by /loop-improve-skill (outer) and /loop-improve-skill-iter
-# (inner) to drive the grade-gated termination contract: the loop strives
-# for grade A on every dimension D1..D8 and exits happy when achieved.
+# Consumed by /loop-improve-skill (driver.sh — both in-loop per-iter grade
+# parse and post-iter-cap final re-evaluation) to drive the grade-gated
+# termination contract: the loop strives for grade A on every dimension
+# D1..D8 and exits happy when achieved.
 #
 # Usage:
 #   parse-skill-judge-grade.sh <judge-output-file>
