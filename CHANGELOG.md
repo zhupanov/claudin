@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2026-04-20
+
+### Added
+
+- `/loop-improve-skill-iter` — new inner skill that runs exactly one `/skill-judge` → `/design` → `/im` iteration for a target skill. Writes a per-substep `.done` sentinel ledger under a caller-supplied `LOOP_TMPDIR` (validated as under `/tmp/` or `/private/tmp/` with `..` rejection) and emits `ITER_STATUS=<value>` plus a non-empty completion sentinel. Invoked only by `/loop-improve-skill` via the Skill tool — not a standalone user-facing skill.
+
+### Changed
+
+- `/loop-improve-skill` — refactored into an outer loop controller that delegates each of up to 10 improvement rounds to `/loop-improve-skill-iter`. After each inner return, a mechanical `scripts/verify-skill-called.sh --sentinel-file` gate reads the inner's non-empty completion sentinel. This converts the old "parent halted after child returned" failure mode (issue #231) into an observable missing-sentinel diagnostic with a specific `EXIT_REASON`. New `scripts/test-loop-improve-skill-continuation.sh` structural lint (wired into `make lint`) asserts the split's gate + sentinel literals + banner-density cap in both SKILL.md files. `scripts/test-anti-halt-banners.sh` ORCHESTRATORS array and `skills/shared/subskill-invocation.md` Scope list updated with the new inner skill (D3-honoring Scope-list catalog sync — no new normative prose). Companion updates: `LARCH_RESERVED` in validate-args.sh, `.claude/settings.json` Skill permissions, README Skills catalog + strict-permissions snippet, `docs/workflow-lifecycle.md` topology, `AGENTS.md` canonical-source bullet, `agent-lint.toml` exclude. Closes #231.
+
 ## [4.2.14] - 2026-04-20
 
 ### Added
