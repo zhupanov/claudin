@@ -1,10 +1,17 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger smoke-dialectic halt-rate-probe
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger smoke-dialectic halt-rate-probe
 
-lint: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger
+# CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
+# (regression harnesses). `lint` remains the local-dev convenience target
+# that runs both, defined in terms of the two split targets to prevent drift.
+lint: test-harnesses lint-only
+
+lint-only:
 	pre-commit run --all-files
+
+test-harnesses: test-redact test-parse-input test-parse-prose-blockers test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger
 
 test-redact:
 	bash scripts/test-redact-secrets.sh
