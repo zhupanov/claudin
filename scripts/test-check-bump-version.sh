@@ -380,7 +380,7 @@ assert_stdout_contains "4b: STATUS=git_error" "$out" "STATUS=git_error"
 # Regression guard for the pre-STATUS caller-side trap (surfaced during #172
 # code review). The script does not itself mix pre and post state — each
 # invocation is independent — but the observable signals MUST allow callers
-# (e.g., skills/implement/SKILL.md Rebase + Re-bump Sub-procedure step 4)
+# (e.g., skills/implement/references/rebase-rebump-subprocedure.md step 4)
 # to distinguish:
 #   (a) pre-degraded → COMMITS_BEFORE coerced to 0, STATUS non-ok
 #   (b) post-recovered → COMMITS_AFTER reflects true count N, STATUS=ok
@@ -427,8 +427,8 @@ assert_stdout_contains "5b post-recovered: COMMITS_AFTER=3 (true count)" "$post_
 # With the coerced BEFORE=0 and true AFTER=3, the numeric check would
 # naturally set VERIFIED=false — but a correct caller skips the comparison
 # because the pre-check STATUS was non-ok. This test documents the raw
-# signals; the SKILL.md step 4 "Pre-check STATUS guard" branches on the
-# pre-check STATUS, not on this post-check's VERIFIED value.
+# signals; the rebase-rebump-subprocedure.md step 4 "Pre-check STATUS guard"
+# branches on the pre-check STATUS, not on this post-check's VERIFIED value.
 assert_stdout_contains "5b post-recovered: script-level VERIFIED reflects naive arithmetic" "$post_out" "VERIFIED=false"
 
 # --- Section 6: argument-error paths -----------------------------------------

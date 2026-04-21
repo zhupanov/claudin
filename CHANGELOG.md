@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.8] - 2026-04-20
+
+### Fixed
+
+- `scripts/test-check-bump-version.sh` — Section 5 body comments cited `skills/implement/SKILL.md Rebase + Re-bump Sub-procedure step 4` (line 383 call-site example) and `SKILL.md step 4 "Pre-check STATUS guard"` (lines 430-431 test rationale), but PR #229 extracted the sub-procedure to `skills/implement/references/rebase-rebump-subprocedure.md`. Replace both with the canonical `rebase-rebump-subprocedure.md step 4` anchor. Prose-only; zero runtime behavior change. Same class of stale anchor as #235 (which targeted 4 script headers) but in a test-script body comment that was deliberately left out of #235's enumerated scope. Closes #248.
+
 ## [4.3.7] - 2026-04-20
 
 ### Changed
