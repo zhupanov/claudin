@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.4] - 2026-04-21
+
+### Fixed
+
+- `/simplify-skill` resolver (`skills/simplify-skill/scripts/build-feature-description.sh`) now probes `$PWD/skills/<name>/SKILL.md` as priority 2, between the existing `${CLAUDE_PLUGIN_ROOT}/skills/` and `$PWD/.claude/skills/` probes. Previously, invoking `/simplify-skill` from inside the larch plugin repo itself (cwd is the plugin repo with a `skills/<name>/SKILL.md` layout, and `CLAUDE_PLUGIN_ROOT` unset in the helper subshell) failed with `STATUS=not_found`. The `STATUS=not_found` error message now lists all four probed paths. `skills/simplify-skill/SKILL.md` NEVER #2 prose is updated to name the three probe locations the resolver covers.
+
 ## [5.1.3] - 2026-04-21
 
 ### Changed
