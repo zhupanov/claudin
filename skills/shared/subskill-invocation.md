@@ -128,6 +128,7 @@ The banner MUST appear in these orchestrator SKILL.md files:
 - `skills/review/SKILL.md`
 - `skills/loop-review/SKILL.md`
 - `skills/loop-improve-skill/SKILL.md`
+- `skills/loop-improve-skill-iter/SKILL.md`
 - `skills/alias/SKILL.md`
 - `skills/research/SKILL.md`
 

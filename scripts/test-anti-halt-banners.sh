@@ -35,6 +35,7 @@ ORCHESTRATORS=(
   "skills/review/SKILL.md"
   "skills/loop-review/SKILL.md"
   "skills/loop-improve-skill/SKILL.md"
+  "skills/loop-improve-skill-iter/SKILL.md"  # inner single-iteration skill; runs multiple Skill calls post-split (closes #231)
   "skills/alias/SKILL.md"  # has Step 4 post-delegation verification
   "skills/research/SKILL.md"  # may invoke /issue via the Skill tool and continue to report/cleanup
 )
