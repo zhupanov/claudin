@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.2] - 2026-04-21
+
+### Changed
+
+- `/fix-issue` Step 2 lock now deletes the `GO` comment (instead of leaving it alongside `IN PROGRESS`). `issue-lifecycle.sh comment --lock` captures the GO comment's id + `created_at`, deletes the comment via `DELETE /repos/{owner}/{repo}/issues/comments/{id}`, posts `IN PROGRESS`, and uses the captured timestamp (not a surviving GO anchor) for the concurrent-race duplicate-`IN PROGRESS` post-check. Recovery semantics updated for the crash-between-delete-and-post scenario.
+
 ## [5.0.1] - 2026-04-21
 
 ### Fixed
