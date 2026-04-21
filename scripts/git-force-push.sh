@@ -2,7 +2,8 @@
 # git-force-push.sh — Force-push the current branch with lease protection + recovery.
 #
 # Wraps `git push --force-with-lease` with the full recovery logic from
-# /implement's Rebase + Re-bump Sub-procedure step 5:
+# /implement's Rebase + Re-bump Sub-procedure step 5
+# (skills/implement/references/rebase-rebump-subprocedure.md):
 #   - Try `git push --force-with-lease` once.
 #   - On failure: refresh the local tracking ref (`git fetch origin <branch>`),
 #     compare local HEAD vs origin/<branch>. If equal, the push actually landed

@@ -2,8 +2,10 @@
 # git-sync-local-main.sh — Fast-forward local `main` ref to `origin/main`.
 #
 # Silent no-op when the local `main` ref does not exist. Used by the
-# Rebase + Re-bump Sub-procedure step 3 so that `classify-bump.sh`'s
-# merge-base computation resolves against the latest remote base.
+# Rebase + Re-bump Sub-procedure step 3
+# (skills/implement/references/rebase-rebump-subprocedure.md) so that
+# `classify-bump.sh`'s merge-base computation resolves against the latest
+# remote base.
 #
 # Never run on `main` itself — `git branch -f` of the current branch fails.
 # /implement's Step 10 and Step 12 rebase loops always run on a feature branch.

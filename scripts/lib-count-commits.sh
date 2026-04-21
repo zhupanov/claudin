@@ -43,8 +43,8 @@
 #   operators' existing grep patterns (see #160 FINDING_7). Consumers MAY
 #   grep `WARN: check-bump-version.sh:` for this condition. The prefix is
 #   intentionally a historical alias — do not rename to `lib-count-commits.sh`
-#   without coordinating consumer updates (e.g., skills/implement/SKILL.md's
-#   Rebase + Re-bump Sub-procedure step 4 notes).
+#   without coordinating consumer updates (e.g., skills/implement/references/
+#   rebase-rebump-subprocedure.md step 4 notes).
 #
 # Scope boundary (distinct from classify-bump.sh):
 #   `.claude/skills/bump-version/scripts/classify-bump.sh` also resolves a
