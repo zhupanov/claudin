@@ -113,6 +113,18 @@ suppress = [
 # continuation contract (closes #231). It is referenced only from Makefile
 # (test-loop-improve-skill-continuation target) and AGENTS.md, matching the
 # same Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/test-implement-structure.sh is the structural regression harness
+# for skills/implement/SKILL.md and skills/implement/references/ invariants
+# (closes #234). Companion to scripts/test-implement-rebase-macro.sh: the
+# macro harness owns Rebase Checkpoint Macro placement/registry mechanics,
+# this harness owns top-level section headings (Load-Bearing Invariants /
+# NEVER List / Rebase Checkpoint Macro), the MANDATORY ↔ reference-file
+# binding, the CI-parity focus-area enum check, reference-file contract
+# headers (Consumer/Contract/When-to-load), and the no-`see Step N
+# below|above` invariant in references/*.md. It is referenced only from
+# Makefile (test-implement-structure target) and AGENTS.md, matching the
+# same Makefile-only pattern as the other test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -128,6 +140,7 @@ exclude = [
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
+  "scripts/test-implement-structure.sh",
   "scripts/test-subskill-anchors.sh",
   "scripts/test-loop-improve-skill-continuation.sh",
 ]
