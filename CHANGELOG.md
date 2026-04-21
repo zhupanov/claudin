@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2026-04-20
+
+### Fixed
+
+- `.claude/skills/bump-version/scripts/classify-bump.sh` — fix silent SIGPIPE 141 abort on large SKILL.md files. The `extract_frontmatter` awk function exits after matching the closing `---` frontmatter delimiter; `printf '%s\n' "$FILE" | extract_frontmatter` then receives SIGPIPE while still writing hundreds of KB on large files. Under `set -euo pipefail` the pipefail-propagated 141 silently aborted the whole script with no stdout and no stderr, causing `/implement` Step 8 to misclassify the bump. Replaces the pipe with a herestring (`extract_frontmatter <<< "$FILE"`) so awk reads from stdin without an intermediate writer that can be SIGPIPE-killed; awk function body unchanged. The four subsequent `printf | awk` extractions for `OLD_NAME`/`NEW_NAME`/`OLD_ARG_HINT`/`NEW_ARG_HINT` operate on already-extracted small frontmatter blocks (well under the 64KB pipe buffer) and do not trigger the bug — left as-is. Closes #240.
+
 ## [4.3.0] - 2026-04-20
 
 ### Added
