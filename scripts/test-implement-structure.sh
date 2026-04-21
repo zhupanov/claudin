@@ -160,6 +160,9 @@ done
 #     Pattern is narrow: requires both a step number AND a direction word (below|above).
 #     Permits legitimate cross-refs like 'see Step 8' with no direction word.
 #     Case-insensitive: catches sentence-initial 'See Step 8 below' variants.
+#     The step-number token is `[0-9][0-9a-z.]*` so bare digits (`8`), letter-suffix
+#     forms (`9a`), and dotted substep forms (`9a.1`, `3c.2`) are all caught — matching
+#     /implement's dotted substep numbering (closes #253).
 #     Scans every *.md under references/ (not just the four expected refs) so new
 #     reference files added in the future are covered automatically — the contract
 #     documented in the header and AGENTS.md says "references/*.md" generally.
@@ -172,7 +175,7 @@ shopt -u nullglob
 
 match_files=""
 for ref_path in "${ref_files[@]}"; do
-  if grep -qiE 'see Step [0-9]+[a-z.]* (below|above)' "$ref_path"; then
+  if grep -qiE 'see Step [0-9][0-9a-z.]* (below|above)' "$ref_path"; then
     match_files="$match_files $(basename "$ref_path")"
   fi
 done
