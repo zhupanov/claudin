@@ -74,6 +74,16 @@ Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ f
 
 **Limitation**: Verbosity suppression is prompt-enforced and best-effort.
 
+## Design Mindset
+
+Before invoking `/design`, the orchestrator should internalize these questions. They bias every subsequent choice — sketch synthesis, plan drafting, review-finding acceptance — and are the thinking pattern this skill transfers along with its mechanical procedures.
+
+- **What is the smallest change that achieves the goal?** Resist adding abstractions, flags, or layers the feature description did not ask for. Every additional moving part is a new failure mode.
+- **Where is anchoring risk highest?** The first plausible approach locks architectural direction unless the sketch phase forces alternatives. Do NOT skip Step 2a (anti-pattern rule #1).
+- **What hidden constraints must this preserve?** Canonical sources, CI invariants, downstream parsers, contract tokens, byte-preserved reference files. Identify them before edits, not during plan review.
+- **Which tradeoffs should surface to the user versus be quietly chosen?** Scope and hard-constraint decisions surface via Round 1 discussion; architectural preferences belong to the sketch phase — not to the user.
+- **Which anti-patterns in the NEVER list below apply to this specific feature?** Re-read the Anti-patterns section for every non-trivial feature; muscle memory for the six rules is the expert delta this skill aims to transfer.
+
 ## Anti-patterns
 
 Consolidated NEVER rules collected from the procedural steps below. Each rule states the WHY so edits can respect the original constraint. Inline step-local mentions remain where they carry load-bearing context.
@@ -152,7 +162,7 @@ Print: `> **🔶 1d: discussion r1**`
 
 **If `auto_mode=true`**: Print `⏩ 1d: discussion r1 — skipped (auto mode) (<elapsed>)` and proceed to Step 2a.
 
-**If `auto_mode=false`**: Execute the Step 1d body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` (loaded via the MANDATORY directive in Step 1c above — no need to re-load).
+**If `auto_mode=false`**: Execute the Step 1d body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely.
 
 ## Step 2a — Collaborative Approach Sketches
 
@@ -295,7 +305,7 @@ Print the plan to the user under a `## Implementation Plan` header so reviewers 
 
 **IMPORTANT: Plan review MUST ALWAYS run with all 3 reviewers (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Never skip or abbreviate this step regardless of how straightforward the plan appears — even when all sketch agents agreed, the plan is short, or the change seems trivial. Reviewers validate against the actual codebase state, catching issues that sketch-phase reasoning alone cannot detect.**
 
-**MANDATORY — READ ENTIRE FILE before launching reviewers**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` completely. It is the single normative source for Step 3 execution *except* the two external reviewer launch Bash blocks (Cursor + Codex) which remain inline below because CI greps SKILL.md for the focus-area enum they carry. The reference contains the byte-preserved Competition notice blockquote (appended to EACH reviewer prompt), the Claude Code Reviewer subagent archetype (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` with XML-wrap literal-delimiter instruction / `{OUTPUT_INSTRUCTION}`), the voter-1 / voter-2 / voter-3 detailed quoted prompts, the ballot file handling paragraph, the Collecting External Reviewer Results 5-step procedure, the Voting Panel launch-order + threshold + Competition scoring rules, the Finalize Plan Review 4-step procedure plus OOS artifact write rule, the Track Rejected Plan Review Findings rule, and the accepted `FINDING_N` template, accepted `oos-accepted-design.md` format, and rejected-findings template. The Competition notice must be in context before any reviewer launch below — reading this file now guarantees that.
+**MANDATORY — READ ENTIRE FILE before launching reviewers**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` completely. The reference is the normative source for the reviewer-prompt content and post-launch procedures: the byte-preserved Competition notice blockquote (appended to EACH reviewer prompt), the Claude Code Reviewer subagent archetype (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` with XML-wrap literal-delimiter instruction / `{OUTPUT_INSTRUCTION}`), the voter-1 / voter-2 / voter-3 detailed quoted prompts, the ballot file handling paragraph, the Collecting External Reviewer Results 5-step procedure, the Voting Panel launch-order + threshold + Competition scoring rules, the Finalize Plan Review 4-step procedure plus OOS artifact write rule, the Track Rejected Plan Review Findings rule, and the accepted `FINDING_N` template, accepted `oos-accepted-design.md` format, and rejected-findings template. Step 3 control flow that remains inline in SKILL.md below (not in plan-review.md): the 3-reviewer "MUST ALWAYS run" IMPORTANT banner, the overall parallel-launch + spawn-order rule, `### External Reviewer Setup` (writing `$DESIGN_TMPDIR/plan.txt` + the focus-area enum summary line), and the two external reviewer launch Bash blocks (Cursor + Codex) which must stay inline because CI greps SKILL.md for the focus-area enum they carry. The Competition notice must be in context before any reviewer launch below — reading this file now guarantees that.
 
 Launch **all 3 reviewers in parallel** (in a single message). When an external tool is unavailable, launch a Claude subagent fallback so the total reviewer count always remains 3. **Spawn order matters for parallelism** — launch the slowest reviewer first: Cursor, then Codex, then the Claude subagent. Each reviewer receives the plan text and the feature description. Each must **only report findings** — never edit files.
 
@@ -352,7 +362,7 @@ Print: `> **🔶 3.5: discussion r2**`
 
 **If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode) (<elapsed>)` and proceed to Step 3a. **Do NOT load `discussion-rounds.md` when `auto_mode=true`.**
 
-**If `auto_mode=false`**: Execute the Step 3.5 body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` (already loaded at Step 1c when `auto_mode=false`; otherwise load it now via MANDATORY — READ ENTIRE FILE). The body defines Inputs, Behavior (still-contested criteria including close 2-1 voted, fallback-to-synthesis, bucket-skipped, over-cap), Short-circuit, Output schema, Cap, and Terse-answer rules.
+**If `auto_mode=false`**: Execute the Step 3.5 body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely. The body defines Inputs, Behavior (still-contested criteria including close 2-1 voted, fallback-to-synthesis, bucket-skipped, over-cap), Short-circuit, Output schema, Cap, and Terse-answer rules.
 
 ## Step 3a — Post-Review Confirmation
 
@@ -362,7 +372,7 @@ Print: `> **🔶 3a: confirmation**`
 
 **If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ 3a: confirmation — skipped (plan unchanged) (<elapsed>)` and proceed to Step 3b.
 
-**If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 discussion): Execute the Step 3a body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` (already loaded at Step 1c or 3.5 when `auto_mode=false`; otherwise load it now via MANDATORY — READ ENTIRE FILE). The body defines the approval-only confirmation procedure and the proceed-on-rejection rule.
+**If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 discussion): Execute the Step 3a body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c or 3.5, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely. The body defines the approval-only confirmation procedure and the proceed-on-rejection rule.
 
 ## Step 3b — Architecture Diagram
 

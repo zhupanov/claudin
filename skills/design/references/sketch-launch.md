@@ -34,7 +34,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 
-**Cursor slot 2 fallback**: Claude subagent with `<EDGE_PROMPT>` (effort suffix dropped).
+**Cursor slot 2 fallback** (if `cursor_available` is false): Claude subagent with `<EDGE_PROMPT>` (effort suffix dropped).
 
 **Codex slot 1 — Innovation/Exploration** (if `codex_available`):
 
@@ -47,7 +47,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$D
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 
-**Codex slot 1 fallback**: Claude subagent with `<INNOVATION_PROMPT>` (effort suffix dropped).
+**Codex slot 1 fallback** (if `codex_available` is false): Claude subagent with `<INNOVATION_PROMPT>` (effort suffix dropped).
 
 **Codex slot 2 — Pragmatism/Safety** (if `codex_available`):
 
@@ -60,6 +60,6 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$D
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 
-**Codex slot 2 fallback**: Claude subagent with `<PRAGMATIC_PROMPT>` (effort suffix dropped).
+**Codex slot 2 fallback** (if `codex_available` is false): Claude subagent with `<PRAGMATIC_PROMPT>` (effort suffix dropped).
 
 **Claude sketch (General)**: Only after all external and fallback launches are issued, produce your own 2-3 paragraph inline sketch covering: (1) key architectural decisions, (2) files/modules to modify, (3) main tradeoffs. Print it under a `### Claude Sketch` header. Write this **before** reading any external or fallback outputs to preserve independence.

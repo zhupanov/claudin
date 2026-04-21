@@ -97,7 +97,7 @@ Print any non-accepted OOS items under a `## Out-of-Scope Observations` header f
 
 If voting rejects all in-scope findings, print: `**ℹ Voting panel rejected all in-scope findings. Plan unchanged.**` (OOS items accepted for issue filing are processed separately by `/implement`.) Proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
 
-### Accepted FINDING_N template
+### Accepted FINDING_N template (byte-preserved)
 
 ```markdown
 ### FINDING_N: <title>
@@ -105,7 +105,7 @@ If voting rejects all in-scope findings, print: `**ℹ Voting panel rejected all
 - **Resolution**: <how the plan was revised>
 ```
 
-### Accepted OOS format
+### Accepted OOS format (byte-preserved)
 
 ```markdown
 ### OOS_N: <short title>
@@ -119,7 +119,7 @@ If voting rejects all in-scope findings, print: `**ℹ Voting panel rejected all
 
 ## Track Rejected Plan Review Findings
 
-For any **in-scope** findings that were **not accepted by vote** (fewer than 2 YES votes — whether rejected or exonerated) during plan review (from any reviewer — Claude subagents, Codex, or Cursor), append each to `$DESIGN_TMPDIR/rejected-findings.md` using the template below. **Do not include OOS items** — those follow a separate pipeline (accepted OOS → GitHub issues via `/implement`, non-accepted OOS → PR body observations).
+For any **in-scope** findings that were **not accepted by vote** (fewer than 2 YES votes — whether rejected or exonerated) during plan review (from any reviewer — Claude subagents, Codex, or Cursor), append each to `$DESIGN_TMPDIR/rejected-findings.md` using the byte-preserved template below. **Do not include OOS items** — those follow a separate pipeline (accepted OOS → GitHub issues via `/implement`, non-accepted OOS → PR body observations).
 
 If no findings were rejected, do not create the file yet.
 
