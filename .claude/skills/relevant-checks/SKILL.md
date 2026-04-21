@@ -1,6 +1,6 @@
 ---
 name: relevant-checks
-description: Run repo-specific validation checks based on modified files. Use when you need to validate code quality after implementation, after code review fixes, or when fixing CI failures.
+description: Run repo-specific validation checks (pre-commit on modified files + agent-lint on the full repo). Use when you need to validate code quality after implementation, after code review fixes, or when fixing CI failures.
 allowed-tools: Bash
 ---
 
@@ -12,17 +12,11 @@ Run validation checks scoped to files modified on the current branch. This is a 
 
 Before diagnosing a failure, classify it by phase: **changed-file phase** (`pre-commit run --files`) or **full-repo phase** (`agent-lint --pedantic`). The two phases of `run-checks.sh` are not strictly "mechanical vs structural" — `.pre-commit-config.yaml` already routes some structural hooks (e.g., agnix on SKILL.md/CLAUDE.md) through the changed-file phase. The phase-based split is: what the script applied to the changed files vs. what it applied to the whole repo. On a **deletions-only branch**, the changed-file phase is skipped entirely (empty `files[]`) while the full-repo phase still runs.
 
+**Maintenance rule.** Before editing `run-checks.sh` or this skill, ask: does the change alter anything the Failure-mode taxonomy table or the NEVER list pins to — observable banners, exit paths, `WARNING:`/`ERROR:` lines, or script comment labels / branch names (e.g., the `files[] empty but MODIFIED_FILES non-empty` branch)? If yes, update both the script and the doc in the same commit — the script is the source of truth, but the doc's decision table and NEVER bullets are pinned to specific strings from it.
+
 ## How it works
 
-Changed files are collected from the branch diff, staged changes, unstaged changes, and untracked files. The union is passed to `pre-commit run --files`, which routes each file to the appropriate linter hooks based on file type. Deleted files are filtered out automatically. `.pre-commit-config.yaml` is the authoritative hook catalogue — it is consulted at invocation time by `pre-commit`, so changes to that file take effect on the next `/relevant-checks` run.
-
-The following linters are configured in `.pre-commit-config.yaml`:
-
-- **Shell scripts (`.sh`)**: shellcheck
-- **Markdown files (`.md`)**: markdownlint (using `.markdownlint.json` config)
-- **JSON files (`.json`)**: jq validation
-- **GitHub Actions workflows (`.yml`, `.yaml`)**: actionlint
-- **AI agent configs (`SKILL.md`, `CLAUDE.md`, agent configs)**: agnix (using `.agnix.toml` config)
+Changed files are collected from the branch diff, staged changes, unstaged changes, and untracked files. The union is passed to `pre-commit run --files`, which routes each file to the appropriate linter hooks based on file type. Deleted files are filtered out automatically. See `.pre-commit-config.yaml` for the authoritative hook list applied to the changed-file phase — it is consulted at invocation time by `pre-commit` and evolves independently of this skill.
 
 After pre-commit linting succeeds, `run-checks.sh` additionally invokes `agent-lint` (if available on PATH) to catch structural regressions on the full repository. This is the same linter that CI's `agent-lint` job runs, so developers can catch structural breakage locally before pushing. If pre-commit fails, agent-lint is skipped — only run when basic linting passes.
 
