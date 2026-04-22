@@ -1,15 +1,18 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 9 load-bearing invariants across skills/implement/SKILL.md and the four
+# Asserts 8 load-bearing invariants across skills/implement/SKILL.md and the four
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
-# reference-file contract headers, and the no-`see Step N below|above` invariant in
-# references/*.md. Intentional overlap: assertion (3) (single `## Rebase Checkpoint Macro`
-# heading) and assertion (5) (verbosity literals) duplicate peer-harness assertions (A)
-# and (D) respectively — accepted duplication per design-phase sketch consensus.
+# and the no-`see Step N below|above` invariant in references/*.md. The cross-skill
+# Consumer/Contract/When-to-load header triplet (formerly assertion 8 here, implement-
+# scoped) moved to scripts/test-references-headers.sh as of #308 and now applies repo-
+# wide to every skills/*/references/*.md. Intentional overlap: assertion (3) (single
+# `## Rebase Checkpoint Macro` heading) and assertion (5) (verbosity literals) duplicate
+# peer-harness assertions (A) and (D) respectively — accepted duplication per design-
+# phase sketch consensus.
 #
-# Nine assertions:
+# Eight assertions:
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -25,10 +28,7 @@
 #      (e.g., the NEVER List) but the actual Cursor/Codex quick-review prompt strings
 #      regress. Design FINDING_2.
 #  (7) Four `skills/implement/references/*.md` files exist with expected names.
-#  (8) Each `references/*.md` contains `**Consumer**:`, `**Contract**:`, `**When to load**:`
-#      header lines. Scans every *.md under references/ (not just the four expected
-#      refs) so new reference files added in the future are covered automatically.
-#  (9) Zero occurrences of `see Step N below` / `see Step N above` patterns inside any
+#  (8) Zero occurrences of `see Step N below` / `see Step N above` patterns inside any
 #      references/*.md — progressive-disclosure invariant (references must not
 #      back-reference parent SKILL.md step numbers with direction words).
 #
@@ -142,31 +142,7 @@ for ref in "${expected_refs[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# (8) Each references/*.md contains the Consumer/Contract/When-to-load header triplet.
-#     Scans every *.md under references/ (not just the four expected refs) so new
-#     reference files added in the future are covered automatically — the contract
-#     documented in the header and scripts/test-implement-structure.md (sibling contract) covers "references/*.md" generally.
-# ---------------------------------------------------------------------------
-contract_headers=(
-  '**Consumer**:'
-  '**Contract**:'
-  '**When to load**:'
-)
-shopt -s nullglob
-contract_ref_files=( "$REFS_DIR"/*.md )
-shopt -u nullglob
-[[ "${#contract_ref_files[@]}" -gt 0 ]] \
-  || fail "(8) no .md files found under $REFS_DIR — cannot validate the Consumer/Contract/When-to-load header triplet"
-
-for ref_path in "${contract_ref_files[@]}"; do
-  for hdr in "${contract_headers[@]}"; do
-    grep -Fq "$hdr" "$ref_path" \
-      || fail "(8) references/$(basename "$ref_path") lacks '$hdr' header"
-  done
-done
-
-# ---------------------------------------------------------------------------
-# (9) Zero 'see Step N below' / 'see Step N above' patterns in any references/*.md.
+# (8) Zero 'see Step N below' / 'see Step N above' patterns in any references/*.md.
 #     Pattern is narrow: requires both a step number AND a direction word (below|above).
 #     Permits legitimate cross-refs like 'see Step 8' with no direction word.
 #     Case-insensitive: catches sentence-initial 'See Step 8 below' variants.
@@ -176,12 +152,14 @@ done
 #     Scans every *.md under references/ (not just the four expected refs) so new
 #     reference files added in the future are covered automatically — the contract
 #     documented in the header and scripts/test-implement-structure.md (sibling contract) covers "references/*.md" generally.
+#     Cross-skill Consumer/Contract/When-to-load header-triplet invariant lives in
+#     scripts/test-references-headers.sh as of #308, not here.
 # ---------------------------------------------------------------------------
 shopt -s nullglob
 ref_files=( "$REFS_DIR"/*.md )
 shopt -u nullglob
 [[ "${#ref_files[@]}" -gt 0 ]] \
-  || fail "(9) no .md files found under $REFS_DIR — cannot validate the 'see Step N below|above' invariant"
+  || fail "(8) no .md files found under $REFS_DIR — cannot validate the 'see Step N below|above' invariant"
 
 match_files=""
 for ref_path in "${ref_files[@]}"; do
@@ -190,8 +168,8 @@ for ref_path in "${ref_files[@]}"; do
   fi
 done
 if [[ -n "$match_files" ]]; then
-  fail "(9) found forbidden 'see Step N below|above' patterns (case-insensitive) in:$match_files"
+  fail "(8) found forbidden 'see Step N below|above' patterns (case-insensitive) in:$match_files"
 fi
 
-echo "PASS: test-implement-structure.sh — all 9 structural invariants hold"
+echo "PASS: test-implement-structure.sh — all 8 structural invariants hold"
 exit 0

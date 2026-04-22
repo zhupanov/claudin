@@ -2,6 +2,10 @@
 
 **Consumer**: `/design` Step 2a.5 — loaded after the short-circuit + zero-externals guardrail check when contested decisions exist. This file owns the dialectic-execution mechanics: per-decision prompt rendering, parallel debater launch, collection, eligibility gate, judge re-probe, ballot construction, judge launch, tally, and resolution writing.
 
+**Contract**: single normative source for dialectic-execution mechanics — step-6 through final `✅ 2a.5: dialectic` print directive, including the nested MANDATORY pointer to `references/dialectic-debate.md`, the externals-only debate-path carve-out (GitHub issue #98), the Option B snapshot pattern via `dialectic_*_available` shadow flags, and the `dialectic-resolutions.md` schema for voted / fallback-to-synthesis / bucket-skipped / over-cap dispositions.
+
+**When to load**: once Step 2a.5 has passed the short-circuit (`NO_CONTESTED_DECISIONS`) check AND the zero-externals guardrail has not fired. Do NOT load when `contested-decisions.md` contains only `NO_CONTESTED_DECISIONS`, or when the zero-externals guardrail fired in Step 2a.5 step 5 (in that case, `dialectic-resolutions.md` contains only `bucket-skipped`/`over-cap` entries — emit them without loading this file's execution mechanics).
+
 **Binding convention**: This file is the single normative source for dialectic-execution mechanics. SKILL.md Step 2a.5 retains only the short-circuit, GH#98 carve-out banner, bucket-assignment rule, and zero-externals guardrail summary; the full execution procedure lives here. Variable references (`$DESIGN_TMPDIR`, `${CLAUDE_PLUGIN_ROOT}`, `{SYNTHESIS_TEXT}`, `{FEATURE_DESCRIPTION}`, `{DECISION_BLOCK}`, etc.) and warning-string literals are byte-identical to the pre-extraction SKILL.md source.
 
 ---

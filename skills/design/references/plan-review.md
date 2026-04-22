@@ -4,6 +4,8 @@
 
 **Contract**: 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude fallbacks when externals are unavailable), dual-list output (In-Scope Findings + Out-of-Scope Observations), then a 3-voter panel using YES/NO/EXONERATE with 2+ YES threshold and the proportionality rule. Claude subagent voter replacement when external tool unavailable so the panel always remains at 3.
 
+**When to load**: once Step 3 begins, via the MANDATORY directive at the top of Step 3 in SKILL.md. Do NOT load during Steps 0, 1, 2a, 2a.5, 2b, 3.5, 3a, 3b, 4, or 5 — the reviewer archetype, ballot handling, voting panel launch, finalize procedure, and rejected-findings template defined here are all Step-3-internal concerns.
+
 ---
 
 ## Competition notice

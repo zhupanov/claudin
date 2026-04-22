@@ -2,6 +2,10 @@
 
 **Consumer**: `/design` Step 2a.2 — external sketch launches (Cursor/Codex) and per-slot Claude fallbacks.
 
+**Contract**: byte-preserved launch shell blocks for the four external slots (Cursor Arch/Edge + Codex Innovation/Pragmatic), the spawn-order rule (externals before Claude General), the `run_in_background: true` + `timeout: 1260000` requirements, the per-slot Claude fallback rules, and the Claude General sketch independence rule. Token bodies (`<ARCH_PROMPT>` etc.) are resolved from the companion `references/sketch-prompts.md`, not here. Sketch-phase collection (`collect-reviewer-results.sh` for Step 2a.3) is NOT defined here — that invocation stays single-source in SKILL.md.
+
+**When to load**: at Step 2a.2 entry, AFTER `references/sketch-prompts.md` has been loaded (so the placeholder tokens are resolvable). Do NOT load during Steps 0, 1, 2a.3, 2a.4, 2a.5, 2b, 3, 3.5, 3a, 3b, 4, or 5.
+
 **Binding convention**: single normative source for the four external-slot launch shell blocks, the spawn-order rule, the per-slot `run_in_background: true` / `timeout: 1260000` requirements, the per-slot Claude fallback notes, and the Claude General sketch independence rule. Token substitution placeholders (`<ARCH_PROMPT>`, `<EDGE_PROMPT>`, `<INNOVATION_PROMPT>`, `<PRAGMATIC_PROMPT>`) are resolved from `references/sketch-prompts.md`, which the caller loads first. Sketch-phase collection is NOT defined here — the `collect-reviewer-results.sh` invocation for Step 2a.3 remains single-source in SKILL.md.
 
 ---

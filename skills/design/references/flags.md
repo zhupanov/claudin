@@ -2,6 +2,10 @@
 
 **Consumer**: `/design` argument parsing (loaded before Step 0 via the MANDATORY directive adjacent to the compact flag table in SKILL.md).
 
+**Contract**: single normative source for every `/design` flag — validation rules, default values, fallback behaviors, the `::` delimiter encoding spec for `--step-prefix`, the 4-key requirement for `--branch-info`, the `--auto` / `--quick` interaction rules, and all backward-compat notes. The literal string `All 4 keys are required` is byte-pinned by `scripts/test-design-structure.sh`.
+
+**When to load**: once at the top of `/design` invocation, before Step 0 executes, via the MANDATORY directive adjacent to the compact flag table. Do NOT load mid-flow; flag parsing runs once and the decisions are sticky.
+
 **Binding convention**: This file is the single normative source for `/design` flag semantics. SKILL.md's compact flag table is a non-normative index — when a caller needs the authoritative validation rule, fallback behavior, or encoding spec for any flag, read this file.
 
 ---

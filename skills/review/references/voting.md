@@ -2,6 +2,10 @@
 
 **Consumer**: `/review` Step 3c.1, round-1 branch.
 
+**Contract**: owns the round-1 voting-panel body — three-voter setup with proportionality guidance, ballot file handling, parallel launch ordering, threshold + competition scoring rules, the zero-accepted-findings short-circuit, the OOS artifact write rule, the save-not-accepted-IDs rule, and the rounds-2+ skip-voting rule. The `### 3c.1` heading and the round-1 / rounds-2+ branch selector remain inline in SKILL.md; this file owns the round-1 body content only.
+
+**When to load**: on Step 3c.1's round-1 branch only. Do NOT load on rounds 2+ (Step 3c.1's rounds-2+ branch explicitly skips voting) or on the zero-findings short-circuit (Step 3b's skip-to-Step-4 path).
+
 **Binding convention**: single normative source for the round-1 voting panel mechanics — three-voter setup with proportionality guidance, ballot file handling rule, parallel launch ordering, threshold + competition scoring rules, the zero-accepted-findings short-circuit, the OOS artifact write rule, the save-not-accepted-IDs rule, and the rounds 2+ skip-voting rule. The `### 3c.1` heading and the "round 1" / "rounds 2+" branch selector remain inline in `SKILL.md`; this file owns the body content the round-1 branch executes. Do NOT load on rounds 2+ (Step 3c.1 explicitly skips voting in those rounds) or on the zero-findings short-circuit (Step 3b skip-to-Step-4 path).
 
 ---

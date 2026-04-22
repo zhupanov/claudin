@@ -7,8 +7,9 @@
 #    (line-scoped so a future edit cannot split the MANDATORY and the Do-NOT-load into
 #    different paragraphs without the harness catching the drift)
 #  - Each references/*.md OPENS WITH the Consumer / Contract / When-to-load header triplet
-#    in the first 20 lines (tightens the /implement precedent's whole-file grep — matches
-#    the sibling contract's literal 'opens with' promise)
+#    in the first 20 lines (a /research-local tightening layered on top of the cross-skill
+#    presence check enforced by scripts/test-references-headers.sh — matches the sibling
+#    contract's literal 'opens with' promise)
 #  - RESEARCH_PROMPT literal appears in research-phase.md (substring pin for byte-drift detection)
 #  - reviewer XML wrapper tags (<reviewer_research_question>, <reviewer_research_findings>)
 #    appear in validation-phase.md (byte pin for prompt-injection hardening)
