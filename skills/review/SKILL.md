@@ -61,21 +61,6 @@ This replaces individual per-reviewer completion messages in non-debug mode. Do 
 
 **Limitation**: Verbosity suppression is prompt-enforced and best-effort.
 
-## Domain-Specific Review Rules
-
-These rules supplement the generic reviewer templates. The orchestrating agent applies them when evaluating findings and reviewing the diff, especially during Step 3c (deduplication).
-
-### Settings.json Permissions Ordering
-
-When changes touch `.claude/settings.json`, verify that the `permissions.allow` array remains in **strict ASCII/Unicode code-point order** (equivalent to `LC_ALL=C sort`, Go's `sort.Strings`, or Python's `sorted()`). Entries must be sorted as raw strings without preprocessing or normalization. This means special characters sort by their code-point value (e.g., `$` < `.` < `/` < uppercase letters < `[` < lowercase letters < `~`).
-
-### Skill and Script Genericity
-
-When changes touch files under `scripts/` or `skills/shared/`, verify the changes do not introduce repo-specific content: no repo-specific paths (e.g., `server/`, `cli/`, `myservice`), cluster names (e.g., `prod-1`, `staging-2`), service-specific environment variable names, or hardcoded project references that would break when the file is used in a different repository.
-
-- **Generic directories**: `scripts/`, `skills/shared/` — changes to files here must not introduce repo-specific references.
-- **Repo-specific directories**: individual skill-specific script directories (e.g., `skills/implement/scripts/`, `skills/loop-review/scripts/`), and the private `.claude/skills/relevant-checks/` skill — files here are repo-specific by design and exempt from this rule.
-
 ## Step 0 — Session Setup
 
 Run the shared session setup script. This handles temp directory creation, reviewer health probe, and health status file in a single call:
@@ -178,6 +163,8 @@ External reviewer output collection, validation, and retry are handled by the sh
 
 ## Step 3 — Collect, Deduplicate, and Implement (Recursive Loop)
 
+**MANDATORY — READ ENTIRE FILE** before executing any sub-step of Step 3: `${CLAUDE_PLUGIN_ROOT}/skills/review/references/domain-rules.md`. It contains the Settings.json permissions ordering rule and the skill/script genericity rule that the orchestrating agent applies when evaluating findings and reviewing the diff across Step 3 (collect, dedup, voting, fix application). Loaded unconditionally on every Step 3 entry — no branch-skip guard, because the rules must remain visible during the zero-findings short-circuit (Step 3b skip-to-Step-4 path) where a missed `.claude/settings.json` ordering or `scripts/`/`skills/shared/` genericity regression must still be caught.
+
 This step repeats until reviewers find no more issues. Track the current **round number** starting at 1.
 
 ### 3a — Collect
@@ -204,35 +191,9 @@ Merge findings from all reviewers into a single deduplicated list, grouped by fi
 
 ### 3c.1 — Voting Panel (round 1 only)
 
-**In round 1**: Submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section. For code review:
+**In round 1**: **MANDATORY — READ ENTIRE FILE** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` and execute its body — three-voter setup with proportionality guidance, ballot file handling rule (Write tool, not `cat`-heredoc), parallel launch order (Cursor → Codex → Claude subagent), threshold rules + competition scoring per `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`, the zero-accepted-findings short-circuit to **Step 4**, the OOS-accepted-by-vote artifact write to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` (only when `SESSION_ENV_PATH` is non-empty), and the save-not-accepted-IDs rule used to suppress re-raised findings in rounds 2+.
 
-- **Voter 1**: **Claude Code Reviewer subagent** — fresh Agent tool invocation (subagent_type: `code-reviewer`) with the voting prompt. Instruct: `"You are a very scrupulous senior code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed code changes. Be extremely rigorous — only vote YES for findings that identify genuine bugs, logic errors, security issues, or clearly important improvements. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. Vote NO for trivial style nits, subjective preferences, or speculative concerns. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
-- **Voter 2**: Codex — via `run-external-reviewer.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `codex_available` is false, launch a Claude subagent voter instead per the Voting Protocol. Instruct similarly as a "very scrupulous senior code reviewer," including the proportionality guidance.
-- **Voter 3**: Cursor — via `run-external-reviewer.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `cursor_available` is false, launch a Claude subagent voter instead per the Voting Protocol. Instruct similarly, including the proportionality guidance.
-
-**Ballot file handling**: Use the Write tool (not `cat` with heredoc or Bash) to write the ballot to `$REVIEW_TMPDIR/ballot.txt`. For Codex and Cursor voter prompts, reference the ballot file path (e.g., "Read the ballot from $REVIEW_TMPDIR/ballot.txt") instead of inlining the ballot content. This avoids permission prompts from `cat > file << 'EOF'` or `BALLOT=$(cat file)` patterns.
-
-Launch all available voters **in parallel** (Cursor first, then Codex, then Claude subagent). Wait for external voter sentinels using `wait-for-reviewers.sh` per the Voting Protocol, then parse voter outputs.
-
-**Tally votes**: Apply the threshold rules from the Voting Protocol based on eligible voters per finding (2+ YES with 3 voters, unanimous 2/2 with 2 voters, skip if <2 eligible). Print vote breakdown per finding.
-
-**Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol. Note in the scoreboard that scores apply to round 1 only — round 2+ findings are auto-accepted and do not contribute to scores.
-
-**Zero accepted in-scope findings**: If voting rejects all in-scope findings, print `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` (OOS items accepted for issue filing are processed separately by `/implement`.) and skip to **Step 4**.
-
-**OOS items accepted by vote** (2+ YES in round 1): These are accepted for GitHub issue filing, NOT for code implementation. **Only when `SESSION_ENV_PATH` is non-empty**: write accepted OOS items to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` using the format:
-```markdown
-### OOS_N: <short title>
-- **Description**: <full description of the observation>
-- **Reviewer**: <attribution>
-- **Vote tally**: <YES/NO/EXONERATE counts>
-- **Phase**: review
-```
-When `SESSION_ENV_PATH` is empty (standalone invocation), skip the OOS artifact write.
-
-**Save not-accepted finding IDs**: Record the IDs of findings not accepted by vote in round 1 (whether rejected or exonerated). In rounds 2+, if a Claude-only reviewer re-raises a finding that was not accepted by the round-1 voting panel (same file, same issue), suppress it — do not re-accept a finding the panel already voted down or exonerated.
-
-**In rounds 2+**: Skip voting — accept all Claude-only findings directly, **except** findings that match round-1 rejected findings (same file and substantially similar issue). External reviewer findings are not present in rounds 2+.
+**In rounds 2+**: Skip voting — accept all Claude-only findings directly, **except** findings that match round-1 rejected findings (same file and substantially similar issue). External reviewer findings are not present in rounds 2+. **Do NOT load** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` in rounds 2+ — the body is round-1-only and would waste tokens. Same `Do NOT load` guidance applies on the Step 3b zero-findings short-circuit (which skips directly to Step 4 without entering 3c.1).
 
 ### 3d — Print Round Summary
 
