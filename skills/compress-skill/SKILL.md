@@ -1,150 +1,71 @@
 ---
 name: compress-skill
-description: "Use when compressing an existing skill's prose. Rewrites SKILL.md and all transitively included .md files (excluding sub-skills), applying Strunk & White's Elements of Style adapted for technical writing."
+description: "Use when compressing an existing skill's prose. Rewrites SKILL.md and all transitively included .md files (excluding sub-skills), applying Strunk & White's Elements of Style adapted for technical writing. Delegates to /imaq so changes ship as a PR."
 argument-hint: "<skill-name-or-path> [--debug]"
-allowed-tools: Bash, Read, Edit, Write
+allowed-tools: Bash, Skill
 ---
 
 # compress-skill
 
-Rewrite an existing skill's Markdown prose to reduce size while preserving meaning, grammar, and every structural element. Operates on SKILL.md and on `.md` files transitively linked from it, restricted to the skill's own directory tree.
+Rewrite an existing skill's Markdown prose to reduce size while preserving meaning, grammar, and every structural element. Pure delegator: validates the target, enumerates the transitively-reachable `.md` set inside the skill directory, snapshots baseline sizes, and hands off to `/imaq` (= `/implement --merge --auto --quick`) for branch creation, implementation, code review, PR creation, and auto-merge.
+
+Example: `/compress-skill implement` compresses `skills/implement/SKILL.md` plus every `.md` file reachable from it that resolves inside the `skills/implement/` directory tree.
 
 ## Scope
 
-- **In scope**: `.md` files inside the target skill's directory (`SKILL.md`, `references/*.md`, and any `.md` file reachable from SKILL.md via either Markdown link syntax `](path.md)` **or** path-shaped backticked references like `` `${CLAUDE_PLUGIN_ROOT}/skills/<name>/references/foo.md` ``, that resolve to a path inside the skill dir). Both forms are followed because larch SKILL.md files cite most sibling references via backticks rather than Markdown links.
-- **Out of scope**: sub-skills invoked via the Skill tool (separate skills — never compressed from here), shared larch files (`skills/shared/*.md`, top-level `*.md` like `AGENTS.md`, `README.md`, `SECURITY.md`), any `.md` reached by a reference whose resolved path is outside the target skill directory.
+- **In scope**: `.md` files inside the target skill's directory (`SKILL.md`, `references/*.md`, and any `.md` file reachable from `SKILL.md` via either Markdown link syntax `](path.md)` **or** path-shaped backticked references like `` `${CLAUDE_PLUGIN_ROOT}/skills/<name>/references/foo.md` ``, that resolve to a path inside the skill dir). Both forms are followed because larch `SKILL.md` files cite most sibling references via backticks rather than Markdown links.
+- **Out of scope**: sub-skills invoked via the `Skill` tool (separate skills — never compressed from here), shared larch files (`skills/shared/*.md`, top-level `*.md` like `AGENTS.md`, `README.md`, `SECURITY.md`), any `.md` reached by a reference whose resolved path is outside the target skill directory.
 
 The directory-tree restriction is the mechanical filter: references to files outside the skill dir are skipped, which naturally excludes shared docs and callee skills.
 
 **Known limitations**:
 
-- Link targets containing unencoded spaces (e.g. `](My File.md)`) are not followed — the regex stops at whitespace. larch SKILL.md paths never use spaces, so this does not affect any in-corpus file.
-- Reference-style Markdown links (`[text][ref]` + `[ref]: path.md`) are not followed — only inline links `](path.md)` and path-shaped backticked spans are extracted. No larch SKILL.md or reference uses this syntax today; if a future skill starts using it, extend `discover-md-set.py` to collect link-definition lines alongside inline links.
+- Link targets containing unencoded spaces (e.g. `](My File.md)`) are not followed — the regex stops at whitespace. larch `SKILL.md` paths never use spaces, so this does not affect any in-corpus file.
+- Reference-style Markdown links (`[text][ref]` + `[ref]: path.md`) are not followed — only inline links `](path.md)` and path-shaped backticked spans are extracted. No larch `SKILL.md` or reference uses this syntax today; if a future skill starts using it, extend `discover-md-set.py` to collect link-definition lines alongside inline links.
 
-## Flags
+## NEVER
 
-Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. The remaining positional token is the skill name or absolute path.
+1. **NEVER descend into sub-skills invoked via the `Skill` tool.** **Why:** sub-skills are independent compression targets with their own PR histories — pulling them into one refactor produces a PR too large to review. The coordinator enumerates only `.md` files physically under the target skill directory (plus transitive references that resolve inside it).
+2. **NEVER run `/compress-skill` on a skill with no `SKILL.md`.** **Why:** the resolver probes the plugin tree (`${CLAUDE_PLUGIN_ROOT}/skills/`), the in-plugin-repo `skills/` layout (for working inside larch itself), and the consumer-repo `.claude/skills/` layout — and fails closed when none contains the target. A missing `SKILL.md` means there is nothing to compress.
+3. **NEVER introduce feature or behavior changes during the compression pass.** **Why:** behavior-preserving is the contract; a semantic change disguised as a prose rewrite violates reviewer expectations and destabilizes downstream callers. The feature description pinned for `/implement` names this explicitly.
+4. **NEVER target a plugin-namespaced form (e.g., `larch:implement`).** **Why:** the colon is not a valid directory character in the resolver's probed paths; the resolver rejects it. Pass the bare skill name only.
+5. **NEVER inline shell logic in this `SKILL.md`.** **Why:** Mechanical rule B — non-trivial shell lives in `.sh` scripts. Keeps this `SKILL.md` scannable; avoids copy-paste drift with `/simplify-skill`, `/alias`, and `/create-skill`.
 
-- `--debug`: verbose progress output. Default: off.
+## Step 1 — Parse Arguments
 
-## Style guide (Strunk & White, adapted for technical writing)
+Parse flags from the start of `$ARGUMENTS` before the first positional token.
 
-Apply to **prose only**. Do not alter any structural element.
+- `--debug`: Set `debug_mode=true`. Default: `debug_mode=false`. Forwarded to `/imaq` (and thence to `/implement`).
 
-**Preserve verbatim**: YAML frontmatter, fenced code blocks (``` and ~~~), inline code, HTML comments, heading text (so `references/*.md § <heading>` anchors still resolve), link targets, table cell structure, list markers, file paths, numeric values, identifiers.
+After flag stripping, the next positional token is the **target skill name** (bare form, e.g. `implement`) or an **absolute path** to a skill directory. Strip a leading `/` if present on a bare name. Reject names containing `:` (no plugin-qualified forms — see NEVER #4).
 
-**Rewrite**:
+If zero positional tokens remain, print: `**ERROR: Usage: /compress-skill <skill-name-or-path> [--debug]**` and abort.
 
-- **Omit needless words.** "In order to" → "to". "Due to the fact that" → "because". "At the present time" → "now". "For the purpose of" → "for". "Is able to" → "can".
-- **Prefer active voice.** "The result is returned by the script" → "The script returns the result."
-- **Use positive form.** "Do not fail to" → "remember to". "Not honest" → "dishonest".
-- **Use definite, specific, concrete language.** Replace abstractions with names, counts, examples.
-- **Keep related words together.** Do not split modifiers from what they modify.
-- **One idea per sentence.** Split long sentences; do not coalesce short ones that carry distinct facts.
+## Step 2 — Resolve Target and Build Feature Description
 
-**Retain technical precision.** Never drop a qualifier that changes meaning (`usually`, `only when`, `at least`, `must`, `should`, `never`). If a word looks redundant but encodes an invariant or rationale, keep it.
-
-## Anti-patterns
-
-- **NEVER alter any line inside a fenced code block.** Why: code fences contain shell commands, regex patterns, YAML, JSON, mermaid, and example output that tests or harnesses match byte-exactly. A reworded example breaks the contract.
-- **NEVER change heading text.** Why: citations like ``` `foo/SKILL.md § Step 3` ``` resolve to `## Step 3` by exact string; `scripts/test-subskill-anchors.sh` and similar harnesses fail-closed on a miss.
-- **NEVER remove the "why" explanation from an anti-pattern or invariant.** Why: Section VI of `skill-design-principles.md` declares the "why" load-bearing — stripping it turns a strong anti-pattern into a weak one.
-- **NEVER drop file-path or `file:line` citations.** Why: AGENTS.md, review harnesses, and cross-references depend on these tokens.
-- **NEVER shorten a paragraph by under ~10%.** Why: marginal gains do not justify the drift risk; leave short paragraphs alone.
-- **NEVER compress a file outside the target skill's directory tree.** Why: shared docs and callee skills have other consumers; a mutation here propagates.
-
-When uncertain, keep the original wording. Meaning preservation beats compression.
-
-## Progress Reporting
-
-Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
-
-Step Name Registry:
-
-| Step | Short Name       |
-|------|------------------|
-| 0    | setup            |
-| 1    | discover         |
-| 2    | snapshot         |
-| 3    | compress         |
-| 4    | report           |
-| 5    | cleanup          |
-
-## Step 0 — Setup
-
-Resolve the skill argument to an absolute skill directory (containing `SKILL.md`), create a session tmpdir, and emit the resolved values.
+Resolve the target skill directory, enumerate the in-scope `.md` files, snapshot baseline sizes, and compose the feature description for `/implement`. All of this runs in a single coordinator script per mechanical rule C (no consecutive Bash calls). The full stdout contract, exit-code semantics, and resolution order are documented in the sibling contract `${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/build-feature-description.md`.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/setup.sh $ARGUMENTS
+${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/build-feature-description.sh <skill-name-or-path>
 ```
 
-Parse output for `SKILL_DIR`, `SKILL_NAME`, `COMPRESS_TMPDIR`. On an `ERROR=` line, print the error and abort.
+**Fail-closed verification.** Parse stdout for `STATUS`, `TARGET_DIR`, `SKILL_NAME`, `FILE_COUNT`, and `FEATURE_FILE`, then validate the result before proceeding:
 
-Set `debug_mode` from the `--debug` flag when present in `$ARGUMENTS`.
+- **`STATUS=ok`** — verify that `FEATURE_FILE` exists and is non-empty; read its contents as `FEATURE_DESCRIPTION` and proceed to Step 3. If the file is missing or empty, treat it as a script failure and abort.
+- **`STATUS=not_found`** — print the `ERROR=<message>` line from stdout and abort.
+- **`STATUS=bad_name`** — print the `ERROR=<message>` line from stdout and abort.
+- **No `STATUS=` line (script exited non-zero)** — print the error text from stderr and abort.
 
-Print: `> **🔶 0: setup — <SKILL_NAME> at <SKILL_DIR>**`
+The coordinator invokes `discover-md-set.sh` internally to BFS the transitive `.md` set from `SKILL.md`, then measures each file's byte and line count for the baseline. The style guide, anti-patterns, and judgment rules are embedded in the feature description so that `/implement`'s Step 2 has them inline.
 
-## Step 1 — Discover Transitive `.md` Set
+Print: `✅ 2: resolve — <FILE_COUNT> file(s) under <TARGET_DIR>`
 
-Starting from `SKILL.md`, walk both Markdown link targets of the form `](path.md)` and path-shaped backticked references (`` `…/path.md` ``, with `${CLAUDE_PLUGIN_ROOT}` and `$PWD` expanded). Optional `#anchor` fragments and `§ heading` suffixes are stripped. Each target is resolved relative to the referring file's directory, canonicalized, and kept only when its path lies inside `SKILL_DIR`. References inside fenced code blocks (``` or ~~~) are ignored.
+## Step 3 — Delegate to /imaq
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/discover-md-set.sh --skill-dir "$SKILL_DIR" --output "$COMPRESS_TMPDIR/md-set.list"
-```
+Print: `**compress-skill /<SKILL_NAME> — delegating to /imaq [--debug]**` (omit `--debug` if `debug_mode=false`).
 
-The shell wrapper dispatches to `${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/discover-md-set.py` (Python — Markdown parsing with fenced-block exclusion and path canonicalization is cleaner than pure bash).
+Invoke the Skill tool:
+- Try skill: `"imaq"` first (bare name). If no skill matches, try skill: `"larch:imaq"` (fully-qualified plugin name).
+- args: `"[--debug] <FEATURE_DESCRIPTION>"` — prepend `--debug` only if `debug_mode=true`. `--merge --auto --quick` are not forwarded (`/imaq` prepends them itself).
 
-Parse output for `FILE_COUNT`. The list file contains NUL-delimited absolute paths in discovery order (breadth-first from `SKILL.md`). Read the list file to obtain the paths.
-
-Print: `✅ 1: discover — <FILE_COUNT> file(s)`
-
-## Step 2 — Snapshot Before Sizes
-
-Record each file's byte and line count before compression.
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/measure-set.sh --input "$COMPRESS_TMPDIR/md-set.list" --output "$COMPRESS_TMPDIR/before.tsv"
-```
-
-Parse output for `TOTAL_BYTES`, `TOTAL_LINES`. Save as `BYTES_BEFORE` and `LINES_BEFORE`.
-
-Print: `✅ 2: snapshot — before: <BYTES_BEFORE> bytes, <LINES_BEFORE> lines`
-
-## Step 3 — Compress Each File
-
-For each absolute path in `$COMPRESS_TMPDIR/md-set.list`:
-
-1. Read the file in full.
-2. Apply the **Style guide** above to prose only. Preserve every structural element verbatim (frontmatter, fenced blocks, inline code, headings, link targets, list markers, table structure, file paths, numeric values, identifiers).
-3. Write the compressed content back to the same path (use the Edit tool with `replace_all: false` on the whole file via a unique pre-existing anchor, or the Write tool for full-file replacement).
-
-Per-file judgment rules:
-
-- Compress sentence by sentence. A paragraph that is already lean stays as-is.
-- A rewrite that shortens the paragraph by under ~10% is not worth the drift risk — keep the original.
-- If any doubt remains about meaning equivalence, keep the original wording.
-- Confirm every anti-pattern retains its **Why:** clause; every instruction retains its modal (`must`, `should`, `may`).
-
-Print per-file progress only when `debug_mode=true`: `⏳ 3: compress — <path>`.
-
-Print on step completion: `✅ 3: compress — <FILE_COUNT> file(s) rewritten`
-
-## Step 4 — Report Deltas
-
-Re-measure each file and emit a Markdown report comparing before and after.
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/report-deltas.sh --input "$COMPRESS_TMPDIR/md-set.list" --before "$COMPRESS_TMPDIR/before.tsv" --output "$COMPRESS_TMPDIR/report.md"
-```
-
-Read `$COMPRESS_TMPDIR/report.md` and print it. The report shows per-file before/after byte and line counts, absolute deltas, and overall totals.
-
-Print: `✅ 4: report — overall Δ printed above`
-
-## Step 5 — Cleanup
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$COMPRESS_TMPDIR"
-```
-
-Print: `✅ 5: cleanup — compress-skill complete`
+The `/imaq` → `/implement --merge --auto --quick` chain runs branch creation, inline plan, implementation (the actual file-by-file prose rewrite), single-reviewer code review loop, `/relevant-checks`, version bump, PR creation with the token-budget delta table in the body, CI wait, and auto-merge. No post-invocation verification is needed at this level — `/implement`'s own internal gates (CI green, merge) are the authoritative signal, and this skill runs no further steps after `/imaq` returns.
