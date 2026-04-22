@@ -4,13 +4,15 @@
 # sizes, and compose the /implement feature description for /compress-skill.
 #
 # Usage:
-#   build-feature-description.sh [--debug] <skill-name-or-absolute-path>
+#   build-feature-description.sh <skill-name-or-absolute-path>
 #
-# Resolution order for a bare <skill-name>:
+# Resolution order for a bare <skill-name> (leading "/" is stripped before
+# resolution, so both `implement` and `/implement` are accepted as bare names):
 #   1. ${CLAUDE_PLUGIN_ROOT}/skills/<name>/
 #   2. $PWD/skills/<name>/
 #   3. $PWD/.claude/skills/<name>/
-# An absolute path is used as-is (must exist and contain SKILL.md).
+#   4. ${CLAUDE_PLUGIN_ROOT}/.claude/skills/<name>/
+# An absolute path (with >1 segment) is used as-is (must exist and contain SKILL.md).
 #
 # Stdout contract (always one KEY=VALUE per line):
 #   On success:
@@ -32,10 +34,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 ARG=""
-DEBUG=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --debug) DEBUG=true; shift ;;
     --) shift; break ;;
     -*) echo "ERROR=Unknown flag: $1" >&2; exit 1 ;;
     *)
@@ -52,6 +52,13 @@ done
 if [[ -z "$ARG" ]]; then
   echo "ERROR=Missing required positional argument: skill name or absolute path" >&2
   exit 1
+fi
+
+# Strip a single leading slash when ARG matches the bare-name regex so that
+# both `implement` and `/implement` route through the same probe chain rather
+# than being misread as the filesystem root.
+if [[ "$ARG" =~ ^/[a-z][a-z0-9-]*$ ]]; then
+  ARG="${ARG#/}"
 fi
 
 # --- Resolve target directory ---
@@ -95,6 +102,11 @@ else
     TRIED+=("$CANDIDATE")
     if TARGET_DIR="$(resolve_dir "$CANDIDATE")"; then :; fi
   fi
+  if [[ -z "$TARGET_DIR" ]] && [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
+    CANDIDATE="${CLAUDE_PLUGIN_ROOT}/.claude/skills/${ARG}"
+    TRIED+=("$CANDIDATE")
+    if TARGET_DIR="$(resolve_dir "$CANDIDATE")"; then :; fi
+  fi
   if [[ -z "$TARGET_DIR" ]]; then
     printf 'STATUS=not_found\n'
     printf 'ERROR=Could not resolve skill %s. Tried: %s\n' "$ARG" "${TRIED[*]}"
@@ -107,9 +119,11 @@ SKILL_NAME="$(basename "$TARGET_DIR")"
 # --- Discover transitive .md set ---
 
 TMP_LIST="$(mktemp -t compress-skill-mdset.XXXXXX)"
-DISCOVER_OUT="$("$SCRIPT_DIR/discover-md-set.sh" --skill-dir "$TARGET_DIR" --output "$TMP_LIST" 2>&1)" || {
+# Capture stdout only; let stderr stream through so warnings stay visible
+# and cannot contaminate the FILE_COUNT= line parse.
+DISCOVER_OUT="$("$SCRIPT_DIR/discover-md-set.sh" --skill-dir "$TARGET_DIR" --output "$TMP_LIST")" || {
   rm -f "$TMP_LIST"
-  echo "ERROR=discover-md-set.sh failed: $DISCOVER_OUT" >&2
+  echo "ERROR=discover-md-set.sh failed" >&2
   exit 1
 }
 
@@ -242,7 +256,3 @@ printf 'TARGET_DIR=%s\n' "$TARGET_DIR"
 printf 'SKILL_NAME=%s\n' "$SKILL_NAME"
 printf 'FILE_COUNT=%s\n' "$FILE_COUNT"
 printf 'FEATURE_FILE=%s\n' "$FEATURE_FILE"
-
-if [[ "$DEBUG" == "true" ]]; then
-  printf 'DEBUG=true\n'
-fi
