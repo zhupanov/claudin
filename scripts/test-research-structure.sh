@@ -49,16 +49,19 @@ grep -q 'MANDATORY — READ ENTIRE FILE.*validation-phase\.md.*Do NOT load.*rese
 # Check 4: Each references/*.md opens with the Consumer / Contract / When-to-load header
 #          triplet in the first 20 lines. The sibling contract says "opens with" — enforce that
 #          literally, so future edits cannot bury the triplet mid-file without the harness
-#          catching the drift.
-contract_headers=(
-  '**Consumer**:'
-  '**Contract**:'
-  '**When to load**:'
+#          catching the drift. Patterns are anchored at line-start (same shape as the global
+#          scripts/test-references-headers.sh harness) so the /research-local tightening
+#          actually layers on top of the cross-skill anchored presence check — a prose line
+#          like `see **Consumer**: below` in the head region must NOT satisfy the check.
+contract_header_patterns=(
+  '^\*\*Consumer\*\*:'
+  '^\*\*Contract\*\*:'
+  '^\*\*When to load\*\*:'
 )
 for ref_path in "$RESEARCH_MD" "$VALIDATION_MD"; do
-  for hdr in "${contract_headers[@]}"; do
-    head -n 20 "$ref_path" | grep -Fq "$hdr" \
-      || fail "references/$(basename "$ref_path") must open with '$hdr' header in the first 20 lines"
+  for pattern in "${contract_header_patterns[@]}"; do
+    head -n 20 "$ref_path" | grep -Eq "$pattern" \
+      || fail "references/$(basename "$ref_path") must open with anchored header matching '$pattern' in the first 20 lines"
   done
 done
 
