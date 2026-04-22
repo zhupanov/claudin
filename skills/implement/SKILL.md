@@ -177,7 +177,7 @@ After each child skill returns (`/design` in Step 1, `/review` in Step 5), check
 1. Read the current values from `$IMPLEMENT_TMPDIR/session-env.sh` (parse `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UNAVAILABLE` line-by-line, same safe parsing as `session-setup.sh` — do NOT source the file)
 2. Re-write the file using `write-session-env.sh` with those preserved values plus the updated health flags
 
-This ensures runtime timeouts propagate across skill boundaries within the `/implement` flow without clobbering existing Slack/repo state.
+Runtime timeouts then propagate across skill boundaries without clobbering existing Slack/repo state.
 
 ## Execution Issues Tracking
 
@@ -268,7 +268,7 @@ The Description field is forwarded verbatim into a public GitHub issue body by `
 - **Phase**: implement
 ```
 
-If `oos-accepted-main-agent.md` does not yet exist, create it with the new entry. If `repo_unavailable=true`, still append to the file (Step 9a.1 will skip filing) — note that `$IMPLEMENT_TMPDIR` is removed at Step 18 cleanup, so the only persistent audit trail in the repo-unavailable case is the corresponding `Pre-existing Code Issues` entry in `execution-issues.md` that gets written into the PR body's `<details><summary>Execution Issues</summary>` block. The PR body's "Accepted OOS (GitHub issues filed)" subsection will explicitly say "Skipped — repo unavailable" in this case (see Step 9a.1's `repo_unavailable=true` branch).
+If `oos-accepted-main-agent.md` does not exist, create it with the new entry. If `repo_unavailable=true`, still append (Step 9a.1 will skip filing) — `$IMPLEMENT_TMPDIR` is removed at Step 18 cleanup, so the only persistent audit trail in the repo-unavailable case is the `Pre-existing Code Issues` entry in `execution-issues.md` that gets written into the PR body's `<details><summary>Execution Issues</summary>` block. The PR body's "Accepted OOS (GitHub issues filed)" subsection will say "Skipped — repo unavailable" (see Step 9a.1's `repo_unavailable=true` branch).
 
 ## Step 1 — Ensure Design Plan Exists
 
