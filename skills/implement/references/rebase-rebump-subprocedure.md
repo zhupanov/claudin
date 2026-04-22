@@ -1,8 +1,8 @@
 # Rebase + Re-bump Sub-procedure
 
-**Consumer**: `/implement` Steps 10 and 12 — shared sub-procedure invoked from `ACTION=rebase`, `ACTION=rebase_then_evaluate`, and Phase 4 exit-0 paths.
+**Consumer**: `/implement` Steps 10 and 12 — shared sub-procedure invoked from `ACTION=rebase`, `ACTION=rebase_then_evaluate`, and Phase 4 exit-0 paths. Includes the "Continue after child returns" anti-halt micro-reminder that travels with the `/bump-version` Skill-tool call per `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md`.
 
-**Contract**: Byte-preserving extraction from `skills/implement/SKILL.md` L758–898 including the "Continue after child returns" anti-halt micro-reminder at the original L821 (which travels with its `/bump-version` Skill-tool call per intent of `skills/shared/subskill-invocation.md`). All `caller_kind` tokens (`step12_rebase`, `step12_rebase_then_evaluate`, `step12_phase4`, `step10_rebase`, `step10_rebase_then_evaluate`) are contract tokens — do NOT rename. The #172 STATUS-first evaluation ordering is the degraded-git fail-closed enforcement point for Step 12 (Load-Bearing Invariant #3 in SKILL.md).
+**Contract**: Authoritative source for the drop/rebase/fast-forward/bump/push/PR-body-refresh sequence. All `caller_kind` tokens (`step12_rebase`, `step12_rebase_then_evaluate`, `step12_phase4`, `step10_rebase`, `step10_rebase_then_evaluate`) are contract tokens — do NOT rename. The #172 STATUS-first evaluation ordering is the degraded-git fail-closed enforcement point for Step 12 (Load-Bearing Invariant #3 in SKILL.md).
 
 **When to load**: before invoking the sub-procedure from Step 10 (any `ACTION=rebase*` return from `ci-wait.sh`), before invoking from Step 12a (any `ACTION=rebase*` return), or at the entry of Step 12 Phase 4's `rebase-push.sh --continue` exit-0 handler. Do NOT load when Step 12's `merge=false` or `repo_unavailable=true` early-exits fire, or when Step 10's `ACTION=merge` / `already_merged` / `evaluate_failure` / `bail` is returned.
 

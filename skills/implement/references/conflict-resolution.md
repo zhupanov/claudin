@@ -2,7 +2,7 @@
 
 **Consumer**: `/implement` Step 12 — entered when `rebase-push.sh` exits with code 1 from the Rebase + Re-bump Sub-procedure's step 2 conflict-fallback path (step12 family only — step10 family breaks out to Step 11 instead).
 
-**Contract**: Byte-preserving extraction from `skills/implement/SKILL.md` L1030–1123. Preserve the trivial-files auto-resolve list (`version.go`, `go.sum`, `.claude-plugin/plugin.json`, auto-generated), the "upstream (main) / feature branch commit" labeling convention (NEVER "ours"/"theirs"), and the Phase 4 exit-0 dispatch to the Rebase + Re-bump Sub-procedure with `rebase_already_done=true, caller_kind=step12_phase4`. The per-file context block format at section 3c is parsed by reviewer panel prompts.
+**Contract**: Authoritative source for the Phase 1–4 conflict resolution procedure. Preserve the trivial-files auto-resolve list (`version.go`, `go.sum`, `.claude-plugin/plugin.json`, auto-generated), the "upstream (main) / feature branch commit" labeling convention (NEVER "ours"/"theirs" — see NEVER #3 in SKILL.md), and the Phase 4 exit-0 dispatch to the Rebase + Re-bump Sub-procedure with `rebase_already_done=true, caller_kind=step12_phase4`. The per-file context block format at section 3c is parsed by reviewer panel prompts.
 
 **When to load**: only when `rebase-push.sh` (the full, non-`--no-push` variant) exits 1 inside the sub-procedure's step 2 step12-family conflict fallback. Do NOT load on any other `rebase-push.sh` exit code, and do NOT load for step10-family callers.
 

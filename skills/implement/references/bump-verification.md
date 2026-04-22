@@ -1,14 +1,14 @@
 # Bump Verification STATUS Handling
 
-**Consumer**: `/implement` Step 8 post-check (`bump-verification.md` Block α) and Rebase + Re-bump Sub-procedure step 4 post-check (Block β) — the authoritative `check-bump-version.sh --mode post` STATUS-handling matrix for the two callers.
+**Consumer**: `/implement` Step 8 post-check (Block α), Step 8 step 3b sentinel defense-in-depth (Block γ), and Rebase + Re-bump Sub-procedure step 4 post-check (Block β) — the authoritative `check-bump-version.sh --mode post` STATUS-handling matrix and reasoning-file sentinel contract for all callers.
 
-**Contract**: Byte-preserving extraction from `skills/implement/SKILL.md` L522–528 (Block α, Step 8) and L828–858 (Block β, sub-procedure step 4). Do NOT synthesize or merge — the two blocks have distinct caller-family semantics (Step 8 permissive; sub-procedure step12-family strict). The #172 fail-closed invariant is authoritative: `STATUS != ok` forces `VERIFIED=false` at the script level.
+**Contract**: Authoritative source for post-`/bump-version` verification. The two callers have distinct failure semantics — Block α is Step 8's permissive pre-PR handling; Block β is the sub-procedure's strict step12-family handling (with step10-family degraded-graceful variant). Block γ covers the reasoning-file sentinel check (#160 defense-in-depth). The #172 fail-closed invariant is authoritative across all blocks: `STATUS != ok` forces `VERIFIED=false` at the script level. Do NOT synthesize or merge the α/β caller-family semantics.
 
-**When to load**: before executing Step 8 step 3 (Block α) or the sub-procedure step 4 post-verification block (Block β). Do NOT load when `HAS_BUMP=false` (the bump is skipped entirely), or when the sub-procedure's pre-check `STATUS != ok` (the numeric post-check is already bypassed upstream).
+**When to load**: before executing Step 8 step 3 post-verification (Block α + Block γ) or the sub-procedure step 4 post-verification (Block β + Block γ). Do NOT load when `HAS_BUMP=false` (bump skipped entirely) or when the sub-procedure's pre-check `STATUS != ok` (numeric post-check is already bypassed upstream).
 
 ---
 
-## Block α — Step 8 post-check STATUS handling (from SKILL.md L522–528)
+## Block α — Step 8 post-check STATUS handling
 
    **First**: if the pre-check STATUS was non-`ok` (baseline untrustworthy per the warning above), skip the numeric-comparison branches below — the `EXPECTED = COMMITS_BEFORE + 1` arithmetic is built on a coerced 0 baseline, so any mismatch with the true `COMMITS_AFTER` is meaningless. Log `**⚠ 8: version bump — pre-check was degraded; skipping post-check numeric verification. Step 12 will re-verify under strict semantics.**` to `Warnings` and continue to Step 8a.
 
@@ -20,7 +20,7 @@
 
 ---
 
-## Block β — Rebase + Re-bump Sub-procedure step 4 post-check STATUS handling (from SKILL.md L828–858)
+## Block β — Rebase + Re-bump Sub-procedure step 4 post-check STATUS handling
 
      Parse `VERIFIED`, `COMMITS_AFTER`, `EXPECTED`, and `STATUS`. **Evaluate `STATUS` FIRST** — before the `VERIFIED`/`COMMITS` comparison. A non-`ok` status means the count is 0-by-coercion (not a legitimate "0 commits ahead" result), and `VERIFIED` has already been forced to `false` by the script itself. Do not route such cases through the numeric-comparison branches below, which would emit a misleading "BUMP_TYPE=NONE or missing main ref" message when the true cause is a transient git error:
 
@@ -44,10 +44,23 @@
        - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Bailing to 12d.**` Bail to 12d.
        - **step10 family**: log warning and break to Step 11.
 
-     After the commit-delta check completes (regardless of VERIFIED outcome above), also run the reasoning-file sentinel check (per #160 — mirrors Step 8 step 3b). **Guard on non-empty path** — see Step 8 step 3b for the full rationale:
-     ```bash
-     if [[ -n "$BUMP_REASONING_FILE" ]]; then
-       ${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file "$BUMP_REASONING_FILE"
-     fi
-     ```
-     where `$BUMP_REASONING_FILE` is the `REASONING_FILE=<path>` value parsed from this sub-procedure's `/bump-version` invocation's stdout. When invoked, parse for `VERIFIED` and `REASON`. If `VERIFIED=false` or the guard skipped the helper (empty path), print `**⚠ 12: CI+merge loop — bump sentinel check failed (REASON=<token> or skipped for empty path). Continuing.**` (or the step10 equivalent) and log to `Warnings`. **Do NOT bail** — the commit-delta check is the hard gate; the sentinel is advisory. The commit-delta check can also report zero new commits when `classify-bump.sh` chose a no-op path (e.g., `BUMP_TYPE=NONE`) or when a base ref is missing; the sentinel is an orthogonal artifact-presence signal, not a branch of the commit-delta script.
+     After the commit-delta check completes (regardless of VERIFIED outcome above), also run the reasoning-file sentinel check (per #160 — mirrors Step 8 step 3b; see Block γ below for the full rationale and invocation).
+
+---
+
+## Block γ — Reasoning-file sentinel defense-in-depth (Step 8 step 3b + sub-procedure step 4)
+
+Runs **after** the commit-delta check in both Block α (Step 8) and Block β (sub-procedure step 4). Complementary to the commit-delta check: Block γ catches the case where `/bump-version` silently no-ops without writing its reasoning artifact, whereas the commit-delta check catches the case where no commit was created. Both checks run unconditionally; neither short-circuits the other.
+
+**Guard on non-empty path**: `verify-skill-called.sh --sentinel-file` rejects an empty path as an argument error (exit 1), so only invoke the helper when `$BUMP_REASONING_FILE` is non-empty. If `$BUMP_REASONING_FILE` is empty (the caller's step 2 failed to parse `REASONING_FILE=<path>` from `/bump-version`'s stdout), treat that as equivalent to a failed sentinel check: print a warning (`**⚠ /bump-version sentinel check skipped — BUMP_REASONING_FILE is empty. Continuing.**` for Step 8; the sub-procedure uses the caller-family-appropriate prefix), append to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`, and do not invoke the helper.
+
+    if [[ -n "$BUMP_REASONING_FILE" ]]; then
+      ${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file "$BUMP_REASONING_FILE"
+    fi
+
+`$BUMP_REASONING_FILE` is the `REASONING_FILE=<path>` value parsed from the caller's `/bump-version` invocation's stdout. When the helper is invoked, parse for `VERIFIED` and `REASON`.
+
+- **Step 8 (Block α caller)**: If `VERIFIED=false`, print `**⚠ /bump-version sentinel check failed (REASON=<token>). Continuing.**` and append the warning to `Warnings`. **Do NOT bail** — the commit-delta check (step 3) is the hard gate; the sentinel is advisory.
+- **Sub-procedure step 4 (Block β caller)**: If `VERIFIED=false` or the guard skipped the helper (empty path), print `**⚠ 12: CI+merge loop — bump sentinel check failed (REASON=<token> or skipped for empty path). Continuing.**` (step12 family) or the step10 equivalent, and log to `Warnings`. **Do NOT bail** — the commit-delta check is the hard gate; the sentinel is advisory. The commit-delta check can also report zero new commits when `classify-bump.sh` chose a no-op path (e.g., `BUMP_TYPE=NONE`) or when a base ref is missing; the sentinel is an orthogonal artifact-presence signal, not a branch of the commit-delta script.
+
+**Freshness limitation**: the sentinel check is only meaningful when `BUMP_REASONING_FILE` was freshly parsed from the current `/bump-version` invocation's stdout — a stale file from a prior run at the same path would satisfy the check. This is the intended scope (the goal is to catch "skill totally skipped", not "skill reused stale artifact").
