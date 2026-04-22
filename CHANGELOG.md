@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.7] - 2026-04-21
+
+### Added
+
+- `scripts/test-references-headers.sh` + sibling contract `scripts/test-references-headers.md` — cross-skill structural regression guard for the progressive-disclosure Consumer/Contract/When-to-load header triplet (closes #308). Scans every `skills/*/references/*.md` via flat glob and enforces the triplet as anchored line-start patterns (`^\*\*Consumer\*\*:`, `^\*\*Contract\*\*:`, `^\*\*When to load\*\*:`) via `grep -Eq`. Fails closed on empty glob. Path-qualified failure messages.
+
+### Changed
+
+- `scripts/test-implement-structure.sh` narrowed from 9 to 8 assertions: the Consumer/Contract/When-to-load triplet check (formerly assertion 8, scoped to `skills/implement/references/` only) is retired. Cross-skill ownership now lives in `scripts/test-references-headers.sh`. The `/implement`-specific topology invariants (top-level headings, MANDATORY binding, CI-parity focus-area enum, the no-`see Step N below|above` ban in `references/*.md`) remain. PASS echo updated to "all 8 structural invariants hold". Sibling contract `scripts/test-implement-structure.md` rewritten to reflect the new 8-assertion list and cite `test-references-headers.md` as the new triplet owner.
+- `scripts/test-research-structure.{sh,md}` Check 4 — the `/research`-local first-20-lines tightening — now uses anchored `grep -Eq` patterns (`^\*\*Consumer\*\*:` etc.) against `head -n 20`, so it actually layers on top of the anchored cross-skill presence check instead of relying on the looser `grep -Fq` substring match. Comment block updated to describe the rule as `/research`-local tightening on top of `scripts/test-references-headers.sh`.
+- Backfilled `**Contract**:` + `**When to load**:` headers on 9 reference files under `skills/design/references/` (7 files) and `skills/review/references/` (2 files) so every `skills/*/references/*.md` complies with the new cross-skill triplet contract. `plan-review.md` already had Contract so only When-to-load was added. Existing `**Binding convention**:`, `**Delivery pattern**:`, `**Effort-suffix convention**:`, and `**Substitution placeholders**:` headers preserved in place — no renames.
+- `skills/design/references/dialectic-execution.md`'s new `**When to load**:` paragraph now mirrors the caller contract at `skills/design/SKILL.md` Step 2a.5: on the zero-externals guardrail path, debate-execution mechanics MUST NOT fire but a one-time load to consult the `dialectic-resolutions.md` schema is acceptable when the orchestrator does not already have the schema in context.
+- `Makefile`: new `test-references-headers` target wired into `.PHONY` and the `test-harnesses` aggregate.
+- `agent-lint.toml`: new exclude entry for `scripts/test-references-headers.sh` with documenting comment block; existing `test-implement-structure.sh` comment retargeted to drop the triplet-ownership claim and cite the new harness.
+
 ## [5.2.6] - 2026-04-21
 
 ### Added
