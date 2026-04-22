@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.6] - 2026-04-21
+
+### Added
+
+- `scripts/test-review-structure.sh` + sibling contract `scripts/test-review-structure.md` — structural regression guard for `skills/review/SKILL.md` and `skills/review/references/` (closes #306). Eight assertions: SKILL.md + references dir exist; baseline refs (`domain-rules.md`, `voting.md`) exist; every `references/*.md` file on disk is named on a `MANDATORY — READ ENTIRE FILE` line in SKILL.md via a `references/<basename>` path-token form with non-filename/EOL boundary (prevents suffix/name-containing-name false-pass); baseline refs appear on a MANDATORY line (distinct diagnostic); CI-parity focus-area enum check (every `code-quality / risk-integration / correctness / architecture` line also contains `security` — mirrors agent-sync `UNQUOTED_FILES` loop); anti-halt banner and micro-reminder substrings pinned (intentional overlap with `test-anti-halt-banners.sh` for single-file fail locality); each reference opens with `**Consumer**:` and `**Binding convention**:` in the first 20 lines (the `/review` native 2-line header schema, deliberately NOT the `/implement` triplet). Wired into `Makefile` `test-harnesses` target and `agent-lint.toml` exclude list.
+
 ## [5.2.5] - 2026-04-21
 
 ### Changed
