@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.8] - 2026-04-21
+
+### Changed
+
+- `/implement` SKILL.md refactored via progressive disclosure and prose compression. `skills/implement/SKILL.md` shrinks from 944 to 683 lines (-261 lines, -29 KB) by (a) compressing Section-I (knowledge-delta) prose across Load-Bearing Invariants, NEVER List, Progress Reporting, Verbosity Control, Execution Issues Tracking, and the per-step narratives, and (b) extracting two workflows into the existing `skills/implement/references/pr-body-template.md`: the full Step 9a.1 OOS GitHub issue creation pipeline (repo-unavailable early-exit, 3-artifact read, all-empty early-exit, idempotency sentinel recovery, cross-phase dedup, `/issue` batch-mode invocation, stdout parsing, PR body "Accepted OOS" placeholder replacement, Run Statistics `| OOS issues filed |` cell rewrite, sentinel write) and the Step 11 post-execution PR body refresh (fetch live body, replace `<details><summary>Execution Issues</summary>` block content, update via `gh-pr-body-update.sh`). Adds Block γ (reasoning-file sentinel defense-in-depth, #160) to `skills/implement/references/bump-verification.md`, consolidating the step-3b procedure previously duplicated inline. Updates `**Contract**:` fields in all 4 reference files to drop stale `SKILL.md L<range>` citations in favor of range-free descriptions. Behavior-preserving: all flags, exit codes, stdout contracts, sentinel-file names, Step Name Registry rows, NEVER-list titles, Rebase Checkpoint Macro invocation shape + M1-M4 body + call-site registry, 3 byte-pinned ⏩ verbosity literals, and Step 5 quick-mode Cursor/Codex Bash blocks (carrying the focus-area enum + `security` on same line that CI's `agent-sync` greps for) remain byte-identical. `scripts/test-implement-structure.sh` (9 assertions) and `scripts/test-implement-rebase-macro.sh` (A-I assertions) pass unchanged.
+
 ## [5.2.7] - 2026-04-21
 
 ### Added
