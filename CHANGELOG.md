@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.1] - 2026-04-21
+
+### Changed
+
+- `/design` SKILL.md refactored via progressive disclosure. `skills/design/SKILL.md` shrinks from 655 to 431 lines (~34%) by: extracting the four external sketch-launch Bash blocks + spawn-order rule + per-slot fallback notes + Claude General sketch independence rule to new `skills/design/references/sketch-launch.md`; extracting the interactive-branch bodies of Steps 1c, 1d, 3.5, and 3a to new `skills/design/references/discussion-rounds.md` (loaded via MANDATORY only when `auto_mode=false`); absorbing the Step 3 Claude subagent archetype + Collecting External Reviewer Results + Voting Panel launch-order + Finalize Plan Review + Track Rejected Plan Review Findings sections into the existing `skills/design/references/plan-review.md`. Behavior-preserving: all harness-asserted literals preserved byte-identically (flag MANDATORY pointer above `## Step 0`, both Step 2a.5 Do-NOT-Load guards, Step Name Registry rows, Anti-patterns NEVER titles, `## Step 0 — Session Setup` heading, focus-area enum on SKILL.md). The two Step 3 external reviewer Bash blocks (Cursor + Codex) remain inline in SKILL.md because `.github/workflows/ci.yaml` greps them for the focus-area enum. `scripts/test-design-structure.sh` + `scripts/test-subskill-anchors.sh` pass unchanged.
+
 ## [5.2.0] - 2026-04-21
 
 ### Added
