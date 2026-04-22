@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.4] - 2026-04-21
+
+### Changed
+
+- `/review` SKILL.md refactored via progressive disclosure. `skills/review/SKILL.md` shrinks from 298 to 259 lines (-39 lines, -3.8 KB) by extracting two cohesive blocks into new references: `skills/review/references/voting.md` owns the Step 3c.1 round-1 voting panel mechanics (3-voter setup, ballot file rule, threshold + competition scoring, OOS-accepted artifact write, save-not-accepted IDs) and is loaded via MANDATORY READ inside the round-1 branch with a Do-NOT-load guard for rounds 2+ and the Step 3b zero-findings short-circuit; `skills/review/references/domain-rules.md` owns the Settings.json permissions ordering and skill/script genericity rules and is loaded via MANDATORY READ at Step 3 entry unconditionally (the rules must remain visible during the zero-findings short-circuit). Behavior-preserving: all harness-asserted literals stay inline in SKILL.md byte-identical (`**Anti-halt continuation reminder.**` banner, `Continue after child returns` micro-reminder, the focus-area enum `code-quality / risk-integration / correctness / architecture / security` on both Cursor and Codex prompt lines that `.github/workflows/ci.yaml` greps for). Existing harnesses (`make test-anti-halt`, `make test-orchestrator-scope-sync`, the CI `agent-sync` job) pass unchanged.
+
 ## [5.2.3] - 2026-04-21
 
 ### Changed
