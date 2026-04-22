@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.3] - 2026-04-21
+
+### Changed
+
+- `/compress-skill` now delegates to `/imaq` so compression changes ship as a PR instead of being written to the working tree in place. `skills/compress-skill/SKILL.md` is rewritten as a thin delegator (parse args → build feature description → delegate to `/imaq`), mirroring the `/simplify-skill` pattern; the actual file-by-file prose rewrite happens inside `/implement`'s Step 2. Adds `skills/compress-skill/scripts/build-feature-description.sh` as the coordinator (resolver with four probe paths, transitive `.md` discovery via `discover-md-set.sh`, baseline byte/line snapshot, self-contained feature description embedding the Strunk & White style guide, anti-patterns, per-file judgment rules, and PR-body `## Token budget` requirement) plus its sibling contract `build-feature-description.md`. Deletes `setup.sh`, `measure-set.sh`, and `report-deltas.sh` (subsumed / no longer needed now that the delta report is produced inside the PR body). Updates `README.md` and `docs/workflow-lifecycle.md` catalog entries.
+
 ## [5.2.2] - 2026-04-21
 
 ### Changed
