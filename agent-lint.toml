@@ -207,6 +207,24 @@ suppress = [
 # referenced only from Makefile (test-research-structure target) and
 # scripts/test-research-structure.md (sibling contract), matching the same
 # Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/test-review-structure.sh is the structural regression harness for
+# skills/review/SKILL.md and skills/review/references/ invariants (closes
+# #306). Companion to scripts/test-design-structure.sh,
+# scripts/test-implement-structure.sh, and scripts/test-research-structure.sh:
+# this harness owns the /review MANDATORY ↔ reference-file binding
+# (bidirectional orphan detection via filesystem enumeration; baseline pair
+# domain-rules.md and voting.md), the CI-parity focus-area enum check
+# mirroring the agent-sync UNQUOTED_FILES loop, the anti-halt banner and
+# micro-reminder substring pins (intentional overlap with
+# scripts/test-anti-halt-banners.sh for single-file fail locality, matching
+# the test-implement-structure.sh precedent), and the /review native
+# 2-line reference header schema (**Consumer**: and **Binding convention**:
+# in the first 20 lines — deliberately NOT the /implement
+# Consumer/Contract/When-to-load triplet). It is referenced only from
+# Makefile (test-review-structure target) and
+# scripts/test-review-structure.md (sibling contract), matching the same
+# Makefile-only pattern as the other test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -232,6 +250,7 @@ exclude = [
   "scripts/test-lib-loop-improve-halt-ledger.sh",
   "scripts/test-orchestrator-scope-sync.sh",
   "scripts/test-research-structure.sh",
+  "scripts/test-review-structure.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
