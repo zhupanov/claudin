@@ -116,7 +116,9 @@ Print: `> **🔶 2: validation**`
 
 **MANDATORY — READ ENTIRE FILE** before executing Step 2: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md`. It carries the 3-lane validation invariant banner, the Cursor and Codex validation-reviewer launch bash blocks with their long prompts and per-slot Claude Code Reviewer subagent fallbacks, the always-on Claude Code Reviewer subagent lane with the research-validation variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) and research-specific acceptance criteria, the process-Claude-findings-immediately rule, Step 2.4 `COLLECT_ARGS` + zero-externals branch + runtime-timeout replacement, the Codex/Cursor negotiation delegation to `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, and the Finalize Validation procedure. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` at Step 2** — that reference is Step 1's body and loading it now would pollute context with the wrong phase's prompts.
 
-Execute Step 2 per the reference file above. SKILL.md is the sole owner of Step 2 entry and completion breadcrumbs; the reference file emits none. On completion, if all reviewers report no issues, print: `✅ 2: validation — all findings validated, no corrections needed (<elapsed>)`
+Execute Step 2 per the reference file above. SKILL.md is the sole owner of Step 2 entry and completion breadcrumbs; the reference file emits none. On completion, print one of the two branches depending on the Finalize Validation outcome:
+- If all reviewers reported no issues: `✅ 2: validation — all findings validated, no corrections needed (<elapsed>)`
+- If any findings were accepted and the synthesis was revised: `✅ 2: validation — corrections applied, <N> findings accepted (<elapsed>)`
 
 ## Step 3 — Final Research Report
 
