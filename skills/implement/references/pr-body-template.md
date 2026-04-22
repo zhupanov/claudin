@@ -1,14 +1,14 @@
 # PR Body Template
 
-**Consumer**: `/implement` Step 9a — PR body composition. Also consumed by the Rebase + Re-bump Sub-procedure step 6 for the Version Bump Reasoning block refresh.
+**Consumer**: `/implement` Step 9a (PR body composition), Step 9a.1 (OOS GitHub issue creation pipeline), Step 11 (post-execution PR body refresh), and the Rebase + Re-bump Sub-procedure step 6 (Version Bump Reasoning block refresh).
 
-**Contract**: Byte-preserving extraction of the PR body markdown scaffold from `skills/implement/SKILL.md` L580–681 plus Voting Tally extraction guidance (L683–685) and Quick-mode PR body guidance (L687–699). Section headers and `<details><summary>` block structure must NOT drift — they are parsed by the Rebase + Re-bump Sub-procedure step 6's `<details><summary>Version Bump Reasoning</summary>` marker search and by Step 11's `<details><summary>Execution Issues</summary>` marker search. Blank lines immediately after opening `<summary>` tags and before closing `</details>` tags are load-bearing for GitHub Markdown rendering.
+**Contract**: Authoritative source for the PR body markdown scaffold, Voting Tally extraction guidance, Quick-mode PR body guidance, the Step 9a.1 OOS issue-creation pipeline, and the Step 11 post-execution PR body refresh. Section headers and `<details><summary>` block structure must NOT drift — they are parsed by the sub-procedure step 6's `<details><summary>Version Bump Reasoning</summary>` marker search and by Step 11's `<details><summary>Execution Issues</summary>` marker search. Blank lines immediately after opening `<summary>` tags and before closing `</details>` tags are load-bearing for GitHub Markdown rendering.
 
-**When to load**: before writing `$IMPLEMENT_TMPDIR/pr-body.md` in Step 9a, and before the Rebase + Re-bump Sub-procedure step 6 PR body refresh. Do NOT load in any other step.
+**When to load**: before writing `$IMPLEMENT_TMPDIR/pr-body.md` in Step 9a; at Step 9a.1 entry (OOS pipeline); at Step 11's post-execution PR body refresh; at sub-procedure step 6 (Version Bump Reasoning refresh). Do NOT load in any other step.
 
 ---
 
-## PR Body Template (from SKILL.md L580–681)
+## PR Body Template
 
 ```markdown
 ## Summary
@@ -115,7 +115,7 @@ Generated with [Claude Code](https://claude.com/claude-code)
 
 ---
 
-## Voting Tally extraction guidance (from SKILL.md L683–685)
+## Voting Tally extraction guidance
 
 Populate Run Statistics from conversation context: count accepted/rejected findings from /design Step 3 output, count review rounds and findings from /review output, count entries in `execution-issues.md` by category, and note external reviewer availability from /design and /review preflight checks. Note: Run Statistics aggregates (N accepted, N rejected) intentionally coexist with the detailed per-finding tally tables in the voting tally sections — they serve different purposes (quick summary vs. full audit trail).
 
@@ -123,7 +123,7 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
 
 ---
 
-## Quick-mode PR body guidance (from SKILL.md L687–699)
+## Quick-mode PR body guidance
 
 **Quick-mode PR body guidance** (`quick_mode=true`): When populating the PR body in quick mode, use these section-specific rules:
 - **Architecture Diagram**: Write "Quick mode — architecture diagram skipped."
@@ -138,3 +138,57 @@ Populate Run Statistics from conversation context: count accepted/rejected findi
   - **Accepted OOS (GitHub issues filed)**: Populate from Step 9a.1's main-agent-surfaced items in `oos-accepted-main-agent.md`. If Step 9a.1 filed no issues (no main-agent OOS findings), write "No OOS items were accepted for issue filing."
   - **Non-accepted OOS observations**: Write "Quick mode — no reviewer voting panel. Main-agent OOS items (if any) are auto-filed per policy; see Accepted OOS above."
 - **Run Statistics**: Set "Plan review findings" to "N/A (quick mode)", "External reviewers" to "N/A (quick mode)". For "OOS issues filed", do NOT hardcode `N/A (quick mode)` — Step 9a.1 runs in quick mode now and writes the actual count to this cell per its sub-step 7b. The cell will be `<N> created, <M> deduplicated`, `0`, or `N/A (repo unavailable)` depending on the Step 9a.1 outcome. Code review findings should reflect the quick review results.
+
+---
+
+## Step 9a.1 OOS GitHub Issue Creation Pipeline
+
+**Unconditional execution** regardless of mode (`--quick`, `--auto`, `--merge`, `--debug`, `--no-merge`, or any future flag). The only legitimate hard-skip is `repo_unavailable=true`.
+
+**Repo-unavailable early-exit**: If `repo_unavailable=true`, print `⏩ 9a.1: OOS issues — skipped (repo unavailable) (<elapsed>)`. Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`. Update `$IMPLEMENT_TMPDIR/pr-body.md`: replace the "Accepted OOS (GitHub issues filed)" placeholder with `Skipped — repo unavailable; OOS items remain in execution-issues.md only.` and set the `| OOS issues filed |` Run Statistics cell to `N/A (repo unavailable)`. Proceed to Step 9b.
+
+**Read OOS artifacts**:
+- `$IMPLEMENT_TMPDIR/oos-accepted-design.md` (from `/design` plan review)
+- `$IMPLEMENT_TMPDIR/oos-accepted-review.md` (from `/review` code review)
+- `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` (from main-agent dual-write per SKILL.md's Execution Issues Tracking section)
+
+**All-empty early-exit**: If none of the three artifacts exist or all are empty, print `⏩ 9a.1: OOS issues — no accepted OOS items (<elapsed>)`. Update `$IMPLEMENT_TMPDIR/pr-body.md`: replace the "Accepted OOS (GitHub issues filed)" placeholder with `No OOS items were accepted for issue filing.` and set the `| OOS issues filed |` Run Statistics cell to `0`. Proceed to Step 9b.
+
+**Idempotency**: If `$IMPLEMENT_TMPDIR/oos-issues-created.md` already exists (written by a previous Step 9a.1 in this session), skip issue creation entirely. Read the existing file to recover previously created issue URLs (`ISSUE_N_NUMBER` / `ISSUE_N_URL` / `ISSUE_N_TITLE` / `ISSUE_N_DUPLICATE*` lines) and the previous tally (`ISSUES_CREATED` / `ISSUES_FAILED` / `ISSUES_DEDUPLICATED`). Update `$IMPLEMENT_TMPDIR/pr-body.md` from recovered values exactly as the create-script branch (steps 7 and 7b below) would: replace the "Accepted OOS" placeholder with the recovered issue links and set the `| OOS issues filed |` Run Statistics cell from the recovered counts. Proceed to Step 9b. (This is Load-Bearing Invariant #2 — sentinel-based byte-exact idempotency guard.)
+
+**Create-script branch** (at least one artifact has content; no idempotency sentinel):
+
+1. Read and parse all accepted OOS items from all three files.
+2. **Cross-phase deduplication**: if the same pre-existing issue was surfaced and accepted in two or more of {design, review, implement} (matching by exact normalized title — case-insensitive, `[oos]`-prefix-stripped, whitespace-collapsed), keep one entry whose Description text notes the contributing phases (append e.g., " (also surfaced during design review)"). Do NOT modify schema fields — Reviewer and Phase remain single-valued; merged provenance lives in the Description prose. This cross-phase merge runs **before** calling `/issue` so the batch mode sees one canonical item per observation.
+3. Write the deduplicated items to `$IMPLEMENT_TMPDIR/oos-items.md` as input for `/issue` batch mode. Preserve the OOS markdown format — `/issue`'s parser reads it directly.
+4. Invoke `/issue` in batch mode via the Skill tool:
+   - `skill: "issue"`, `args: --input-file $IMPLEMENT_TMPDIR/oos-items.md --title-prefix "[OOS]" --label out-of-scope --repo $REPO`
+5. Parse `/issue`'s stdout for lines matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$`: `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and per-issue `ISSUE_N_NUMBER` / `ISSUE_N_URL` / `ISSUE_N_TITLE` / `ISSUE_N_DUPLICATE` / `ISSUE_N_DUPLICATE_OF_NUMBER` / `ISSUE_N_DUPLICATE_OF_URL` / `ISSUE_N_FAILED=true`. `/issue` writes only machine lines to stdout; warnings go to stderr.
+6. If `ISSUES_FAILED > 0`: log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Tool Failures`: `Step 9a.1 — /issue batch mode failed to create <N> of <total> OOS issues.`
+7. Update `$IMPLEMENT_TMPDIR/pr-body.md`: replace the "Accepted OOS (GitHub issues filed)" placeholder with the actual issue links. For deduplicated items, link to the existing issue: `"- #<EXISTING_NUMBER>: <title> (deduplicated — already tracked) (<reviewer attribution>)"`. Reviewer attribution (`Code` / `Cursor` / `Codex` / `Main agent`) comes from the contributing artifact's `Reviewer:` field.
+7b. **Rewrite Run Statistics `| OOS issues filed |` cell** to `<ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated` (e.g., `3 created, 1 deduplicated`). The early-exit branches above already update this cell themselves; step 7b handles only the create-script branch. This applies to both quick and normal mode — the Quick-mode PR body guidance no longer overrides this cell.
+8. Write the created issue metadata to `$IMPLEMENT_TMPDIR/oos-issues-created.md` as the idempotency sentinel. Include `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, and all `ISSUE_N_NUMBER` / `ISSUE_N_URL` / `ISSUE_N_TITLE` / `ISSUE_N_DUPLICATE*` lines from the script output.
+
+Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated (<elapsed>)`
+
+---
+
+## Step 11 Post-execution PR body refresh
+
+Runs unconditionally after all Step 11 branches converge — including when Slack was skipped (`slack_available=false`) or when `PR_STATUS=existing`. All Step 11 early-exit paths must reach this section before proceeding to Step 12.
+
+If `$IMPLEMENT_TMPDIR/execution-issues.md` exists and is non-empty, update the PR body to reflect the final execution issues (may include issues logged during Steps 10–11, after the initial PR body was written):
+
+1. Fetch the current live PR body (do NOT re-read `$IMPLEMENT_TMPDIR/pr-body.md` — the live body may differ from the local copy):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_TMPDIR/live-body.md"
+   ```
+   Read `$IMPLEMENT_TMPDIR/live-body.md` to get the current body text.
+2. Replace the entire inner content of the `<details><summary>Execution Issues</summary>...</details>` block with the full current contents of `$IMPLEMENT_TMPDIR/execution-issues.md`, preserving the blank lines after the opening tag and before the closing `</details>` (required for GitHub Markdown rendering). If the `<details><summary>Execution Issues</summary>` block is not found in the fetched body, print `**⚠ Execution Issues block not found in live PR body. Skipping refresh.**` and skip the update.
+3. Write the result to `$IMPLEMENT_TMPDIR/pr-body.md`.
+4. Update the PR:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
+   ```
+
+If `execution-issues.md` does not exist or is empty, skip this refresh.
