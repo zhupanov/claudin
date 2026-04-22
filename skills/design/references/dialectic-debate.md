@@ -2,6 +2,10 @@
 
 **Consumer**: `/design` Step 2a.5 — rendered per-decision into `$DESIGN_TMPDIR/debate-<n>-thesis-prompt.txt` and `$DESIGN_TMPDIR/debate-<n>-antithesis-prompt.txt` via the Write tool (NOT heredoc/cat) to avoid shell-quoting hazards.
 
+**Contract**: byte-preserved thesis/antithesis prompt templates plus the shared delivery pattern, substitution placeholder set, and literal `<debater_synthesis>` / `<debater_decision>` reference-block tag names consumed by Step 2a.5's per-decision renderer.
+
+**When to load**: only when the MANDATORY directive at Step 2a.5 of `references/dialectic-execution.md` fires (nested load from inside dialectic-execution.md's prompt-rendering step). Do NOT load when `contested-decisions.md` is `NO_CONTESTED_DECISIONS` or when the zero-externals guardrail fires (no debaters will be launched).
+
 **Delivery pattern**: externals read the rendered prompt file via a short bootstrap prompt — "Read the dialectic-debate task description from `$DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt` and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level." The trailing effort suffix is appended at the bash-launch level (NOT in the template body) because `${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh --with-effort` is documented as a no-op for Cursor (Cursor has no dedicated reasoning-effort flag — the convention is the prompt-level suffix). Codex receives the same suffix for symmetry.
 
 **Substitution placeholders**: render with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substituted before writing to file. The `<debater_synthesis>` and `<debater_decision>` tags stay literal — they delimit reference material for the external debater.

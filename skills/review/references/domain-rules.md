@@ -2,6 +2,10 @@
 
 **Consumer**: `/review` Step 3 entry (loaded unconditionally on every Step 3 entry; no branch-skip guard).
 
+**Contract**: owns the repo-specific review rules layered on top of the generic reviewer templates — settings-ordering rules, scripts/skills-shared genericity rules, and any other domain-specific invariants applied during collect, dedup, voting, and fix application across all of Step 3.
+
+**When to load**: at every Step 3 entry, before 3a collect/dedup runs, so the rules are visible throughout the step (including during the zero-findings short-circuit, where a missed ordering or genericity regression must still be caught). Do NOT load during Steps 0, 1, 2, 4, or 5.
+
 **Binding convention**: single normative source for repo-specific review rules that supplement the generic reviewer templates. The orchestrating agent applies them when evaluating findings and reviewing the diff across all of Step 3 (collect, dedup, voting, fix application). Loaded at Step 3 entry — not at Step 3c — so the rules are visible during 3a's collect/dedup work and during the zero-findings short-circuit (where a missed `.claude/settings.json` ordering or `scripts/`/`skills/shared/` genericity regression must still be caught).
 
 ---

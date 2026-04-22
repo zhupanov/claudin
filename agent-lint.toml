@@ -157,11 +157,27 @@ suppress = [
 # macro harness owns Rebase Checkpoint Macro placement/registry mechanics,
 # this harness owns top-level section headings (Load-Bearing Invariants /
 # NEVER List / Rebase Checkpoint Macro), the MANDATORY ↔ reference-file
-# binding, the CI-parity focus-area enum check, reference-file contract
-# headers (Consumer/Contract/When-to-load), and the no-`see Step N
-# below|above` invariant in references/*.md. It is referenced only from
-# Makefile (test-implement-structure target) and
+# binding, the CI-parity focus-area enum check, and the no-`see Step N
+# below|above` invariant in references/*.md. The cross-skill Consumer/
+# Contract/When-to-load header-triplet invariant moved out of this harness
+# as of #308 — see scripts/test-references-headers.sh below. It is
+# referenced only from Makefile (test-implement-structure target) and
 # scripts/test-implement-structure.md (sibling contract), matching the
+# same Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/test-references-headers.sh is the cross-skill structural
+# regression guard for the progressive-disclosure reference header triplet
+# (closes #308). Scans every skills/*/references/*.md (flat glob, no
+# nested references/** descent) and asserts each file contains the
+# **Consumer**:, **Contract**:, and **When to load**: headers matched as
+# anchored line-start patterns (to avoid false-passes on prose or fenced-
+# code examples). Owns the triplet invariant formerly held by
+# test-implement-structure.sh assertion (8). Companion to
+# test-implement-structure.sh (/implement-specific topology) and
+# test-research-structure.sh (stricter /research-local first-20-lines
+# tightening layered on top of this global presence check). Referenced
+# only from Makefile (test-references-headers target) and
+# scripts/test-references-headers.md (sibling contract), matching the
 # same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-loop-improve-skill-skill-md.sh is the structural regression
@@ -241,6 +257,7 @@ exclude = [
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
   "scripts/test-implement-structure.sh",
+  "scripts/test-references-headers.sh",
   "scripts/test-subskill-anchors.sh",
   "scripts/test-loop-improve-skill-driver.sh",
   "scripts/test-loop-improve-skill-skill-md.sh",

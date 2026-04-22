@@ -2,6 +2,10 @@
 
 **Consumer**: `/design` Steps 1c, 1d, 3.5, and the `auto_mode=false AND plan was revised` branch of Step 3a.
 
+**Contract**: owns the four discussion-round bodies (Step 1c clarifying questions, Step 1d round 1, Step 3.5 round 2, Step 3a post-review confirmation) with their decision-tree walks, question caps, output schemas (`$DESIGN_TMPDIR/discussion-round1.md`, `$DESIGN_TMPDIR/discussion-round2.md`), and the terse-answer rule. SKILL.md retains the `auto_mode` gate + skip breadcrumbs inline; this file owns body content only.
+
+**When to load**: once the calling step in SKILL.md has passed its `auto_mode=false` gate (and, for Step 3a, additionally confirmed `plan was revised`). Do NOT load when `auto_mode=true` at Steps 1c/1d/3.5/3a, or when Step 3a's `plan was NOT revised` short-circuit fires.
+
 **Binding convention**: single normative source for discussion-round behavior (decision-tree walk, question caps, output schemas, terse-answer rule) and the Step 3a interactive-approval body. Each consumer step in SKILL.md performs its own `auto_mode=false` gate (and for Step 3a additionally the `plan was revised` gate) before dispatching here; this file assumes the caller has already passed those gates. The `auto_mode=true` skip breadcrumb and (for Step 3a) the `plan was NOT revised` skip breadcrumb remain inline in SKILL.md so they are emitted without loading this file.
 
 ---
