@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.5] - 2026-04-21
+
+### Changed
+
+- `/research` SKILL.md refactored via progressive disclosure. `skills/research/SKILL.md` shrinks from 357 to 174 lines (-183 lines, -14.1 KB) by extracting Step 1 and Step 2 bodies into new references: `skills/research/references/research-phase.md` owns the 3-lane research invariant banner, `RESEARCH_PROMPT` literal, Cursor/Codex launch blocks with per-slot Claude subagent fallbacks, Claude inline-research independence rule, Step 1.3 `COLLECT_ARGS` / zero-externals branch / Runtime Timeout Fallback pointer, and Step 1.4 synthesis requirements. `skills/research/references/validation-phase.md` owns the 3-lane validation invariant banner, Cursor/Codex validation launches with long reviewer prompts, the Claude Code Reviewer subagent archetype with research-validation variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` XML wrap / `{OUTPUT_INSTRUCTION}`), process-Claude-findings-immediately rule, Step 2.4 collection / zero-externals / runtime-timeout replacement, negotiation delegation, and Finalize Validation procedure. Each reference is loaded via a single `MANDATORY — READ ENTIRE FILE` directive with reciprocal `Do NOT load` guard on the other phase's reference on the same line. Behavior-preserving: frontmatter, hooks, anti-halt banner (`**Anti-halt continuation reminder.**` + `Continue after child returns` substring), Step Name Registry, `RESEARCH_PROMPT` literal, and reviewer XML wrapper tags all preserved byte-identical and pinned by the new harness. Adds `scripts/test-research-structure.sh` (six assertions: reference files exist; each named on a `MANDATORY — READ ENTIRE FILE` line that also carries the reciprocal `Do NOT load` guard; each reference opens with the `**Consumer**:` / `**Contract**:` / `**When to load**:` header triplet in its first 20 lines; `RESEARCH_PROMPT` byte-pin; reviewer XML wrapper tags byte-pin) plus sibling contract `test-research-structure.md`. Wired into `Makefile` `test-harnesses` target and excluded from `agent-lint.toml` S030. Existing harnesses (`make test-anti-halt`, `make test-lint-skill-invocations`, `make test-deny-edit-write`, `make agent-lint`) pass unchanged.
+
 ## [5.2.4] - 2026-04-21
 
 ### Changed
