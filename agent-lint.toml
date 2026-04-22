@@ -194,6 +194,19 @@ suppress = [
 # Referenced only from Makefile (test-orchestrator-scope-sync target) and
 # scripts/test-orchestrator-scope-sync.md (sibling contract); matches the
 # Makefile-only pattern as the other harnesses above.
+#
+# scripts/test-research-structure.sh is the structural regression harness
+# for skills/research/SKILL.md and skills/research/references/ invariants
+# (2-reference progressive-disclosure topology introduced by the /research
+# refactor). Companion to scripts/test-design-structure.sh and
+# scripts/test-implement-structure.sh: this harness owns the /research
+# MANDATORY ↔ reference-file binding (research-phase.md, validation-phase.md),
+# the reciprocal "Do NOT load" guards on each MANDATORY line, the
+# Consumer/Contract/When-to-load reference header triplet, the
+# RESEARCH_PROMPT byte pin, and the validation XML wrapper tag pins. It is
+# referenced only from Makefile (test-research-structure target) and
+# scripts/test-research-structure.md (sibling contract), matching the same
+# Makefile-only pattern as the other test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -218,6 +231,7 @@ exclude = [
   "scripts/lib-loop-improve-halt-ledger.sh",
   "scripts/test-lib-loop-improve-halt-ledger.sh",
   "scripts/test-orchestrator-scope-sync.sh",
+  "scripts/test-research-structure.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
