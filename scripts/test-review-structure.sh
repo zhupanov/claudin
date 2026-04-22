@@ -52,10 +52,13 @@ done
 # ---------------------------------------------------------------------------
 # (3) Every skills/review/references/*.md file on disk is named on at least one
 #     'MANDATORY — READ ENTIRE FILE' line in SKILL.md (bidirectional orphan
-#     detection). Match 'references/<basename>' so a file named 'my-voting.md'
-#     mentioned on a MANDATORY line does NOT false-pass the check for voting.md
-#     (path-prefix is a natural boundary — /review cites refs under
-#     skills/review/references/<basename>).
+#     detection). Match 'references/<basename>' followed by a boundary
+#     character (end of line, whitespace, or a non-filename token like ` ` ) ,
+#     so neither a name-containing-name case (e.g. 'references/my-voting.md'
+#     covering 'voting.md') nor a suffix/extension case (e.g.
+#     'references/foo.md.bak' covering 'foo.md') can false-pass. The
+#     filename-char class is [A-Za-z0-9._-]; any character outside it counts
+#     as a boundary.
 # ---------------------------------------------------------------------------
 # Use `|| true` so grep's exit-1 on zero matches does not abort before fail().
 mandatory_lines=$(grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" || true)
@@ -68,20 +71,33 @@ shopt -u nullglob
 [[ "${#ref_files[@]}" -gt 0 ]] \
   || fail "(3) no .md files found under $REFS_DIR — cannot validate orphan-reference invariant"
 
+# Escape regex metacharacters in the basename (e.g., '.' in '*.md') so grep -E
+# treats them literally. The only metachar expected in reference filenames is
+# '.', but escape the full set defensively.
+escape_regex() {
+  printf '%s' "$1" | sed 's/[][\.*^$+?(){}|\\/-]/\\&/g'
+}
+
 for ref_path in "${ref_files[@]}"; do
-  basename=$(basename "$ref_path")
-  printf '%s\n' "$mandatory_lines" | grep -Fq "references/$basename" \
-    || fail "(3) no 'MANDATORY — READ ENTIRE FILE' line in SKILL.md references 'references/$basename' — orphan reference under skills/review/references/"
+  ref_basename=$(basename "$ref_path")
+  escaped=$(escape_regex "$ref_basename")
+  # Require 'references/<basename>' followed by end-of-line or a non-filename
+  # character (anything outside [A-Za-z0-9._-]) so 'references/foo.md.bak' does
+  # NOT satisfy the check for 'foo.md'.
+  printf '%s\n' "$mandatory_lines" | grep -Eq "references/${escaped}([^A-Za-z0-9._-]|$)" \
+    || fail "(3) no 'MANDATORY — READ ENTIRE FILE' line in SKILL.md references 'references/$ref_basename' — orphan reference under skills/review/references/"
 done
 
 # ---------------------------------------------------------------------------
 # (4) Each baseline expected reference appears on at least one MANDATORY line
 #     in SKILL.md. Logically implied by (3) once the filesystem matches the
 #     baseline, but kept as a distinct check for clearer diagnostics if the
-#     baseline pair specifically regresses.
+#     baseline pair specifically regresses. Uses the same path-token boundary
+#     match as (3).
 # ---------------------------------------------------------------------------
 for ref in "${expected_refs[@]}"; do
-  printf '%s\n' "$mandatory_lines" | grep -Fq "references/$ref" \
+  escaped=$(escape_regex "$ref")
+  printf '%s\n' "$mandatory_lines" | grep -Eq "references/${escaped}([^A-Za-z0-9._-]|$)" \
     || fail "(4) no 'MANDATORY — READ ENTIRE FILE' line in SKILL.md references 'references/$ref' — baseline step-to-reference binding broken"
 done
 
