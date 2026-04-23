@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] - 2026-04-23
+
+### Added
+
+- `/implement --issue <N>` flag + new Step 0.5 "Resolve Tracking Issue" with 4-branch decision tree (sentinel reuse with hydration / `--issue` explicit adoption / PR-body-recovery from `Closes #<N>` / deferred-to-Step-9a.1). Step 9a.1 creates the tracking issue on the deferred path. Phase 3 of umbrella #348 (tracks #351).
+- Anchor-section accumulation: each relevant step (1 / 5 / 7a / 8 / 9a.1 / 11) writes per-step fragments to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md` and upserts a single canonical anchor comment on the tracking issue (via `scripts/tracking-issue-write.sh upsert-anchor`) as the single source of truth for voting tallies, diagrams, version-bump reasoning, OOS list, execution issues, and run statistics.
+- Load-Bearing Invariant #4 (Tracking-Issue Sentinel Idempotency) — `$IMPLEMENT_TMPDIR/parent-issue.md` is the byte-exact session-scope guard against double-creation on retry.
+- `SECURITY.md` documents the anchor comment as a durable public store, compose-time sanitization obligations, public-publication boundary, `repo_unavailable=true` audit-loss, and cross-session recovery via `Closes #<N>`.
+
+### Changed
+
+- `skills/implement/references/pr-body-template.md`: rewritten to the slim Phase 3 projection — Summary + Architecture Diagram + Code Flow Diagram + Test plan + `Closes #<N>` + Claude Code footer only. Rich report content lives in the anchor comment per `anchor-comment-template.md`. Step 11's post-execution refresh now targets the anchor's `execution-issues` section (was the PR body's `<details><summary>Execution Issues</summary>` block).
+- `skills/implement/references/anchor-comment-template.md`: active-consumer status updated; the three load-bearing marker literals (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`) are now pinned here by `scripts/test-implement-structure.sh` assertion (9a). Step 9a.1 pipeline becomes canonical here.
+- `scripts/test-implement-structure.sh` + sibling `.md`: `expected_refs` extended to 5 entries (adds `anchor-comment-template.md`); MANDATORY-occurrence floor raised to 5; assertion (9a) pins the 3 marker literals in `anchor-comment-template.md` (migrated from `pr-body-template.md`); assertion (9b) pins a new ≥3 reference floor for `anchor-comment-template.md` in SKILL.md (Step 0.5 MANDATORY + Step 9a.1 + Step 11); assertion (9c) lowers `pr-body-template.md` floor to ≥1 (just the Step 9a MANDATORY pointer).
+- NEVER #5 renamed from "PR-body Accepted-OOS update" to "anchor-comment Accepted-OOS update"; "How to apply" clause retargeted to the anchor's `oos-issues` / `run-statistics` sections.
+- `scripts/tracking-issue-read.md` `ADOPTED=` contract gets Phase 3 producer semantics pinned: `true` on Branches 2 & 3 (explicit-flag or PR-body-recovery adoption), `false` on Branch 4's deferred creation (new issue created, not adopted).
+
 ## [6.1.12] - 2026-04-23
 
 ### Changed
