@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.8] - 2026-04-23
+
+### Changed
+
+- `skills/create-skill/SKILL.md` prose compressed via Strunk & White filler removal. Two sentence-level tweaks on line 10 drop "if you want to" and sentential "it is" from the `--merge` explicit-pass note. Net saving: 19 bytes (0.11% of file); 0 line-count delta. `scripts/parse-args.md` unchanged — every paragraph is already at or below the ~10% per-paragraph compression threshold, so meaning-preservation beats marginal compression. Zero structural changes: YAML frontmatter, fenced code blocks, headings, link targets, table structure, file paths, numeric values, flag names all byte-identical.
+
 ## [6.1.7] - 2026-04-23
 
 ### Changed
