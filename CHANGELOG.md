@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.4] - 2026-04-23
+
+### Changed
+
+- `/issue --go` now works in both single and batch modes (closes #315). `skills/issue/SKILL.md` Step 1 no longer aborts when `--input-file` and `--go` are combined; Step 6's CREATE branch posts `gh issue comment ... --body "GO"` inline after each successful create for both modes, binding the per-iteration issue number from `create-one.sh`'s `ISSUE_NUMBER=<N>` output. A new per-item stdout line `ISSUE_<i>_GO_POSTED=true|false` is emitted only on the CREATE path (never for DUPLICATE, FAILED, or DRY_RUN items). GO-post failures are non-fatal: the stderr excerpt is redacted through `scripts/redact-secrets.sh` before surfacing in a per-item warning, the item still counts as CREATED, and the batch continues. The single-mode duplicate+`--go` pre-flight is explicitly scoped to `MODE=single`. The old Step 9 (single-mode GO post) is removed; its logic is unified inside Step 6 so Step 8's human summary now accurately branches on `ISSUE_1_GO_POSTED`. `README.md` skill catalog row and `SECURITY.md` updated: a new "`/issue --go` approval semantics" subsection documents the batch-approval widening, operator guidance to restrict `--go` callers, and the fail-open-dedup amplifier (a transient dedup-helper failure combined with batch `--go` can produce a burst of newly-created AND auto-approved issues for `/fix-issue`).
+
 ## [6.0.3] - 2026-04-23
 
 ### Changed
