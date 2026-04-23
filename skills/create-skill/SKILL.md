@@ -135,7 +135,7 @@ MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full f
   C. No consecutive Bash-tool calls per step — combine multi-action steps into one coordinator .sh that invokes the individual scripts internally.
 ```
 
-Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug] [--slack]**` (omit each optional flag if its corresponding variable is `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and not forwarded.
+Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug] [--slack]**` (omit each optional flag if its corresponding variable is `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and is not forwarded.
 
 Invoke the Skill tool:
 - Try skill: `"im"` first (bare name). If no skill matches, try skill: `"larch:im"` (fully-qualified plugin name).
