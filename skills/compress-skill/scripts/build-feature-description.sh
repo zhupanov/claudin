@@ -150,8 +150,8 @@ TOTAL_LINES=0
 
 while IFS= read -r -d '' path; do
   [[ -z "$path" ]] && continue
-  bytes=$(wc -c < "$path" | tr -d ' ')
-  lines=$(wc -l < "$path" | tr -d ' ')
+  bytes=$(wc -c < "$path" | tr -d '[:space:]')
+  lines=$(wc -l < "$path" | tr -d '[:space:]')
   TOTAL_BYTES=$((TOTAL_BYTES + bytes))
   TOTAL_LINES=$((TOTAL_LINES + lines))
   # Relativize path under TARGET_DIR for readability in the feature description.
