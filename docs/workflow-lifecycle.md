@@ -100,7 +100,7 @@ flowchart TD
         COMMIT2 --> VERSION[Version bump]
         VERSION --> PR[Create PR]
         PR --> CI_MONITOR[Monitor CI + fix failures]
-        CI_MONITOR --> SLACK[Slack announcement]
+        CI_MONITOR --> SLACK["Slack announcement<br/>(only if --slack)"]
     end
 
     IMPL_PHASE --> MERGE_FLAG{--merge<br/>flag set?}
@@ -112,7 +112,7 @@ flowchart TD
         REBASE -->|Yes| DO_REBASE[Rebase + push]
         DO_REBASE --> CI_WAIT
         REBASE -->|No| MERGE[Merge PR]
-        MERGE --> EMOJI[Add :merged: emoji to Slack]
+        MERGE --> EMOJI["Add :merged: emoji to Slack<br/>(only if --slack)"]
         EMOJI --> CLEANUP[Local cleanup]
         CLEANUP --> VERIFY[Verify main]
     end
@@ -147,14 +147,15 @@ Flags modify behavior across the skill hierarchy:
 |---|---|---|
 | `--quick` | `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 1 Claude Code Reviewer subagent only (no external reviewers, no voting panel). |
 | `--auto` | `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
-| `--merge` | `/implement` | Runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification after PR creation. Without `--merge`, `/implement` creates the PR and stops (the initial CI wait, Slack announcement, rejected findings report, final report, and temp cleanup still run). |
+| `--merge` | `/implement` | Runs the CI+rebase+merge loop, local branch cleanup, and main verification after PR creation (and, when combined with `--slack`, adds a `:merged:` emoji to the Slack announcement). Without `--merge`, `/implement` creates the PR and stops (the initial CI wait, optional Slack announcement, rejected findings report, final report, and temp cleanup still run). |
+| `--slack` | `/implement` | Opt-in Slack posting. Step 11 posts a PR announcement; when combined with `--merge`, Step 13 adds a `:merged:` emoji after merge. Both also require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration, and no "Slack not configured" warning is printed at session setup. |
 | `--debug` | `/implement`, `/design`, `/review`, `/research`, `/loop-review` | Enables verbose output: descriptive Bash tool descriptions, full explanatory prose between tool calls, per-reviewer individual completion messages alongside the compact status table. Default (no `--debug`) uses minimal output with compact status tables and suppressed prose. `/implement` auto-propagates `--debug` to `/design` and `/review`. `/loop-review`'s `--debug` controls only its own verbosity (no downstream propagation — `/issue` has no `--debug` flag). |
 
 ## Conditional Steps
 
 Certain steps in the workflow depend on configuration prerequisites and are skipped when unavailable:
 
-- **Slack announcements** — Require Slack configuration. When unavailable, the announcement step is skipped with a warning but the workflow continues.
+- **Slack announcements** — Opt-in via `/implement --slack` AND require Slack configuration (`LARCH_SLACK_BOT_TOKEN` + `LARCH_SLACK_CHANNEL_ID`). Without `--slack`, the announcement and `:merged:` emoji steps are silently skipped. With `--slack` but missing env vars, the steps are skipped with a warning. The workflow continues in both cases.
 - **CI monitoring** — Requires repository identification. When unavailable, CI monitoring is skipped.
 - **Version bump** — Requires a `/bump-version` skill defined in the repo. When absent, the version bump step is skipped with a warning.
 - **External reviewers (Cursor, Codex)** — When unavailable, Claude Code Reviewer subagent fallbacks replace them so the per-skill lane/voter counts remain constant in most phases (3 for plan/code review, `/research`, and `/loop-review`; 5 for the `/design` sketch phase; 3 for voting panels; 3 for the `/design` dialectic judge panel). The review still lands because the unified Code Reviewer archetype is what each fallback reviewer runs; losing the external tool means losing harness diversity but not coverage.

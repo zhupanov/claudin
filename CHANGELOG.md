@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - 2026-04-23
+
+### Changed
+
+- **BREAKING:** `/implement` Slack posting is now opt-in. Added `--slack` flag to `skills/implement/SKILL.md`; default is `slack_enabled=false`. Step 11 (PR announcement) and Step 13 (`:merged:` emoji) now skip Slack API calls unless `--slack` is passed, even when `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` are present. When `--slack` is passed but env vars are missing, the session-setup warning still prints; when `--slack` is omitted, no warning is printed. Consumers who previously relied on auto-posting based on env-var presence alone must now add `--slack` to their invocations. README.md and `docs/workflow-lifecycle.md` updated to document the new flag and opt-in semantics; the workflow-lifecycle mermaid diagram annotates Slack/`:merged:` nodes as conditional on `--slack`.
+
 ## [5.2.9] - 2026-04-23
 
 ### Changed

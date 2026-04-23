@@ -6,7 +6,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
 
 Larch is distributed as a [Claude Code plugin](https://code.claude.com/docs/en/plugin-marketplaces). Installation is a two-step process: register the marketplace that hosts larch, then install the plugin from that marketplace.
 
-Slack integration is optional. See [Environment Variables](#environment-variables) below — skills degrade gracefully when Slack is not configured.
+Slack integration is optional and opt-in. `/implement` posts to Slack only when invoked with `--slack` (and the required environment variables are set). See [Environment Variables](#environment-variables) below — skills degrade gracefully when Slack is not configured or not requested.
 
 ### Install from GitHub
 
@@ -176,7 +176,7 @@ These tools enhance the workflow but are not required. When unavailable, Claude 
 
 - **Codex** — [OpenAI Codex CLI](https://github.com/openai/codex). Participates as an external reviewer and voter alongside Claude subagents. When unavailable, a Claude subagent replacement maintains the reviewer count.
 - **Cursor** — [Cursor AI editor](https://cursor.com/). Participates as an external reviewer and voter. When unavailable, a Claude subagent replacement maintains the reviewer count.
-- **Slack** — PR announcements and `:merged:` emoji reactions. Requires environment variables or plugin `userConfig` (see [Environment Variables](#environment-variables)). When not configured, all Slack operations are skipped with a warning; all other workflow steps proceed normally.
+- **Slack** — PR announcements and `:merged:` emoji reactions. Opt-in via `/implement --slack` (or `/fix-issue`'s own Slack steps). Also requires environment variables or plugin `userConfig` (see [Environment Variables](#environment-variables)). When `--slack` is not passed, all Slack operations are skipped silently. When `--slack` is passed but Slack is not configured, they are skipped with a warning. All other workflow steps proceed normally in either case.
 
 ### Contributor development
 
@@ -189,7 +189,7 @@ These tools enhance the workflow but are not required. When unavailable, Claude 
 - **Dialectic adjudication** — Contested design decisions from the sketch phase are resolved by a 3-judge binary panel (Claude Code Reviewer subagent + Codex + Cursor) after a thesis/antithesis debate run on external Cursor/Codex. Ballots are attribution-stripped with deterministic position rotation to cancel judge bias.
 - **Voting-based review resolution** — A 3-agent voting panel (YES/NO/EXONERATE) adjudicates review findings for both plan review and code review
 - **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
-- **End-to-end automation** — From feature design through PR creation, initial CI wait, and Slack announcement in a single command. With `--merge`, also runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification. With `--draft` (mutually exclusive with `--merge`), creates a draft PR and keeps the feature branch checked out so the user can keep iterating
+- **End-to-end automation** — From feature design through PR creation and initial CI wait in a single command. With `--slack`, also posts a PR announcement to Slack (and, when combined with `--merge`, adds a `:merged:` emoji after merge). With `--merge`, also runs the CI+rebase+merge loop, local branch cleanup, and main verification. With `--draft` (mutually exclusive with `--merge`), creates a draft PR and keeps the feature branch checked out so the user can keep iterating
 - **External reviewer integration** — Codex and Cursor participate alongside Claude subagents as both reviewers and voters
 - **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`). Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
 
@@ -202,7 +202,7 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 | [`/design`](skills/design/SKILL.md) | `[--auto] [--debug] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/design/diagram.svg) |
 | [`/research`](skills/research/SKILL.md) | `[--debug] <research question or topic>` | Collaborative read-only research using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable. Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo: scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook), and `/issue` may be invoked via the Skill tool to file research-result issues. [(Diagram).](skills/research/diagram.svg) |
 | [`/review`](skills/review/SKILL.md) | `[--debug]` | Code review current branch changes with a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
-| [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge \| --draft] [--debug] <feature description>` | Full end-to-end feature workflow — design, implement, PR, and Slack announce. `--quick` skips `/design` and uses simplified code review (1 Claude Code Reviewer subagent, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait, Slack announcement, and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
+| [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge \| --draft] [--slack] [--debug] <feature description>` | Full end-to-end feature workflow — design, implement, PR (Slack announce is opt-in via `--slack`). `--quick` skips `/design` and uses simplified code review (1 Claude Code Reviewer subagent, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. `--slack` posts a PR announcement to Slack after PR creation, and (when combined with `--merge`) adds a `:merged:` emoji after merge; both require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
 | [`/loop-review`](skills/loop-review/SKILL.md) | `[--debug] [partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, if available), and filing every actionable finding as a deduplicated GitHub issue via `/issue --input-file --label loop-review`. Uses the Negotiation Protocol to merge per-slice reviewer findings. Security-tagged findings are held locally per SECURITY.md. Batches accumulate up to 3 slices per `/issue` flush so its 2-phase LLM dedup runs once per batch. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). The `loop-review` label should be pre-created in the target repository — `/issue` silently drops unknown labels with a stderr warning. [(Diagram).](skills/loop-review/diagram.svg) |
 | [`/fix-issue`](skills/fix-issue/SKILL.md) | `[--debug] [<number-or-url>]` | Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any blocked by an open dependency (GitHub's native blocked-by API plus conservative prose-keyword scanning of the body and comments — `Depends on #N`, `Blocked by #N`, etc., with fail-open posture), triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement`. With a number or URL argument, targets a specific issue instead of auto-picking. Single-iteration design — the caller handles repetition. |
 | [`/issue`](skills/issue/SKILL.md) | `[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [<issue description>]` | Create one or more GitHub issues with LLM-based semantic duplicate detection. Two modes: single (free-form description) and batch (`--input-file`). 2-phase dedup against open + recently-closed issues (default 90-day window). `/implement` Step 9a.1 calls this skill in batch mode to file OOS issues. `--go` (single mode only) posts a final `GO` comment so the new issue becomes eligible for `/fix-issue` automation; errors on semantic duplicate. |
@@ -321,7 +321,7 @@ PER_LOCATION_BREAKDOWN: none=<n> 3j=<n> 3jv=<n> 3d-pre-detect=<n> 3d-post-detect
 
 Larch uses environment variables for Slack integration and external reviewer model configuration. All are optional — when not set, Slack-related features are skipped with warnings, and external reviewers use their default models.
 
-> **Important:** Both `LARCH_SLACK_BOT_TOKEN` **and** `LARCH_SLACK_CHANNEL_ID` must be set in your shell environment for Slack features to function. If either is missing, **all** Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
+> **Important:** Slack posting in `/implement` is opt-in: pass `--slack` to request it. When `--slack` is set, both `LARCH_SLACK_BOT_TOKEN` **and** `LARCH_SLACK_CHANNEL_ID` must also be present in your shell environment — if either is missing, **all** Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent. When `--slack` is not set, no Slack calls are made regardless of environment configuration. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
 
 **Alternative: Plugin `userConfig`** — If you installed larch as a plugin, you can also configure Slack tokens via the plugin's `userConfig` (prompted at plugin enable time). The `userConfig` values are exported as `CLAUDE_PLUGIN_OPTION_*` environment variables to subprocesses. Larch checks both: environment variables take precedence if both are set.
 
@@ -329,13 +329,13 @@ Larch uses environment variables for Slack integration and external reviewer mod
 
 A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack API calls.
 
-**When set:**
+**When set (and `/implement` is invoked with `--slack`):**
 - `/implement` posts PR announcements to Slack after creating a PR
 - `/implement` adds a `:merged:` emoji reaction to the Slack announcement after the PR is merged
 - The token's presence is checked during session setup and its availability is propagated to child skills
 
-**When not set:**
-- All Slack operations are skipped with a warning at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_BOT_TOKEN not set). Slack announcement (Step 11) will be skipped.`)
+**When not set (or `/implement` is invoked without `--slack`):**
+- All Slack operations in `/implement` are skipped. When `--slack` is set but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_BOT_TOKEN not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.`). When `--slack` is not set, no warning is printed — Slack is not in use.
 - The `:merged:` emoji step in `/implement` is skipped
 - All other workflow steps (design, implementation, code review, CI monitoring, merge) proceed normally
 
@@ -343,12 +343,12 @@ A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack AP
 
 The Slack channel ID (e.g., `C0123456789`) where PR announcements and emoji reactions are posted.
 
-**When set:**
+**When set (and `/implement` is invoked with `--slack`):**
 - PR announcements are posted to this channel
 - The `:merged:` emoji reaction targets announcements in this channel
 
-**When not set:**
-- All Slack operations are skipped with a warning at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_CHANNEL_ID not set).`)
+**When not set (or `/implement` is invoked without `--slack`):**
+- All Slack operations in `/implement` are skipped. When `--slack` is set but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_CHANNEL_ID not set).`). When `--slack` is not set, no warning is printed.
 - The `:merged:` emoji step in `/implement` is also skipped
 - All other workflow steps proceed normally
 

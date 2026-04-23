@@ -1,13 +1,13 @@
 ---
 name: implement
-description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green squash-merge, Slack. Triggers: 'ship X', 'land PR', 'merge this'. See /research (read-only), /design (plan), /im (merge), /imaq (auto-merge)."
-argument-hint: "[--quick] [--auto] [--merge | --draft] [--debug] [--session-env <path>] <feature description>"
+description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green squash-merge, optional Slack. Triggers: 'ship X', 'land PR', 'merge this'. See /research (read-only), /design (plan), /im (merge), /imaq (auto-merge)."
+argument-hint: "[--quick] [--auto] [--merge | --draft] [--slack] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
 # Implement Skill
 
-End-to-end: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, Slack announce, cleanup. With `--merge`: also CI+rebase+merge loop, :merged: emoji, local branch delete, main verification.
+End-to-end: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, cleanup. With `--slack`: also post a Slack announcement after PR creation (and, when combined with `--merge`, add a `:merged:` emoji after merge). With `--merge`: also CI+rebase+merge loop, local branch delete, main verification.
 
 **Anti-halt continuation reminder.** After every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. Strictly subordinate to explicit non-sequential control-flow directives in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation here is covered. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
@@ -43,8 +43,9 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 - `--quick`: `quick_mode=true`. Step 1 skips `/design` (inline plan instead); Step 5 skips `/review` (single-reviewer loop, up to 7 rounds, Cursor → Codex → Claude fallback, no voting panel); Step 7a skips the Code Flow Diagram. All other steps run normally. Independent of `--merge`.
 - `--auto`: `auto_mode=true`. (a) forward `--auto` to `/design` in Step 1, suppressing its interactive checkpoints; (b) suppress this skill's Step 2 opportunistic questions; (c) in Step 12 merge-conflict resolution, suppress `AskUserQuestion` and use best-effort (bail if confidence too low). When `--quick` also set and `/design` skipped, `--auto` still suppresses Step 2 questions.
-- `--merge`: `merge=true`. Steps 12–15 run (CI+rebase+merge loop, :merged: emoji, local cleanup, main verification). Otherwise those steps are skipped — PR is created and workflow stops after initial CI wait, Slack, rejected findings, final report, temp cleanup. **Mutually exclusive with `--draft`.**
+- `--merge`: `merge=true`. Steps 12–15 run (CI+rebase+merge loop, local cleanup, main verification, plus Step 13's `:merged:` emoji when `--slack` is also set and Slack is configured). Otherwise those steps are skipped — PR is created and workflow stops after initial CI wait, optional Slack announcement, rejected findings, final report, temp cleanup. **Mutually exclusive with `--draft`.**
 - `--draft`: `draft=true`. Step 9b creates the PR in draft state (`create-pr.sh --draft`); Step 14 is skipped so the local branch stays. `draft=true` implies `merge=false`. **Mutually exclusive with `--merge`.** If both are present, print `**⚠ --draft and --merge are mutually exclusive. Aborting.**` and exit without Step 0.
+- `--slack`: `slack_enabled=true`. Default: `slack_enabled=false`. When `slack_enabled=true`, Step 11 posts a Slack PR announcement and Step 13 adds a `:merged:` emoji reaction after merge (both still require `slack_available=true` — i.e. `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` set). When `slack_enabled=false`, Steps 11 and 13 skip their Slack API calls regardless of environment configuration (Step 11's post-execution PR body refresh still runs). Independent of all other flags.
 - `--no-merge`: **Deprecated** no-op. On encounter, print `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
 - `--debug`: `debug_mode=true`. Controls output verbosity (see Verbosity Control). Forwarded to `/design` (Step 1) and `/review` (Step 5).
 - `--session-env <path>`: sets `SESSION_ENV_PATH`. Forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. Empty = standalone invocation (full discovery).
@@ -142,7 +143,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$IMPLEMENT_TMPDIR/s
 ```
 
 Then:
-- If `SLACK_OK=false`: print `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.**` Set `slack_available=false`.
+- Set `slack_available` from `SLACK_OK` (`true` → `true`; `false` → `false`). Warn only when the user has opted in: if `slack_enabled=true` AND `SLACK_OK=false`, print `**⚠ Slack is not fully configured (<SLACK_MISSING> not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.**` When `slack_enabled=false`, suppress the warning — Slack is not in use regardless of environment state.
 - If `REPO_UNAVAILABLE=true`: print `**⚠ Could not determine repository name. CI monitoring (Steps 10, 12) and merge (Step 12b) will be skipped.**` Set `repo_unavailable=true`.
 - Set `codex_available=true` only when both `CODEX_AVAILABLE=true` and `CODEX_HEALTHY=true` (per the Binary Check and Health Probe mapping in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`); same for `cursor_available`. Both flip to `false` at runtime via Runtime Timeout Fallback.
 - If `CODEX_AVAILABLE=false`: print `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**` Else if `CODEX_HEALTHY=false`: print `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**` Same for Cursor (only check `*_HEALTHY` when `*_AVAILABLE=true`).
@@ -510,9 +511,9 @@ Print the PR URL. Save `PR_NUMBER`, `PR_URL`, `PR_TITLE` for Steps 10–15.
 
 If `repo_unavailable=true`: print `⏭️ 10: CI monitor — skipped (repo unavailable) (<elapsed>)` and proceed to Step 11.
 
-Wait for CI to go green so Step 11's Slack announcement links to a passing PR. This step does **NOT merge** — Step 12 handles advancement and merging.
+Wait for CI to go green so the post-PR reporting phase (and Step 11's Slack announcement, when `--slack` is set) sees a passing PR. This step does **NOT merge** — Step 12 handles advancement and merging.
 
-**Best-effort re-bump during CI wait**: Step 10's rebase handler invokes the Rebase + Re-bump Sub-procedure (same as Step 12) with step10-family semantics — hard failures degrade gracefully (warn + break to Step 11) rather than bailing. This keeps the PR's version fresh during the Slack-wait phase while ensuring Step 10 never blocks the pipeline — Step 12 remains the last-chance enforcement point (Load-Bearing Invariant #1).
+**Best-effort re-bump during CI wait**: Step 10's rebase handler invokes the Rebase + Re-bump Sub-procedure (same as Step 12) with step10-family semantics — hard failures degrade gracefully (warn + break to Step 11) rather than bailing. This keeps the PR's version fresh during the CI-wait phase while ensuring Step 10 never blocks the pipeline — Step 12 remains the last-chance enforcement point (Load-Bearing Invariant #1).
 
 Counters (all start at 0): `iteration` (passed to `ci-wait.sh`, returned as `ITERATION`); `rebase_count`; `fix_attempts`; `transient_retries` (consecutive; reset after rebase, code fix, or different failure).
 
@@ -538,9 +539,9 @@ Log CI failures, transient retries, bail events to `CI Issues`. After any non-te
 
 ## Step 11 — Post Slack Announcement
 
-If `slack_available=false`: print `⏭️ 11: slack announce — skipped (Slack not configured) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution PR body refresh. If `PR_STATUS=existing`: print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution refresh.
+If `slack_enabled=false`: print `⏭️ 11: slack announce — skipped (--slack not set) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution PR body refresh. If `slack_available=false`: print `⏭️ 11: slack announce — skipped (Slack not configured) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution PR body refresh. If `PR_STATUS=existing`: print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution refresh.
 
-Otherwise (`slack_available=true` and `PR_STATUS=created`):
+Otherwise (`slack_enabled=true` and `slack_available=true` and `PR_STATUS=created`):
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/post-pr-announce.sh --pr <PR-NUMBER>
@@ -626,7 +627,7 @@ Bail if any: 3 fix iterations attempted without progress; failure fundamentally 
 
 ## Step 13 — Add :merged: Emoji to Slack Post
 
-If `merge=false`: skip. If `slack_available=false`: print `⏭️ 13: merged emoji — skipped (Slack not configured) (<elapsed>)` and proceed to Step 14. Only if PR was merged (Step 12b or force-merged externally — not bailed in 12d). Only if `SLACK_TS` from Step 11 is non-empty.
+If `merge=false`: skip. If `slack_enabled=false`: print `⏭️ 13: merged emoji — skipped (--slack not set) (<elapsed>)` and proceed to Step 14. If `slack_available=false`: print `⏭️ 13: merged emoji — skipped (Slack not configured) (<elapsed>)` and proceed to Step 14. Only if PR was merged (Step 12b or force-merged externally — not bailed in 12d). Only if `SLACK_TS` from Step 11 is non-empty.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/post-merged-emoji.sh --slack-ts "$SLACK_TS"
