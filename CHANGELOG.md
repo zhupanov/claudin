@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.5] - 2026-04-23
+
+### Changed
+
+- Cursor default model flipped from `composer-2-fast` to `composer-2` in `scripts/reviewer-model-args.sh`, and every substantive Cursor invocation now wraps its prompt through new `scripts/cursor-wrap-prompt.sh`, which owns the single source of truth for the ` /max-mode on. Prompt: ` prefix that engages Cursor's max-mode. 12 wrapped launch strings in 11 files were updated: `skills/{research/references/{research-phase,validation-phase}.md, design/SKILL.md, design/references/{sketch-launch (x2), dialectic-execution}.md, shared/{voting-protocol,dialectic-protocol}.md, review/SKILL.md, implement/SKILL.md, loop-review/SKILL.md}` and `scripts/run-negotiation-round.sh`. `scripts/check-reviewers.sh` health probes are deliberately NOT wrapped (max-mode is unnecessary latency/cost for a `Respond with OK` reachability check; rationale comments added at both probe sites). `scripts/run-external-reviewer.sh` header example now references the wrapper. `README.md` External Reviewer Model Configuration and `.claude-plugin/plugin.json` `cursor_model` description document the new default; users can opt back into the previous behavior by setting `LARCH_CURSOR_MODEL=composer-2-fast`. Preflight confirmed the prefix engages max-mode (model self-reports `MAX_MODE=on` only when the wrapper is applied).
+
 ## [6.0.4] - 2026-04-23
 
 ### Changed
