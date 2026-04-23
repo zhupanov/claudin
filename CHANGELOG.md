@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.10] - 2026-04-23
+
+### Changed
+
+- `.github/workflows/ci.yaml:36` comment no longer asserts a hardcoded harness count: the literal string `the 22 test-*` was replaced with `the test-*` so the phrase reads "the `test-*` bash scripts in Makefile". The count was already stale (the target lists 25+) and would keep drifting every time a harness is added; CI still runs `make test-harnesses`, the authoritative list. Cosmetic, no behavioral effect. Closes #319.
+
 ## [6.0.9] - 2026-04-23
 
 ### Changed
