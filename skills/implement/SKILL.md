@@ -47,7 +47,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 - `--auto`: `auto_mode=true`. (a) forward `--auto` to `/design` in Step 1, suppressing its interactive checkpoints; (b) suppress this skill's Step 2 opportunistic questions; (c) in Step 12 merge-conflict resolution, suppress `AskUserQuestion` and use best-effort (bail if confidence too low). When `--quick` also set and `/design` skipped, `--auto` still suppresses Step 2 questions.
 - `--merge`: `merge=true`. Steps 12–15 run (CI+rebase+merge loop, local cleanup, main verification, plus Step 13's `:merged:` emoji when `--slack` is also set and Slack is configured). Otherwise those steps are skipped — PR is created and workflow stops after initial CI wait, optional Slack announcement, rejected findings, final report, temp cleanup. **Mutually exclusive with `--draft`.**
 - `--draft`: `draft=true`. Step 9b creates the PR in draft state (`create-pr.sh --draft`); Step 14 is skipped so the local branch stays. `draft=true` implies `merge=false`. **Mutually exclusive with `--merge`.** If both are present, print `**⚠ --draft and --merge are mutually exclusive. Aborting.**` and exit without Step 0.
-- `--slack`: `slack_enabled=true`. Default: `slack_enabled=false`. When `slack_enabled=true`, Step 11 posts a Slack PR announcement and Step 13 adds a `:merged:` emoji reaction after merge (both still require `slack_available=true` — i.e. `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` set). When `slack_enabled=false`, Steps 11 and 13 skip their Slack API calls regardless of environment configuration (Step 11's post-execution PR body refresh still runs). Independent of all other flags.
+- `--slack`: `slack_enabled=true`. Default: `slack_enabled=false`. When `slack_enabled=true`, Step 11 posts a Slack PR announcement and Step 13 adds a `:merged:` emoji reaction after merge (both still require `slack_available=true` — i.e. `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` set). When `slack_enabled=false`, Steps 11 and 13 skip their Slack API calls regardless of environment configuration (Step 11's post-execution anchor `execution-issues` refresh still runs). Independent of all other flags.
 - `--no-merge`: **Deprecated** no-op. On encounter, print `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
 - `--debug`: `debug_mode=true`. Controls output verbosity (see Verbosity Control). Forwarded to `/design` (Step 1) and `/review` (Step 5).
 - `--session-env <path>`: sets `SESSION_ENV_PATH`. Forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. Empty = standalone invocation (full discovery).
@@ -165,13 +165,13 @@ After each child skill returns (`/design` Step 1, `/review` Step 5), check `$IMP
 Durable, actionable follow-up identified during design / implementation / review MUST be tracked as a GitHub issue (the anchor comment on the tracking issue is the durable store for execution content; the PR body carries only the `Closes #<N>` pointer — see Step 9a). Two filing paths:
 
 1. **Auto-filed via Step 9a.1** — items fitting the OOS pipeline (accepted OOS from `/design` or `/review` voting, or main-agent items via the dual-write below). Step 9a.1 creates issues via `/issue` batch mode.
-2. **Manually filed via `/issue`** — durable follow-up not fitting OOS schema (e.g., a process-level gap surfaced by a warning). After `/issue` returns the number, reference it in the most relevant PR body block: `Implementation Deviations` (supports inline `#<N>`) or the originating `execution-issues.md` entry (rendered verbatim in the PR body's `Execution Issues` block — append `→ filed as #<N>` to the entry's description line in place).
+2. **Manually filed via `/issue`** — durable follow-up not fitting OOS schema (e.g., a process-level gap surfaced by a warning). After `/issue` returns the number, reference it in the originating `execution-issues.md` entry: append `→ filed as #<N>` to the entry's description line in place. The entry is rendered verbatim into the anchor comment's `execution-issues` section by Step 11's post-execution refresh.
 
 **Actionability drives filing**, not category. `Pre-existing Code Issues` are always durable (mechanical dual-write below). `Tool Failures` / `CI Issues` / `Warnings` — file when the failure exposes a recurring / systemic defect; log-only for one-off transients. `External Reviewer Issues` / `Permission Prompts` — typically log-only (operational telemetry); file only when the pattern is persistent across sessions.
 
-**Carve-outs**: Non-accepted OOS (voting rejected) remain PR-narrative in `Out-of-Scope Observations`. Rejected review findings remain PR-narrative in `Rejected Plan Review Suggestions` / `Rejected Code Review Suggestions`. `repo_unavailable=true` blocks BOTH paths: Step 9a.1 keeps the entry in `oos-accepted-main-agent.md` and reports `Skipped — repo unavailable` in `Accepted OOS`; manual `/issue` keeps the item in `execution-issues.md` or `Implementation Deviations` — do NOT call `/issue` manually when `repo_unavailable=true`. **Security findings are NEVER filed via this principle** — route through SECURITY.md's private disclosure flow.
+**Carve-outs**: Non-accepted OOS (voting rejected) land in the anchor comment's `oos-issues` section under the "Rejected / Out-of-Scope Observations (not filed)" sub-block. Rejected review findings land in `$IMPLEMENT_TMPDIR/rejected-findings.md` and are printed to the terminal transcript at Steps 4 (plan review rejected) and 16 (code review rejected); they are not written to a persistent remote surface on the slim PR body but may be referenced from the anchor's `plan-review-tally` / `code-review-tally` sections' vote-breakdown prose. `repo_unavailable=true` blocks BOTH paths: Step 9a.1 keeps the entry in `oos-accepted-main-agent.md` and reports `Skipped — repo unavailable` in the anchor's `oos-issues` section; manual `/issue` keeps the item in `execution-issues.md` — do NOT call `/issue` manually when `repo_unavailable=true`. **Security findings are NEVER filed via this principle** — route through SECURITY.md's private disclosure flow.
 
-**Sanitize before filing from execution context.** Any issue body composed from execution-session-derived content (execution-issues.md, oos-accepted-main-agent.md, Implementation Deviations, reviewer prose, any session-derived source) MUST apply the dual-write redaction rules below (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`) plus SECURITY.md's outbound-redaction subsection. `/issue`'s outbound shell scrubber covers secrets but not internal hostnames / URLs or PII — prompt-level sanitization is required. `/issue` batch mode forwards Description verbatim into public issue bodies.
+**Sanitize before filing from execution context.** Any issue body or anchor fragment composed from execution-session-derived content (execution-issues.md, oos-accepted-main-agent.md, reviewer prose, any session-derived source) MUST apply the dual-write redaction rules below (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`) plus SECURITY.md's outbound-redaction subsection. `/issue`'s outbound shell scrubber covers secrets but not internal hostnames / URLs or PII — prompt-level sanitization is required. `/issue` batch mode forwards Description verbatim into public issue bodies, and `tracking-issue-write.sh upsert-anchor` publishes fragment content verbatim into the anchor comment.
 
 Log noteworthy issues to `$IMPLEMENT_TMPDIR/execution-issues.md` throughout execution. **Any step** may append. Log pre-existing code issues not fixed, tool failures, permission prompts, external reviewer failures, CI transients, and any uncategorized `⚠` warning.
 
@@ -222,14 +222,17 @@ Parse stdout for `ISSUE_NUMBER`, `ANCHOR_COMMENT_ID`, `ADOPTED`.
 
 - **Mismatch guard**: if `ISSUE_ARG` is non-empty AND `ISSUE_NUMBER_in_sentinel != ISSUE_ARG`: print `**⚠ 0.5: tracking issue — sentinel mismatch (sentinel has #$ISSUE_NUMBER_in_sentinel, --issue requested #$ISSUE_ARG). Clearing sentinel and re-adopting.**`, remove the sentinel file and `rm -rf $IMPLEMENT_TMPDIR/anchor-sections/`, fall through to Branch 2.
 - **Reuse**: set `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` from sentinel. Print `✅ 0.5: tracking issue — reusing sentinel #$ISSUE_NUMBER (<elapsed>)`.
-- **Hydration** (FINDING_8): if `$IMPLEMENT_TMPDIR/anchor-sections/` is empty or missing, fetch the remote anchor to avoid overwriting populated sections with empty fragments on the first resumed upsert:
+- **Hydration** (FINDING_8): if `$IMPLEMENT_TMPDIR/anchor-sections/` is empty or missing, fetch the remote anchor to avoid overwriting populated sections with empty fragments on the first resumed upsert.
+
+  **Fetch the anchor comment directly by ID** — do NOT route through `tracking-issue-read.sh --issue`, because that script's anchor-marker filter unconditionally skips anchor comments from `TASK_FILE` (the filter is a feedback-loop guard for prompt context, not a content-retrieval path). Hydration requires the opposite semantics — retrieving the anchor body — which is a different contract.
 
   ```bash
-  mkdir -p "$IMPLEMENT_TMPDIR/anchor-hydrate"
-  ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-read.sh --issue $ISSUE_NUMBER --out-dir "$IMPLEMENT_TMPDIR/anchor-hydrate"
+  mkdir -p "$IMPLEMENT_TMPDIR/anchor-hydrate" "$IMPLEMENT_TMPDIR/anchor-sections"
+  gh api "/repos/$REPO/issues/comments/$ANCHOR_COMMENT_ID" --jq '.body' \
+    > "$IMPLEMENT_TMPDIR/anchor-hydrate/anchor-body.md"
   ```
 
-  Parse the fetched `TASK_FILE` with an inline awk loop over `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Hydration is best-effort: any failure (fetch error, anchor missing, parse error) logs to `Warnings` ("Step 0.5 — anchor hydration skipped: <reason>") and proceeds. On failure, the next step's fragment write will be the first fresh write — acceptable if no prior anchor content existed.
+  Run an inline awk loop over `anchor-body.md` matching `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Hydration is best-effort: any failure (fetch error, anchor missing, parse error, empty `ANCHOR_COMMENT_ID`) logs to `Warnings` ("Step 0.5 — anchor hydration skipped: <reason>") and proceeds. On failure, the next step's fragment write will be the first fresh write — acceptable if no prior anchor content existed.
 
 Proceed to Step 1.
 
@@ -243,13 +246,25 @@ Detect PR-vs-issue: if `.url` contains `/pull/`, print `**⚠ 0.5: tracking issu
 
 If `.state == "CLOSED"`: print `**⚠ 0.5: tracking issue — adopted issue #$ISSUE_ARG is CLOSED. Aborting.**`, emit `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout, skip to Step 18. (Phase 4 of umbrella #348 will handle this bail token in `/fix-issue`.)
 
-Else (`.state == "OPEN"`): compose a seed body (anchor first-line marker + empty section-marker pairs only) and upsert the anchor:
+Else (`.state == "OPEN"`): **adopt safely without clobbering any populated existing anchor**. First try to locate an existing anchor via marker search:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_ARG --body-file <seed-body>
+ANCHOR_ID=$(gh api "/repos/$REPO/issues/$ISSUE_ARG/comments" --jq '.[] | select(.body | startswith("<!-- larch:implement-anchor v1")) | .id' | head -1)
 ```
 
-Parse `ANCHOR_COMMENT_ID` from stdout. If `FAILED=true`, print `**⚠ 0.5: tracking issue — upsert-anchor failed: $ERROR. Aborting.**` and skip to Step 18. Write `$IMPLEMENT_TMPDIR/parent-issue.md`:
+- If `ANCHOR_ID` is non-empty: existing anchor present. Fetch its body to hydrate local fragments before any upsert:
+  ```bash
+  mkdir -p "$IMPLEMENT_TMPDIR/anchor-hydrate" "$IMPLEMENT_TMPDIR/anchor-sections"
+  gh api "/repos/$REPO/issues/comments/$ANCHOR_ID" --jq '.body' > "$IMPLEMENT_TMPDIR/anchor-hydrate/anchor-body.md"
+  ```
+  Run the inline awk section-extraction loop (matching `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs) over `anchor-body.md`, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. Do NOT call `upsert-anchor` at this point — future fragment writes will update sections in place without clobbering hydrated content.
+- If `ANCHOR_ID` is empty: no existing anchor. Compose a seed body (anchor first-line marker + empty section-marker pairs only) and plant the anchor:
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_ARG --body-file <seed-body>
+  ```
+  Parse `ANCHOR_COMMENT_ID` from stdout. If `FAILED=true`, print `**⚠ 0.5: tracking issue — upsert-anchor failed: $ERROR. Aborting.**` and skip to Step 18.
+
+On either branch, write `$IMPLEMENT_TMPDIR/parent-issue.md`:
 
 ```
 ISSUE_NUMBER=$ISSUE_ARG
@@ -267,13 +282,16 @@ Check for an existing PR on the current branch; if present, extract the first `C
 gh pr view --json body --jq '.body' 2>/dev/null | grep -oE 'Closes #[0-9]+' | head -1 | grep -oE '[0-9]+'
 ```
 
-If a number emerges as `RECOVERED_N`: validate the target issue via `gh issue view "$RECOVERED_N" --json state,url` (same PR-vs-issue + CLOSED checks as Branch 2). If target is a PR URL or CLOSED, fall through to Branch 4. Else (OPEN issue): upsert the anchor:
+If a number emerges as `RECOVERED_N`: validate the target issue via `gh issue view "$RECOVERED_N" --json state,url` (same PR-vs-issue + CLOSED checks as Branch 2). If target is a PR URL or CLOSED, fall through to Branch 4. Else (OPEN issue): **adopt safely without clobbering any populated existing anchor** using the same marker-search-then-hydrate pattern as Branch 2:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file <seed-body>
+ANCHOR_ID=$(gh api "/repos/$REPO/issues/$RECOVERED_N/comments" --jq '.[] | select(.body | startswith("<!-- larch:implement-anchor v1")) | .id' | head -1)
 ```
 
-Parse `ANCHOR_COMMENT_ID`. Write sentinel with `ADOPTED=true` (Phase 3 Branch 3 adopts an existing open issue via PR-body recovery; per the `scripts/tracking-issue-read.md` contract). Set `ISSUE_NUMBER=$RECOVERED_N`. Print `✅ 0.5: tracking issue — recovered #$ISSUE_NUMBER from PR body (<elapsed>)`. Proceed to Step 1.
+- If `ANCHOR_ID` is non-empty: fetch its body and hydrate local fragments (same as Branch 2 — direct `gh api /repos/.../issues/comments/$ANCHOR_ID` + awk section-extraction). Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. No upsert.
+- If `ANCHOR_ID` is empty: plant a fresh seed anchor via `tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file <seed-body>`. Parse `ANCHOR_COMMENT_ID` from stdout.
+
+On either branch, write sentinel with `ADOPTED=true` (Phase 3 Branch 3 adopts an existing open issue via PR-body recovery; per the `scripts/tracking-issue-read.md` contract). Set `ISSUE_NUMBER=$RECOVERED_N`. Print `✅ 0.5: tracking issue — recovered #$ISSUE_NUMBER from PR body (<elapsed>)`. Proceed to Step 1.
 
 If no PR exists, no `Closes #<N>` match, or the match is not a valid adoptable issue: fall through to Branch 4.
 
@@ -291,7 +309,7 @@ If `repo_unavailable=true`: skip all Step 0.5 branches, do NOT invoke `gh issue 
 
 **Future** `/fix-issue` Step 6a (Phase 4 of umbrella #348) will forward `--issue $ISSUE_NUMBER` to `/implement` so the two skills converge on the same tracking issue via Branch 2. Until Phase 4 lands, Phase 3 provides only the `--issue` flag surface on `/implement`; callers must pass it manually. GO/IN PROGRESS lock-check logic in `/fix-issue` is undisturbed by Phase 3: `/implement`'s anchor comment carries the `<!-- larch:implement-anchor v1 issue=<N> -->` first-line marker, and `tracking-issue-read.sh`'s anchor-marker filter skips it from aggregated task content — the lock-check ignores anchors by construction. See `skills/fix-issue/SKILL.md` Step 6a (current narrative, pre-Phase-4) and `scripts/tracking-issue-read.md` (anchor-marker filter section).
 
-### Anchor-section accumulation (Steps 1, 3, 5, 7a, 8, 9a.1, 11)
+### Anchor-section accumulation (Steps 1, 5, 7a, 8, 9a.1, 11)
 
 Each step covered by the accumulation mechanism writes its fragment to `$IMPLEMENT_TMPDIR/anchor-sections/<section-id>.md`. Fragment content is the markdown that will be wrapped by the `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` markers during body assembly. If `ISSUE_NUMBER` is set (Branches 1, 2, 3 resolved), after writing a fragment the step ALSO assembles the full anchor body and upserts for progressive remote visibility. If `deferred=true` (Branch 4) or `repo_unavailable=true`, the step writes only the local fragment.
 
@@ -395,7 +413,7 @@ Apply the Rebase Checkpoint Macro with `<step-prefix>=1.r` and `<short-name>=des
 
 ## Step 2 — Implement the Feature
 
-**Opportunistic questions** (`auto_mode=false` only): before edits, if the plan leaves genuinely ambiguous choices, batch 1-4 into a single `AskUserQuestion`. Only ask when the ambiguity cannot be resolved from the plan, codebase, or CLAUDE.md. When `auto_mode=true`, proceed with best judgment. Mid-coding ambiguity: pick the interpretation most consistent with plan + existing patterns; record (question + chosen interpretation + one-sentence rationale) under the PR body's "Implementation Deviations" section. Material answers that change scope or approach log there too.
+**Opportunistic questions** (`auto_mode=false` only): before edits, if the plan leaves genuinely ambiguous choices, batch 1-4 into a single `AskUserQuestion`. Only ask when the ambiguity cannot be resolved from the plan, codebase, or CLAUDE.md. When `auto_mode=true`, proceed with best judgment. Mid-coding ambiguity: pick the interpretation most consistent with plan + existing patterns; record (question + chosen interpretation + one-sentence rationale) as an `Implementation Deviations` entry inside `$IMPLEMENT_TMPDIR/execution-issues.md` under the `Warnings` category (or a new `Implementation Deviations` category if preferred). The entry is rendered verbatim into the anchor comment's `execution-issues` section by Step 11's post-execution refresh. Material answers that change scope or approach log there too.
 
 Implement per Step 1's plan. Follow CLAUDE.md: read existing code before modifying; match style and patterns; avoid duplication; don't over-engineer (each abstraction justified by a concrete current need). Prefer TDD when the project has test infrastructure (failing test first, then implement to pass). For pure configuration / documentation / prompt-text edits, skip TDD but state one concrete post-change verification (`/relevant-checks`, grep, dry-run, or minimal manual repro). Address root causes; do not suppress errors. Invoke `/relevant-checks` via the Skill tool promptly after each non-trivial logical sub-step — Step 3 is the final check, not the only one.
 
@@ -627,7 +645,13 @@ Print: `✅ 8a: changelog — updated for v<NEW_VERSION> (<elapsed>)`
 
 The anchor comment on the tracking issue is the single source of truth for report content (voting tallies, diagrams, version bump reasoning, OOS list, execution issues, run statistics) — see `anchor-comment-template.md`. The PR body is a **slim projection**: Summary + Architecture Diagram + Code Flow Diagram + Test plan + `Closes #<TRACKING_ISSUE_NUMBER>` + Claude Code footer.
 
-Write the slim PR body to `$IMPLEMENT_TMPDIR/pr-body.md`. Substitute `<TRACKING_ISSUE_NUMBER>` with `$ISSUE_NUMBER` from the Step 0.5 sentinel (or from Step 9a.1's first-remote-write on the deferred path). The `Closes #<N>` line auto-closes the tracking issue on merge and anchors Step 0.5 Branch 3 recovery on subsequent sessions.
+Write the slim PR body to `$IMPLEMENT_TMPDIR/pr-body.md`. Substitute `<TRACKING_ISSUE_NUMBER>`:
+
+- **Adopted path** (Branches 1/2/3 of Step 0.5 — `$ISSUE_NUMBER` is already known): substitute `$ISSUE_NUMBER` directly.
+- **Deferred path** (Branch 4 — `$ISSUE_NUMBER` is not yet known because Step 9a.1 hasn't created the issue): write the placeholder string `<PLACEHOLDER_TRACKING_ISSUE>` (exactly that literal). Step 9a.1's deferred-creation sub-step rewrites this placeholder with the newly-created `ISSUE_NUMBER` before Step 9b consumes `pr-body.md`.
+- **Repo-unavailable or create-issue-failed path**: substitute `(no tracking issue created)` as the issue reference — the PR body will not have an auto-close link, and Step 0.5 Branch 3 recovery on subsequent sessions will fall through.
+
+The `Closes #<N>` line auto-closes the tracking issue on merge and anchors Step 0.5 Branch 3 recovery on subsequent sessions.
 
 **MANDATORY — READ ENTIRE FILE** before composing the PR body: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/pr-body-template.md`. Contains the slim PR body scaffold (Summary, Architecture Diagram, Code Flow Diagram, Test plan, `Closes #<N>`, Claude Code footer). **Do NOT load** outside Step 9a.
 
@@ -651,13 +675,11 @@ At Step 9a.1 entry, if no sentinel exists (`deferred=true`) and `repo_unavailabl
    ```
    Parse `ISSUE_NUMBER` and `ISSUE_URL`. On `FAILED=true`, print `**⚠ 9a.1: OOS issues — create-issue failed: $ERROR. Aborting Step 9a.1 and proceeding with deferred/absent anchor.**` Log to `Tool Failures`. Skip anchor accumulation for the rest of the run; PR body's `Closes #<N>` line will be absent (substitute `# (no tracking issue created)` in the slim PR body).
 
-4. The tracking-issue's initial body (anchor seed) already carries the first-line `<!-- larch:implement-anchor v1` marker. `tracking-issue-write.sh create-issue` writes the issue body directly — no separate `upsert-anchor` is required on first creation. Capture `ANCHOR_COMMENT_ID`: the initial body IS the anchor (on GitHub, the issue body is not a comment, so `ANCHOR_COMMENT_ID` remains empty — `tracking-issue-write.sh upsert-anchor`'s marker-search fallback on subsequent calls will find the marker in the issue body and upsert via `gh issue edit` rather than comment edit).
-
-   Actually: `tracking-issue-write.sh` treats the anchor as a standalone comment, not the issue body. After `create-issue`, call:
+4. `tracking-issue-write.sh` treats the anchor as a standalone comment on the issue (not the issue body — `list_anchor_comments` in `tracking-issue-write.sh` scans `/repos/.../issues/{issue}/comments`, never the issue description). After `create-issue` returns `ISSUE_NUMBER`, plant the anchor as a first comment on the newly-created issue by calling `upsert-anchor`:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
    ```
-   to plant the anchor as a first comment on the newly-created issue. Parse `ANCHOR_COMMENT_ID` from stdout.
+   Parse `ANCHOR_COMMENT_ID` from stdout. On `FAILED=true`, print `**⚠ 9a.1: OOS issues — anchor planting failed after create-issue: $ERROR. Continuing with ANCHOR_COMMENT_ID empty; subsequent upserts will fall back to marker-search.**` and log to `Tool Failures`.
 
 5. Write `$IMPLEMENT_TMPDIR/parent-issue.md`:
    ```
@@ -667,7 +689,17 @@ At Step 9a.1 entry, if no sentinel exists (`deferred=true`) and `repo_unavailabl
    ```
    `ADOPTED=false` per the `scripts/tracking-issue-read.md` contract: Step 9a.1 Branch 4 CREATED a fresh tracking issue, not adopted an existing one.
 
-6. Proceed to the OOS pipeline steps (read artifacts, /issue batch, parse stdout, etc. — per `anchor-comment-template.md` Step 9a.1 procedure).
+6. **Rewrite the slim PR body's `Closes` placeholder** with the newly-created issue number. Step 9a wrote `Closes #<PLACEHOLDER_TRACKING_ISSUE>` on the deferred path because `ISSUE_NUMBER` was not yet known; replace that literal now before Step 9b consumes `pr-body.md`:
+   ```bash
+   sed -i.bak 's|<PLACEHOLDER_TRACKING_ISSUE>|'"$ISSUE_NUMBER"'|g' "$IMPLEMENT_TMPDIR/pr-body.md" && rm -f "$IMPLEMENT_TMPDIR/pr-body.md.bak"
+   ```
+   Grep to verify the substitution succeeded:
+   ```bash
+   grep -q "Closes #$ISSUE_NUMBER" "$IMPLEMENT_TMPDIR/pr-body.md" || echo "**⚠ 9a.1: Closes #<N> substitution failed. PR body may lack auto-close link.**"
+   ```
+   If the substitution failed (e.g., Step 9a was run in a mode that didn't write the placeholder), log to `Warnings` and continue — the PR will still be created but without the auto-close link.
+
+7. Proceed to the OOS pipeline steps (read artifacts, /issue batch, parse stdout, etc. — per `anchor-comment-template.md` Step 9a.1 procedure).
 
 ### Anchor-section fragments — `oos-issues` and `run-statistics` (two separate files)
 
@@ -733,7 +765,7 @@ Log CI failures, transient retries, bail events to `CI Issues`. After any non-te
 
 ## Step 11 — Post Slack Announcement
 
-If `slack_enabled=false`: print `⏭️ 11: slack announce — skipped (--slack not set) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution PR body refresh. If `slack_available=false`: print `⏭️ 11: slack announce — skipped (Slack not configured) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution PR body refresh. If `PR_STATUS=existing`: print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually) (<elapsed>)`, set `SLACK_TS` empty, proceed to post-execution refresh.
+If `slack_enabled=false`: print `⏭️ 11: slack announce — skipped (--slack not set) (<elapsed>)`, set `SLACK_TS` empty, proceed to the post-execution anchor `execution-issues` refresh. If `slack_available=false`: print `⏭️ 11: slack announce — skipped (Slack not configured) (<elapsed>)`, set `SLACK_TS` empty, proceed to the post-execution anchor `execution-issues` refresh. If `PR_STATUS=existing`: print `⏭️ 11: slack announce — skipped (PR already existed, run post-pr-announce.sh manually) (<elapsed>)`, set `SLACK_TS` empty, proceed to the post-execution anchor `execution-issues` refresh.
 
 Otherwise (`slack_enabled=true` and `slack_available=true` and `PR_STATUS=created`):
 

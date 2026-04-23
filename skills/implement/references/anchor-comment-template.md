@@ -1,10 +1,10 @@
 # Anchor Comment Template
 
-**Consumer**: `/implement` Phase 3 (umbrella #348) — the canonical anchor-comment markdown template written via `scripts/tracking-issue-write.sh upsert-anchor` and parsed from issue comments by future consumers. Phase 1 ships this reference file with no consumer wiring; the first consumer lands in Phase 3.
+**Consumer**: `/implement` Phase 3 (umbrella #348) — the canonical anchor-comment markdown template written via `scripts/tracking-issue-write.sh upsert-anchor` and parsed from issue comments by consumers. Active consumers wired in Phase 3: Step 0.5 (resolve tracking issue, hydrate fragments, plant seed anchor on adoption), Anchor-section accumulation at Steps 1 / 5 / 7a / 8 / 9a.1 / 11, Step 9a.1 OOS pipeline (first-remote-write + anchor section population), Step 11 post-execution `execution-issues` refresh.
 
-**Contract**: single normative source for (1) the eight canonical section markers, (2) the first-line HTML anchor marker literal, (3) the Voting Tally extraction guidance, (4) the Step 9a.1 OOS pipeline procedure adapted to anchor-comment context, (5) the Quick-mode anchor guidance, and (6) the three load-bearing string literals that Phase 3's test-harness migration will pin (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`). Section headers and HTML comment markers must NOT drift — `scripts/tracking-issue-write.sh`'s `SECTION_MARKERS` array and the body-level collapse priority rely on the exact slug set listed here, and future `test-implement-structure.sh` assertions will pin these literals.
+**Contract**: single normative source for (1) the eight canonical section markers, (2) the first-line HTML anchor marker literal, (3) the Voting Tally extraction guidance, (4) the Step 9a.1 OOS pipeline procedure in anchor-comment context, (5) the Quick-mode anchor guidance, and (6) the three load-bearing string literals pinned by `scripts/test-implement-structure.sh` assertion (9a) (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`). Section headers and HTML comment markers must NOT drift — `scripts/tracking-issue-write.sh`'s `SECTION_MARKERS` array and the body-level collapse priority rely on the exact slug set listed here, and `test-implement-structure.sh` assertion (9a) pins these literals; assertion (9b) pins a ≥3 reference floor for `anchor-comment-template.md` in SKILL.md.
 
-**When to load**: by Phase 3 consumers when they begin composing anchor-comment bodies via `tracking-issue-write.sh upsert-anchor`, and by the `test-implement-structure.sh` assertion (future) that pins the load-bearing literals here. Do NOT load in Phase 1 — there are no consumers yet.
+**When to load**: before composing any anchor-section fragment or invoking `tracking-issue-write.sh upsert-anchor`. Do NOT load outside Step 0.5, the Anchor-section accumulation procedure, Step 9a.1, and Step 11's post-execution anchor refresh.
 
 ---
 
@@ -150,7 +150,7 @@ The canonical Step 9a.1 procedure lives here (Phase 3+). The anchor comment is t
 
 Step 9a.1's sequence in anchor context:
 
-1. Read `$IMPLEMENT_TMPDIR/oos-accepted-*.md` artifact files (one per phase: `oos-accepted-design.md`, `oos-accepted-review-r<N>.md`, `oos-accepted-main-agent.md`).
+1. Read `$IMPLEMENT_TMPDIR/oos-accepted-*.md` artifact files (one per phase: `oos-accepted-design.md`, `oos-accepted-review.md`, `oos-accepted-main-agent.md`).
 2. If all artifacts are empty, emit `Accepted OOS (GitHub issues filed)` as an empty bulleted list.
 3. Idempotency guard: if `$IMPLEMENT_TMPDIR/oos-issues-created.md` sentinel exists, recover prior URLs from it and skip the `/issue` invocation (deterministic byte-exact guard). Do NOT double-file.
 4. Invoke `/issue --input-file` batch mode with the accepted OOS entries. Parse stdout for `ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`, per-issue `ISSUE_<i>_NUMBER=`, `ISSUE_<i>_URL=`.
