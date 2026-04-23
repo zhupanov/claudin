@@ -282,6 +282,12 @@ exclude = [
   # test harness ships with no runtime consumers yet. Phase 3 is the
   # first consumer via skills/implement/SKILL.md (not in this phase).
   "scripts/test-tracking-issue-write.sh",
+  # Regression harness for tracking-issue-read.sh's --sentinel branch
+  # (added by #359 — ADOPTED= contract pin). Invoked only from Makefile's
+  # test-harnesses target; no SKILL.md reference. Phase 3 first consumes
+  # --sentinel via skills/implement/SKILL.md; until then this harness is
+  # Makefile-only.
+  "scripts/test-tracking-issue-read-sentinel.sh",
   # scripts/tracking-issue-read.sh ships with no consumers in Phase 1;
   # Phase 2 wires /fix-issue --issue forwarding as its first consumer.
   # scripts/tracking-issue-write.sh is referenced only from tracking-issue-read.sh
