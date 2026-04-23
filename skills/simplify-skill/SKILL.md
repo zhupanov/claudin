@@ -1,7 +1,7 @@
 ---
 name: simplify-skill
 description: "Use when refactoring a larch skill to improve adherence to skill-design principles and reduce SKILL.md footprint. Partitions large files into references/*.md. Excludes sub-skills invoked via Skill tool. Behavior-preserving; delegates to /implement."
-argument-hint: "[--debug] <skill-name>"
+argument-hint: "[--debug] [--slack] <skill-name>"
 allowed-tools: Bash, Skill
 ---
 
@@ -24,10 +24,11 @@ Example: `/simplify-skill implement` refactors `skills/implement/SKILL.md` plus 
 Parse flags from the start of `$ARGUMENTS` before the first positional token.
 
 - `--debug`: Set `debug_mode=true`. Default: `debug_mode=false`. Forwarded to `/im` (and thence to `/implement` → `/design` and `/review`).
+- `--slack`: Set `slack_enabled=true`. Default: `slack_enabled=false`. Forwarded to `/im` (and thence to `/implement`) so the delegated run posts a Slack PR announcement (and a `:merged:` emoji after merge). Without `--slack`, the delegated run does not post to Slack regardless of Slack env-var presence.
 
 After flag stripping, the next positional token is the **target skill name** — bare form (`implement`) or slash-prefixed (`/implement`). Strip a leading `/` if present. Reject names containing `:` (no plugin-qualified forms — see NEVER #5) or non-`[a-z0-9-]` characters.
 
-If zero positional tokens remain, print: `**ERROR: Usage: /simplify-skill [--debug] <skill-name>**` and abort.
+If zero positional tokens remain, print: `**ERROR: Usage: /simplify-skill [--debug] [--slack] <skill-name>**` and abort.
 
 ## Step 2 — Validate Target and Build Feature Description
 
@@ -47,10 +48,10 @@ The helper enforces NEVER #1 (sub-skills not enumerated), NEVER #2 (missing SKIL
 
 ## Step 3 — Delegate to /im
 
-Print: `**Simplify-skill /<skill-name> — delegating to /im [--debug]**` (omit `--debug` if `debug_mode=false`).
+Print: `**Simplify-skill /<skill-name> — delegating to /im [--debug] [--slack]**` (omit each flag if its corresponding variable is `false`).
 
 Invoke the Skill tool:
 - Try skill: `"im"` first (bare name). If no skill matches, try skill: `"larch:im"` (fully-qualified plugin name).
-- args: `"[--debug] <FEATURE_DESCRIPTION>"` — prepend `--debug` only if `debug_mode=true`. `--merge` is not forwarded (`/im` prepends it itself).
+- args: `"[--debug] [--slack] <FEATURE_DESCRIPTION>"` — prepend `--debug` only if `debug_mode=true`; prepend `--slack` only if `slack_enabled=true`. `--merge` is not forwarded (`/im` prepends it itself).
 
 The `/im` → `/implement --merge` chain runs design, implementation, code review, `/relevant-checks`, version bump, PR creation, CI monitoring, and auto-merge. No post-invocation verification is needed at this level — `/implement`'s own internal gates (rebase + re-bump, CI green, merge) are the authoritative signal, and this skill runs no further steps after `/im` returns.

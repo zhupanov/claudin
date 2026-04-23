@@ -1,7 +1,7 @@
 ---
 name: create-skill
 description: "Use when scaffolding a new larch skill (new SKILL.md). Validates name and description, then delegates to /im --quick --auto which runs render-skill-md.sh and auto-merges. Default: .claude/skills/; --plugin: skills/."
-argument-hint: "[--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>  (--merge is a backward-compat no-op; /im auto-merges)"
+argument-hint: "[--plugin] [--multi-step] [--merge] [--debug] [--slack] <skill-name> <description>  (--merge is a backward-compat no-op; /im auto-merges)"
 allowed-tools: Bash, Skill
 ---
 
@@ -19,7 +19,7 @@ Invoke the argument parser:
 ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/parse-args.sh $ARGUMENTS
 ```
 
-Parse the output for `NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`. (`MERGE` is kept in the parse output for backward compat but is a no-op — delegation via `/im` always auto-merges.)
+Parse the output for `NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`, `SLACK`. (`MERGE` is kept in the parse output for backward compat but is a no-op — delegation via `/im` always auto-merges.) `SLACK` is forwarded to `/im` (which forwards to `/implement`) when `true`; when `false` (the default) the delegated run does not post to Slack regardless of Slack env-var presence.
 
 If the script exits non-zero or emits an `ERROR=` line, print the error and abort.
 
@@ -133,10 +133,10 @@ MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full f
   C. No consecutive Bash-tool calls per step — combine multi-action steps into one coordinator .sh that invokes the individual scripts internally.
 ```
 
-Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug]**` (omit `--debug` if `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and is not forwarded.
+Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug] [--slack]**` (omit each optional flag if its corresponding variable is `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and is not forwarded.
 
 Invoke the Skill tool:
 - Try skill: `"im"` first (bare name). If no skill matches, try skill: `"larch:im"` (fully-qualified plugin name).
-- args: `"--quick --auto [--debug] <feature-description>"` — include `--debug` only if `DEBUG=true`. `--merge` is NOT forwarded (`/im` prepends it itself); the `MERGE` parse value is ignored at delegation time.
+- args: `"--quick --auto [--debug] [--slack] <feature-description>"` — include `--debug` only if `DEBUG=true`; include `--slack` only if `SLACK=true`. `--merge` is NOT forwarded (`/im` prepends it itself); the `MERGE` parse value is ignored at delegation time.
 
 The implementing agent will execute `render-skill-md.sh`, run validation checks, commit, review, bump the version, create the PR, and merge it (via `/im` → `/implement --merge`).

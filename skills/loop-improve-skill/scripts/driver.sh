@@ -8,9 +8,13 @@
 # model turn that can halt between child-return and post-call Bash.
 #
 # Usage:
-#   driver.sh <skill-name>
+#   driver.sh [--slack] <skill-name>
 #
-# Argument:
+# Arguments:
+#   --slack       — optional flag, must precede <skill-name>. When set, the
+#                   driver prepends `--slack ` to every /larch:im prompt so
+#                   each iteration's PR posts to Slack. Default: absent — no
+#                   iteration posts to Slack regardless of Slack env vars.
 #   <skill-name>  — target larch skill to iteratively improve. A leading `/`
 #                   is stripped. Must match `^[a-z][a-z0-9-]*$`.
 #
@@ -87,11 +91,24 @@ cleanup_on_exit() {
 trap cleanup_on_exit EXIT
 
 # --------------------------------------------------------------------------
-# Step 1 — Parse + validate <skill-name>
+# Step 1 — Parse + validate flags and <skill-name>
 # --------------------------------------------------------------------------
 
+SLACK_FLAG=""  # empty by default; set to "--slack " if --slack is present
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --slack) SLACK_FLAG="--slack "; shift ;;
+    --) shift; break ;;
+    --*)
+      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --slack."
+      exit 1
+      ;;
+    *) break ;;
+  esac
+done
+
 if [[ $# -lt 1 ]]; then
-  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: driver.sh <skill-name>"
+  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: driver.sh [--slack] <skill-name>"
   exit 1
 fi
 
@@ -609,8 +626,11 @@ while [[ $ITER -le 10 ]]; do
   # /larch:im takes the plan text as its argument. FINDING_9: the prompt is
   # sent to claude -p via STDIN (see invoke_claude_p), so the full plan body
   # does NOT have to fit into argv (macOS default ARG_MAX = 262144).
+  # SLACK_FLAG is either empty or "--slack " (trailing space) — parsed at
+  # Step 1 from the optional --slack driver flag. Prepending it here makes
+  # every iteration's /larch:im opt into Slack posting.
   {
-    printf '/larch:im '
+    printf '/larch:im %s' "$SLACK_FLAG"
     cat "$DESIGN_OUT"
   } > "$IM_PROMPT"
 
