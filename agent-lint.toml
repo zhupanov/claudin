@@ -278,6 +278,17 @@ exclude = [
   "scripts/test-orchestrator-scope-sync.sh",
   "scripts/test-research-structure.sh",
   "scripts/test-review-structure.sh",
+  # Phase 1 of umbrella #348 (tracking-issue foundation helpers) —
+  # test harness ships with no runtime consumers yet. Phase 3 is the
+  # first consumer via skills/implement/SKILL.md (not in this phase).
+  "scripts/test-tracking-issue-write.sh",
+  # scripts/tracking-issue-read.sh ships with no consumers in Phase 1;
+  # Phase 2 wires /fix-issue --issue forwarding as its first consumer.
+  # scripts/tracking-issue-write.sh is referenced only from tracking-issue-read.sh
+  # (itself excluded above), so the reachability graph treats it as dead too.
+  # Phase 3 (skills/implement/SKILL.md wiring) removes both exclusions.
+  "scripts/tracking-issue-read.sh",
+  "scripts/tracking-issue-write.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
