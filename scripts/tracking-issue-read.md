@@ -37,12 +37,13 @@ ANCHOR_COMMENT_ID=<id or empty>
 ADOPTED=true|false|
 ```
 
-#### `ADOPTED=` field contract (pinned by #359)
+#### `ADOPTED=` field contract (pinned by #359; first consumer is umbrella #348 Phase 3 per #351)
 
 - **Allowed values**: exactly `true` or `false` (case-strict; lowercase only) when the key is present with a valid value, or empty (either the key is absent from the sentinel file, or present with an empty value). No other non-empty values are accepted.
 - **Absence semantics**: an empty `ADOPTED=` line means **"sentinel is not usable for adoption decisions"**. Absent key and explicit empty (`ADOPTED=`) are semantically identical on the output side.
 - **Consumer obligation**: consumers MUST treat empty/absent `ADOPTED=` as "unusable" and fall back to their fresh-creation path. Consumers MUST NOT treat empty as equivalent to `false`. A `false` value is a positive statement ("sentinel records that adoption did not occur"); an empty value is the absence of that statement.
 - **Fail-closed posture**: any non-empty value other than `true` or `false` (e.g. `TRUE`, `True`, `1`, `yes`, or `true` with a trailing space) is rejected with `FAILED=true` / `ERROR=invalid ADOPTED value in sentinel: '<val>' (expected 'true' or 'false' or absent)` and exit 1. Producers writing invalid values see a loud parse failure at the consumer boundary rather than silent misclassification.
+- **Phase 3 producer semantics** (`/implement` Step 0.5): `ADOPTED=true` is written by Branch 2 (`--issue <N>` explicit adoption) and Branch 3 (PR-body recovery from an existing `Closes #<N>` line). `ADOPTED=false` is written by Step 9a.1's first-remote-write on Branch 4 (truly fresh run — a new tracking issue was CREATED, not adopted). Branch 1 (sentinel reuse) preserves whatever was originally written — `/implement` does not rewrite `ADOPTED=` on resume.
 
 ### Failure keys
 
