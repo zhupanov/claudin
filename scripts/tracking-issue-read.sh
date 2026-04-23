@@ -27,7 +27,21 @@
 #   TASK_SOURCE=issue-plus-prompt|issue-only|prompt  (omitted for --sentinel)
 #   TASK_FILE=<path>                                  (omitted for --sentinel)
 #   ANCHOR_COMMENT_ID=<id>                            (only --sentinel)
-#   ADOPTED=<value>                                   (only --sentinel; allowed-values contract is Phase 3 scope)
+#   ADOPTED=<true|false|>                             (only --sentinel; strict
+#                                                      contract: 'true' or
+#                                                      'false' when the key is
+#                                                      present and valid; empty
+#                                                      (absent or explicit '')
+#                                                      means sentinel unusable —
+#                                                      consumers MUST fall back
+#                                                      to their fresh-creation
+#                                                      path and MUST NOT treat
+#                                                      empty as 'false'. Any
+#                                                      other non-empty value is
+#                                                      rejected with FAILED=true
+#                                                      / ERROR=invalid ADOPTED
+#                                                      value in sentinel: '<v>'
+#                                                      and exit 1.)
 #   On failure: FAILED=true  ERROR=<single-line message>
 #
 # Exit codes:
@@ -204,23 +218,59 @@ else
 fi
 
 # --sentinel branch: parse local markdown file, emit KEY=values.
+#
+# Contract (pinned by #359 for Phase 3 consumption):
+#   - Column-0 keys only. Leading whitespace on a line ("  KEY=val") is NOT
+#     matched and is silently treated as "key absent" → empty value emitted.
+#   - First match wins for duplicate keys (grep -m1 default).
+#   - Leading UTF-8 BOM (\xef\xbb\xbf) at the start of the sentinel file is
+#     stripped before parsing so the first key is matched when producers
+#     emit BOM-prefixed UTF-8. Parity with the --issue comment-loop BOM
+#     tolerance at line ~350.
+#   - Trailing \r on an extracted value is stripped so CRLF-written
+#     sentinels parse identically to LF-written ones. Other trailing
+#     whitespace (e.g., space) is NOT stripped — strict equality for
+#     ADOPTED rejects "true " as invalid.
+#   - ADOPTED is validated strictly: empty, "true", or "false" only.
+#     Anything else → FAILED=true ERROR=... exit 1. Empty/absent means
+#     "sentinel unusable" and consumers MUST fall back to their
+#     fresh-creation path — NEVER treat empty as equivalent to "false".
 if $HAVE_SENTINEL; then
     if [[ ! -f "$SENTINEL" ]]; then
         echo "FAILED=true"
         echo "ERROR=sentinel file not found: $SENTINEL"
         exit 1
     fi
-    # Extract KEY=value lines for ISSUE_NUMBER, ANCHOR_COMMENT_ID, ADOPTED.
-    # Echo them verbatim (empty value allowed; absent key → empty output line).
-    parse_sentinel_key() {
+    if [[ ! -r "$SENTINEL" ]]; then
+        echo "FAILED=true"
+        echo "ERROR=sentinel file not readable: $SENTINEL"
+        exit 1
+    fi
+    SENTINEL_CONTENT=$(cat "$SENTINEL")
+    # Pattern-prefix match (not :0:3 substring — that is char-indexed under
+    # UTF-8 locale and would consume BOM + 2 extra chars, silently failing
+    # to detect the BOM).
+    if [[ "$SENTINEL_CONTENT" == $'\xef\xbb\xbf'* ]]; then
+        SENTINEL_CONTENT="${SENTINEL_CONTENT#$'\xef\xbb\xbf'}"
+    fi
+    extract_sentinel_key() {
         local key="$1"
         local val
-        val=$(grep -m1 -E "^${key}=" "$SENTINEL" | sed -E "s/^${key}=//" || true)
-        printf '%s=%s\n' "$key" "${val:-}"
+        val=$(printf '%s\n' "$SENTINEL_CONTENT" | grep -m1 -E "^${key}=" | sed -E "s/^${key}=//" || true)
+        val="${val%$'\r'}"
+        printf '%s' "${val:-}"
     }
-    parse_sentinel_key ISSUE_NUMBER
-    parse_sentinel_key ANCHOR_COMMENT_ID
-    parse_sentinel_key ADOPTED
+    ISSUE_NUMBER_VAL=$(extract_sentinel_key ISSUE_NUMBER)
+    ANCHOR_COMMENT_ID_VAL=$(extract_sentinel_key ANCHOR_COMMENT_ID)
+    ADOPTED_VAL=$(extract_sentinel_key ADOPTED)
+    if [[ -n "$ADOPTED_VAL" && "$ADOPTED_VAL" != "true" && "$ADOPTED_VAL" != "false" ]]; then
+        echo "FAILED=true"
+        echo "ERROR=invalid ADOPTED value in sentinel: '$ADOPTED_VAL' (expected 'true' or 'false' or absent)"
+        exit 1
+    fi
+    printf 'ISSUE_NUMBER=%s\n' "$ISSUE_NUMBER_VAL"
+    printf 'ANCHOR_COMMENT_ID=%s\n' "$ANCHOR_COMMENT_ID_VAL"
+    printf 'ADOPTED=%s\n' "$ADOPTED_VAL"
     exit 0
 fi
 

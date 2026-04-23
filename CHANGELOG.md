@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.12] - 2026-04-23
+
+### Changed
+
+- `scripts/tracking-issue-read.sh` `--sentinel` mode: pinned the `ADOPTED=` field contract (closes #359) before Phase 3 (#351) wires the sentinel as its first consumer. Allowed values are now strictly `true` or `false` when the key is present with a valid value, or empty (key absent or explicit `ADOPTED=`). Empty means "sentinel unusable" — consumers MUST NOT treat empty as equivalent to `false` and MUST fall back to their fresh-creation path. Any other non-empty value (e.g. `TRUE`, `1`, `yes`, `true` with trailing whitespace) is rejected with `FAILED=true` / `ERROR=invalid ADOPTED value in sentinel: '<val>' (expected 'true' or 'false' or absent)` and exit 1. Parser hardening added at the same time: leading UTF-8 BOM is stripped before key extraction, trailing `\r` is stripped from extracted values (CRLF tolerance), column-0 keys only (indented lines treated as absent), first-match wins on duplicate keys, and an explicit `[[ -r "$SENTINEL" ]]` readability guard emits the `FAILED=true`/`ERROR=sentinel file not readable: <path>` envelope instead of silently tripping `set -e`. Contract pinned in `scripts/tracking-issue-read.md` and a focused regression harness `scripts/test-tracking-issue-read-sentinel.sh` (15 cases, 30 assertions) wired into `make lint` via `test-harnesses` locks the behavior against drift. `agent-lint.toml` exclusion mirrors the existing `test-tracking-issue-write.sh` Phase-1 pattern.
+
 ## [6.1.11] - 2026-04-23
 
 ### Fixed
