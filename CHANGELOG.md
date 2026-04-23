@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.2] - 2026-04-23
+
+### Fixed
+
+- `/compress-skill` temp-file leak: `skills/compress-skill/scripts/build-feature-description.sh` emits `FEATURE_FILE` (a `mktemp -t` temp file under `$TMPDIR`) on stdout and exits without cleanup — by contract the caller owns the file's lifetime. `skills/compress-skill/SKILL.md` Step 2 was reading the contents into `FEATURE_DESCRIPTION` but never removing the file, so every `/compress-skill` invocation leaked one temp file (persists across reboots on macOS `/private/tmp` when `$TMPDIR` routes there, accumulates on long-running Linux containers/VMs). Adds `rm -f "$FEATURE_FILE"` to the STATUS=ok branch of Step 2 (only on the success path — failure paths abort before the rm so we never delete a file we could not confirm reading). Documents the caller-owns-lifetime invariant in the script's in-file header and the sibling contract `build-feature-description.md` in the same PR (per AGENTS.md's stdout-contract mirror rule). Closes #310.
+
 ## [6.0.1] - 2026-04-23
 
 ### Fixed
