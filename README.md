@@ -79,6 +79,8 @@ claude plugin install larch@larch-local
   }
 ```
 
+> **Note — larch overrides the cli-config.json model for its own Cursor invocations.** Larch launches Cursor via `cursor agent --model $MODEL …`, where `$MODEL` is resolved by `scripts/reviewer-model-args.sh` from `LARCH_CURSOR_MODEL` (env var) or the plugin userConfig `CURSOR_MODEL` (default: `composer-2`). Cursor's CLI `--model` flag takes precedence over the `modelId` set in `~/.cursor/cli-config.json`, so editing the JSON alone will not change the model larch uses. To pin larch to a specific Cursor model, set `LARCH_CURSOR_MODEL` (or the `CURSOR_MODEL` userConfig) instead. Larch similarly enforces max-mode at the prompt level (`scripts/cursor-wrap-prompt.sh` prepends `/max-mode on.`), so `"maxMode": true` in the JSON is not required for larch-driven calls — though setting it is harmless. The cli-config.json snippet above is still the recommended setup for Cursor outside larch.
+
 ### What the plugin provides
 
 | Component | Description |
