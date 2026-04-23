@@ -36,6 +36,15 @@ PASS=0
 FAIL=0
 FAILED_TESTS=()
 
+# On assertion failure, also surface LAST_STDERR (set by run_sentinel)
+# so any regression that emits unexpected warnings / errors to stderr is
+# visible in local debug output and CI logs.
+print_stderr_if_any() {
+    if [[ -n "${LAST_STDERR:-}" ]]; then
+        echo "       stderr: $(printf '%q' "$LAST_STDERR")" >&2
+    fi
+}
+
 assert_equal_stdout() {
     local actual="$1" expected="$2" label="$3"
     if [[ "$actual" == "$expected" ]]; then
@@ -47,6 +56,7 @@ assert_equal_stdout() {
         echo "  FAIL: $label" >&2
         echo "       expected (quoted): $(printf '%q' "$expected")" >&2
         echo "       actual   (quoted): $(printf '%q' "$actual")" >&2
+        print_stderr_if_any
     fi
 }
 
@@ -59,6 +69,7 @@ assert_equal_exit() {
         FAIL=$((FAIL + 1))
         FAILED_TESTS+=("$label")
         echo "  FAIL: $label (expected exit $expected, got $actual)" >&2
+        print_stderr_if_any
     fi
 }
 
@@ -72,6 +83,7 @@ assert_contains() {
         FAILED_TESTS+=("$label")
         echo "  FAIL: $label (missing needle: $needle)" >&2
         echo "       haystack: $(printf '%q' "$haystack")" >&2
+        print_stderr_if_any
     fi
 }
 
@@ -79,14 +91,22 @@ TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/test-tracking-issue-read-sentinel-XXXXXX")
 # shellcheck disable=SC2317
 trap 'rm -rf "$TMPROOT"' EXIT
 
-# Helper: invoke --sentinel and capture stdout + exit code.
-# Sets globals LAST_STDOUT and LAST_EXIT for the caller to assert against.
+# Helper: invoke --sentinel and capture stdout + exit code + stderr.
+# Sets globals LAST_STDOUT, LAST_STDERR, and LAST_EXIT for the caller to
+# assert against. Stderr is captured (not dropped) so regressions that
+# emit unexpected warnings remain visible in local debugging and in CI
+# --verbose logs.
 run_sentinel() {
     local sentinel_path="$1"
+    local stderr_file
+    stderr_file=$(mktemp "${TMPROOT}/stderr-XXXXXX")
     LAST_STDOUT=""
+    LAST_STDERR=""
     LAST_EXIT=0
-    LAST_STDOUT=$(bash "$READ_SCRIPT" --sentinel "$sentinel_path" 2>/dev/null) || LAST_EXIT=$?
+    LAST_STDOUT=$(bash "$READ_SCRIPT" --sentinel "$sentinel_path" 2>"$stderr_file") || LAST_EXIT=$?
     LAST_EXIT="${LAST_EXIT:-0}"
+    LAST_STDERR=$(cat "$stderr_file")
+    rm -f "$stderr_file"
 }
 
 # ---------------------------------------------------------------------------
@@ -106,8 +126,8 @@ run_sentinel "$F"
 assert_equal_exit "$LAST_EXIT" "0" "(b) exit 0"
 assert_equal_stdout "$LAST_STDOUT" "$(printf 'ISSUE_NUMBER=\nANCHOR_COMMENT_ID=\nADOPTED=false')" "(b) stdout"
 
-# (c) empty file → all three keys absent
-echo "(c) empty file — all keys absent"
+# (c) empty file → all three keys absent from source; keys still emitted with empty values
+echo "(c) empty file — all values empty (keys still emitted with empty value)"
 F="$TMPROOT/c.md"
 : > "$F"
 run_sentinel "$F"
@@ -177,13 +197,13 @@ run_sentinel "$F"
 assert_equal_exit "$LAST_EXIT" "0" "(k) exit 0"
 assert_equal_stdout "$LAST_STDOUT" "$(printf 'ISSUE_NUMBER=\nANCHOR_COMMENT_ID=\nADOPTED=true')" "(k) stdout"
 
-# (l) CRLF line endings — \r stripped from value
-printf '(l) CRLF line endings -- \\r stripped\n'
+# (l) CRLF line endings — \r stripped from value (all three keys)
+printf '(l) CRLF line endings -- \\r stripped (all three keys)\n'
 F="$TMPROOT/l.md"
-printf 'ADOPTED=true\r\n' > "$F"
+printf 'ISSUE_NUMBER=123\r\nANCHOR_COMMENT_ID=456\r\nADOPTED=true\r\n' > "$F"
 run_sentinel "$F"
 assert_equal_exit "$LAST_EXIT" "0" "(l) exit 0"
-assert_equal_stdout "$LAST_STDOUT" "$(printf 'ISSUE_NUMBER=\nANCHOR_COMMENT_ID=\nADOPTED=true')" "(l) stdout"
+assert_equal_stdout "$LAST_STDOUT" "$(printf 'ISSUE_NUMBER=123\nANCHOR_COMMENT_ID=456\nADOPTED=true')" "(l) stdout (all three values \\r-stripped)"
 
 # (m) UTF-8 BOM at start — stripped before parsing
 echo "(m) UTF-8 BOM — stripped"
@@ -200,6 +220,22 @@ printf '  ADOPTED=true\n' > "$F"
 run_sentinel "$F"
 assert_equal_exit "$LAST_EXIT" "0" "(n) exit 0"
 assert_equal_stdout "$LAST_STDOUT" "$(printf 'ISSUE_NUMBER=\nANCHOR_COMMENT_ID=\nADOPTED=')" "(n) stdout"
+
+# (o) Unreadable sentinel file (mode 000) — fail-closed with envelope.
+# Skipped when running as root because chmod 000 does not block root reads
+# (root bypasses DAC mode bits on most Unix kernels).
+echo "(o) unreadable sentinel — fail-closed with envelope"
+if (( EUID == 0 )); then
+    echo "  skip: (o) root can read mode-000 files; skipping"
+else
+    F="$TMPROOT/o.md"
+    printf 'ADOPTED=true\n' > "$F"
+    chmod 000 "$F"
+    run_sentinel "$F"
+    chmod 600 "$F"  # restore so EXIT trap can delete
+    assert_equal_exit "$LAST_EXIT" "1" "(o) exit 1"
+    assert_equal_stdout "$LAST_STDOUT" "$(printf 'FAILED=true\nERROR=sentinel file not readable: %s' "$F")" "(o) stdout envelope"
+fi
 
 # ---------------------------------------------------------------------------
 # Summary

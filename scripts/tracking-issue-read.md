@@ -46,7 +46,9 @@ ADOPTED=true|false|
 
 ### Failure keys
 
-`FAILED=true` followed by `ERROR=<single-line message>`. Flattened to one line, capped at 500 bytes.
+`FAILED=true` followed by `ERROR=<single-line message>`.
+
+The newline-flatten + 500-byte cap applies to `ERROR=` values derived from captured `gh` stderr (via `redact_gh_error`) — combinations 1 and 2 routed through the `gh api` paths. Parse errors on the local `--sentinel` branch (combination 4) emit a single pre-composed `ERROR=` line WITHOUT that cap or flattening step — the script controls the message text, so inputs cannot smuggle multi-line content there. The `ADOPTED=` field contract above documents the exact sentinel-path `ERROR=` shape.
 
 ## Exit codes
 

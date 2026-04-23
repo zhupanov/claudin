@@ -241,6 +241,11 @@ if $HAVE_SENTINEL; then
         echo "ERROR=sentinel file not found: $SENTINEL"
         exit 1
     fi
+    if [[ ! -r "$SENTINEL" ]]; then
+        echo "FAILED=true"
+        echo "ERROR=sentinel file not readable: $SENTINEL"
+        exit 1
+    fi
     SENTINEL_CONTENT=$(cat "$SENTINEL")
     # Pattern-prefix match (not :0:3 substring — that is char-indexed under
     # UTF-8 locale and would consume BOM + 2 extra chars, silently failing
