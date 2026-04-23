@@ -12,7 +12,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Eight assertions:
+# Nine assertions:
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -31,6 +31,18 @@
 #  (8) Zero occurrences of `see Step N below` / `see Step N above` patterns inside any
 #      references/*.md — progressive-disclosure invariant (references must not
 #      back-reference parent SKILL.md step numbers with direction words).
+#  (9) Load-bearing marker literals in skills/implement/references/pr-body-template.md
+#      (closes #323):
+#      (9a) three byte-pinned marker literals must be present in pr-body-template.md
+#      (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`,
+#      `<details><summary>Execution Issues</summary>`) — parsed and written at runtime
+#      by the Step 9a.1 OOS issue-filing pipeline and the Step 11 post-execution
+#      PR-body refresh. Renaming or removing any marker silently breaks runtime
+#      behavior with no other test failure. (9b) SKILL.md must reference
+#      `pr-body-template.md` at least 3 times (one MANDATORY pointer in Step 9a +
+#      one prose binding in Step 9a.1 + one prose binding in Step 11) to guard
+#      against a future edit that keeps the MANDATORY pointer but orphans Step 9a.1
+#      or Step 11 from the extracted reference.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
@@ -171,5 +183,41 @@ if [[ -n "$match_files" ]]; then
   fail "(8) found forbidden 'see Step N below|above' patterns (case-insensitive) in:$match_files"
 fi
 
-echo "PASS: test-implement-structure.sh — all 8 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (9a) Three load-bearing marker literals must appear at least once in
+#      skills/implement/references/pr-body-template.md. Step 9a.1 (OOS
+#      issue-filing pipeline) parses and rewrites the OOS placeholder and the
+#      Run Statistics OOS cell; Step 11 (post-execution PR-body refresh)
+#      locates and rewrites the Execution Issues details block. A future
+#      rename or removal in pr-body-template.md silently breaks runtime
+#      behavior with no other test failure. Use fixed-string matching since
+#      the literals contain regex metachars (`|`, `<`, `>`).
+# ---------------------------------------------------------------------------
+PR_BODY_TEMPLATE="$REFS_DIR/pr-body-template.md"
+pr_body_markers=(
+  'Accepted OOS (GitHub issues filed)'
+  '| OOS issues filed |'
+  '<details><summary>Execution Issues</summary>'
+)
+for marker in "${pr_body_markers[@]}"; do
+  grep -Fq "$marker" "$PR_BODY_TEMPLATE" \
+    || fail "(9a) pr-body-template.md lost load-bearing marker literal: $marker"
+done
+
+# ---------------------------------------------------------------------------
+# (9b) skills/implement/SKILL.md must reference `pr-body-template.md` at
+#      least 3 times — one MANDATORY pointer in Step 9a, one prose binding
+#      in Step 9a.1, one prose binding in Step 11's post-execution refresh.
+#      Assertion (4) already checks the MANDATORY line exists; this guards
+#      against a future edit that keeps the MANDATORY pointer but orphans
+#      Step 9a.1 or Step 11 from the extracted reference (both steps
+#      delegate their full procedure to pr-body-template.md sections).
+#      Use fixed-string matching so the `.` in the filename is literal.
+# ---------------------------------------------------------------------------
+pr_body_refs=$(grep -cF 'pr-body-template.md' "$SKILL_MD" || true)
+if ! [[ "$pr_body_refs" =~ ^[0-9]+$ ]] || (( pr_body_refs < 3 )); then
+  fail "(9b) expected at least 3 references to 'pr-body-template.md' in SKILL.md (Step 9a MANDATORY + Step 9a.1 binding + Step 11 binding), found ${pr_body_refs:-0}"
+fi
+
+echo "PASS: test-implement-structure.sh — all 9 structural invariants hold"
 exit 0
