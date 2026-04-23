@@ -7,7 +7,7 @@ allowed-tools: Bash, Skill
 
 # Create Skill
 
-Scaffold a new larch-style skill and delegate to `/im --quick --auto` for the full pipeline (implementation, code review, version bump, PR, auto-merge). `/im` is larch's `/implement --merge` alias — auto-merge is now the default for scaffolded skills. Pass `--merge` if you want to be explicit (it is a backward-compat no-op since `/im` already merges).
+Scaffold a new larch-style skill and delegate to `/im --quick --auto` for the full pipeline (implementation, code review, version bump, PR, auto-merge). `/im` is larch's `/implement --merge` alias — auto-merge is now the default for scaffolded skills. Pass `--merge` to be explicit (a backward-compat no-op since `/im` already merges).
 
 Example: `/create-skill foo "Use when doing X"` creates `.claude/skills/foo/SKILL.md` in the consumer repo. With `--plugin`, creates `skills/foo/SKILL.md` inside the larch plugin repo.
 
@@ -135,7 +135,7 @@ MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full f
   C. No consecutive Bash-tool calls per step — combine multi-action steps into one coordinator .sh that invokes the individual scripts internally.
 ```
 
-Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug] [--slack]**` (omit each optional flag if its corresponding variable is `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and is not forwarded.
+Print: `**Create-skill /<NAME> (<plugin-dev|consumer>, <minimal|multi-step>) — delegating to /im --quick --auto [--debug] [--slack]**` (omit each optional flag if its corresponding variable is `false`). `/im` auto-merges; `--merge` on `/create-skill` is a backward-compat no-op and not forwarded.
 
 Invoke the Skill tool:
 - Try skill: `"im"` first (bare name). If no skill matches, try skill: `"larch:im"` (fully-qualified plugin name).
