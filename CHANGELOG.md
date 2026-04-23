@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.6] - 2026-04-23
+
+### Fixed
+
+- `.github/workflows/ci.yaml` Node.js 20 deprecation and invalid `agent-lint` input (closes #316). Bumped `actions/checkout@v4` → `@v6`, `actions/setup-python@v5` → `@v6`, and `actions/cache@v4` → `@v5` — each major publishes a Node.js 24 entrypoint (runner v2.327.1+, already on `ubuntu-latest`). Replaced the silently-ignored `args: --pedantic` on `zhupanov/agent-lint@v2.3.2` with the documented `pedantic: true` input.
+
 ## [6.0.5] - 2026-04-23
 
 ### Changed
