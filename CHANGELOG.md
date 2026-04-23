@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.2] - 2026-04-23
+
+### Fixed
+
+- `skills/simplify-skill/scripts/build-feature-description.sh:134-135` now strips all whitespace from `wc -l` / `wc -c` output via `tr -d '[:space:]'` instead of only ASCII spaces. BSD `wc` pads its numeric output with whitespace that is not a plain space, so the previous `tr -d ' '` left stray characters concatenated into `SKILL_MD_LINES` / `SKILL_MD_CHARS`. Identical fix to the one already applied to `skills/compress-skill/scripts/build-feature-description.sh` for issue #311. Closes #328.
+
 ## [6.1.1] - 2026-04-23
 
 ### Added
