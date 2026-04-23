@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.4] - 2026-04-23
+
+### Added
+
+- `scripts/test-references-headers.sh` gained a second assertion that rejects stale `L<digits>-<digits>` line-range citations inside the `**Contract**:` paragraph of every `skills/*/references/*.md` file (closes #322). The check extends the existing triplet-header scan: for each reference file, `awk` extracts the Contract paragraph (from `^**Contract**:` to the next whitespace-only line or the next anchored `**Consumer**:` / `**When to load**:` header), and `grep -E` rejects any word-bounded `L<digits>(-|–|—)<digits>` substring. All three dash forms (ASCII hyphen, en-dash, em-dash) are matched via alternation so the check stays locale-safe under `LC_ALL=C`. The v5.2.7 refactor had already eradicated such citations from the 4 `skills/implement/references/*.md` files (replacing them with range-free descriptions in FINDING_4); this regression guard prevents reintroduction in any current or future reference file. Sibling contract `scripts/test-references-headers.md` and the script's top-of-file comment updated in sync.
+
 ## [6.1.3] - 2026-04-23
 
 ### Changed
