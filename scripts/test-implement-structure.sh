@@ -1,10 +1,12 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 8 load-bearing invariants across skills/implement/SKILL.md and the four
+# Asserts 9 load-bearing invariants across skills/implement/SKILL.md and the four
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
-# and the no-`see Step N below|above` invariant in references/*.md. The cross-skill
+# the no-`see Step N below|above` invariant in references/*.md, and (closes #323) the
+# three load-bearing marker literals in pr-body-template.md plus the ≥3
+# `pr-body-template.md` reference-count floor in SKILL.md. The cross-skill
 # Consumer/Contract/When-to-load header triplet (formerly assertion 8 here, implement-
 # scoped) moved to scripts/test-references-headers.sh as of #308 and now applies repo-
 # wide to every skills/*/references/*.md. Intentional overlap: assertion (3) (single
