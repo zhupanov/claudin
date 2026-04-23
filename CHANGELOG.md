@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.7] - 2026-04-23
+
+### Changed
+
+- `README.md` "Setting Up Claude, Codex, Cursor, etc." section intro rewritten to state explicitly that only `claude` is mandatory; `codex` and `cursor` are optional and are substituted with Claude subagents when missing or unauthenticated (deduplicated with `Prerequisites > Optional integrations` via cross-reference rather than restating). Adds a sentence clarifying that larch is agent-agnostic about authentication — each agent can be set up with either an API key or a subscription plan via web-based login; larch only needs the binary on `PATH` and a successful authenticated session.
+- `README.md` Cursor-subsection `cli-config.json` note trimmed from a multi-sentence paragraph to the single sentence "Note — larch overrides the cli-config.json model for its own Cursor invocations." The `--model` precedence, `LARCH_CURSOR_MODEL` resolution, `composer-2` default, and max-mode prompt injection details are preserved in the `Environment Variables > LARCH_CURSOR_MODEL` section rather than being duplicated in the setup recipe.
+
 ## [6.1.6] - 2026-04-23
 
 ### Changed
