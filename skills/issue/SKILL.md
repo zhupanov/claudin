@@ -10,7 +10,7 @@ allowed-tools: Bash, Read, Write
 Create one or more GitHub issues in the current repository with **LLM-based semantic duplicate detection**. Two modes:
 
 - **Single mode** (no `--input-file`): a free-form description is the issue body; an optional `--go` posts a `GO` comment on the new issue.
-- **Batch mode** (`--input-file FILE`): parse a multi-item markdown file (OOS format from `/implement`, or a generic `### <title>` + body fallback) and create N issues in one pass.
+- **Batch mode** (`--input-file FILE`): parse a multi-item markdown file (OOS format from `/implement`, or a generic `### <title>` + body fallback) and create N issues in one pass; an optional `--go` posts a `GO` comment on each successfully-created issue (duplicates, failed creates, and dry-run items never receive a GO comment).
 
 Both modes run the same 2-phase dedup pipeline against open + recently-closed issues (default 90-day window). Phase 1 triages by title; Phase 2 reads full bodies + comments for shortlisted candidates and filters. Dedup fails **open**: any helper failure (network, rate limit, gh auth) produces a warning on stderr and falls through to create-all.
 
@@ -32,8 +32,8 @@ Supported flags (all optional):
 - `--title-prefix PREFIX` — string prepended to every created issue's title (e.g. `[OOS]`). Case-insensitively deduplicates if the input title already carries the prefix.
 - `--label LABEL` — repeatable. Each label is probed against the target repo; missing labels are silently dropped with a stderr warning.
 - `--body-file FILE` — single-mode alternative to the inline description. Mutually exclusive with a trailing description arg.
-- `--dry-run` — run Phase 1+2 dedup normally; **do not** call `gh issue create`. Emit structured output tagged `DRY_RUN=true`.
-- `--go` — single mode only. Post `GO` as the final comment on the new issue so it becomes eligible for `/fix-issue` automation. **If `--input-file` is also present, abort with the error** `**ERROR: --go is not supported in batch mode.**`
+- `--dry-run` — run Phase 1+2 dedup normally; **do not** call `gh issue create`. Emit structured output tagged `DRY_RUN=true`. When combined with `--go`, the GO comment is suppressed (dry-run has no side effects) and no `ISSUE_<i>_GO_POSTED` lines are emitted.
+- `--go` — post `GO` as the final comment on each newly-created issue so it becomes eligible for `/fix-issue` automation. Works in both single and batch modes: Step 6 handles the GO post inline after each successful CREATE. Duplicates, failed creates, and dry-run items never get a GO comment.
 - `--repo OWNER/REPO` — explicit repo (otherwise inferred from the current working directory via `gh repo view`).
 - `--closed-window-days N` — override the closed-issue dedup window (default 90; set 0 to skip closed-issue dedup).
 
@@ -43,7 +43,6 @@ After flag stripping:
 
 Validations:
 - `MODE=single` with empty `DESCRIPTION`: abort with `**ERROR: Usage: /issue [--go] [--title-prefix P] [--label L]... [--body-file F] <issue description>**`
-- `MODE=batch` + `--go`: abort as above.
 - `MODE=batch` + missing or empty `INPUT_FILE`: abort with `**ERROR: --input-file must point to a non-empty file.**`
 
 ## Step 2 — Resolve Repository
@@ -127,13 +126,15 @@ Parse stdout for `FETCH_STATUS_<N>=ok|failed`. Drop any `failed` numbers from th
 
 ## Step 6 — Create Surviving Items
 
-**Single-mode duplicate + `--go` pre-flight** (runs before the iteration below): if `MODE=single` AND `--go` is set AND the sole item resolved to `DUPLICATE` (either `DUPLICATE_OF=<N>` or `DUPLICATE_OF_ITEM=<j>`), abort with:
+**Single-mode duplicate + `--go` pre-flight** (MODE=single only; runs before the iteration below): if `MODE=single` AND `--go` is set AND the sole item resolved to `DUPLICATE` (either `DUPLICATE_OF=<N>` or `DUPLICATE_OF_ITEM=<j>`), abort with:
 
 ```
 **ERROR: this looks like a duplicate of #<N> (<url>). Re-run without --go to confirm, or manually comment GO on #<N> if appropriate.**
 ```
 
 Exit non-zero. No issue is created and no GO comment is posted. `<N>` and `<url>` are the resolved target identifiers from Phase 2's verdict (for intra-run matches, use the earlier item's resolved number/URL; for snapshot matches, use the Phase 1 snapshot URL).
+
+This pre-flight applies only when `MODE=single`. In `MODE=batch`, per-item duplicates are handled individually in the iteration below; no batch-level abort.
 
 Otherwise, iterate `i = 1..ITEMS_TOTAL` in input-file order:
 
@@ -189,15 +190,25 @@ Otherwise, iterate `i = 1..ITEMS_TOTAL` in input-file order:
     - `ISSUE_<i>_URL=<url>`
     - `ISSUE_<i>_TITLE=<final-title>` — taken directly from `ISSUE_TITLE=…` in create-one.sh's output, which applies the `--title-prefix` with `[OOS]` double-prefix normalization. Do not reimplement title-prefix logic in prompt text.
     - Increment `ISSUES_CREATED`. Append the created issue to an in-memory snapshot so later intra-run dedup iterations can also reference it if the LLM Phase 2 missed an equivalence.
+    - **Post-create GO comment** (only when `--go` is set; applies to both single and batch modes). Bind `$N` to the issue number from THIS iteration's `create-one.sh` `ISSUE_NUMBER=<N>` output — never reuse a number from an earlier iteration. Then:
+      ```bash
+      gh issue comment -R "$REPO" "$N" --body "GO" 2>"$ISSUE_TMPDIR/go-stderr-$i.txt"
+      ```
+      - On exit 0: emit `ISSUE_<i>_GO_POSTED=true` on stdout.
+      - On non-zero exit: pipe the captured stderr through `${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh` before emitting; emit `ISSUE_<i>_GO_POSTED=false` on stdout; emit on stderr: `**⚠ /issue: GO comment failed for item <i> (#$N): <redacted-stderr>. Add 'GO' as a final comment manually to approve for /fix-issue.**`. The item still counts as CREATED; do NOT decrement `ISSUES_CREATED`.
   - On `ISSUE_FAILED=true` + `ISSUE_ERROR=<msg>`: emit
     - `ISSUE_<i>_FAILED=true`
     - `ISSUE_<i>_TITLE=<input-title>` (the pre-prefix title from the input item — helper did not apply the prefix on failure)
     - Append a warning to stderr: `**⚠ /issue: create failed for item <i>: <msg>**`
     - Increment `ISSUES_FAILED`.
+    - Do NOT post GO and do NOT emit `ISSUE_<i>_GO_POSTED` (no issue exists to comment on).
   - On `DRY_RUN=true` + `ISSUE_TITLE=<final-title>` (when `--dry-run` was passed): emit
     - `ISSUE_<i>_DRY_RUN=true`
     - `ISSUE_<i>_TITLE=<final-title>` — from create-one.sh's `ISSUE_TITLE=…` line.
     - Increment `ISSUES_CREATED` (conceptually — dry-run counts as a successful create for contract-completeness).
+    - Do NOT post GO and do NOT emit `ISSUE_<i>_GO_POSTED` (dry-run skips the side effect).
+
+For `DUPLICATE` outcomes (both `DUPLICATE_OF=<N>` and `DUPLICATE_OF_ITEM=<j>` branches above), do NOT post GO and do NOT emit `ISSUE_<i>_GO_POSTED` (no new issue was created). `ISSUE_<i>_GO_POSTED` is emitted only on the CREATE path when `--go` is set.
 
 ## Step 7 — Emit Aggregate Counters and Final Output
 
@@ -212,7 +223,7 @@ ISSUES_DEDUPLICATED=<N>
 Plus the per-item `ISSUE_<i>_*` lines accumulated above.
 
 **Channel discipline**:
-- All machine lines (`ISSUES_*`, `ISSUE_<i>_*`, `DRY_RUN=true`) go to **stdout** only.
+- All machine lines (`ISSUES_*`, `ISSUE_<i>_*` — including `ISSUE_<i>_GO_POSTED=true|false` emitted only on the CREATE path when `--go` is set, per Step 6 — and `DRY_RUN=true`) go to **stdout** only.
 - All warnings (`**⚠ …`), fail-open notes, and human prose go to **stderr**.
 - No sentinel terminator. The consumer (e.g. `/implement` Step 9a.1) parses any line matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$` from stdout.
 
@@ -221,21 +232,12 @@ Plus the per-item `ISSUE_<i>_*` lines accumulated above.
 Only when `MODE=single`, also print one human-readable summary line (after all machine lines, to stderr so it does not corrupt the structured stdout stream for programmatic consumers):
 
 - `ISSUES_CREATED=1`, no `--go`: `✅ Created issue #<N> — <URL>`
-- `ISSUES_CREATED=1`, `--go` present and GO comment succeeded: `✅ Created issue #<N> with GO comment — <URL>` (see Step 9 for the comment.)
+- `ISSUES_CREATED=1`, `--go` and `ISSUE_1_GO_POSTED=true` (GO comment succeeded in Step 6): `✅ Created issue #<N> with GO comment — <URL>`
+- `ISSUES_CREATED=1`, `--go` and `ISSUE_1_GO_POSTED=false` (GO comment failed in Step 6; the per-item warning was already emitted there): `✅ Created issue #<N> — <URL> (⚠ GO comment failed — see warning above)`
 - `ISSUES_DEDUPLICATED=1`: `ℹ Skipped as duplicate of #<N> — <URL>`
 - `ISSUES_FAILED=1`: `**⚠ Create failed: <error>**`
 - `DRY_RUN=true`: `ℹ Dry-run: would create "<title>"`
 
-## Step 9 — Post GO Comment (single mode, conditional)
-
-Only when `MODE=single`, `--go` is set, **and** the item resolved to `CREATE` (not DUPLICATE, not FAILED, not DRY_RUN). Post the GO comment:
-
-```bash
-gh issue comment -R "$REPO" "$ISSUE_1_NUMBER" --body "GO"
-```
-
-On failure, emit on stderr: `**⚠ Issue was created but GO comment failed: <stderr excerpt>. You can add 'GO' as a final comment manually to approve it for /fix-issue.**`
-
-## Step 10 — Cleanup
+## Step 9 — Cleanup
 
 Remove `$ISSUE_TMPDIR` if it exists.
