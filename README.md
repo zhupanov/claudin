@@ -38,8 +38,9 @@ claude plugin install larch@larch-local
 ```
 
 ### Setting Up Claude, Codex, Cursor, etc.
-- Larch uses Claude, Codex, and Cursor in agent mode.  All of these need to be set up with API keys and properly configured as per instructions below.
-- If either Codex or Cursor is not installed or available, Larch skills default to using Claude instead.
+- **Only `claude` is mandatory.** `codex` and `cursor` are optional — when either binary is missing or fails to authenticate, larch skills substitute Claude subagents automatically. See [Optional integrations](#optional-integrations) for the full fallback semantics.
+- **Larch is agent-agnostic about authentication.** Each agent can be set up either with an **API key** in your shell environment, or with a **subscription plan** via web-based login from the binary itself. Larch does not care which — it only needs the corresponding binary (`claude`, `codex`, `cursor`) to be on your `PATH` and to land in an authenticated session when invoked.
+- The subsections below document one concrete setup recipe per agent (API-key path). If you prefer the subscription-plan path, install the binary and follow its own web-login flow instead — the rest of larch's configuration (settings, model overrides) still applies.
 
 #### Claude
 - Via web UI of your Claude org, create your own API key
@@ -79,7 +80,7 @@ claude plugin install larch@larch-local
   }
 ```
 
-> **Note — larch overrides the cli-config.json model for its own Cursor invocations.** Larch launches Cursor via `cursor agent --model $MODEL …`, where `$MODEL` is resolved by `scripts/reviewer-model-args.sh` from `LARCH_CURSOR_MODEL` (env var) or the plugin userConfig `cursor_model` (exported to subprocesses as `CLAUDE_PLUGIN_OPTION_CURSOR_MODEL`; default: `composer-2`). Cursor's CLI `--model` flag takes precedence over the `modelId` set in `~/.cursor/cli-config.json`, so editing the JSON alone will not change the model larch uses. To pin larch to a specific Cursor model, set `LARCH_CURSOR_MODEL` (or the `cursor_model` userConfig) instead. Larch similarly enforces max-mode at the prompt level (`scripts/cursor-wrap-prompt.sh` prepends `/max-mode on.`), so `"maxMode": true` in the JSON is not required for larch-driven calls — though setting it is harmless. The cli-config.json snippet above is still the recommended setup for Cursor outside larch.
+> **Note — larch overrides the cli-config.json model for its own Cursor invocations.**
 
 ### What the plugin provides
 
