@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.7] - 2026-04-23
+
+### Changed
+
+- `.agnix.toml` cleared four residual CI warnings with no behavioral change to any skill (closes #317). Added `XP-SK-001` to `disabled_rules` with a comment explaining that `argument-hint` is a Claude Code-supported field and intentional across every skill here. Added a top-level `exclude` list that preserves agnix's defaults (`node_modules/**`, `.git/**`, `target/**`) and adds `tests/fixtures/**` so deliberately-skeletal halt-rate fixtures (e.g. `tests/fixtures/loop-halt-rate/SKILL.md`) no longer trigger `AS-010`. Added a `[tool_versions]` section pinning `claude_code = "2.1.0"` to satisfy `VER-001`. `AGENTS.md` tightened `contributors developing in this repo should load larch as a plugin …` to `must` to clear `PE-003` in the critical "Editing rules" section.
+
 ## [6.0.6] - 2026-04-23
 
 ### Fixed
