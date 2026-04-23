@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.6] - 2026-04-23
+
+### Changed
+
+- `skills/implement/SKILL.md` anti-halt banner at line 12 normalized to byte-match the canonical wording in `skills/shared/subskill-invocation.md:99` (closes #346). The abbreviated form — missing `e.g., ` in the tool-list parenthetical, `The rule is` / `any` prefixes and `directive` (singular) in the subordination clause, `instruction` in the default-continuation line, `anywhere in this file` and `by this rule` in the `/relevant-checks` sentence, and `for the canonical rule` in the trailing pointer — diverged from the canonical form used by every other orchestrator (`/fix-issue`, `/review`, `/loop-review`, `/alias`, `/research`). Concurrently-maintained divergence makes single-replacement-string sweeps (like PR #347's broadening) fragile; this restores the single-source-of-truth invariant. Contract token `**Anti-halt continuation reminder.**` unchanged — `scripts/test-anti-halt-banners.sh` passes unchanged.
+
 ## [6.1.5] - 2026-04-23
 
 ### Changed
