@@ -4,7 +4,7 @@ How skills compose to form the end-to-end development workflow in Larch.
 
 ## Skill Orchestration Hierarchy
 
-Skills are not invoked in a flat sequence. They form a hierarchical call graph where higher-level **stateful orchestrators** invoke lower-level skills and continue execution based on their side effects. The diagram below shows only true orchestrators and their direct sub-skills; pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`, `/simplify-skill`) are covered separately in the [Delegation Topology](#delegation-topology) subsection below because they run no post-delegation logic (`/loop-improve-skill` is delegator-class via its bash driver, not a Skill-tool chain). `/alias` is a hybrid (validate → delegate → verify) — it also appears in the Delegation Topology subsection.
+Skills are not invoked in a flat sequence. They form a hierarchical call graph where higher-level **stateful orchestrators** invoke lower-level skills and continue execution based on their side effects. The diagram below shows only true orchestrators and their direct sub-skills; pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`, `/simplify-skill`, `/compress-skill`) are covered separately in the [Delegation Topology](#delegation-topology) subsection below because they run no post-delegation logic (`/loop-improve-skill` is delegator-class via its bash driver, not a Skill-tool chain). `/alias` is a hybrid (validate → delegate → verify) — it also appears in the Delegation Topology subsection.
 
 ```mermaid
 graph TD
@@ -40,18 +40,20 @@ graph TD
 
 ## Delegation Topology
 
-Pure forwarders are **not** orchestrators — they validate input (when applicable), call the Skill tool exactly once, and exit. They run no logic after the child returns. This subsection also documents `/alias`, which is a hybrid: it validates, delegates to `/implement`, and then performs a mechanical sentinel-file verification (see `/alias` Step 4). Edges are labeled with the **arguments passed on that edge** (what the immediate child receives), not the final expansion — for single-hop delegation (`/im`, `/imaq`, `/alias`) this is also what `/implement` sees, but for the two-hop chain `/create-skill → /im → /implement`, the `CREATE→IM` edge shows only what `/im` receives; `/im` then prepends `--merge` so `/implement` sees `--merge --quick --auto <feature-desc>`.
+Pure forwarders are **not** orchestrators — they validate input (when applicable), call the Skill tool exactly once, and exit. They run no logic after the child returns. This subsection also documents `/alias`, which is a hybrid: it validates, delegates to `/implement`, and then performs a mechanical sentinel-file verification (see `/alias` Step 4). Edges are labeled with the **arguments passed on that edge** (what the immediate child receives), not the final expansion — for single-hop delegation (`/im`, `/imaq`, `/alias`) this is also what `/implement` sees, but for the two-hop chains `/create-skill → /im → /implement` and `/compress-skill → /imaq → /implement`, the first edge shows only what the intermediate forwarder receives; the forwarder then prepends its own flags (`/im` adds `--merge`; `/imaq` adds `--merge --auto --quick`) before `/implement` sees the final expansion.
 
 ```mermaid
 graph LR
     CREATE["/create-skill"] -->|--quick --auto| IM
     SIMPLIFY["/simplify-skill"] -->|$ARGS (feature-desc)| IM
+    COMPRESS["/compress-skill"] -->|$ARGS (feature-desc)| IMAQ
     IM["/im"] -->|--merge $ARGS| IMPLEMENT["/implement"]
     IMAQ["/imaq"] -->|--merge --auto --quick $ARGS| IMPLEMENT
     ALIAS["/alias"] -->|--quick --auto $ARGS| IMPLEMENT
 
     style CREATE fill:#6b4c2a,color:#fff
     style SIMPLIFY fill:#6b4c2a,color:#fff
+    style COMPRESS fill:#6b4c2a,color:#fff
     style IM fill:#6b4c2a,color:#fff
     style IMAQ fill:#6b4c2a,color:#fff
     style ALIAS fill:#6b4c2a,color:#fff
@@ -63,8 +65,9 @@ graph LR
 - **`/alias`** — hybrid: validates alias name, delegates to `/implement --quick --auto` to scaffold a new project-level alias skill under `.claude/skills/`, then performs a sentinel-file verification (Step 4) that the expected `SKILL.md` was actually written. Accepts optional `--merge` to merge the alias-creation PR.
 - **`/create-skill`** — validates name + description, then delegates to `/im --quick --auto` (which expands to `/implement --merge --quick --auto`) to scaffold a new larch-style skill. Auto-merge is the default. Accepts `--merge` as a backward-compat no-op. `/create-skill --plugin` writes under `skills/`; default is `.claude/skills/<name>/`. The scaffold process also emits a post-scaffold doc-sync checklist via `skills/create-skill/scripts/post-scaffold-hints.sh` — reminders to update the README catalog, `.claude/settings.json` permissions, this file (`docs/workflow-lifecycle.md`), and (when applicable) `docs/agents.md`, `docs/review-agents.md`, and `AGENTS.md` canonical sources.
 - **`/simplify-skill`** — accepts a single target-skill name (bare form; `/` prefix tolerated), resolves the target directory (plugin tree first, then consumer `.claude/skills/`, then `${CLAUDE_PLUGIN_ROOT}/.claude/skills/`), enumerates every `.md` file physically under that directory (excluding `scripts/` and `tests/`), and delegates a pinned behavior-preserving refactor feature description to `/im` (which expands to `/implement --merge`). Sub-skills invoked via the `Skill` tool are out of scope by construction (they live in sibling `skills/OTHER/` directories so never appear in the find output). `skills/shared/*.md` is out of scope by policy (cross-skill blast radius — refactor separately). The feature description requires a `## Token budget` section in the PR body tracking SKILL.md line/char deltas. Helper script: `skills/simplify-skill/scripts/build-feature-description.sh` (fail-closed on bad name / not found).
+- **`/compress-skill`** — pure forwarder. Resolves the target skill directory, enumerates the transitively-reachable `.md` set inside it, snapshots baseline byte/line counts, and delegates a behavior-preserving prose-rewrite feature description to `/imaq` (which expands to `/implement --merge --auto --quick`) so changes ship as an auto-merged PR. See the Standalone Usage entry for full scope rules and the `## Token budget` PR-body contract.
 
-Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`, `/simplify-skill`) are exempt from the post-invocation-verification and anti-halt-continuation rules defined in `skills/shared/subskill-invocation.md` (`/loop-improve-skill` is delegator-class via its bash driver, not a Skill-tool chain). `/alias` is NOT exempt — it carries both the post-invocation sentinel check and the anti-halt banner/micro-reminder. See that document for the full classification rules.
+Pure forwarders (`/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`, `/simplify-skill`, `/compress-skill`) are exempt from the post-invocation-verification and anti-halt-continuation rules defined in `skills/shared/subskill-invocation.md` (`/loop-improve-skill` is delegator-class via its bash driver, not a Skill-tool chain). `/alias` is NOT exempt — it carries both the post-invocation sentinel check and the anti-halt banner/micro-reminder. See that document for the full classification rules.
 
 ## End-to-End Flow
 

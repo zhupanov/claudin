@@ -44,6 +44,7 @@ DELEGATORS=(
   "skills/create-skill/SKILL.md"
   "skills/loop-improve-skill/SKILL.md"  # thin bash-driver wrapper post-#273; forwards to driver.sh via Bash; no Skill tool calls
   "skills/simplify-skill/SKILL.md"  # pure delegator: validate target + build feature description + forward to /im; no post-delegation logic
+  "skills/compress-skill/SKILL.md"  # pure delegator: validate target + build feature description + forward to /imaq; no post-delegation logic
 )
 
 FAIL_COUNT=0
