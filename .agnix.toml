@@ -3,6 +3,26 @@
 
 tools = ["claude-code"]
 
+# Exclude paths from validation. An explicit 'exclude' replaces agnix's
+# defaults (node_modules/**, .git/**, target/**), so we list them here
+# alongside the repo-specific additions.
+# - tests/fixtures/** — intentionally skeletal fixture skills used by the
+#   halt-rate harness (see tests/fixtures/loop-halt-rate/SKILL.md). They
+#   are designed to be graded below-A; AS-010 "missing Use when... trigger"
+#   is expected and must NOT be fixed on the fixture itself.
+exclude = [
+  "node_modules/**",
+  ".git/**",
+  "target/**",
+  "tests/fixtures/**",
+]
+
+# Pin versions so version-dependent rules (VER-001 family) evaluate against
+# a known baseline rather than drifting with agnix defaults. This repo IS
+# the larch Claude Code plugin, so we target the Claude Code 2.1 series.
+[tool_versions]
+claude_code = "2.1.0"
+
 [rules]
 disabled_rules = [
   # File-length rules — larch skills are intentionally long (orchestration prompts)
@@ -14,4 +34,5 @@ disabled_rules = [
   "CC-SK-008",  # 'Agent' is a valid Claude Code tool not yet in agnix's known-tool list
   "XP-003",     # Hard-coded .claude/ paths are correct — this IS a Claude Code plugin repo
   "CC-SK-007",  # Unrestricted Bash is intentional — all larch skills need full shell access
+  "XP-SK-001",  # 'argument-hint' is a Claude Code-supported field; every use in this repo is intentional because this IS a Claude Code plugin
 ]
