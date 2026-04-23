@@ -124,26 +124,28 @@ done
 #     (4) so 'references/voting.md.bak' can NOT satisfy the pin for 'voting.md'.
 #
 #     (5a) domain-rules.md pinned to the Step 3 entry callsite: one SKILL.md
-#          line contains 'MANDATORY — READ ENTIRE FILE', 'Step 3', and
-#          'references/domain-rules.md' together. Currently SKILL.md line 166.
+#          line contains 'MANDATORY — READ ENTIRE FILE', 'Step 3' (with a
+#          word-char boundary so 'Step 3a'/'Step 30'/'Step 3f' do NOT
+#          false-pass), and 'references/domain-rules.md' together.
 #
 #     (5b) voting.md pinned to the round-1 branch: one SKILL.md line contains
 #          'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive — matches
-#          both 'round 1' and 'In round 1'), and 'references/voting.md'
-#          together. Currently SKILL.md line 194.
+#          both 'round 1' and 'In round 1'; same word-char boundary so
+#          'round 10'/'round 11' do NOT false-pass), and 'references/voting.md'
+#          together.
 #
 #     (5c) Reciprocal rounds-2+ guard: one SKILL.md line contains 'Do NOT load'
-#          and 'references/voting.md' together. Currently SKILL.md line 196.
+#          and 'references/voting.md' together.
 # ---------------------------------------------------------------------------
 grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
-  | grep 'Step 3' \
+  | grep -E 'Step 3([^0-9A-Za-z]|$)' \
   | grep -Eq 'references/domain-rules\.md([^A-Za-z0-9._-]|$)' \
-  || fail "(5a) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'Step 3', and 'references/domain-rules.md' together — Step 3 entry callsite pin for domain-rules.md is broken"
+  || fail "(5a) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'Step 3' (boundary-anchored), and 'references/domain-rules.md' together — Step 3 entry callsite pin for domain-rules.md is broken"
 
 grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
-  | grep -i 'round 1' \
+  | grep -iE 'round 1([^0-9A-Za-z]|$)' \
   | grep -Eq 'references/voting\.md([^A-Za-z0-9._-]|$)' \
-  || fail "(5b) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive), and 'references/voting.md' together — round-1 branch callsite pin for voting.md is broken"
+  || fail "(5b) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive, boundary-anchored), and 'references/voting.md' together — round-1 branch callsite pin for voting.md is broken"
 
 grep 'Do NOT load' "$SKILL_MD" \
   | grep -Eq 'references/voting\.md([^A-Za-z0-9._-]|$)' \
