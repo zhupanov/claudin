@@ -655,7 +655,7 @@ The `Closes #<N>` line auto-closes the tracking issue on merge and anchors Step 
 
 **MANDATORY — READ ENTIRE FILE** before composing the PR body: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/pr-body-template.md`. Contains the slim PR body scaffold (Summary, Architecture Diagram, Code Flow Diagram, Test plan, `Closes #<N>`, Claude Code footer). **Do NOT load** outside Step 9a.
 
-### 9a.1 — Create OOS GitHub Issues + Deferred-Creation First-Remote-Write
+### 9a.1 — Create OOS GitHub Issues
 
 Runs unconditionally regardless of mode. The canonical OOS pipeline lives in `anchor-comment-template.md` Step 9a.1 OOS pipeline procedure section (anchor-comment context). See `anchor-comment-template.md` for: repo-unavailable early-exit; read the three OOS artifact files (`oos-accepted-design.md`, `oos-accepted-review.md`, `oos-accepted-main-agent.md`); all-empty early-exit; idempotency sentinel recovery per Load-Bearing Invariant #2 and NEVER #5; cross-phase dedup; `/issue` batch-mode invocation via Skill tool; stdout parsing for `ISSUES_CREATED` / `ISSUES_FAILED` / `ISSUES_DEDUPLICATED` / per-issue fields; **anchor comment's `oos-issues` section** placeholder replacement; **anchor comment's `run-statistics` section** `| OOS issues filed |` cell rewrite; sentinel write to `oos-issues-created.md`.
 
