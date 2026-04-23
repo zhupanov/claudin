@@ -51,7 +51,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/compress-skill/scripts/build-feature-description.sh
 
 **Fail-closed verification.** Parse stdout for `STATUS`, `TARGET_DIR`, `SKILL_NAME`, `FILE_COUNT`, and `FEATURE_FILE`, then validate the result before proceeding:
 
-- **`STATUS=ok`** — verify that `FEATURE_FILE` exists and is non-empty; read its contents as `FEATURE_DESCRIPTION` and proceed to Step 3. If the file is missing or empty, treat it as a script failure and abort.
+- **`STATUS=ok`** — verify that `FEATURE_FILE` exists and is non-empty; read its contents as `FEATURE_DESCRIPTION`; then remove the temp file with `rm -f "$FEATURE_FILE"` (the caller owns its lifetime — see the sibling contract). Proceed to Step 3. If the file is missing or empty, treat it as a script failure and abort (do NOT `rm` on this failure path).
 - **`STATUS=not_found`** — print the `ERROR=<message>` line from stdout and abort.
 - **`STATUS=bad_name`** — print the `ERROR=<message>` line from stdout and abort.
 - **No `STATUS=` line (script exited non-zero)** — print the error text from stderr and abort.
