@@ -3,7 +3,7 @@
 # external reviewer tool.
 #
 # Returns the appropriate --model / -m flag for the given tool based on
-# environment variables. Cursor defaults to composer-2-fast when no model is
+# environment variables. Cursor defaults to composer-2 when no model is
 # configured. Codex outputs nothing when unconfigured (uses its own default).
 #
 # When --with-effort is passed, also emits tool-specific reasoning-effort flags.
@@ -27,6 +27,13 @@
 # tokens are emitted for Cursor; the "Work at maximum reasoning effort"
 # instruction is appended to Cursor prompts at the call site instead.
 #
+# Cursor max-mode: Cursor supports ~/.cursor/cli-config.json for max-mode, but
+# that path is user-managed. Larch enforces max-mode by wrapping Cursor prompts
+# via scripts/cursor-wrap-prompt.sh, which prepends " /max-mode on. Prompt: ".
+# Every substantive Cursor call site MUST use that wrapper — see its sibling
+# scripts/cursor-wrap-prompt.md for the callers registry. The only exception
+# is scripts/check-reviewers.sh's health probe.
+#
 # Usage:
 #   reviewer-model-args.sh --tool cursor|codex [--with-effort]
 #
@@ -36,7 +43,7 @@
 #   Examples:
 #     --model gpt-5.4-medium
 #         (cursor with LARCH_CURSOR_MODEL=gpt-5.4-medium)
-#     --model composer-2-fast
+#     --model composer-2
 #         (cursor default, --with-effort is a no-op for Cursor)
 #     -m o3 -c model_reasoning_effort="high"
 #         (codex with LARCH_CODEX_MODEL=o3 and --with-effort and default effort)
@@ -68,7 +75,7 @@ fi
 
 case "$TOOL" in
     cursor)
-        MODEL="${LARCH_CURSOR_MODEL:-${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL:-composer-2-fast}}"
+        MODEL="${LARCH_CURSOR_MODEL:-${CLAUDE_PLUGIN_OPTION_CURSOR_MODEL:-composer-2}}"
         echo "--model $MODEL"
         # Cursor has no effort flag; --with-effort is intentionally a no-op here.
         ;;

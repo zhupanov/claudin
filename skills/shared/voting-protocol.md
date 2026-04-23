@@ -103,7 +103,7 @@ Launch all 3 voters **in parallel** (in a single message). When external tools a
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "<tmpdir>/cursor-vote-output.txt" --timeout 1200 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "<voter prompt with ballot>. Work at your maximum reasoning effort level."
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<voter prompt with ballot>. Work at your maximum reasoning effort level.")"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000`.

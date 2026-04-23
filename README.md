@@ -364,7 +364,7 @@ A Slack user ID (e.g., `U0123456789`) used to @-mention the PR author in Slack a
 
 ### External Reviewer Model Configuration
 
-These variables control which model Cursor and Codex use when running as external reviewers. When unset, Cursor defaults to `composer-2-fast` and Codex uses its own configured default. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex).
+These variables control which model Cursor and Codex use when running as external reviewers. When unset, Cursor defaults to `composer-2` (with the `/max-mode on.` slash-command prefix applied to every substantive prompt via `scripts/cursor-wrap-prompt.sh`) and Codex uses its own configured default. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex). To restore the pre-`composer-2` behavior, set `LARCH_CURSOR_MODEL=composer-2-fast`.
 
 Model configuration is also available via plugin `userConfig` — environment variables take precedence if both are set.
 
@@ -377,7 +377,9 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 - The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
 
 **When not set:**
-- Defaults to `composer-2-fast` — Cursor's `cursor agent` CLI does not honor the model configured in `~/.cursor/cli-config.json`, so an explicit default is required to avoid falling back to a potentially rate-limited model
+- Defaults to `composer-2` — Cursor's `cursor agent` CLI does not honor the model configured in `~/.cursor/cli-config.json`, so an explicit default is required to avoid falling back to a potentially rate-limited model
+- Every substantive Cursor prompt is additionally wrapped by `scripts/cursor-wrap-prompt.sh` which prepends ` /max-mode on. Prompt: ` to engage Cursor's max-mode for this invocation
+- To opt back into the previous default (faster, lower reasoning budget), set `LARCH_CURSOR_MODEL=composer-2-fast`
 
 ### `LARCH_CODEX_MODEL`
 

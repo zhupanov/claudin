@@ -21,7 +21,7 @@
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-arch-output.txt" --timeout 1200 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "<ARCH_PROMPT>"
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<ARCH_PROMPT>")"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -33,7 +33,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-edge-output.txt" --timeout 1200 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "<EDGE_PROMPT>"
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<EDGE_PROMPT>")"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.

@@ -166,7 +166,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
   cursor agent -p --force --trust \
     $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
     --workspace "$PWD" \
-    "<judge prompt from template above>. Work at your maximum reasoning effort level."
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<judge prompt from template above>. Work at your maximum reasoning effort level.")"
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.

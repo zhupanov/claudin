@@ -43,7 +43,7 @@
     "cursor_model": {
       "title": "Cursor Model",
       "type": "string",
-      "description": "Model for Cursor reviewer (e.g., gpt-5.4-medium). Also accepted via LARCH_CURSOR_MODEL env var. When unset, defaults to composer-2-fast.",
+      "description": "Model for Cursor reviewer (e.g., gpt-5.4-medium). Also accepted via LARCH_CURSOR_MODEL env var. When unset, defaults to composer-2 (with max-mode engaged via scripts/cursor-wrap-prompt.sh). Set to composer-2-fast to restore the previous default.",
       "sensitive": false
     },
     "codex_model": {

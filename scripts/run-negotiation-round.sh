@@ -67,7 +67,7 @@ case "$TOOL" in
         CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool cursor)
         # shellcheck disable=SC2086
         cursor agent -p --force --trust $CURSOR_MODEL_ARGS --workspace "$WORKSPACE" \
-            "Read the negotiation prompt from $PROMPT_FILE and respond to it." \
+            "$("$SCRIPT_DIR/cursor-wrap-prompt.sh" "Read the negotiation prompt from $PROMPT_FILE and respond to it.")" \
             > "$OUTPUT_FILE" 2>&1
         ;;
     *)
