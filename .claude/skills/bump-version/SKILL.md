@@ -78,7 +78,7 @@ $PWD/.claude/skills/bump-version/scripts/apply-bump.sh --new-version <NEW_VERSIO
 
 ## Output contract
 
-The reasoning log at `${IMPLEMENT_TMPDIR:-${TMPDIR:-/tmp}}/bump-version-reasoning.md` is read by `/implement` Step 9a and embedded into the PR body under `<details><summary>Version Bump Reasoning</summary>`. The absolute path is also emitted on stdout by `classify-bump.sh` as `REASONING_FILE=<path>` — callers should prefer that structured output over reconstructing the path from env vars.
+The reasoning log at `${IMPLEMENT_TMPDIR:-${TMPDIR:-/tmp}}/bump-version-reasoning.md` is read by `/implement` Step 8 as the source content for the `version-bump-reasoning` anchor-section fragment (written to `$IMPLEMENT_TMPDIR/anchor-sections/version-bump-reasoning.md` and upserted into the tracking issue's anchor comment via `tracking-issue-write.sh upsert-anchor`). The slim PR body template (`skills/implement/references/pr-body-template.md`) no longer contains a `<details><summary>Version Bump Reasoning</summary>` block — the anchor comment is the canonical audit surface. The absolute path of the reasoning log is also emitted on stdout by `classify-bump.sh` as `REASONING_FILE=<path>` — callers should prefer that structured output over reconstructing the path from env vars.
 
 ## Exit codes
 - `classify-bump.sh` — 0 on success (including `BUMP_TYPE=NONE`), non-zero on parse/validation failure
