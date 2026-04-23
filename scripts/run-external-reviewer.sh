@@ -21,6 +21,8 @@
 #     codex exec --full-auto -C /path/to/repo --output-last-message /tmp/review-abc/codex-output.txt "Review prompt..."
 #
 #   # Cursor review (stdout captured to file via --capture-stdout)
+#   # Production invocations wrap the prompt via scripts/cursor-wrap-prompt.sh to
+#   # engage max-mode; the example below shows the bare shape for clarity.
 #   run-external-reviewer.sh --tool cursor --output /tmp/review-abc/cursor-output.txt --timeout 900 --capture-stdout -- \
 #     cursor agent -p --force --trust --workspace /path/to/repo "Review prompt..."
 
