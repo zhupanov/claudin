@@ -28,6 +28,13 @@
 # Fail-closed contract: exit 0 in all STATUS branches so the caller can parse
 # stdout. Exit 1 only on internal errors (unparseable args, mktemp failure,
 # discovery-script failure).
+#
+# Temp-file lifetime: this script emits FEATURE_FILE's path and exits without
+# removing it — the caller MUST `rm -f "$FEATURE_FILE"` once it has captured
+# the contents, otherwise every invocation leaks one temp file under the
+# system temp directory (`mktemp -t`, typically $TMPDIR). See the sibling
+# contract `build-feature-description.md` for the same rule stated alongside
+# the stdout contract.
 
 set -euo pipefail
 
