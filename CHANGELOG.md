@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.5] - 2026-04-23
+
+### Changed
+
+- Broadened the anti-halt continuation prohibition across 6 orchestrator SKILL.md files and `skills/shared/subskill-invocation.md` to explicitly name "summary, handoff, status recap, or 'returning to parent' message" as halts-in-disguise — not just the prior narrower "child's cleanup output" phrasing. Motivation: PR #345 exposed a halt where `/fix-issue`'s agent wrote a "Returning to /fix-issue caller" handoff message after `/implement`'s Step 18 cleanup, forcing the user to type "continue" to resume Step 7. The PR adds new post-call blockquote directives at 3 heavy-child `Skill`-tool call sites naming the concrete next parent step: `/fix-issue` Step 6a (post-`/implement` → Step 7, success-path scoped), `/implement` Step 1 normal mode (post-`/design`), `/implement` Step 5 normal mode (post-`/review`); `/alias` Step 3's existing post-call reminder is broadened to match. The canonical source `skills/shared/subskill-invocation.md` is the single source of truth; all pre-existing per-call-site micro-reminders (9 locations across 5 files) were updated to include the new broadened clause for internal consistency. Both harness contract substrings (`**Anti-halt continuation reminder.**` and `Continue after child returns`) preserved byte-exact; `scripts/test-anti-halt-banners.sh` passes unchanged.
+
 ## [6.1.4] - 2026-04-23
 
 ### Added
