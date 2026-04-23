@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.3] - 2026-04-23
+
+### Changed
+
+- `docs/workflow-lifecycle.md` Delegation Topology now includes `/compress-skill` — added to the intro "pure forwarders" list, the Delegation Topology mermaid diagram as a two-hop `COMPRESS → IMAQ → IMPLEMENT` chain mirroring the `/create-skill → /im → /implement` pattern, the Topology bullet list, and the "Pure forwarders are exempt..." sentence (closes #312). `skills/shared/subskill-invocation.md` extended in parallel: both exemption paragraphs (`## Post-invocation verification`, `## Anti-halt continuation reminder`) now list `/compress-skill` alongside `/im`, `/imaq`, `/create-skill`, `/loop-improve-skill`, `/simplify-skill`; the `The banner MUST NOT appear in pure-delegator SKILL.md files:` bullet list gains `skills/compress-skill/SKILL.md`; and the Update-triggers paragraph updated from "five pure-delegator SKILL.md files" to "six". `scripts/test-anti-halt-banners.sh` `DELEGATORS` array extended with `skills/compress-skill/SKILL.md` so banner-absence is enforced for this skill; harness passes 18 checks (6 orchestrators, 6 delegators, 6 micro-reminders). Doc/test-only change; no behavioral effect on plugin surface.
+
 ## [6.0.2] - 2026-04-23
 
 ### Fixed
