@@ -211,7 +211,7 @@ For each **accepted in-scope** finding (`FINDING_*` items only — exclude `OOS_
 2. If the fix involves creating new tests, write them.
 3. If the fix involves CI workflow changes, edit the workflow YAML.
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill (Step 3f — Re-review, or Step 4 — Final Summary if converged) — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill (Step 3f — Re-review, or Step 4 — Final Summary if converged) — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run validation checks. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` via the Skill tool to confirm the fix.
 

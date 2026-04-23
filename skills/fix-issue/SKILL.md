@@ -166,7 +166,7 @@ Branch on `INTENT` from Step 5.
 
 Compose the feature description from the issue content: use the issue title as the primary description, with key details from the issue body and comments as context.
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 Invoke `/implement` via the Skill tool:
 
@@ -175,7 +175,7 @@ Invoke `/implement` via the Skill tool:
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
-> **Continue after child returns.** With `PR_URL` and `PR_NUMBER` captured, your next user-facing output MUST be the Step 7 breadcrumb (`> **🔶 7: close issue**`) — do NOT write a summary, status recap, or "returning to caller" message first. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns (success path only).** If `/implement` succeeded and `PR_URL` / `PR_NUMBER` are captured, your next user-facing output MUST be the Step 7 breadcrumb (`> **🔶 7: close issue**`) — do NOT write a summary, status recap, or "returning to caller" message first. If `/implement` failed or bailed, ignore this directive and follow the failure-path branch below. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 If `/implement` fails or bails, print `**⚠ 6: execute — /implement failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
 
@@ -189,7 +189,7 @@ Common `NON_PR` patterns:
 - **Code-review task** — examine the requested area and file one issue per problem found. Invoke `/issue` via the Skill tool in batch mode (`--input-file` with a markdown file listing the findings) to file all findings in a single pass with semantic duplicate detection. Write the `--input-file` markdown to a path under `$FIX_ISSUE_TMPDIR` (never inside the repository working tree) so the "no working-tree edits" rule above holds.
 - **Other investigative or planning tasks** — follow the body's instructions literally; when ambiguous, prefer the interpretation that produces actionable output (issues, documented findings) over the interpretation that produces code changes.
 
-> **Continue after child returns.** When any child Skill (`/issue`, `/research`, ...) returns, execute the NEXT step of this skill — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When any child Skill (`/issue`, `/research`, ...) returns, execute the NEXT step of this skill — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 As work proceeds, maintain a running `WORK_SUMMARY` — a concise markdown summary of what was done and the output artifacts (links to any issues created, key findings, etc.). This summary becomes the closing comment in Step 7 and the Slack message in Step 8. Keep `PR_URL` and `PR_NUMBER` unset on this path.
 

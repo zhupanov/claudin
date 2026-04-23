@@ -239,7 +239,7 @@ Proceed to Step 2.
 
 ### Normal mode (`quick_mode=false`)
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: applies only to the `/design` invocation in normal mode.)
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: applies only to the `/design` invocation in normal mode.)
 
 If `IS_USER_BRANCH=true` AND a reviewed implementation plan is already visible in conversation context (prior `/design` this session), proceed to Step 2. Otherwise invoke `/design` via the Skill tool. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. Prepend `--auto` only if `auto_mode=true`; prepend `--debug` only if `debug_mode=true`. After `/design` returns, proceed to Step 2.
 
@@ -273,7 +273,7 @@ Implement per Step 1's plan. Follow CLAUDE.md: read existing code before modifyi
 
 ## Step 3 — Relevant Checks (first pass)
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Covers every other `/relevant-checks` invocation in this file — no per-site reminders needed at quick-mode 5.7, Step 6, Step 10, or Step 12.)
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Covers every other `/relevant-checks` invocation in this file — no per-site reminders needed at quick-mode 5.7, Step 6, Step 10, or Step 12.)
 
 Invoke `/relevant-checks` via the Skill tool. If checks fail, diagnose and fix, then re-invoke to confirm.
 
@@ -358,7 +358,7 @@ Log to `Warnings`: `Step 5 — quick-mode review loop did not converge after 7 r
 
 ### Normal mode (`quick_mode=false`)
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: applies only to the `/review` invocation in normal mode; quick mode uses an inline reviewer loop.)
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: applies only to the `/review` invocation in normal mode; quick mode uses an inline reviewer loop.)
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip regardless of the nature of changes — code, skills, documentation, data files, configuration — all changes require full review.**
 
@@ -434,7 +434,7 @@ Parse `HAS_BUMP`, `COMMITS_BEFORE`, `STATUS` (`ok|missing_main_ref|git_error` pe
 
 **If `HAS_BUMP=true`**:
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: `HAS_BUMP=false` skips to Step 9 per the control-flow directive above, which overrides this rule.)
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: `HAS_BUMP=false` skips to Step 9 per the control-flow directive above, which overrides this rule.)
 
 1. Invoke `/bump-version` via the Skill tool.
 2. **Capture the reasoning file path**: when invoked via Skill tool, `IMPLEMENT_TMPDIR` does not always propagate to the skill's bash env, so `classify-bump.sh` may write `bump-version-reasoning.md` to `${TMPDIR:-/tmp}`. The authoritative path is on stdout as `REASONING_FILE=<path>`. Parse and save as `BUMP_REASONING_FILE` for step 3b, Step 9a, and the sub-procedure step 6.
@@ -486,7 +486,7 @@ Write the PR body to `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body is the single s
 
 Runs unconditionally regardless of mode. See `pr-body-template.md` section — Step 9a.1 OOS GitHub Issue Creation Pipeline for the full procedure (repo-unavailable early-exit; read the three OOS artifact files; all-empty early-exit; idempotency sentinel recovery per Load-Bearing Invariant #2 and NEVER #5; cross-phase dedup; `/issue` batch-mode invocation via Skill tool; stdout parsing for `ISSUES_CREATED` / `ISSUES_FAILED` / `ISSUES_DEDUPLICATED` / per-issue fields; PR body "Accepted OOS" placeholder replacement; Run Statistics `| OOS issues filed |` cell rewrite; sentinel write to `oos-issues-created.md`).
 
-> **Continue after child returns.** When `/issue` returns from batch mode, execute the next sub-steps (parse stdout; update PR body; write sentinel) — do NOT end the turn. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+> **Continue after child returns.** When `/issue` returns from batch mode, execute the next sub-steps (parse stdout; update PR body; write sentinel) — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated (<elapsed>)` (or the appropriate early-exit breadcrumb).
 
