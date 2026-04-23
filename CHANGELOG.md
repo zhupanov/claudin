@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.11] - 2026-04-23
+
+### Fixed
+
+- `scripts/tracking-issue-write.sh` `truncate_body` no longer leaks its `work_dir` (from `mktemp -d`) when an `awk` call fails mid-function under `set -e` (closes #360). The function body is now a subshell (`truncate_body() ( … )`) and installs `trap "rm -rf '$work_dir'" EXIT` immediately after `mktemp -d`, so cleanup is structurally scoped to the function's own subshell and fires on every exit path — not only the trailing success-path `rm -rf` that the previous code relied on. The subshell-body form also makes the cleanup contract robust to future refactors: callers no longer have to preserve the implicit "always invoke via `$(…)`" invariant for the EXIT trap to stay scoped. The misleading header comment claiming the caller's EXIT trap covered `work_dir` transitively is rewritten to reflect the new ownership (each per-subcommand EXIT trap only names `BODY_TMP`/`ERR_TMP`/`JSON_TMP`, never `work_dir`). Pure resource-management fix — no change to stdout contract, redaction ordering, truncation algorithm, or anchor skeleton preservation; `scripts/test-tracking-issue-write.sh`'s 43 assertions pass unchanged.
+
 ## [6.1.10] - 2026-04-23
 
 ### Added
