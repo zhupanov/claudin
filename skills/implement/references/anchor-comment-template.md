@@ -144,9 +144,9 @@ The `plan-review-tally` and `code-review-tally` sections contain per-finding vot
 - Future consumers extracting tallies from an existing anchor comment should use the section-open / section-end markers as the extraction boundary (not prose heuristics).
 - If a tally section is present but its interior is collapsed to the `[section '...' truncated — see execution-issues.md locally]` placeholder, treat the tally as unavailable and degrade gracefully — do NOT fabricate counts.
 
-## Step 9a.1 OOS pipeline procedure (anchor-comment adaptation)
+## Step 9a.1 OOS pipeline procedure (canonical, anchor-comment context)
 
-The canonical Step 9a.1 procedure lives in `skills/implement/references/pr-body-template.md` (PR-body context); the adaptation for anchor-comment context below covers the Phase 3+ case where accepted OOS issues are also recorded in the tracking issue's anchor comment.
+The canonical Step 9a.1 procedure lives here (Phase 3+). The anchor comment is the single source of truth for report content — the PR body is a slim projection (see `skills/implement/references/pr-body-template.md` for the slim-PR scaffold).
 
 Step 9a.1's sequence in anchor context:
 
@@ -184,5 +184,5 @@ This is a defense-in-depth layer above `scripts/redact-secrets.sh`'s outbound sc
 |---|---|
 | `scripts/tracking-issue-write.sh` | `SECTION_MARKERS` and `COLLAPSE_PRIORITY` arrays must match the slug list here. |
 | `scripts/tracking-issue-read.sh` | Anchor-marker filter uses the same strict `<!-- larch:implement-anchor v1` prefix. |
-| `skills/implement/references/pr-body-template.md` | Sibling canonical template for the PR-body context; shares the Voting Tally + Step 9a.1 content style. |
-| `scripts/test-implement-structure.sh` (future) | Phase 3 test-harness migration will pin the three load-bearing literals in this file. |
+| `skills/implement/references/pr-body-template.md` | Sibling slim-projection template for the PR body (Summary + Diagrams + Test plan + `Closes #<N>` + footer only); Phase 3+ the anchor comment is canonical for rich content. |
+| `scripts/test-implement-structure.sh` | Phase 3 test-harness assertion (9a) pins the three load-bearing literals here (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`); assertion (9b) pins a ≥3 reference floor for `anchor-comment-template.md` in SKILL.md. |

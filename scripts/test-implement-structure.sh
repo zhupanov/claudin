@@ -1,12 +1,14 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 9 load-bearing invariants across skills/implement/SKILL.md and the four
+# Asserts 9 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
 # the no-`see Step N below|above` invariant in references/*.md, and (closes #323) the
-# three load-bearing marker literals in pr-body-template.md plus the ≥3
-# `pr-body-template.md` reference-count floor in SKILL.md. The cross-skill
+# three load-bearing marker literals in anchor-comment-template.md plus the ≥3
+# `anchor-comment-template.md` reference-count floor and ≥1 `pr-body-template.md`
+# floor in SKILL.md (migrated from pr-body-template.md to anchor-comment-template.md
+# as of umbrella #348 Phase 3). The cross-skill
 # Consumer/Contract/When-to-load header triplet (formerly assertion 8 here, implement-
 # scoped) moved to scripts/test-references-headers.sh as of #308 and now applies repo-
 # wide to every skills/*/references/*.md. Intentional overlap: assertion (3) (single
@@ -18,8 +20,8 @@
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
-#  (4) At least 4 `MANDATORY — READ ENTIRE FILE` occurrences (floor, not ceiling),
-#      AND each of the four expected reference filenames appears on a `MANDATORY —
+#  (4) At least 5 `MANDATORY — READ ENTIRE FILE` occurrences (floor, not ceiling),
+#      AND each of the five expected reference filenames appears on a `MANDATORY —
 #      READ ENTIRE FILE` line in SKILL.md (step-to-reference binding from design FINDING_7).
 #  (5) Three byte-pinned verbosity-suppressed literal strings present in SKILL.md.
 #  (6) CI-parity focus-area enum: at least one line in SKILL.md contains the literal
@@ -29,22 +31,26 @@
 #      prevents a false-pass when the five tokens appear in unrelated prose blocks
 #      (e.g., the NEVER List) but the actual Cursor/Codex quick-review prompt strings
 #      regress. Design FINDING_2.
-#  (7) Four `skills/implement/references/*.md` files exist with expected names.
+#  (7) Five `skills/implement/references/*.md` files exist with expected names.
 #  (8) Zero occurrences of `see Step N below` / `see Step N above` patterns inside any
 #      references/*.md — progressive-disclosure invariant (references must not
 #      back-reference parent SKILL.md step numbers with direction words).
-#  (9) Load-bearing marker literals in skills/implement/references/pr-body-template.md
-#      (closes #323):
-#      (9a) three byte-pinned marker literals must be present in pr-body-template.md
-#      (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`,
-#      `<details><summary>Execution Issues</summary>`) — parsed and written at runtime
-#      by the Step 9a.1 OOS issue-filing pipeline and the Step 11 post-execution
-#      PR-body refresh. Renaming or removing any marker silently breaks runtime
-#      behavior with no other test failure. (9b) SKILL.md must reference
-#      `pr-body-template.md` at least 3 times (one MANDATORY pointer in Step 9a +
-#      one prose binding in Step 9a.1 + one prose binding in Step 11) to guard
-#      against a future edit that keeps the MANDATORY pointer but orphans Step 9a.1
-#      or Step 11 from the extracted reference.
+#  (9) Load-bearing marker literals in skills/implement/references/anchor-comment-template.md
+#      (closes #323; migrated from pr-body-template.md per umbrella #348 Phase 3):
+#      (9a) three byte-pinned marker literals must be present in
+#      anchor-comment-template.md (`Accepted OOS (GitHub issues filed)`,
+#      `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`) —
+#      parsed and written at runtime by the Step 9a.1 OOS issue-filing pipeline
+#      (anchor's `oos-issues` + `run-statistics` sections) and the Step 11
+#      post-execution anchor refresh (anchor's `execution-issues` section).
+#      Renaming or removing any marker silently breaks runtime behavior with no
+#      other test failure. (9b) SKILL.md must reference `anchor-comment-template.md`
+#      at least 3 times (one MANDATORY pointer at Step 0.5 + one prose binding in
+#      Step 9a.1 + one prose binding in Step 11) to guard against a future edit
+#      that keeps the MANDATORY pointer but orphans Step 9a.1 or Step 11 from the
+#      extracted reference. (9c) SKILL.md must reference `pr-body-template.md` at
+#      least 1 time (the MANDATORY pointer at Step 9a) — lower floor than pre-Phase-3
+#      since rich report content moved to anchor-comment-template.md.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
@@ -55,6 +61,7 @@ SKILL_MD="$REPO_ROOT/skills/implement/SKILL.md"
 REFS_DIR="$REPO_ROOT/skills/implement/references"
 
 expected_refs=(
+  "anchor-comment-template.md"
   "bump-verification.md"
   "conflict-resolution.md"
   "pr-body-template.md"
@@ -97,8 +104,8 @@ count=$(grep -c '^## Rebase Checkpoint Macro$' "$SKILL_MD" || true)
 # Use `|| true` to keep set -e + pipefail from aborting before the fail() diagnostic
 # when there are zero matches (grep -o exits 1 on no match, which propagates via pipefail).
 occurrences=$(grep -o 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" 2>/dev/null | wc -l | tr -d ' ' || true)
-if ! [[ "$occurrences" =~ ^[0-9]+$ ]] || (( occurrences < 4 )); then
-  fail "(4) expected at least 4 'MANDATORY — READ ENTIRE FILE' occurrences in SKILL.md, found ${occurrences:-0}"
+if ! [[ "$occurrences" =~ ^[0-9]+$ ]] || (( occurrences < 5 )); then
+  fail "(4) expected at least 5 'MANDATORY — READ ENTIRE FILE' occurrences in SKILL.md, found ${occurrences:-0}"
 fi
 
 # Step-to-reference binding: each expected reference filename must appear on a
@@ -187,38 +194,51 @@ fi
 
 # ---------------------------------------------------------------------------
 # (9a) Three load-bearing marker literals must appear at least once in
-#      skills/implement/references/pr-body-template.md. Step 9a.1 (OOS
+#      skills/implement/references/anchor-comment-template.md (migrated from
+#      pr-body-template.md per umbrella #348 Phase 3). Step 9a.1 (OOS
 #      issue-filing pipeline) parses and rewrites the OOS placeholder and the
-#      Run Statistics OOS cell; Step 11 (post-execution PR-body refresh)
-#      locates and rewrites the Execution Issues details block. A future
-#      rename or removal in pr-body-template.md silently breaks runtime
-#      behavior with no other test failure. Use fixed-string matching since
-#      the literals contain regex metachars (`|`, `<`, `>`).
+#      Run Statistics OOS cell in the anchor's `oos-issues` + `run-statistics`
+#      sections; Step 11 (post-execution anchor refresh) locates and rewrites
+#      the Execution Issues details block in the anchor's `execution-issues`
+#      section. A future rename or removal in anchor-comment-template.md
+#      silently breaks runtime behavior with no other test failure. Use
+#      fixed-string matching since the literals contain regex metachars.
 # ---------------------------------------------------------------------------
-PR_BODY_TEMPLATE="$REFS_DIR/pr-body-template.md"
-pr_body_markers=(
+ANCHOR_TEMPLATE="$REFS_DIR/anchor-comment-template.md"
+anchor_markers=(
   'Accepted OOS (GitHub issues filed)'
   '| OOS issues filed |'
   '<details><summary>Execution Issues</summary>'
 )
-for marker in "${pr_body_markers[@]}"; do
-  grep -Fq "$marker" "$PR_BODY_TEMPLATE" \
-    || fail "(9a) pr-body-template.md lost load-bearing marker literal: $marker"
+for marker in "${anchor_markers[@]}"; do
+  grep -Fq "$marker" "$ANCHOR_TEMPLATE" \
+    || fail "(9a) anchor-comment-template.md lost load-bearing marker literal: $marker"
 done
 
 # ---------------------------------------------------------------------------
-# (9b) skills/implement/SKILL.md must reference `pr-body-template.md` at
-#      least 3 times — one MANDATORY pointer in Step 9a, one prose binding
-#      in Step 9a.1, one prose binding in Step 11's post-execution refresh.
-#      Assertion (4) already checks the MANDATORY line exists; this guards
-#      against a future edit that keeps the MANDATORY pointer but orphans
-#      Step 9a.1 or Step 11 from the extracted reference (both steps
-#      delegate their full procedure to pr-body-template.md sections).
+# (9b) skills/implement/SKILL.md must reference `anchor-comment-template.md`
+#      at least 3 times — one MANDATORY pointer at Step 0.5 + one prose
+#      binding in Step 9a.1 + one prose binding in Step 11's post-execution
+#      anchor refresh. Assertion (4) already checks the MANDATORY line exists;
+#      this guards against a future edit that keeps the MANDATORY pointer but
+#      orphans Step 9a.1 or Step 11 from the extracted reference (both steps
+#      delegate their procedure to anchor-comment-template.md sections).
 #      Use fixed-string matching so the `.` in the filename is literal.
 # ---------------------------------------------------------------------------
+anchor_refs=$(grep -cF 'anchor-comment-template.md' "$SKILL_MD" || true)
+if ! [[ "$anchor_refs" =~ ^[0-9]+$ ]] || (( anchor_refs < 3 )); then
+  fail "(9b) expected at least 3 references to 'anchor-comment-template.md' in SKILL.md (Step 0.5 MANDATORY + Step 9a.1 binding + Step 11 binding), found ${anchor_refs:-0}"
+fi
+
+# ---------------------------------------------------------------------------
+# (9c) skills/implement/SKILL.md must reference `pr-body-template.md` at
+#      least 1 time — the MANDATORY pointer at Step 9a. Lower floor than
+#      pre-Phase-3 (was >=3) since rich report content moved to
+#      anchor-comment-template.md. Use fixed-string matching.
+# ---------------------------------------------------------------------------
 pr_body_refs=$(grep -cF 'pr-body-template.md' "$SKILL_MD" || true)
-if ! [[ "$pr_body_refs" =~ ^[0-9]+$ ]] || (( pr_body_refs < 3 )); then
-  fail "(9b) expected at least 3 references to 'pr-body-template.md' in SKILL.md (Step 9a MANDATORY + Step 9a.1 binding + Step 11 binding), found ${pr_body_refs:-0}"
+if ! [[ "$pr_body_refs" =~ ^[0-9]+$ ]] || (( pr_body_refs < 1 )); then
+  fail "(9c) expected at least 1 reference to 'pr-body-template.md' in SKILL.md (Step 9a MANDATORY pointer), found ${pr_body_refs:-0}"
 fi
 
 echo "PASS: test-implement-structure.sh — all 9 structural invariants hold"

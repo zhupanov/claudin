@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green squash-merge, optional Slack. Triggers: 'ship X', 'land PR', 'merge this'. See /research (read-only), /design (plan), /im (merge), /imaq (auto-merge)."
-argument-hint: "[--quick] [--auto] [--merge | --draft] [--slack] [--debug] [--session-env <path>] <feature description>"
+argument-hint: "[--quick] [--auto] [--merge | --draft] [--slack] [--debug] [--session-env <path>] [--issue <N>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
@@ -13,13 +13,15 @@ End-to-end: design, plan review, code, validate, commit, code review, validate, 
 
 ## Load-Bearing Invariants
 
-Three invariants enforced across multiple steps. Anchor cross-step questions here; do not re-derive inline.
+Four invariants enforced across multiple steps. Anchor cross-step questions here; do not re-derive inline.
 
 1. **Version Bump Freshness** — the terminal bump commit on HEAD MUST be based on latest `origin/main` at merge time. **Enforcement**: Step 12's Rebase + Re-bump Sub-procedure, step12-family hard-bail to 12d on any failure; Step 10 uses the same sub-procedure with step10-family best-effort semantics (warn + break to Step 11); Step 8 is pre-PR and permissive. **Why**: merging a stale bump publishes a version that does not reflect latest main, violating the plugin's version contract.
 
-2. **Step 9a.1 Idempotency** — re-running `/implement` in the same session MUST NOT double-file OOS issues. **Enforcement**: the `$IMPLEMENT_TMPDIR/oos-issues-created.md` sentinel detected at Step 9a.1 entry; prior URLs + tallies are recovered from it with no `/issue` call. **Why**: `/issue`'s LLM-based semantic dedup is a second backstop but not deterministic; the sentinel is the byte-exact deterministic guard.
+2. **Step 9a.1 OOS Sentinel Idempotency** — re-running `/implement` in the same session MUST NOT double-file OOS issues. **Enforcement**: the `$IMPLEMENT_TMPDIR/oos-issues-created.md` sentinel detected at Step 9a.1 entry; prior URLs + tallies are recovered from it with no `/issue` call. **Why**: `/issue`'s LLM-based semantic dedup is a second backstop but not deterministic; the sentinel is the byte-exact deterministic guard.
 
 3. **Degraded-Git Fail-Closed** — `check-bump-version.sh STATUS != ok` MUST force `VERIFIED=false` at Step 12 regardless of `COMMITS_AFTER`. **Enforcement**: STATUS-first evaluation ordering in the Rebase + Re-bump Sub-procedure step 4 (see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/bump-verification.md` Block β); Step 8 permissive, Step 12 strict (bail to 12d). **Why**: a coerced 0 baseline from a transient git error routes to a bogus "wrong commit count" mis-diagnosis — the fail-closed rule prevents silently wrong merged versions.
+
+4. **Tracking-Issue Sentinel Idempotency** (umbrella #348) — re-running `/implement` in the same session MUST NOT double-create a tracking issue or double-adopt under a mismatched anchor. **Enforcement**: the `$IMPLEMENT_TMPDIR/parent-issue.md` sentinel detected at Step 0.5 entry; prior `ISSUE_NUMBER` + `ANCHOR_COMMENT_ID` are recovered from it so no `tracking-issue-write.sh create-issue` call (Branch 4 path) runs and no duplicate `upsert-anchor` without `--anchor-id` runs (which could create a second anchor comment). **Why**: `tracking-issue-write.sh upsert-anchor`'s marker-search fallback is deterministic but single-shot; the sentinel is the byte-exact session-scope guard against double-creation on retry or resume. Parallel to Invariant #2 — sentinel-based byte-exact idempotency guards for distinct session artifacts.
 
 ## NEVER List
 
@@ -33,7 +35,7 @@ Each rule states WHY; per-site reminders reference by anchor name.
 
 4. **NEVER skip the `/review` step regardless of the nature of changes.** **Why**: all changes — code, skills, documentation, data files, configuration — require full reviewer-panel vetting. **How to apply**: Step 5 normal mode always invokes `/review`; quick mode runs a single-reviewer loop but still mandates review.
 
-5. **NEVER let the Step 9a.1 sentinel short-circuit silently skip the PR-body Accepted-OOS update.** **Why**: idempotency recovery MUST update the PR body from recovered URLs; silent skip breaks the PR-body contract. **How to apply**: the idempotent-rerun branch in Step 9a.1 writes the same PR-body updates as steps 7 and 7b.
+5. **NEVER let the Step 9a.1 sentinel short-circuit silently skip the anchor-comment Accepted-OOS update.** **Why**: idempotency recovery MUST update the anchor comment's `oos-issues` section from recovered URLs; silent skip breaks the anchor contract as the Phase 3+ single source of truth for Accepted OOS content. **How to apply**: the idempotent-rerun branch in Step 9a.1 issues the same `tracking-issue-write.sh upsert-anchor` call for the anchor's `oos-issues` and `run-statistics` sections (using URLs recovered from `oos-issues-created.md`) as the normal create-script branch steps 7 and 7b.
 
 6. **NEVER move the Step 5 quick-mode Cursor/Codex reviewer prompts (containing the five focus-area enum literals `code-quality` / `risk-integration` / `correctness` / `architecture` / `security`) out of `SKILL.md`.** **Why**: `.github/workflows/ci.yaml` inspects `skills/implement/SKILL.md` for the unquoted focus-area enum. **How to apply**: keep the two Bash blocks for quick-mode Cursor and Codex inline in Step 5; do not move them to a reference file unless the CI workflow's file list is extended in the same PR.
 
@@ -49,6 +51,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 - `--no-merge`: **Deprecated** no-op. On encounter, print `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
 - `--debug`: `debug_mode=true`. Controls output verbosity (see Verbosity Control). Forwarded to `/design` (Step 1) and `/review` (Step 5).
 - `--session-env <path>`: sets `SESSION_ENV_PATH`. Forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. Empty = standalone invocation (full discovery).
+- `--issue <N>`: sets `ISSUE_ARG=<N>`. Default: empty. When non-empty, Step 0.5 Branch 2 adopts the given tracking issue instead of deferring creation to Step 9a.1 (Branch 4). Compatible with all other flags. If the target issue is CLOSED, Step 0.5 emits `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout and exits non-zero (cleanup still runs).
 
 ## Progress Reporting
 
@@ -58,6 +61,7 @@ Step Name Registry:
 | Step | Short Name |
 |------|------------|
 | 0 | setup |
+| 0.5 | tracking issue |
 | 1 | design plan |
 | 1.m | update main |
 | 1.r | rebase |
@@ -158,7 +162,7 @@ After each child skill returns (`/design` Step 1, `/review` Step 5), check `$IMP
 
 ### Follow-up Work Principle
 
-Durable, actionable follow-up identified during design / implementation / review MUST be tracked as a GitHub issue (the PR body is a pointer, not the storage). Two filing paths:
+Durable, actionable follow-up identified during design / implementation / review MUST be tracked as a GitHub issue (the anchor comment on the tracking issue is the durable store for execution content; the PR body carries only the `Closes #<N>` pointer — see Step 9a). Two filing paths:
 
 1. **Auto-filed via Step 9a.1** — items fitting the OOS pipeline (accepted OOS from `/design` or `/review` voting, or main-agent items via the dual-write below). Step 9a.1 creates issues via `/issue` batch mode.
 2. **Manually filed via `/issue`** — durable follow-up not fitting OOS schema (e.g., a process-level gap surfaced by a warning). After `/issue` returns the number, reference it in the most relevant PR body block: `Implementation Deviations` (supports inline `#<N>`) or the originating `execution-issues.md` entry (rendered verbatim in the PR body's `Execution Issues` block — append `→ filed as #<N>` to the entry's description line in place).
@@ -198,7 +202,123 @@ Whenever the main agent appends to `Pre-existing Code Issues` in `execution-issu
 
 **Sanitize the description before append.** Redact secrets / API keys / OAuth / JWT / passwords / certificates → `<REDACTED-TOKEN>`; internal hostnames / URLs / private IPs → `<INTERNAL-URL>`; PII (emails, names, account IDs linked to a real user) → `<REDACTED-PII>`. The Description is forwarded verbatim into a public GitHub issue — paraphrase reproduction context rather than copying log lines when in doubt.
 
-If `oos-accepted-main-agent.md` does not exist, create it with the new entry. If `repo_unavailable=true`, still append (Step 9a.1 skips filing). `$IMPLEMENT_TMPDIR` is removed at Step 18, so the only persistent audit trail in the repo-unavailable case is the `Pre-existing Code Issues` entry in `execution-issues.md` that lands in the PR body's `<details><summary>Execution Issues</summary>` block.
+If `oos-accepted-main-agent.md` does not exist, create it with the new entry. If `repo_unavailable=true`, still append (Step 9a.1 skips filing). **Repo-unavailable audit-loss disclosure**: in `repo_unavailable=true` mode, neither the tracking issue's anchor comment nor the PR body's Execution Issues block exists (Phase 3 slim PR body dropped the Execution Issues block, and without repo access no anchor comment can be created). `$IMPLEMENT_TMPDIR/execution-issues.md` is the only audit trail and is removed at Step 18. Operators running with `repo_unavailable=true` must preserve the tmpdir manually if an audit trail is required.
+
+## Step 0.5 — Resolve Tracking Issue
+
+Resolve a stable `ISSUE_NUMBER` + (when available) `ANCHOR_COMMENT_ID` for the session. The anchor comment on this tracking issue is the single source of truth for Phase 3+ report content (voting tallies, diagrams, version bump reasoning, OOS list, execution issues, run statistics); the PR body is a slim projection.
+
+**MANDATORY — READ ENTIRE FILE** before composing any anchor-section fragment or invoking `tracking-issue-write.sh`: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/anchor-comment-template.md`. Contains the canonical anchor body template, the eight section slugs, the first-line HTML marker literal, the compose-time sanitization rule, the Step 9a.1 OOS pipeline procedure in anchor-comment context, and the Quick-mode anchor guidance. **Do NOT load** outside Step 0.5, the Anchor-section accumulation procedure, Step 9a.1, and Step 11's post-execution anchor refresh.
+
+**Decision order** (top-to-bottom; first match wins):
+
+**Branch 1 — sentinel exists** (`$IMPLEMENT_TMPDIR/parent-issue.md` present):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-read.sh --sentinel "$IMPLEMENT_TMPDIR/parent-issue.md"
+```
+
+Parse stdout for `ISSUE_NUMBER`, `ANCHOR_COMMENT_ID`, `ADOPTED`.
+
+- **Mismatch guard**: if `ISSUE_ARG` is non-empty AND `ISSUE_NUMBER_in_sentinel != ISSUE_ARG`: print `**⚠ 0.5: tracking issue — sentinel mismatch (sentinel has #$ISSUE_NUMBER_in_sentinel, --issue requested #$ISSUE_ARG). Clearing sentinel and re-adopting.**`, remove the sentinel file and `rm -rf $IMPLEMENT_TMPDIR/anchor-sections/`, fall through to Branch 2.
+- **Reuse**: set `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` from sentinel. Print `✅ 0.5: tracking issue — reusing sentinel #$ISSUE_NUMBER (<elapsed>)`.
+- **Hydration** (FINDING_8): if `$IMPLEMENT_TMPDIR/anchor-sections/` is empty or missing, fetch the remote anchor to avoid overwriting populated sections with empty fragments on the first resumed upsert:
+
+  ```bash
+  mkdir -p "$IMPLEMENT_TMPDIR/anchor-hydrate"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-read.sh --issue $ISSUE_NUMBER --out-dir "$IMPLEMENT_TMPDIR/anchor-hydrate"
+  ```
+
+  Parse the fetched `TASK_FILE` with an inline awk loop over `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Hydration is best-effort: any failure (fetch error, anchor missing, parse error) logs to `Warnings` ("Step 0.5 — anchor hydration skipped: <reason>") and proceeds. On failure, the next step's fragment write will be the first fresh write — acceptable if no prior anchor content existed.
+
+Proceed to Step 1.
+
+**Branch 2 — `--issue <N>` provided** (`ISSUE_ARG` non-empty, no usable sentinel after Branch 1 mismatch-clear):
+
+```bash
+gh issue view "$ISSUE_ARG" --json state,url --jq '{state,url}'
+```
+
+Detect PR-vs-issue: if `.url` contains `/pull/`, print `**⚠ 0.5: tracking issue — #$ISSUE_ARG is a pull request, not an issue. Aborting.**` and skip to Step 18.
+
+If `.state == "CLOSED"`: print `**⚠ 0.5: tracking issue — adopted issue #$ISSUE_ARG is CLOSED. Aborting.**`, emit `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout, skip to Step 18. (Phase 4 of umbrella #348 will handle this bail token in `/fix-issue`.)
+
+Else (`.state == "OPEN"`): compose a seed body (anchor first-line marker + empty section-marker pairs only) and upsert the anchor:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_ARG --body-file <seed-body>
+```
+
+Parse `ANCHOR_COMMENT_ID` from stdout. If `FAILED=true`, print `**⚠ 0.5: tracking issue — upsert-anchor failed: $ERROR. Aborting.**` and skip to Step 18. Write `$IMPLEMENT_TMPDIR/parent-issue.md`:
+
+```
+ISSUE_NUMBER=$ISSUE_ARG
+ANCHOR_COMMENT_ID=<id>
+ADOPTED=true
+```
+
+`ADOPTED=true` per the `scripts/tracking-issue-read.md` contract: Phase 3 Branch 2 adopts an existing open issue. Set `ISSUE_NUMBER=$ISSUE_ARG`. Print `✅ 0.5: tracking issue — adopted #$ISSUE_NUMBER via --issue (<elapsed>)`. Proceed to Step 1.
+
+**Branch 3 — PR on current branch with `Closes #<N>`** (no sentinel, no `--issue`):
+
+Check for an existing PR on the current branch; if present, extract the first `Closes #<N>` line from its body:
+
+```bash
+gh pr view --json body --jq '.body' 2>/dev/null | grep -oE 'Closes #[0-9]+' | head -1 | grep -oE '[0-9]+'
+```
+
+If a number emerges as `RECOVERED_N`: validate the target issue via `gh issue view "$RECOVERED_N" --json state,url` (same PR-vs-issue + CLOSED checks as Branch 2). If target is a PR URL or CLOSED, fall through to Branch 4. Else (OPEN issue): upsert the anchor:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file <seed-body>
+```
+
+Parse `ANCHOR_COMMENT_ID`. Write sentinel with `ADOPTED=true` (Phase 3 Branch 3 adopts an existing open issue via PR-body recovery; per the `scripts/tracking-issue-read.md` contract). Set `ISSUE_NUMBER=$RECOVERED_N`. Print `✅ 0.5: tracking issue — recovered #$ISSUE_NUMBER from PR body (<elapsed>)`. Proceed to Step 1.
+
+If no PR exists, no `Closes #<N>` match, or the match is not a valid adoptable issue: fall through to Branch 4.
+
+**Branch 4 — truly fresh run** (no sentinel, no `--issue`, no PR-body recovery):
+
+Set internal `deferred=true`. Do NOT write a sentinel yet. Do NOT invoke `tracking-issue-write.sh`. Print `⏩ 0.5: tracking issue — deferred creation until Step 9a.1 (<elapsed>)`. Proceed to Step 1.
+
+Subsequent Steps 1/3/5/7a/8 accumulate anchor-body fragments locally under `$IMPLEMENT_TMPDIR/anchor-sections/` without remote writes. Step 9a.1 performs the first-remote-write (`tracking-issue-write.sh create-issue` + `upsert-anchor` with all accumulated sections).
+
+### repo_unavailable=true
+
+If `repo_unavailable=true`: skip all Step 0.5 branches, do NOT invoke `gh issue view` / `tracking-issue-write.sh`. Fragment accumulation at later steps writes only to local `$IMPLEMENT_TMPDIR/anchor-sections/` files. No tracking issue is created, no sentinel is written, and `$IMPLEMENT_TMPDIR/execution-issues.md` is the only audit trail (removed at Step 18). Print `⏩ 0.5: tracking issue — skipped (repo unavailable) (<elapsed>)`.
+
+### /fix-issue coordination
+
+**Future** `/fix-issue` Step 6a (Phase 4 of umbrella #348) will forward `--issue $ISSUE_NUMBER` to `/implement` so the two skills converge on the same tracking issue via Branch 2. Until Phase 4 lands, Phase 3 provides only the `--issue` flag surface on `/implement`; callers must pass it manually. GO/IN PROGRESS lock-check logic in `/fix-issue` is undisturbed by Phase 3: `/implement`'s anchor comment carries the `<!-- larch:implement-anchor v1 issue=<N> -->` first-line marker, and `tracking-issue-read.sh`'s anchor-marker filter skips it from aggregated task content — the lock-check ignores anchors by construction. See `skills/fix-issue/SKILL.md` Step 6a (current narrative, pre-Phase-4) and `scripts/tracking-issue-read.md` (anchor-marker filter section).
+
+### Anchor-section accumulation (Steps 1, 3, 5, 7a, 8, 9a.1, 11)
+
+Each step covered by the accumulation mechanism writes its fragment to `$IMPLEMENT_TMPDIR/anchor-sections/<section-id>.md`. Fragment content is the markdown that will be wrapped by the `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` markers during body assembly. If `ISSUE_NUMBER` is set (Branches 1, 2, 3 resolved), after writing a fragment the step ALSO assembles the full anchor body and upserts for progressive remote visibility. If `deferred=true` (Branch 4) or `repo_unavailable=true`, the step writes only the local fragment.
+
+**Section-ID mapping** (matches the 8 canonical slugs in `anchor-comment-template.md`):
+
+| Step | Section-ID |
+|------|------------|
+| Step 1 (after `/design` plan + test plan visible) | `plan-goals-test` |
+| Step 1 tail (after `/design` voting tally visible) | `plan-review-tally` |
+| Step 5 (after `/review` voting tally visible, or after quick-mode loop) | `code-review-tally` |
+| Step 7a (after Code Flow Diagram generated) | `diagrams` (both Architecture + Code Flow) |
+| Step 8 (after `/bump-version` returns `REASONING_FILE`) | `version-bump-reasoning` |
+| Step 9a.1 (after OOS filing) | `oos-issues` AND `run-statistics` (two separate fragment files) |
+| Step 11 (post-execution) | `execution-issues` |
+
+**Assembly + upsert procedure** (when `ISSUE_NUMBER` set):
+
+1. Walk the 8 canonical section slugs in `SECTION_MARKERS` order (defined in `anchor-comment-template.md`): `plan-goals-test`, `plan-review-tally`, `code-review-tally`, `diagrams`, `version-bump-reasoning`, `oos-issues`, `execution-issues`, `run-statistics`.
+2. For each slug, if `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md` exists, emit `<!-- section:<slug> -->\n<content>\n<!-- section-end:<slug> -->`. If absent, emit only the marker pair with empty content (preserves section shape for `tracking-issue-write.sh`'s truncation algorithm).
+3. Prepend the first-line HTML marker: `<!-- larch:implement-anchor v1 issue=$ISSUE_NUMBER -->`.
+4. Write assembled body to `$IMPLEMENT_TMPDIR/anchor-assembled.md`.
+5. ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --anchor-id $ANCHOR_COMMENT_ID --body-file $IMPLEMENT_TMPDIR/anchor-assembled.md
+   ```
+6. On `FAILED=true`, log to `Warnings` (`Step <N> — anchor upsert failed: $ERROR`) and proceed; do NOT bail. Fragments still accumulate locally; Step 9a.1's final upsert is the last attempt.
+
+**Compose-time sanitization**: every fragment composed into an anchor section MUST apply prompt-level sanitization (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`). `scripts/redact-secrets.sh` (invoked inside `tracking-issue-write.sh`) is the shell-layer backstop but does NOT cover internal URLs or PII — compose-time sanitization is the first-line defense. See `anchor-comment-template.md` Compose-time sanitization rule.
 
 ## Step 1 — Ensure Design Plan Exists
 
@@ -258,6 +378,14 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/git-current-branch.sh
 ```
 
 Parse `BRANCH=<name>` and save as `BRANCH_NAME`. Referenced by Step 14 (`local-cleanup.sh --branch $BRANCH_NAME`) and by Steps 4 / 14 / 18 status messages. Step 1 is responsible for ensuring `BRANCH_NAME` reflects the branch where implementation will happen — re-run `git-current-branch.sh` after `/design` returns (normal mode) since `/design` may have switched branches.
+
+### Anchor-section fragments — `plan-goals-test` + `plan-review-tally`
+
+Write two anchor fragments from `/design`'s visible output. See Step 0.5 "Anchor-section accumulation" for the mechanism.
+
+1. **`plan-goals-test` fragment** — compose from `/design`'s `## Goal` and `## Test plan` sections (or their quick-mode inline equivalents). Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-goals-test.md`.
+2. **`plan-review-tally` fragment** — compose from the plan review voting tally + Reviewer Competition Scoreboard visible in conversation context (or `"Voting was skipped (insufficient voters)."` / `"No findings were raised — voting was not needed."` / `"Quick mode — no plan review voting."` as appropriate). Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-review-tally.md`.
+3. If `ISSUE_NUMBER` is set (Branches 1, 2, 3 from Step 0.5), assemble the anchor body and invoke `upsert-anchor`. If `deferred=true` (Branch 4) or `repo_unavailable=true`, skip the upsert.
 
 ### Rebase onto latest main (before implementation)
 
@@ -368,9 +496,13 @@ After `/review` returns, follow the Cross-Skill Health Propagation procedure fro
 
 > **Continue after child returns.** When `/review` returns, execute the Cross-Skill Health Propagation + Track Rejected Code Review Findings + Step 6 breadcrumb in order — do NOT write a summary, handoff, or "returning to parent" message first. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
+### Anchor-section fragment — `code-review-tally`
+
+After `/review` returns (normal mode) or the quick-mode loop completes, compose the `code-review-tally` fragment from the visible per-finding vote breakdown and Reviewer Competition Scoreboard (normal mode), or from the round-by-round summary (quick mode — fallback text `"Quick mode — no voting panel. Main agent reviewed findings across up to 7 single-reviewer rounds (Cursor → Codex → Claude fallback chain)."`). Write to `$IMPLEMENT_TMPDIR/anchor-sections/code-review-tally.md`. If `ISSUE_NUMBER` is set, assemble the anchor body and upsert (see Step 0.5 "Anchor-section accumulation").
+
 ### Track Rejected Code Review Findings
 
-After review (`/review` in normal mode or the quick-mode loop), for any **in-scope** findings that were not accepted (not enough YES votes in normal mode — rejected or exonerated — or rejected by the main agent in quick mode), append each to `$IMPLEMENT_TMPDIR/rejected-findings.md`. **Do not include OOS items** — those follow a separate pipeline (accepted OOS → Step 9a.1 GitHub issues; non-accepted OOS → PR body observations):
+After review (`/review` in normal mode or the quick-mode loop), for any **in-scope** findings that were not accepted (not enough YES votes in normal mode — rejected or exonerated — or rejected by the main agent in quick mode), append each to `$IMPLEMENT_TMPDIR/rejected-findings.md`. **Do not include OOS items** — those follow a separate pipeline (accepted OOS → Step 9a.1 GitHub issues; non-accepted OOS → anchor comment's `oos-issues` section Rejected sub-block):
 
 ```markdown
 ### [Code Review] <Reviewer Name>
@@ -410,11 +542,20 @@ Print: `> **🔶 7a: code flow**`
 
 Runs unconditionally after Step 7 (regardless of Steps 6-7 skip).
 
-If `quick_mode=true`: print `⏩ 7a: code flow — skipped (quick mode) (<elapsed>)` and proceed to Step 8.
+If `quick_mode=true`: print `⏩ 7a: code flow — skipped (quick mode) (<elapsed>)`, still write the `diagrams` anchor fragment (Architecture Diagram + Code-Flow-skipped placeholder per the Anchor-section fragment — `diagrams` sub-section below) so the Architecture Diagram is not silently omitted from the anchor, then proceed to Step 8.
 
 If `quick_mode=false`: generate a mermaid Code Flow Diagram from the actual committed implementation. Focus on **runtime behavior** — function call sequences, data flow, control flow. Do NOT duplicate the Architecture Diagram's structural view. Choose the appropriate mermaid type (`sequenceDiagram`, `flowchart`, `stateDiagram`, `graph`, etc.). Print under a `## Code Flow Diagram` header with a mermaid code fence.
 
 On success: `✅ 7a: code flow — diagram generated (<elapsed>)`. On failure (too abstract to diagram): `**⚠ 7a: code flow — generation failed, proceeding without diagram (<elapsed>)**` and log to `Warnings`.
+
+### Anchor-section fragment — `diagrams`
+
+Compose the `diagrams` fragment from both diagrams (matching the two-sub-section shape in `anchor-comment-template.md`):
+
+- `## Architecture Diagram` + mermaid code fence (retrieved from the `/design` Step 3b output visible in conversation context, or `"Architecture diagram not available."` if not visible).
+- `## Code Flow Diagram` + mermaid code fence just generated, or `"(Code Flow Diagram skipped — quick mode)"` if `quick_mode=true`, or `"Code flow diagram not available."` if generation failed.
+
+Write to `$IMPLEMENT_TMPDIR/anchor-sections/diagrams.md`. If `ISSUE_NUMBER` is set, assemble and upsert (see Step 0.5). In quick mode, Step 7a is skipped entirely for Code Flow generation but the fragment is still written with the Architecture Diagram + skipped placeholder — do NOT skip the fragment write just because Code Flow was skipped, or the Architecture Diagram will be silently omitted on the deferred path.
 
 ### Rebase onto latest main (before version bump)
 
@@ -447,6 +588,12 @@ Parse `HAS_BUMP`, `COMMITS_BEFORE`, `STATUS` (`ok|missing_main_ref|git_error` pe
 
 **Important**: at PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 8a after `/bump-version` returns. No additional commits may occur between Step 8a and Step 9. After PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the sub-procedure). Branch history between PR creation and merge may temporarily contain zero or multiple bump commits; the invariant is Load-Bearing Invariant #1 (terminal bump commit on HEAD based on latest `origin/main` at merge time), enforced strictly by Step 12 and best-effort by Step 10.
 
+### Anchor-section fragment — `version-bump-reasoning`
+
+Compose the `version-bump-reasoning` fragment from the contents of `$BUMP_REASONING_FILE` if it exists and is non-empty; otherwise use `"No version bump reasoning available (skill may have skipped via BUMP_TYPE=NONE, or /bump-version was not invoked)."`. Write to `$IMPLEMENT_TMPDIR/anchor-sections/version-bump-reasoning.md`. If `ISSUE_NUMBER` is set, assemble and upsert (see Step 0.5).
+
+**Transient gap until Phase 5**: `rebase-rebump-subprocedure.md` step 6 currently refreshes the PR body's `<details><summary>Version Bump Reasoning</summary>` marker, which no longer exists in the slim PR body (Phase 3). Until Phase 5 of umbrella #348 retargets sub-procedure step 6 to refresh the anchor's `version-bump-reasoning` section instead, step 6 becomes a silent no-op during re-bump cycles (Steps 10 / 12). Version bump reasoning IS still captured at this Step 8 fragment write (and refreshed on the adopted path via `upsert-anchor`), so no information is lost on normal rebase-free runs. Phase 5 will close the mid-loop refresh gap.
+
 ## Step 8a — CHANGELOG Update
 
 Skip and proceed to Step 9 if `CHANGELOG.md` does not exist in the project root (print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`) or if Step 8 was skipped (`HAS_BUMP=false`; print `⏩ 8a: changelog — skipped (no version bump) (<elapsed>)`).
@@ -478,15 +625,58 @@ Print: `✅ 8a: changelog — updated for v<NEW_VERSION> (<elapsed>)`
 
 ### 9a — Prepare PR body
 
-Write the PR body to `$IMPLEMENT_TMPDIR/pr-body.md`. The PR body is the single source of truth for all report content — no separate report files.
+The anchor comment on the tracking issue is the single source of truth for report content (voting tallies, diagrams, version bump reasoning, OOS list, execution issues, run statistics) — see `anchor-comment-template.md`. The PR body is a **slim projection**: Summary + Architecture Diagram + Code Flow Diagram + Test plan + `Closes #<TRACKING_ISSUE_NUMBER>` + Claude Code footer.
 
-**MANDATORY — READ ENTIRE FILE** before composing the PR body: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/pr-body-template.md`. Contains the canonical PR body markdown template (Summary, Architecture Diagram, Code Flow Diagram, Goal, Test plan, Final Design, Version Bump Reasoning, Rejected Plan Review Suggestions, Implementation Deviations, Rejected Code Review Suggestions, Plan Review Voting Tally, Code Review Voting Tally Round 1, Out-of-Scope Observations, Execution Issues, Run Statistics), Voting Tally extraction guidance, Quick-mode PR body guidance, the full Step 9a.1 OOS pipeline procedure, and the Step 11 post-execution PR body refresh. **Do NOT load** outside Step 9a, Step 9a.1, Step 11's post-execution refresh, and the Rebase + Re-bump Sub-procedure step 6.
+Write the slim PR body to `$IMPLEMENT_TMPDIR/pr-body.md`. Substitute `<TRACKING_ISSUE_NUMBER>` with `$ISSUE_NUMBER` from the Step 0.5 sentinel (or from Step 9a.1's first-remote-write on the deferred path). The `Closes #<N>` line auto-closes the tracking issue on merge and anchors Step 0.5 Branch 3 recovery on subsequent sessions.
 
-### 9a.1 — Create OOS GitHub Issues
+**MANDATORY — READ ENTIRE FILE** before composing the PR body: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/pr-body-template.md`. Contains the slim PR body scaffold (Summary, Architecture Diagram, Code Flow Diagram, Test plan, `Closes #<N>`, Claude Code footer). **Do NOT load** outside Step 9a.
 
-Runs unconditionally regardless of mode. See `pr-body-template.md` section — Step 9a.1 OOS GitHub Issue Creation Pipeline for the full procedure (repo-unavailable early-exit; read the three OOS artifact files; all-empty early-exit; idempotency sentinel recovery per Load-Bearing Invariant #2 and NEVER #5; cross-phase dedup; `/issue` batch-mode invocation via Skill tool; stdout parsing for `ISSUES_CREATED` / `ISSUES_FAILED` / `ISSUES_DEDUPLICATED` / per-issue fields; PR body "Accepted OOS" placeholder replacement; Run Statistics `| OOS issues filed |` cell rewrite; sentinel write to `oos-issues-created.md`).
+### 9a.1 — Create OOS GitHub Issues + Deferred-Creation First-Remote-Write
 
-> **Continue after child returns.** When `/issue` returns from batch mode, execute the next sub-steps (parse stdout; update PR body; write sentinel) — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+Runs unconditionally regardless of mode. The canonical OOS pipeline lives in `anchor-comment-template.md` Step 9a.1 OOS pipeline procedure section (anchor-comment context). See `anchor-comment-template.md` for: repo-unavailable early-exit; read the three OOS artifact files (`oos-accepted-design.md`, `oos-accepted-review.md`, `oos-accepted-main-agent.md`); all-empty early-exit; idempotency sentinel recovery per Load-Bearing Invariant #2 and NEVER #5; cross-phase dedup; `/issue` batch-mode invocation via Skill tool; stdout parsing for `ISSUES_CREATED` / `ISSUES_FAILED` / `ISSUES_DEDUPLICATED` / per-issue fields; **anchor comment's `oos-issues` section** placeholder replacement; **anchor comment's `run-statistics` section** `| OOS issues filed |` cell rewrite; sentinel write to `oos-issues-created.md`.
+
+> **Continue after child returns.** When `/issue` returns from batch mode, execute the next sub-steps (parse stdout; write fragments; upsert anchor; write sentinel) — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
+### Deferred-Creation first-remote-write (Branch 4 of Step 0.5)
+
+At Step 9a.1 entry, if no sentinel exists (`deferred=true`) and `repo_unavailable=false`:
+
+1. Derive the tracking-issue title from `FEATURE_DESCRIPTION`: take the first line if present (everything before the first `\n`), else the first 80 characters; strip leading/trailing whitespace; collapse internal whitespace runs to a single space. Do NOT use `PR_TITLE` — the PR is not yet created at Step 9a.1 entry (Step 9b creates it).
+
+2. Compose a seed body (anchor first-line marker + all 8 canonical section marker pairs wrapping any fragments already written in Steps 1/3/5/7a/8). Write to `$IMPLEMENT_TMPDIR/anchor-seed.md`.
+
+3. Create the tracking issue:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh create-issue --title "<derived-title>" --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
+   ```
+   Parse `ISSUE_NUMBER` and `ISSUE_URL`. On `FAILED=true`, print `**⚠ 9a.1: OOS issues — create-issue failed: $ERROR. Aborting Step 9a.1 and proceeding with deferred/absent anchor.**` Log to `Tool Failures`. Skip anchor accumulation for the rest of the run; PR body's `Closes #<N>` line will be absent (substitute `# (no tracking issue created)` in the slim PR body).
+
+4. The tracking-issue's initial body (anchor seed) already carries the first-line `<!-- larch:implement-anchor v1` marker. `tracking-issue-write.sh create-issue` writes the issue body directly — no separate `upsert-anchor` is required on first creation. Capture `ANCHOR_COMMENT_ID`: the initial body IS the anchor (on GitHub, the issue body is not a comment, so `ANCHOR_COMMENT_ID` remains empty — `tracking-issue-write.sh upsert-anchor`'s marker-search fallback on subsequent calls will find the marker in the issue body and upsert via `gh issue edit` rather than comment edit).
+
+   Actually: `tracking-issue-write.sh` treats the anchor as a standalone comment, not the issue body. After `create-issue`, call:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
+   ```
+   to plant the anchor as a first comment on the newly-created issue. Parse `ANCHOR_COMMENT_ID` from stdout.
+
+5. Write `$IMPLEMENT_TMPDIR/parent-issue.md`:
+   ```
+   ISSUE_NUMBER=<created-N>
+   ANCHOR_COMMENT_ID=<id>
+   ADOPTED=false
+   ```
+   `ADOPTED=false` per the `scripts/tracking-issue-read.md` contract: Step 9a.1 Branch 4 CREATED a fresh tracking issue, not adopted an existing one.
+
+6. Proceed to the OOS pipeline steps (read artifacts, /issue batch, parse stdout, etc. — per `anchor-comment-template.md` Step 9a.1 procedure).
+
+### Anchor-section fragments — `oos-issues` and `run-statistics` (two separate files)
+
+Step 9a.1 writes TWO anchor fragments:
+
+- `$IMPLEMENT_TMPDIR/anchor-sections/oos-issues.md` — the Accepted OOS bullet list (with `#<N>` links from `/issue` batch output) plus the Rejected / Out-of-Scope Observations sub-block. Content per `anchor-comment-template.md` section `oos-issues`.
+- `$IMPLEMENT_TMPDIR/anchor-sections/run-statistics.md` — the Run Statistics table, with the `| OOS issues filed |` cell populated from the `ISSUES_CREATED` / `ISSUES_DEDUPLICATED` counts. Content per `anchor-comment-template.md` section `run-statistics`.
+
+After both fragments are written, assemble the anchor body and upsert (see Step 0.5 "Anchor-section accumulation"). Assembly order follows `SECTION_MARKERS`: `oos-issues` comes before `execution-issues`, `run-statistics` comes last.
 
 Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED> deduplicated (<elapsed>)` (or the appropriate early-exit breadcrumb).
 
@@ -553,9 +743,28 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/post-pr-announce.sh --pr <PR-NUMBER>
 
 Parse `SLACK_TS=<value>` (emitted by `post-pr-announce.sh` — keep in sync). On non-zero exit or empty `SLACK_TS`: print `**⚠ Slack announcement failed. Continuing.**`, set `SLACK_TS` empty, log to `Tool Failures`. Save `SLACK_TS` for Step 13.
 
-### Post-execution PR body refresh
+### Post-execution anchor `execution-issues` refresh
 
-Runs unconditionally after all Step 11 branches converge (including Slack-skipped and `PR_STATUS=existing`). All Step 11 early-exit paths must reach this before Step 12. See `pr-body-template.md` section — Step 11 Post-execution PR body refresh for the full procedure (fetch live body via `gh-pr-body-read.sh`; replace the `<details><summary>Execution Issues</summary>` block content with `$IMPLEMENT_TMPDIR/execution-issues.md` verbatim, preserving load-bearing blank lines; write to `$IMPLEMENT_TMPDIR/pr-body.md`; update via `gh-pr-body-update.sh`). Skip if `execution-issues.md` does not exist or is empty.
+Runs unconditionally after all Step 11 branches converge (including Slack-skipped and `PR_STATUS=existing`). All Step 11 early-exit paths must reach this before Step 12.
+
+**Branch on state**:
+
+1. If `repo_unavailable=true`: print `⏭️ 11: execution-issues — skipped (repo unavailable) (<elapsed>)` and proceed to Step 12. No anchor exists; `$IMPLEMENT_TMPDIR/execution-issues.md` is the only audit trail (removed at Step 18; preserve tmpdir manually if audit needed).
+2. If `$IMPLEMENT_TMPDIR/execution-issues.md` does not exist or is empty: skip cleanly (no content to refresh).
+3. If `ISSUE_NUMBER` is absent at Step 11 entry (sentinel not written): log to `Warnings` (`Step 11 — execution-issues refresh skipped: no tracking-issue sentinel. Expected Step 9a.1 to have written one on non-repo_unavailable runs.`) and proceed to Step 12. This is a bug path; Step 9a.1 should have created the issue on the deferred-creation path.
+4. Otherwise (`ISSUE_NUMBER` set, `execution-issues.md` non-empty, `repo_unavailable=false`):
+
+   a. Compose the `execution-issues` fragment from the full contents of `$IMPLEMENT_TMPDIR/execution-issues.md`, wrapped in the `<details><summary>Execution Issues</summary>` / `</details>` block per `anchor-comment-template.md` section `execution-issues`. Preserve load-bearing blank lines (required for GitHub Markdown rendering inside `<details>` blocks).
+
+   b. Write to `$IMPLEMENT_TMPDIR/anchor-sections/execution-issues.md`.
+
+   c. Assemble the full anchor body from all current fragments in canonical `SECTION_MARKERS` order (see Step 0.5 "Anchor-section accumulation"), and upsert:
+      ```bash
+      ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --anchor-id $ANCHOR_COMMENT_ID --body-file "$IMPLEMENT_TMPDIR/anchor-assembled.md"
+      ```
+      On `FAILED=true`, print `**⚠ 11: execution-issues — anchor refresh failed: $ERROR. Continuing.**` and log to `Tool Failures`.
+
+Print: `✅ 11: execution-issues — anchor refreshed (<elapsed>)` on success.
 
 ## Step 12 — CI + Rebase + Merge Loop
 
