@@ -9,7 +9,7 @@ allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task
 
 End-to-end: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, cleanup. With `--slack`: also post a Slack announcement after PR creation (and, when combined with `--merge`, add a `:merged:` emoji after merge). With `--merge`: also CI+rebase+merge loop, local branch delete, main verification.
 
-**Anti-halt continuation reminder.** After every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output. Strictly subordinate to explicit non-sequential control-flow directives in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation here is covered. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+**Anti-halt continuation reminder.** After every child `Skill` tool call (`/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. Strictly subordinate to explicit non-sequential control-flow directives in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation here is covered. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 ## Load-Bearing Invariants
 
@@ -243,6 +243,8 @@ Proceed to Step 2.
 
 If `IS_USER_BRANCH=true` AND a reviewed implementation plan is already visible in conversation context (prior `/design` this session), proceed to Step 2. Otherwise invoke `/design` via the Skill tool. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. Prepend `--auto` only if `auto_mode=true`; prepend `--debug` only if `debug_mode=true`. After `/design` returns, proceed to Step 2.
 
+> **Continue after child returns.** When `/design` returns, execute the Cross-Skill Health Update + `BRANCH_NAME` capture + Step 1.r rebase checkpoint + Step 2 breadcrumb in order — do NOT write a summary, handoff, or "returning to parent" message first. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
 ### Cross-Skill Health Update (after /design)
 
 After `/design` returns (normal mode), follow the Cross-Skill Health Propagation procedure from Step 0.
@@ -363,6 +365,8 @@ Log to `Warnings`: `Step 5 — quick-mode review loop did not converge after 7 r
 Invoke `/review` via the Skill tool. Canonical order: `[--debug] --step-prefix "5.::code review" --session-env $IMPLEMENT_TMPDIR/session-env.sh`. Prepend `--debug` only if `debug_mode=true`. Launches the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, Claude fallbacks when externals unavailable); implements accepted suggestions recursively until clean.
 
 After `/review` returns, follow the Cross-Skill Health Propagation procedure from Step 0.
+
+> **Continue after child returns.** When `/review` returns, execute the Cross-Skill Health Propagation + Track Rejected Code Review Findings + Step 6 breadcrumb in order — do NOT write a summary, handoff, or "returning to parent" message first. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
 ### Track Rejected Code Review Findings
 
