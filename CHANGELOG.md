@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.3] - 2026-04-23
+
+### Changed
+
+- `README.md` Cursor setup section gained a note clarifying that larch overrides `~/.cursor/cli-config.json` `modelId` via its own `--model $MODEL` flag, where `$MODEL` resolves from `LARCH_CURSOR_MODEL` or the plugin userConfig `cursor_model` (exported to subprocesses as `CLAUDE_PLUGIN_OPTION_CURSOR_MODEL`; default `composer-2`). Users pinning a specific Cursor model for larch should set `LARCH_CURSOR_MODEL` or the `cursor_model` userConfig rather than editing the JSON file. Also notes that larch enforces max-mode at the prompt level (`scripts/cursor-wrap-prompt.sh`), so `"maxMode": true` in the JSON is not required for larch-driven calls. Closes #334.
+
 ## [6.1.2] - 2026-04-23
 
 ### Fixed
