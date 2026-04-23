@@ -154,19 +154,29 @@ emit_gh_failure() {
 # Implementation: the new-interior content can contain newlines, which
 # awk -v cannot accept. For each section we write the replacement
 # interior to a per-section temp file and have awk splice it in via
-# getline. A single work_dir (mktemp -d) holds these temps. Every call
-# site invokes truncate_body via command substitution
-# ($(truncate_body "$BODY_CONTENT")), so the EXIT trap below is scoped
-# to the command-substitution subshell and fires on both normal return
-# AND a set -e abort from any awk failure mid-function — guaranteeing
-# cleanup without relying on the caller's own EXIT trap (which is
-# installed later and only names BODY_TMP/ERR_TMP/JSON_TMP, not
-# work_dir).
-truncate_body() {
+# getline. A single work_dir (mktemp -d) holds these temps. The
+# function body uses a subshell `( … )` rather than a brace group so
+# the EXIT trap below is structurally scoped to the function's own
+# subshell — it cannot clobber the caller's EXIT trap regardless of
+# how the function is invoked. The trap fires whenever this subshell
+# exits (normal return, explicit exit, or propagated failure),
+# guaranteeing work_dir cleanup without relying on the caller's own
+# EXIT trap (which is installed later and only names
+# BODY_TMP/ERR_TMP/JSON_TMP, not work_dir). Note: Bash 3.2's errexit
+# behavior inside nested subshells is known to be inconsistent for
+# some inner-command failure patterns — the cleanup guarantee here
+# rests on subshell exit, not on errexit specifically triggering.
+truncate_body() (
     local body="$1"
     local slug interior new_interior open_marker close_marker
     local work_dir
     work_dir=$(mktemp -d)
+    # Expand $work_dir at trap-install time (double-quoted outer + single-
+    # quoted path inside): work_dir is `local`, so by the time the EXIT
+    # trap fires the local binding is gone. Single-quoting the whole trap
+    # body (or using double quotes around the inner path) would see an
+    # empty variable at EXIT and leak the real directory. The disable
+    # below turns off the SC2064 lint that flags this exact pattern.
     # shellcheck disable=SC2064
     trap "rm -rf '$work_dir'" EXIT
 
@@ -250,7 +260,7 @@ truncate_body() {
     fi
 
     printf '%s' "$body"
-}
+)
 
 # list_anchor_comments <issue-number> <repo> — prints tab-separated
 # "id<TAB>first-line-of-body" lines (one per comment) to stdout, order
