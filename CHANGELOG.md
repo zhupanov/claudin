@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.1] - 2026-04-23
+
+### Changed
+
+- `.claude/skills/bump-version/SKILL.md` Output contract aligned with the slim PR body that Phase 3 of umbrella #348 shipped (closes #364). The section no longer claims the reasoning log is embedded into the PR body under `<details><summary>Version Bump Reasoning</summary>` — that block does not exist in the post-Phase-3 PR body template. It now states that `/implement` Step 8 reads the reasoning log as source content for the `version-bump-reasoning` anchor-section fragment, which is upserted into the tracking issue's anchor comment via `tracking-issue-write.sh upsert-anchor` and is the canonical audit surface. The `classify-bump.sh REASONING_FILE=<path>` stdout guidance is unchanged.
+
 ## [6.2.0] - 2026-04-23
 
 ### Added
