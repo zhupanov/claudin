@@ -131,8 +131,8 @@ done
 FEATURE_FILE="$(mktemp -t simplify-skill-feature.XXXXXX)"
 
 # Count lines for the Token budget baseline the feature description pins.
-SKILL_MD_LINES=$(wc -l < "$TARGET_SKILL_MD" | tr -d ' ')
-SKILL_MD_CHARS=$(wc -c < "$TARGET_SKILL_MD" | tr -d ' ')
+SKILL_MD_LINES=$(wc -l < "$TARGET_SKILL_MD" | tr -d '[:space:]')
+SKILL_MD_CHARS=$(wc -c < "$TARGET_SKILL_MD" | tr -d '[:space:]')
 
 # Build the included-files prose block (one per line, indented).
 INCLUDED_PROSE=""
