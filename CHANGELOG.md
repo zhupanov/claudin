@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.8] - 2026-04-23
+
+### Fixed
+
+- `skills/create-skill/scripts/render-skill-md.sh` scaffold bullet 6 (Anti-halt continuation reminder) in both `MULTI_STEP_BODY` and `MINIMAL_BODY` heredocs no longer enumerates a hard-coded four-name pure-delegator list. It now points at `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section "Scope list" — the single source of truth already used by `scripts/test-anti-halt-banners.sh`'s `DELEGATORS` array. Eliminates the drift surface that had left newly-scaffolded skills with an outdated checklist missing `/simplify-skill` and `/compress-skill` (closes #327).
+
 ## [6.0.7] - 2026-04-23
 
 ### Changed
