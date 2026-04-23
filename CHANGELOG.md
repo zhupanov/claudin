@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.1] - 2026-04-23
+
+### Added
+
+- `scripts/test-implement-structure.sh` gained a 9th assertion that pins load-bearing marker literals inside the extracted `skills/implement/references/pr-body-template.md` reference (closes #323). (9a) Three byte-pinned markers — `Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, and `<details><summary>Execution Issues</summary>` — must remain in `pr-body-template.md`; these are parsed and rewritten at runtime by the Step 9a.1 OOS issue-filing pipeline (OOS placeholder + Run Statistics OOS cell) and the Step 11 post-execution PR-body refresh (Execution Issues details block), so a silent rename or removal would break runtime behavior with no test failure. Fixed-string matching because the literals contain regex metachars (`|`, `<`, `>`). (9b) `skills/implement/SKILL.md` must reference `pr-body-template.md` at least 3 times — Step 9a MANDATORY pointer + Step 9a.1 prose binding + Step 11 prose binding — guarding against a future edit that keeps the MANDATORY pointer (which assertion (4) already pins) but orphans Step 9a.1 or Step 11 from the extracted reference. Sibling contract `scripts/test-implement-structure.md` and the script's top-of-file comment updated in sync.
+
 ## [6.1.0] - 2026-04-23
 
 ### Added
