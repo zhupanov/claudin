@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.1] - 2026-04-23
+
+### Fixed
+
+- `skills/compress-skill/scripts/build-feature-description.sh:153-154` — replaced `tr -d ' '` with `tr -d '[:space:]'` on both the `wc -c` and `wc -l` pipelines. The space-only strip failed to remove BSD `wc` leading/padding whitespace that is not a plain ASCII space on some platforms, letting stray whitespace flow into `TOTAL_BYTES` / `TOTAL_LINES` arithmetic and table cells. Restores the safer normalization the removed `measure-set.sh` previously used. Closes #311.
+
 ## [6.0.0] - 2026-04-23
 
 ### Changed
