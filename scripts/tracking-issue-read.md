@@ -37,7 +37,7 @@ ANCHOR_COMMENT_ID=<id or empty>
 ADOPTED=<value or empty>
 ```
 
-Note: the `ADOPTED=` field contract (allowed values, absence semantics) is NOT fully defined in Phase 1 — tracked as OOS observation for Phase 3 when the first consumer (rebase-rebump sub-procedure) wires against it.
+Note: the `ADOPTED=` field contract (allowed values, absence semantics) is NOT fully defined in Phase 1. The Phase 1 review panel accepted a follow-up observation to be filed through the /implement OOS issue-creation pipeline; Phase 3 (rebase-rebump sub-procedure) is the first consumer that will wire against this field and is expected to pin the contract.
 
 ### Failure keys
 

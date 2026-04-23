@@ -246,21 +246,33 @@ truncate_body() {
     printf '%s' "$body"
 }
 
-# list_anchor_comments <issue-number> <repo> — emits anchor comment IDs
-# (one per line, order preserved) for comments whose first line starts
-# with ANCHOR_MARKER_V1_PREFIX. gh api pagination handles >100 comments.
+# list_anchor_comments <issue-number> <repo> — prints tab-separated
+# "id<TAB>first-line-of-body" lines (one per comment) to stdout, order
+# preserved. gh api pagination handles >100 comments. On gh failure
+# stashes the captured stderr in LIST_ANCHOR_ERROR and returns 2. The
+# CALLER is responsible for calling emit_gh_failure with that message.
+#
+# Why this contract: when invoked via command substitution (the caller
+# does LIST_OUT=$(list_anchor_comments …)), any stdout emission from a
+# nested emit_gh_failure would go into LIST_OUT rather than the parent
+# process's stdout — the caller's stdout would be empty even though
+# emit_gh_failure printed FAILED=/ERROR= lines. Returning non-zero and
+# letting the caller emit the envelope restores the documented
+# stdout-visible failure contract.
+LIST_ANCHOR_ERROR=""
 list_anchor_comments() {
     local issue="$1"
     local repo="$2"
     local err_tmp
     err_tmp=$(mktemp)
-    if ! gh api "/repos/${repo}/issues/${issue}/comments" --paginate --jq '.[] | (.id|tostring) + "\t" + (.body // "" | split("\n")[0])' 2>"$err_tmp"; then
-        local err
-        err=$(cat "$err_tmp")
+    local out
+    if ! out=$(gh api "/repos/${repo}/issues/${issue}/comments" --paginate --jq '.[] | (.id|tostring) + "\t" + (.body // "" | split("\n")[0])' 2>"$err_tmp"); then
+        LIST_ANCHOR_ERROR=$(cat "$err_tmp")
         rm -f "$err_tmp"
-        emit_gh_failure "$err"
+        return 2
     fi
     rm -f "$err_tmp"
+    printf '%s' "$out"
 }
 
 # filter_anchor_ids <tab-separated-id-firstline-lines> — stdin → ids of
@@ -469,7 +481,14 @@ case "$cmd" in
             UPDATED=true
         else
             # Marker-search fallback. List anchor-marker comments.
-            LIST_OUT=$(list_anchor_comments "$ISSUE" "$REPO")
+            # list_anchor_comments returns 2 on gh failure and stashes
+            # the captured error in LIST_ANCHOR_ERROR; we emit the
+            # envelope here (caller's stdout) rather than letting the
+            # helper emit it from within the command substitution
+            # subshell.
+            if ! LIST_OUT=$(list_anchor_comments "$ISSUE" "$REPO"); then
+                emit_gh_failure "${LIST_ANCHOR_ERROR:-gh api list comments failed}"
+            fi
             ANCHOR_IDS=$(printf '%s\n' "$LIST_OUT" | filter_anchor_ids)
             ANCHOR_COUNT=0
             if [[ -n "$ANCHOR_IDS" ]]; then
@@ -518,8 +537,11 @@ case "$cmd" in
             emit_gh_failure "jq JSON encode failed: $ERR_CONTENT"
         fi
         if PATCH_OUT=$(gh api -X PATCH "/repos/${REPO}/issues/comments/${TARGET_ID}" --input "$JSON_TMP" 2>"$ERR_TMP"); then
-            # Successful PATCH returns JSON with id + html_url.
-            PATCH_URL=$(printf '%s' "$PATCH_OUT" | grep -oE '"html_url":"[^"]+"' | head -n1 | sed -E 's/"html_url":"([^"]+)"/\1/')
+            # Successful PATCH returns JSON with id + html_url. Parse
+            # with jq (robust against pretty-printed output, multiple
+            # html_url-named fields, or JSON escaping quirks) rather
+            # than grep|sed.
+            PATCH_URL=$(printf '%s' "$PATCH_OUT" | jq -r '.html_url // empty' 2>/dev/null || echo "")
             if [[ -z "$PATCH_URL" ]]; then
                 ERR_CONTENT=$(cat "$ERR_TMP")
                 emit_gh_failure "gh api PATCH did not emit html_url (stderr: $ERR_CONTENT)"

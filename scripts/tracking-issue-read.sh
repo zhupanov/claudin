@@ -27,7 +27,7 @@
 #   TASK_SOURCE=issue-plus-prompt|issue-only|prompt  (omitted for --sentinel)
 #   TASK_FILE=<path>                                  (omitted for --sentinel)
 #   ANCHOR_COMMENT_ID=<id>                            (only --sentinel)
-#   ADOPTED=<value>                                   (only --sentinel; contract TBD — see OOS #<filed>)
+#   ADOPTED=<value>                                   (only --sentinel; allowed-values contract is Phase 3 scope)
 #   On failure: FAILED=true  ERROR=<single-line message>
 #
 # Exit codes:
@@ -93,6 +93,28 @@ fail_usage() {
     exit 1
 }
 
+# redact_gh_error <captured-stderr> — pipe captured gh error text through
+# scripts/redact-secrets.sh, flatten to one line, cap at 500 bytes, and
+# print the result. Parity with tracking-issue-write.sh's outbound
+# redaction posture: 4xx API responses can echo token-bearing request
+# bodies, so every ERROR= emission from a gh failure path MUST go through
+# this helper. The scrubber location is resolved from SCRIPT_DIR; if
+# missing, a best-effort fallback flattens the raw text so the error
+# envelope is still emitted (read.sh is fail-open on missing scrubber
+# since a read is not a publishing path, unlike the write side which is
+# strictly fail-closed).
+redact_gh_error() {
+    local text="$1"
+    local scrubber="$SCRIPT_DIR/redact-secrets.sh"
+    local redacted
+    if [[ -x "$scrubber" ]]; then
+        redacted=$(printf '%s' "$text" | "$scrubber" 2>/dev/null || printf '%s' "$text")
+    else
+        redacted="$text"
+    fi
+    printf '%s' "$redacted" | tr '\n' ' ' | head -c 500
+}
+
 # snap_truncate <text> <max-chars> <scope-label> — if text exceeds
 # max-chars, cut at the previous newline and append an inline marker.
 # Prints the (possibly truncated) text to stdout.
@@ -125,6 +147,17 @@ MAX_BODY_CHARS="$DEFAULT_MAX_BODY_CHARS"
 MAX_COMMENTS="$DEFAULT_MAX_COMMENTS"
 MAX_TOTAL_CHARS="$DEFAULT_MAX_TOTAL_CHARS"
 
+# validate_int_flag <flag-name> <value> — ensure the value is a
+# non-negative integer. Fails the script via fail_usage on non-match so
+# downstream arithmetic never encounters garbage.
+validate_int_flag() {
+    local flag="$1"
+    local value="$2"
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        fail_usage "invalid value for $flag: '$value' (expected non-negative integer)"
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --issue) HAVE_ISSUE=true; ISSUE="${2:?--issue requires a value}"; shift 2 ;;
@@ -132,9 +165,15 @@ while [[ $# -gt 0 ]]; do
         --out-dir) HAVE_OUT_DIR=true; OUT_DIR="${2:?--out-dir requires a value}"; shift 2 ;;
         --repo) HAVE_REPO=true; REPO="${2:?--repo requires a value}"; shift 2 ;;
         --sentinel) HAVE_SENTINEL=true; SENTINEL="${2:?--sentinel requires a value}"; shift 2 ;;
-        --max-body-chars) MAX_BODY_CHARS="${2:?--max-body-chars requires a value}"; shift 2 ;;
-        --max-comments) MAX_COMMENTS="${2:?--max-comments requires a value}"; shift 2 ;;
-        --max-total-chars) MAX_TOTAL_CHARS="${2:?--max-total-chars requires a value}"; shift 2 ;;
+        --max-body-chars)
+            validate_int_flag "--max-body-chars" "${2:?--max-body-chars requires a value}"
+            MAX_BODY_CHARS="$2"; shift 2 ;;
+        --max-comments)
+            validate_int_flag "--max-comments" "${2:?--max-comments requires a value}"
+            MAX_COMMENTS="$2"; shift 2 ;;
+        --max-total-chars)
+            validate_int_flag "--max-total-chars" "${2:?--max-total-chars requires a value}"
+            MAX_TOTAL_CHARS="$2"; shift 2 ;;
         *) fail_usage "unknown flag: $1" ;;
     esac
 done
@@ -203,14 +242,19 @@ if $HAVE_ISSUE && [[ -z "$REPO" ]]; then
     fi
 fi
 
-# --prompt only (or stdin) branch — write prompt verbatim to TASK_FILE.
+# --prompt only (or stdin) branch — write prompt verbatim to TASK_FILE,
+# subject to --max-total-chars (the documented contract says combinations
+# 1-3 share cap flags; prompt-only must honor --max-total-chars).
 if ! $HAVE_ISSUE; then
+    PROMPT_CONTENT=""
     if $HAVE_PROMPT; then
-        printf '%s' "$PROMPT" > "$TASK_FILE"
+        PROMPT_CONTENT="$PROMPT"
     else
         # Read from stdin.
-        cat > "$TASK_FILE"
+        PROMPT_CONTENT=$(cat)
     fi
+    PROMPT_CONTENT=$(snap_truncate "$PROMPT_CONTENT" "$MAX_TOTAL_CHARS" "task-file-total")
+    printf '%s' "$PROMPT_CONTENT" > "$TASK_FILE"
     echo "ISSUE_NUMBER="
     echo "TASK_SOURCE=prompt"
     echo "TASK_FILE=$TASK_FILE"
@@ -218,7 +262,11 @@ if ! $HAVE_ISSUE; then
 fi
 
 # --issue + --prompt branch — post prompt first, then fall through to
-# fetch.
+# fetch. The delegated write-helper path captures its combined stdout/
+# stderr via 2>&1; redact that combined stream through redact_gh_error
+# before surfacing in ERROR= (the write helper already redacts its own
+# stderr, but the combined capture may also include bash -x / trap
+# output from set -e paths that are NOT redacted).
 if $HAVE_PROMPT; then
     PROMPT_TMP=$(mktemp)
     # shellcheck disable=SC2317
@@ -229,7 +277,7 @@ if $HAVE_PROMPT; then
     WRITE_OUT=$(bash "$WRITE_HELPER" append-comment --issue "$ISSUE" --body-file "$PROMPT_TMP" --repo "$REPO" 2>&1) || WRITE_EXIT=$?
     WRITE_EXIT="${WRITE_EXIT:-0}"
     if (( WRITE_EXIT != 0 )); then
-        NESTED=$(printf '%s' "$WRITE_OUT" | tr '\n' ' ' | head -c 400)
+        NESTED=$(redact_gh_error "$WRITE_OUT")
         echo "FAILED=true"
         echo "ERROR=append-comment failed: $NESTED"
         exit 2
@@ -237,7 +285,9 @@ if $HAVE_PROMPT; then
 fi
 
 # --issue (alone or after --prompt post) — fetch issue body + paginated
-# comments, apply filters + caps + envelope, write TASK_FILE.
+# comments, apply filters + caps + envelope, write TASK_FILE. All gh
+# failure paths redact captured stderr through redact_gh_error before
+# emitting the envelope (parity with tracking-issue-write.sh).
 ERR_TMP=$(mktemp)
 # shellcheck disable=SC2317
 cleanup_err() { rm -f "${ERR_TMP:-}" "${PROMPT_TMP:-}"; }
@@ -245,17 +295,22 @@ trap cleanup_err EXIT
 
 ISSUE_BODY=$(gh api "/repos/${REPO}/issues/${ISSUE}" --jq '.body // ""' 2>"$ERR_TMP") || {
     ERR_CONTENT=$(cat "$ERR_TMP")
-    ERR_FLAT=$(printf '%s' "$ERR_CONTENT" | tr '\n' ' ' | head -c 500)
+    ERR_FLAT=$(redact_gh_error "$ERR_CONTENT")
     echo "FAILED=true"
     echo "ERROR=gh api issue fetch failed: $ERR_FLAT"
     exit 2
 }
 
-# Fetch comments with ID + body, tab-separated per line. gh --paginate
-# handles >100 comments.
-COMMENTS_RAW=$(gh api "/repos/${REPO}/issues/${ISSUE}/comments" --paginate --jq '.[] | "\(.id)\t\(.body // "" | gsub("\n"; "\\n"))"' 2>"$ERR_TMP") || {
+# Fetch comments as one per-line JSON-encoded string (lossless — the
+# TSV format was broken by literal tabs or literal `\n` sequences in
+# comment bodies). Each line is a JSON-encoded string representing a
+# compact object `{"id": <n>, "body": <string>}`. The trailing `| tojson`
+# on the jq filter is critical: without it, `gh api --jq` pretty-prints
+# objects across 4+ lines, breaking the per-line parse below. gh
+# --paginate handles >100 comments.
+COMMENTS_RAW=$(gh api "/repos/${REPO}/issues/${ISSUE}/comments" --paginate --jq '.[] | {id: .id, body: (.body // "")} | tojson' 2>"$ERR_TMP") || {
     ERR_CONTENT=$(cat "$ERR_TMP")
-    ERR_FLAT=$(printf '%s' "$ERR_CONTENT" | tr '\n' ' ' | head -c 500)
+    ERR_FLAT=$(redact_gh_error "$ERR_CONTENT")
     echo "FAILED=true"
     echo "ERROR=gh api comments fetch failed: $ERR_FLAT"
     exit 2
@@ -271,15 +326,26 @@ ISSUE_BODY=$(snap_truncate "$ISSUE_BODY" "$MAX_BODY_CHARS" "issue-body")
 
     if [[ -n "$COMMENTS_RAW" ]]; then
         count=0
-        while IFS=$'\t' read -r cid cbody_escaped; do
-            [[ -z "$cid" ]] && continue
-            # Un-escape \n back to real newlines.
-            cbody=$(printf '%b' "${cbody_escaped//\\n/\\n}")
-            # Restore by swapping the literal two-char \n back to real newlines
-            # using awk (portable on BSD).
-            cbody=$(printf '%s' "$cbody_escaped" | awk '{ gsub(/\\n/, "\n"); print }' | sed -e '$ s/\n$//')
+        # Each line of COMMENTS_RAW is a compact JSON object (not a
+        # JSON-encoded string): `gh api --jq` implies raw output (`-r`),
+        # so the trailing `| tojson` in the gh filter produces the raw
+        # object-literal text per line (outer quotes stripped) —
+        # `{"id":<n>,"body":"<string>"}` — without consuming newlines
+        # inside the body (those are encoded as `\n` in the JSON string
+        # literal and decoded by jq below). Parse each line with
+        # `jq -r '.id'` / `jq -r '.body'` directly — no `fromjson` needed
+        # since jq reads the line as a JSON object. This round-trip is
+        # lossless: body newlines AND literal backslash-n sequences both
+        # survive, unlike the earlier ad-hoc TSV format.
+        while IFS= read -r json_line; do
+            [[ -z "$json_line" ]] && continue
+            cid=$(printf '%s' "$json_line" | jq -r '.id' 2>/dev/null || echo "")
+            [[ -z "$cid" || "$cid" == "null" ]] && continue
+            cbody=$(printf '%s' "$json_line" | jq -r '.body' 2>/dev/null || echo "")
             # Extract first line for prefix matching (LC_ALL=C, BOM-tolerant).
-            first_line=$(printf '%s' "$cbody" | head -n 1)
+            # Use parameter expansion (not `head -n 1 | ...`) to avoid
+            # SIGPIPE under set -o pipefail for large bodies.
+            first_line="${cbody%%$'\n'*}"
             # Strip UTF-8 BOM if present.
             if [[ "${first_line:0:3}" == $'\xef\xbb\xbf' ]]; then
                 first_line="${first_line:3}"
