@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.9] - 2026-04-23
+
+### Changed
+
+- `scripts/test-review-structure.sh` hardened with three line-scoped callsite pins (closes #318), pattern parallel to `test-research-structure.sh`'s reciprocal Do-NOT-load pins. New check (5) asserts that a single `skills/review/SKILL.md` line carries (5a) `MANDATORY — READ ENTIRE FILE` + `Step 3` + `references/domain-rules.md` together (Step 3 entry callsite pin); (5b) `MANDATORY — READ ENTIRE FILE` + `round 1` (case-insensitive) + `references/voting.md` together (round-1 branch callsite pin); (5c) `Do NOT load` + `references/voting.md` together (reciprocal rounds-2+ guard). Token boundaries are non-word-char-anchored so `Step 3a` / `Step 30` / `round 10` cannot false-pass. Old assertions (5)–(8) renumbered to (6)–(9); PASS line now reports 9 invariants. Sibling contract `scripts/test-review-structure.md` updated in parallel to document the new pins and boundary rationale.
+
 ## [6.0.8] - 2026-04-23
 
 ### Fixed
