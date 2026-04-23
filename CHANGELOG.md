@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.9] - 2026-04-23
+
+### Changed
+
+- README Installation section: replaced the enumerated list of slash commands ("/design, /implement, /review, /research, ...") with the generic "all larch skills (e.g., /implement)" to reduce doc maintenance as the skill catalog evolves, and added a new `### Setting Up Claude, Codex, Cursor, etc.` subsection with per-tool API key / env-var / settings-file / install-command instructions covering Claude Code, OpenAI Codex, and Cursor. Doc-only change; no behavioral effect on plugin surface.
+
 ## [5.2.8] - 2026-04-21
 
 ### Changed
