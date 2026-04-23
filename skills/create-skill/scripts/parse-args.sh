@@ -11,6 +11,9 @@
 #                 to the child skill. Kept in the parser to avoid breaking existing
 #                 invocations that pass it explicitly.
 #   --debug       Forward to /im (which forwards to /implement).
+#   --slack       Forward to /im (which forwards to /implement). When set, the delegated
+#                 /implement run posts a Slack PR announcement and :merged: emoji after
+#                 merge. Without --slack, the delegated run does not post to Slack.
 #
 # Positional (after flags):
 #   <skill-name>  First positional. Leading '/' is stripped.
@@ -23,6 +26,7 @@
 #   MULTI_STEP=true|false
 #   MERGE=true|false
 #   DEBUG=true|false
+#   SLACK=true|false
 #
 # On failure, emits `ERROR=<msg>` to stdout and exits non-zero.
 
@@ -32,6 +36,7 @@ PLUGIN=false
 MULTI_STEP=false
 MERGE=false
 DEBUG=false
+SLACK=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,8 +44,9 @@ while [[ $# -gt 0 ]]; do
     --multi-step) MULTI_STEP=true; shift ;;
     --merge)      MERGE=true;      shift ;;
     --debug)      DEBUG=true;      shift ;;
+    --slack)      SLACK=true;      shift ;;
     --*)
-      echo "ERROR=Unknown flag '$1'. Valid flags: --plugin, --multi-step, --merge, --debug."
+      echo "ERROR=Unknown flag '$1'. Valid flags: --plugin, --multi-step, --merge, --debug, --slack."
       exit 1
       ;;
     *) break ;;
@@ -48,7 +54,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $# -lt 1 ]]; then
-  echo "ERROR=Missing <skill-name>. Usage: /create-skill [--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>"
+  echo "ERROR=Missing <skill-name>. Usage: /create-skill [--plugin] [--multi-step] [--merge] [--debug] [--slack] <skill-name> <description>"
   exit 1
 fi
 
@@ -59,7 +65,7 @@ shift
 NAME="${NAME#/}"
 
 if [[ $# -lt 1 ]]; then
-  echo "ERROR=Missing <description>. Usage: /create-skill [--plugin] [--multi-step] [--merge] [--debug] <skill-name> <description>"
+  echo "ERROR=Missing <description>. Usage: /create-skill [--plugin] [--multi-step] [--merge] [--debug] [--slack] <skill-name> <description>"
   exit 1
 fi
 
@@ -72,3 +78,4 @@ echo "PLUGIN=${PLUGIN}"
 echo "MULTI_STEP=${MULTI_STEP}"
 echo "MERGE=${MERGE}"
 echo "DEBUG=${DEBUG}"
+echo "SLACK=${SLACK}"

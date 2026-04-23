@@ -1,7 +1,7 @@
 ---
 name: compress-skill
 description: "Use when compressing an existing skill's prose. Rewrites SKILL.md and all transitively included .md files (excluding sub-skills), applying Strunk & White's Elements of Style adapted for technical writing. Delegates to /imaq so changes ship as a PR."
-argument-hint: "<skill-name-or-path> [--debug]"
+argument-hint: "[--debug] [--slack] <skill-name-or-path>"
 allowed-tools: Bash, Skill
 ---
 
@@ -36,10 +36,11 @@ The directory-tree restriction is the mechanical filter: references to files out
 Parse flags from the start of `$ARGUMENTS` before the first positional token.
 
 - `--debug`: Set `debug_mode=true`. Default: `debug_mode=false`. Forwarded to `/imaq` (and thence to `/implement`).
+- `--slack`: Set `slack_enabled=true`. Default: `slack_enabled=false`. Forwarded to `/imaq` (and thence to `/implement`) so the delegated run posts a Slack PR announcement (and a `:merged:` emoji after merge). Without `--slack`, the delegated run does not post to Slack regardless of Slack env-var presence.
 
 After flag stripping, the next positional token is the **target skill name** (bare form, e.g. `implement`) or an **absolute path** to a skill directory. Strip a leading `/` if present on a bare name. Reject names containing `:` (no plugin-qualified forms — see NEVER #4).
 
-If zero positional tokens remain, print: `**ERROR: Usage: /compress-skill <skill-name-or-path> [--debug]**` and abort.
+If zero positional tokens remain, print: `**ERROR: Usage: /compress-skill [--debug] [--slack] <skill-name-or-path>**` and abort.
 
 ## Step 2 — Resolve Target and Build Feature Description
 
@@ -62,10 +63,10 @@ Print: `✅ 2: resolve — <FILE_COUNT> file(s) under <TARGET_DIR>`
 
 ## Step 3 — Delegate to /imaq
 
-Print: `**compress-skill /<SKILL_NAME> — delegating to /imaq [--debug]**` (omit `--debug` if `debug_mode=false`).
+Print: `**compress-skill /<SKILL_NAME> — delegating to /imaq [--debug] [--slack]**` (omit each flag if its corresponding variable is `false`).
 
 Invoke the Skill tool:
 - Try skill: `"imaq"` first (bare name). If no skill matches, try skill: `"larch:imaq"` (fully-qualified plugin name).
-- args: `"[--debug] <FEATURE_DESCRIPTION>"` — prepend `--debug` only if `debug_mode=true`. `--merge --auto --quick` are not forwarded (`/imaq` prepends them itself).
+- args: `"[--debug] [--slack] <FEATURE_DESCRIPTION>"` — prepend `--debug` only if `debug_mode=true`; prepend `--slack` only if `slack_enabled=true`. `--merge --auto --quick` are not forwarded (`/imaq` prepends them itself).
 
 The `/imaq` → `/implement --merge --auto --quick` chain runs branch creation, inline plan, implementation (the actual file-by-file prose rewrite), single-reviewer code review loop, `/relevant-checks`, version bump, PR creation with the token-budget delta table in the body, CI wait, and auto-merge. No post-invocation verification is needed at this level — `/implement`'s own internal gates (CI green, merge) are the authoritative signal, and this skill runs no further steps after `/imaq` returns.

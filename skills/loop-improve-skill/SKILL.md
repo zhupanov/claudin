@@ -1,7 +1,7 @@
 ---
 name: loop-improve-skill
 description: "Use when iteratively improving an existing skill via a judge-design-implement loop in a GitHub issue; bash driver invokes /skill-judge, /design, /im as fresh `claude -p` subprocesses; runs up to 10 rounds."
-argument-hint: "<skill-name>"
+argument-hint: "[--slack] <skill-name>"
 allowed-tools: Bash, Monitor
 ---
 
@@ -10,6 +10,10 @@ allowed-tools: Bash, Monitor
 Iteratively improve an existing skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` — each invoked as a fresh `claude -p` subprocess by the driver. Halt class eliminated by construction: each child's report is its subprocess's output, so there is no post-child-return model turn that can halt (closes #273).
 
 Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
+
+## Flags
+
+- `--slack`: When present before `<skill-name>`, forwarded to the driver and thence prepended to every `/larch:im` invocation in the loop (so each iteration's PR posts to Slack). Default: absent — no iteration posts to Slack regardless of Slack env-var presence. Note: with `--slack`, the loop's up-to-10 iterations can produce up to 10 Slack PR announcements; opt in only when that is the desired signal.
 
 **Termination contract: strive for grade A.** The loop's primary success exit is when `${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh` reports per-dimension grade A on every D1..D8. The loop continues iterating until (a) grade A is achieved, (b) further automated progress is genuinely infeasible (no_plan / design_refusal / im_verification_failed, with written justification), or (c) the 10-iteration cap is reached (final re-judge captures post-cap grade). Token/context budget is NOT a valid exit condition.
 

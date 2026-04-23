@@ -1,7 +1,7 @@
 ---
 name: fix-issue
 description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues with open blockers, triages, classifies intent, then either delegates to /implement or follows the issue's instructions inline for research/review tasks."
-argument-hint: "[--debug] [--issue <number-or-url>] [<number-or-url>]"
+argument-hint: "[--debug] [--slack] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
@@ -16,8 +16,9 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 **Flags**: Parse flags from the start of `$ARGUMENTS`.
 
 - `--debug`: Set `debug_mode=true`. Forward `--debug` to `/implement` in Step 6. Default: `debug_mode=false`.
+- `--slack`: Set `slack_enabled=true`. Forward `--slack` to `/implement` in Step 6a. Default: `slack_enabled=false`. Without `--slack`, the delegated `/implement` run does not post to Slack regardless of whether Slack env vars are configured. Has no effect on the `NON_PR` path — that path's own Step 8 Slack announcement continues to post whenever `slack_available=true` and is not gated by this flag.
 - `--issue <number-or-url>`: **Deprecated** — recognized for backward compatibility. Prefer passing the issue number or URL as a positional argument (e.g., `/fix-issue 42`). When this flag is encountered, print: `**ℹ '--issue' is deprecated; pass the issue number or URL as a positional argument instead (e.g., /fix-issue 42).**`
-- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping `--debug` and `--issue`, treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 1 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
+- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping all flags defined above (`--debug`, `--slack`, `--issue`), treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 1 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
 
 ## Progress Reporting
 
@@ -169,8 +170,8 @@ Compose the feature description from the issue content: use the issue title as t
 
 Invoke `/implement` via the Skill tool:
 
-- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--debug if debug_mode] <feature description>`
-- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--debug if debug_mode] <feature description>`
+- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
+- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
