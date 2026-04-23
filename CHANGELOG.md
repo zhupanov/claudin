@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2026-04-23
+
+### Added
+
+- `--slack` opt-in flag forwarded to `/implement` from every skill that invokes it: `/fix-issue`, `/simplify-skill`, `/compress-skill`, `/create-skill`, `/alias`, and `/loop-improve-skill`. Each skill accepts `--slack` and threads it through to its `/implement` (or `/im` / `/imaq`) invocation; without `--slack`, the delegated run does not post to Slack regardless of Slack env-var presence. `/alias` treats `--slack` as a dual-role flag (consumed when before the first positional, passed through verbatim as a preset flag afterwards), matching the pre-existing `--merge` dual-role. `/loop-improve-skill` propagates `--slack` to every iteration's `/larch:im` prompt, so an opt-in loop can post up to 10 Slack announcements. `/create-skill`'s `parse-args.sh` now emits `SLACK=true|false` alongside the existing output keys; a new sibling contract `skills/create-skill/scripts/parse-args.md` documents the stdout grammar, error contract, and edit-in-sync obligations per AGENTS.md. `README.md` and `docs/workflow-lifecycle.md` updated (flag table, Slash Commands rows, Standalone Usage bullets).
+
 ## [6.0.10] - 2026-04-23
 
 ### Changed
