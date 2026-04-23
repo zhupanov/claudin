@@ -1,7 +1,7 @@
 ---
 name: compress-skill
 description: "Use when compressing an existing skill's prose. Rewrites SKILL.md and all transitively included .md files (excluding sub-skills), applying Strunk & White's Elements of Style adapted for technical writing. Delegates to /imaq so changes ship as a PR."
-argument-hint: "<skill-name-or-path> [--debug] [--slack]"
+argument-hint: "[--debug] [--slack] <skill-name-or-path>"
 allowed-tools: Bash, Skill
 ---
 
@@ -40,7 +40,7 @@ Parse flags from the start of `$ARGUMENTS` before the first positional token.
 
 After flag stripping, the next positional token is the **target skill name** (bare form, e.g. `implement`) or an **absolute path** to a skill directory. Strip a leading `/` if present on a bare name. Reject names containing `:` (no plugin-qualified forms — see NEVER #4).
 
-If zero positional tokens remain, print: `**ERROR: Usage: /compress-skill <skill-name-or-path> [--debug] [--slack]**` and abort.
+If zero positional tokens remain, print: `**ERROR: Usage: /compress-skill [--debug] [--slack] <skill-name-or-path>**` and abort.
 
 ## Step 2 — Resolve Target and Build Feature Description
 

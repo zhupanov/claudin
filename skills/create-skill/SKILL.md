@@ -19,6 +19,8 @@ Invoke the argument parser:
 ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/parse-args.sh $ARGUMENTS
 ```
 
+The full stdout grammar, error contract, positional-argument rules, and edit-in-sync obligations live in the sibling contract at `${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/parse-args.md`.
+
 Parse the output for `NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`, `SLACK`. (`MERGE` is kept in the parse output for backward compat but is a no-op — delegation via `/im` always auto-merges.) `SLACK` is forwarded to `/im` (which forwards to `/implement`) when `true`; when `false` (the default) the delegated run does not post to Slack regardless of Slack env-var presence.
 
 If the script exits non-zero or emits an `ERROR=` line, print the error and abort.

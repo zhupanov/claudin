@@ -44,7 +44,7 @@ After flag stripping, parse the remaining positional arguments:
 - Second token = **target skill name** (without `/` prefix)
 - Remainder = **preset flags** (may be empty — a pure rename shortcut is valid)
 
-If fewer than 2 positional tokens are provided, print: `**ERROR: Usage: /alias [--merge] <alias-name> <target-skill> [preset-flags...]**` and abort.
+If fewer than 2 positional tokens are provided, print: `**ERROR: Usage: /alias [--merge] [--slack] <alias-name> <target-skill> [preset-flags...]**` and abort.
 
 ## Step 2 — Validate
 
