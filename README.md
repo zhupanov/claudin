@@ -15,7 +15,7 @@ claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
 ```
 
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, the `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, and `/imaq` slash commands become available in every Claude Code session.
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, all larch skills (e.g., /implement) become available in every Claude Code session.
 
 To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
 
@@ -35,6 +35,48 @@ Alternatively, add the working checkout as a local marketplace and install from 
 cd larch
 claude plugin marketplace add .
 claude plugin install larch@larch-local
+```
+
+### Setting Up Claude, Codex, Cursor, etc.
+- Larch uses Claude, Codex, and Cursor in agent mode.  All of these need to be set up with API keys and properly configured as per instructions below.
+- If either Codex or Cursor is not installed or available, Larch skills default to using Claude instead.
+
+#### Claude
+- Via web UI of your Claude org, create your own API key
+- Add it to your env (e.g., in `.bashrc`: `export ANTHROPIC_API_KEY="<your-key>"` (replace `<your-key>`, of course))
+- Add/edit the following in `~/.claude/settings.json` (remember to replace `<your-API-key>` with actual value):
+```JSON
+  "env": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "xhigh",
+  },
+  "model": "opus",
+```
+- Install claude code: `curl -fsSL https://claude.ai/install.sh | bash`
+- Run `claude` and verify the above settings
+
+#### Codex
+- Via web UI of your Codex org, create your own API key
+- Add it to your env (e.g., in `.bashrc`: `export OPENAI_API_KEY="<your-key>"` (replace `<your-key>`, of course))
+- Add to `~/.codex/config.toml`:
+`env_key = "OPENAI_API_KEY"`
+- Install Codex: `npm install -g @openai/codex`
+- Run `codex` and verify the above settings
+
+#### Cursor
+- Via web UI of your Cursor org, create your own API key
+- Add it to your env (e.g., in `.bashrc`: `export CURSOR_API_KEY="<your-key>"` (replace `<your-key>`, of course))
+- Edit `~/.cursor/cli-config.json` and change `model` section to read:
+```JSON
+  "model": {
+    "modelId": "composer-2",
+    "displayModelId": "composer-2",
+    "displayName": "Composer 2",
+    "displayNameShort": "Composer 2",
+    "aliases": [
+      "composer"
+    ],
+    "maxMode": true
+  }
 ```
 
 ### What the plugin provides
