@@ -1,11 +1,21 @@
 #!/bin/bash
 # Structural regression test for /review skill progressive-disclosure invariants
-# (closes #306). Asserts that skills/review/SKILL.md + skills/review/references/
-# topology survives edits:
+# (closes #306, hardened in #318). Asserts that skills/review/SKILL.md +
+# skills/review/references/ topology survives edits:
 #  - Each reference file on disk is named on at least one 'MANDATORY — READ ENTIRE FILE'
 #    line in SKILL.md (bidirectional orphan detection via filesystem enumeration).
 #  - Baseline expected references (domain-rules.md, voting.md) exist and each is named
 #    on a MANDATORY line (explicit baseline binding for clearer diagnostics).
+#  - Line-scoped callsite pins (#318, parallel to test-research-structure.sh's
+#    reciprocal Do-NOT-load pins): domain-rules.md is pinned to the Step 3 entry
+#    callsite (a single SKILL.md line carries MANDATORY, 'Step 3', and
+#    'references/domain-rules.md' together); voting.md is pinned to the round-1
+#    branch callsite (a single line carries MANDATORY, 'round 1' (case-insensitive,
+#    matching 'In round 1' too), and 'references/voting.md' together); and the
+#    reciprocal rounds-2+ guard (a line carries 'Do NOT load' and
+#    'references/voting.md' together). Pattern parallel to test-research-structure.sh
+#    so a future edit cannot move voting.md's MANDATORY to Step 3 entry or drop the
+#    Do-NOT-load guard without the harness catching the drift.
 #  - SKILL.md's Cursor/Codex quick-review prompt lines carry the focus-area enum
 #    'code-quality / risk-integration / correctness / architecture' AND every such line
 #    also contains 'security' on the same line. Mirrors the agent-sync UNQUOTED_FILES
@@ -102,7 +112,47 @@ for ref in "${expected_refs[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# (5) CI-parity focus-area enum check. Mirrors the agent-sync UNQUOTED_FILES
+# (5) Line-scoped callsite pins for MANDATORY references (#318). Pattern parallel
+#     to test-research-structure.sh's reciprocal Do-NOT-load pins: each assertion
+#     checks that a SINGLE line in SKILL.md carries all the required tokens
+#     together. Line-scoped by construction — the grep pipeline threads each
+#     token through its own filter stage while preserving line granularity, so a
+#     future edit that splits the directive across lines fails. Under
+#     `set -o pipefail` a zero-match in any stage fails the pipeline and the
+#     `||` short-circuit triggers fail(). Boundary match on the reference path
+#     (character outside [A-Za-z0-9._-] or end-of-line) mirrors checks (3) and
+#     (4) so 'references/voting.md.bak' can NOT satisfy the pin for 'voting.md'.
+#
+#     (5a) domain-rules.md pinned to the Step 3 entry callsite: one SKILL.md
+#          line contains 'MANDATORY — READ ENTIRE FILE', 'Step 3' (with a
+#          word-char boundary so 'Step 3a'/'Step 30'/'Step 3f' do NOT
+#          false-pass), and 'references/domain-rules.md' together.
+#
+#     (5b) voting.md pinned to the round-1 branch: one SKILL.md line contains
+#          'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive — matches
+#          both 'round 1' and 'In round 1'; same word-char boundary so
+#          'round 10'/'round 11' do NOT false-pass), and 'references/voting.md'
+#          together.
+#
+#     (5c) Reciprocal rounds-2+ guard: one SKILL.md line contains 'Do NOT load'
+#          and 'references/voting.md' together.
+# ---------------------------------------------------------------------------
+grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
+  | grep -E 'Step 3([^0-9A-Za-z]|$)' \
+  | grep -Eq 'references/domain-rules\.md([^A-Za-z0-9._-]|$)' \
+  || fail "(5a) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'Step 3' (boundary-anchored), and 'references/domain-rules.md' together — Step 3 entry callsite pin for domain-rules.md is broken"
+
+grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
+  | grep -iE 'round 1([^0-9A-Za-z]|$)' \
+  | grep -Eq 'references/voting\.md([^A-Za-z0-9._-]|$)' \
+  || fail "(5b) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive, boundary-anchored), and 'references/voting.md' together — round-1 branch callsite pin for voting.md is broken"
+
+grep 'Do NOT load' "$SKILL_MD" \
+  | grep -Eq 'references/voting\.md([^A-Za-z0-9._-]|$)' \
+  || fail "(5c) no single SKILL.md line carries 'Do NOT load' and 'references/voting.md' together — reciprocal rounds-2+ guard for voting.md is missing"
+
+# ---------------------------------------------------------------------------
+# (6) CI-parity focus-area enum check. Mirrors the agent-sync UNQUOTED_FILES
 #     loop in .github/workflows/ci.yaml (referenced by name, not line number):
 #     the loop greps every unquoted-prompt file for
 #       'code-quality / risk-integration / correctness / architecture'
@@ -113,37 +163,37 @@ done
 # ---------------------------------------------------------------------------
 enum_hits=$(grep -n 'code-quality / risk-integration / correctness / architecture' "$SKILL_MD" || true)
 [[ -n "$enum_hits" ]] \
-  || fail "(5) SKILL.md lacks the unquoted slash-separated focus-area enum ('code-quality / risk-integration / correctness / architecture') — CI's agent-sync UNQUOTED_FILES guard would fail"
+  || fail "(6) SKILL.md lacks the unquoted slash-separated focus-area enum ('code-quality / risk-integration / correctness / architecture') — CI's agent-sync UNQUOTED_FILES guard would fail"
 
 while IFS= read -r hit; do
   [[ -z "$hit" ]] && continue
   line_text="${hit#*:}"
   if ! printf '%s\n' "$line_text" | grep -q 'security'; then
-    fail "(5) focus-area enum line lacks 'security' on same line — CI's agent-sync UNQUOTED_FILES guard would fail: $line_text"
+    fail "(6) focus-area enum line lacks 'security' on same line — CI's agent-sync UNQUOTED_FILES guard would fail: $line_text"
   fi
 done <<< "$enum_hits"
 
 # ---------------------------------------------------------------------------
-# (6) Anti-halt banner substring present in SKILL.md. Intentional overlap with
+# (7) Anti-halt banner substring present in SKILL.md. Intentional overlap with
 #     scripts/test-anti-halt-banners.sh (which pins the same substring for
 #     every ORCHESTRATORS entry including skills/review/SKILL.md) — single-file
 #     fail locality per the test-implement-structure.sh precedent.
 # ---------------------------------------------------------------------------
 grep -Fq '**Anti-halt continuation reminder.**' "$SKILL_MD" \
-  || fail "(6) SKILL.md lacks anti-halt banner substring '**Anti-halt continuation reminder.**'"
+  || fail "(7) SKILL.md lacks anti-halt banner substring '**Anti-halt continuation reminder.**'"
 
 # ---------------------------------------------------------------------------
-# (7) Micro-reminder substring present in SKILL.md. Uses the canonical narrow
+# (8) Micro-reminder substring present in SKILL.md. Uses the canonical narrow
 #     token 'Continue after child returns' — matches test-anti-halt-banners.sh
 #     MICRO_SIGNATURE, so a future loop-internal variant like
 #     '**Continue after child returns (loop-internal).**' still matches.
 #     Intentional overlap with test-anti-halt-banners.sh per the note above.
 # ---------------------------------------------------------------------------
 grep -Fq 'Continue after child returns' "$SKILL_MD" \
-  || fail "(7) SKILL.md lacks micro-reminder substring 'Continue after child returns'"
+  || fail "(8) SKILL.md lacks micro-reminder substring 'Continue after child returns'"
 
 # ---------------------------------------------------------------------------
-# (8) Each skills/review/references/*.md opens with '**Consumer**:' and
+# (9) Each skills/review/references/*.md opens with '**Consumer**:' and
 #     '**Binding convention**:' header lines in the first 20 lines. /review's
 #     deliberate 2-line header schema, NOT the /implement Consumer/Contract/
 #     When-to-load triplet. Peer pattern from test-research-structure.sh (head
@@ -157,9 +207,9 @@ review_header_lines=(
 for ref_path in "${ref_files[@]}"; do
   for hdr in "${review_header_lines[@]}"; do
     head -n 20 "$ref_path" | grep -Fq "$hdr" \
-      || fail "(8) references/$(basename "$ref_path") must open with '$hdr' header in the first 20 lines"
+      || fail "(9) references/$(basename "$ref_path") must open with '$hdr' header in the first 20 lines"
   done
 done
 
-echo "PASS: test-review-structure.sh — all 8 structural invariants hold"
+echo "PASS: test-review-structure.sh — all 9 structural invariants hold"
 exit 0
