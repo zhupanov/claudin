@@ -11,9 +11,10 @@ permissions:
 
 jobs:
   # Linters only: pre-commit over all files (shellcheck, markdownlint,
-  # jsonlint, actionlint, agent-lint, agnix, lint-skill-invocations).
-  # Test harnesses run in the separate `test-harnesses` job below so
-  # harness failures and linter failures can be re-run independently.
+  # jsonlint, actionlint, agent-lint, agnix, lint-skill-invocations,
+  # gitleaks). Test harnesses run in the separate `test-harnesses` job
+  # below so harness failures and linter failures can be re-run
+  # independently.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -70,6 +71,47 @@ jobs:
         with:
           target: 'claude-code'
           config: '.agnix.toml'
+
+  # Dedicated gitleaks gate. Runs the same pinned v8.18.4 engine as
+  # the pre-commit hook (no drift between local and CI). `fetch-depth: 0`
+  # is required because `gitleaks detect` scans the git log, not just the
+  # working tree.
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-
+      - name: Install pre-commit
+        run: pip install pre-commit==4.2.0
+      - name: Run gitleaks
+        run: pre-commit run gitleaks --all-files
+
+  # Trufflehog verified-only scan. Independent of gitleaks — catches
+  # credentials that authenticate against a live provider API even if
+  # gitleaks' regex rules miss them.
+  trufflehog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.82.13
+        with:
+          version: 3.82.13
+          path: ./
+          extra_args: --only-verified
 
   agent-sync:
     runs-on: ubuntu-latest

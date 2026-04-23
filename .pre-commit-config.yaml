@@ -38,6 +38,17 @@ repos:
     hooks:
       - id: actionlint
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        # Override upstream's `gitleaks protect --staged` (scans zero commits on
+        # a clean tree). `detect` scans the full working tree + git log so
+        # `pre-commit run gitleaks --all-files` and the CI lint job actually
+        # produce coverage, not a vacuous pass.
+        entry: gitleaks detect --source . --redact --no-banner
+        pass_filenames: false
+
   - repo: local
     hooks:
       - id: lint-skill-invocations

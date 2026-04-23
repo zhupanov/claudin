@@ -1,0 +1,20 @@
+title = "larch gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures, redaction-scanner source, and token-family documentation legitimately contain token-shaped strings."
+paths = [
+    '''^\.gitleaks\.toml$''',
+    '''^scripts/redact-secrets\.sh$''',
+    '''^scripts/test-redact-secrets\.sh$''',
+    '''^scripts/tracking-issue-write\.sh$''',
+    '''^scripts/tracking-issue-write\.md$''',
+    '''^scripts/test-tracking-issue-write\.md$''',
+    '''^skills/issue/scripts/create-one\.sh$''',
+    '''^skills/issue/SKILL\.md$''',
+    '''^SECURITY\.md$''',
+    '''^README\.md$''',
+    '''^CHANGELOG\.md$''',
+]
