@@ -105,6 +105,15 @@ suppress = [
 # and skills/fix-issue/scripts/parse-prose-blockers.md (sibling contract),
 # matching the same Makefile-only pattern as the other test-* harnesses above.
 #
+# skills/fix-issue/scripts/test-issue-lifecycle.sh is the regression harness
+# for skills/fix-issue/scripts/issue-lifecycle.sh close idempotency (Phase 2
+# of umbrella #348). The target script IS structurally referenced from
+# skills/fix-issue/SKILL.md's Steps 2, 4, and 7, and is therefore not
+# excluded; the test harness is referenced only from Makefile
+# (test-issue-lifecycle target) and skills/fix-issue/scripts/issue-lifecycle.md
+# (sibling contract), matching the same Makefile-only pattern as the other
+# test-* harnesses above.
+#
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
 # presence in 6 orchestrator SKILL.md files (fix-issue, implement, review,
@@ -253,6 +262,7 @@ exclude = [
   "scripts/test-check-bump-version.sh",
   "scripts/test-lint-skill-invocations.sh",
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
+  "skills/fix-issue/scripts/test-issue-lifecycle.sh",
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
@@ -274,6 +284,7 @@ exclude = [
   # editing the sibling .sh). Excluded from S030/orphaned-skill-files.
   "skills/issue/scripts/parse-input.md",
   "skills/fix-issue/scripts/parse-prose-blockers.md",
+  "skills/fix-issue/scripts/issue-lifecycle.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
 ]

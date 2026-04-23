@@ -153,9 +153,11 @@ cmd_close() {
         exit 2
     fi
 
-    # Update body with PR link if provided (idempotent)
+    # Update body with PR link if provided (idempotent). Suppress stdout so
+    # cmd_update_body's UPDATED=/SKIPPED= keys never leak into cmd_close's
+    # stdout — the caller-visible contract is CLOSED=true (or CLOSED=false + ERROR=).
     if [[ -n "$pr_url" ]]; then
-        cmd_update_body --issue "$issue" --pr-url "$pr_url" || {
+        cmd_update_body --issue "$issue" --pr-url "$pr_url" >/dev/null || {
             echo "CLOSED=false"
             echo "ERROR=Failed to update issue #$issue body with PR link"
             exit 1
@@ -171,11 +173,32 @@ cmd_close() {
         }
     fi
 
-    gh issue close "$issue" >/dev/null 2>&1 || {
-        echo "CLOSED=false"
-        echo "ERROR=Failed to close issue #$issue"
-        exit 1
-    }
+    # Idempotency guard: probe current state before attempting close. If the
+    # issue is already CLOSED (e.g., GitHub auto-closed it via `Closes #<N>`
+    # on PR merge), skip the `gh issue close` call but still emit CLOSED=true
+    # on stdout so /fix-issue Step 7's stdout parser cannot distinguish the
+    # paths (stderr carries an INFO note; stdout contract is byte-stable).
+    # On probe failure, log a WARNING to stderr and fall through to the
+    # existing close path rather than hard-failing — this preserves the
+    # pre-PR OPEN-path reliability (a transient `gh issue view` blip must
+    # not abort a close that would otherwise have succeeded).
+    # Exact match on "CLOSED": /fix-issue only ever passes issue numbers
+    # (never PR numbers), so MERGED and other PR-state values never appear here.
+    local current_state probe_ok=1
+    current_state=$(gh issue view "$issue" --json state --jq '.state' 2>/dev/null) || probe_ok=0
+
+    if (( probe_ok )) && [ "$current_state" = "CLOSED" ]; then
+        echo "INFO: issue #$issue already closed; backfilling DONE metadata only" >&2
+    else
+        if (( ! probe_ok )); then
+            echo "WARNING: failed to probe state for issue #$issue; attempting close anyway" >&2
+        fi
+        gh issue close "$issue" >/dev/null 2>&1 || {
+            echo "CLOSED=false"
+            echo "ERROR=Failed to close issue #$issue"
+            exit 1
+        }
+    fi
 
     echo "CLOSED=true"
 }

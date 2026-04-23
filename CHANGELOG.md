@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.9] - 2026-04-23
+
+### Changed
+
+- `skills/fix-issue/scripts/issue-lifecycle.sh` `cmd_close` is now idempotent against an already-CLOSED issue (Phase 2 of umbrella #348; closes #350). Before invoking `gh issue close`, the subcommand probes current state via `gh issue view --json state`; on `CLOSED` it skips the close call and emits `INFO: issue #N already closed; backfilling DONE metadata only` on stderr while still printing `CLOSED=true` on stdout — the DONE comment and `--pr-url` body backfill still run in both branches. On probe failure the subcommand logs `WARNING: failed to probe state for issue #N; attempting close anyway` on stderr and falls through to `gh issue close`, preserving the pre-idempotency OPEN-path reliability (transient `gh issue view` blips no longer abort a close that the write-side would have succeeded on). Additionally tightened: `cmd_close` now suppresses the internal `cmd_update_body` stdout via `>/dev/null` so `UPDATED=`/`SKIPPED=` keys never leak into `cmd_close`'s stdout, making the `CLOSED=true` contract byte-stable across open and already-closed paths. Sibling contract doc `skills/fix-issue/scripts/issue-lifecycle.md` added per AGENTS.md. Offline PATH-stub regression harness `skills/fix-issue/scripts/test-issue-lifecycle.sh` (6 fixtures) added and wired into `make test-harnesses` via the new `test-issue-lifecycle` target; `agent-lint.toml` excludes updated for the new harness and its sibling `.md`.
+
 ## [6.1.8] - 2026-04-23
 
 ### Changed
