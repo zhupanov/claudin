@@ -153,9 +153,11 @@ cmd_close() {
         exit 2
     fi
 
-    # Update body with PR link if provided (idempotent)
+    # Update body with PR link if provided (idempotent). Suppress stdout so
+    # cmd_update_body's UPDATED=/SKIPPED= keys never leak into cmd_close's
+    # stdout — the caller-visible contract is CLOSED=true (or CLOSED=false + ERROR=).
     if [[ -n "$pr_url" ]]; then
-        cmd_update_body --issue "$issue" --pr-url "$pr_url" || {
+        cmd_update_body --issue "$issue" --pr-url "$pr_url" >/dev/null || {
             echo "CLOSED=false"
             echo "ERROR=Failed to update issue #$issue body with PR link"
             exit 1
@@ -171,11 +173,29 @@ cmd_close() {
         }
     fi
 
-    gh issue close "$issue" >/dev/null 2>&1 || {
+    # Idempotency guard: probe current state before attempting close. If the
+    # issue is already CLOSED (e.g., GitHub auto-closed it via `Closes #<N>`
+    # on PR merge), skip the `gh issue close` call but still emit CLOSED=true
+    # so /fix-issue Step 7 cannot distinguish the paths. Fatal on probe
+    # failure matches the error posture of the other gh calls above.
+    # Exact match on "CLOSED": /fix-issue only ever passes issue numbers
+    # (never PR numbers), so MERGED and other PR-state values never appear here.
+    local current_state
+    current_state=$(gh issue view "$issue" --json state --jq '.state' 2>/dev/null) || {
         echo "CLOSED=false"
-        echo "ERROR=Failed to close issue #$issue"
+        echo "ERROR=Failed to read state for issue #$issue"
         exit 1
     }
+
+    if [ "$current_state" = "CLOSED" ]; then
+        echo "INFO: issue #$issue already closed; backfilling DONE metadata only" >&2
+    else
+        gh issue close "$issue" >/dev/null 2>&1 || {
+            echo "CLOSED=false"
+            echo "ERROR=Failed to close issue #$issue"
+            exit 1
+        }
+    fi
 
     echo "CLOSED=true"
 }

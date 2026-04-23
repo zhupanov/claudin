@@ -199,6 +199,8 @@ If the work cannot be completed (e.g., `/issue` fails repeatedly, the issue's in
 
 Print `> **🔶 7: close issue**`
 
+`issue-lifecycle.sh close` is **idempotent**: if the issue was auto-closed externally before Step 7 runs (e.g., GitHub's `Closes #<N>` PR-merge auto-close from a `/implement --merge` invocation), the call still succeeds cheaply — the DONE comment and `--pr-url` body backfill still run, only the `gh issue close` call is skipped. The stdout contract (`CLOSED=true` on success) is byte-stable across both paths, so this step does not need to branch on whether the issue was already closed.
+
 Branch on `INTENT`.
 
 ### 7a — `INTENT=PR`
