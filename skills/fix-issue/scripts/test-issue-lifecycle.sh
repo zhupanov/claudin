@@ -13,7 +13,10 @@
 #   2. CLOSED, no --pr-url         — idempotency; close NOT invoked; stderr INFO.
 #   3. CLOSED with --pr-url        — body backfill + DONE + skip close.
 #   4. OPEN with --pr-url (parity) — body backfill + DONE + close.
-#   5. Probe-failure               — stub exits 1 on state probe; fatal with ERROR=.
+#   5. Probe-failure, close succeeds — probe exits 1; WARNING to stderr; fall
+#                                      back to close; CLOSED=true.
+#   6. Probe-failure, close fails  — probe exits 1; close also fails; fatal with
+#                                    CLOSED=false + ERROR=Failed to close.
 #
 # Scope: offline, hermetic (no network, no git state change). All scratch
 # state under $TMPDIR; torn down by EXIT trap.
@@ -82,8 +85,9 @@ assert_not_contains() {
 }
 
 # new_stub_bin — builds a fresh $bin dir with a stub `gh` that reads
-# $STUB_STATE (OPEN|CLOSED) and optionally $STUB_PROBE_FAIL (1 = probe fails).
-# The stub logs invocations to $INVOCATIONS_LOG. Returns $bin on stdout.
+# $STUB_STATE (OPEN|CLOSED), $STUB_PROBE_FAIL (1 = probe fails), and
+# $STUB_CLOSE_FAIL (1 = `gh issue close` exits non-zero). Logs invocations to
+# $INVOCATIONS_LOG. Returns $bin on stdout.
 new_stub_bin() {
     local bin="$TMPROOT/$1"
     mkdir -p "$bin"
@@ -167,6 +171,10 @@ case "${1:-}" in
                 # gh issue close <N>
                 local_issue="${3:-}"
                 log_invocation "close|$local_issue"
+                if [[ "${STUB_CLOSE_FAIL:-0}" == "1" ]]; then
+                    echo "stub: close failure forced" >&2
+                    exit 1
+                fi
                 exit 0
                 ;;
         esac
@@ -188,10 +196,10 @@ STUB_EOF
 }
 
 run_case() {
-    # run_case <label> <stub_state> <probe_fail> <extra_args...>
+    # run_case <label> <stub_state> <probe_fail> <close_fail> <extra_args...>
     # Globals set: RC, CLOSE_STDOUT, CLOSE_STDERR, INVOCATIONS_LOG
-    local label="$1" stub_state="$2" probe_fail="$3"
-    shift 3
+    local label="$1" stub_state="$2" probe_fail="$3" close_fail="$4"
+    shift 4
     local case_dir="$TMPROOT/$label"
     mkdir -p "$case_dir"
     local bin
@@ -200,17 +208,18 @@ run_case() {
     : > "$INVOCATIONS_LOG"
     export STUB_STATE="$stub_state"
     export STUB_PROBE_FAIL="$probe_fail"
+    export STUB_CLOSE_FAIL="$close_fail"
     set +e
     CLOSE_STDOUT=$(PATH="$bin:$PATH" "$SCRIPT" close "$@" 2>"$case_dir/stderr.log")
     RC=$?
     set -e
     CLOSE_STDERR=$(cat "$case_dir/stderr.log")
-    unset STUB_STATE STUB_PROBE_FAIL INVOCATIONS_LOG
+    unset STUB_STATE STUB_PROBE_FAIL STUB_CLOSE_FAIL INVOCATIONS_LOG
 }
 
 # --- Fixture 1: OPEN, no --pr-url -----------------------------------------
 echo "=== 1: OPEN, no --pr-url ==="
-run_case "f1" "OPEN" "0" --issue 42 --comment DONE
+run_case "f1" "OPEN" "0" "0" --issue 42 --comment DONE
 assert_eq "[f1] exit code" 0 "$RC"
 assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f1] stdout has CLOSED=true"
 assert_not_contains "$CLOSE_STDOUT" "CLOSED=false" "[f1] stdout has no CLOSED=false"
@@ -222,7 +231,7 @@ assert_contains "$log1" "close|42" "[f1] gh issue close invoked (OPEN branch)"
 # --- Fixture 2: CLOSED, no --pr-url ---------------------------------------
 echo ""
 echo "=== 2: CLOSED, no --pr-url ==="
-run_case "f2" "CLOSED" "0" --issue 42 --comment DONE
+run_case "f2" "CLOSED" "0" "0" --issue 42 --comment DONE
 assert_eq "[f2] exit code" 0 "$RC"
 assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f2] stdout has CLOSED=true"
 assert_not_contains "$CLOSE_STDOUT" "CLOSED=false" "[f2] stdout has no CLOSED=false"
@@ -234,7 +243,7 @@ assert_not_contains "$log2" "close|42" "[f2] gh issue close SKIPPED (CLOSED bran
 # --- Fixture 3: CLOSED with --pr-url --------------------------------------
 echo ""
 echo "=== 3: CLOSED with --pr-url ==="
-run_case "f3" "CLOSED" "0" --issue 42 --comment DONE --pr-url "https://example.com/pr/1"
+run_case "f3" "CLOSED" "0" "0" --issue 42 --comment DONE --pr-url "https://example.com/pr/1"
 assert_eq "[f3] exit code" 0 "$RC"
 assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f3] stdout has CLOSED=true"
 assert_not_contains "$CLOSE_STDOUT" "CLOSED=false" "[f3] stdout has no CLOSED=false"
@@ -250,7 +259,7 @@ assert_not_contains "$log3" "close|42" "[f3] gh issue close SKIPPED (CLOSED bran
 # --- Fixture 4: OPEN with --pr-url (parity) -------------------------------
 echo ""
 echo "=== 4: OPEN with --pr-url (parity) ==="
-run_case "f4" "OPEN" "0" --issue 42 --comment DONE --pr-url "https://example.com/pr/1"
+run_case "f4" "OPEN" "0" "0" --issue 42 --comment DONE --pr-url "https://example.com/pr/1"
 assert_eq "[f4] exit code" 0 "$RC"
 assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f4] stdout has CLOSED=true"
 assert_not_contains "$CLOSE_STDOUT" "UPDATED=" "[f4] no UPDATED= leak on stdout"
@@ -259,15 +268,35 @@ assert_contains "$log4" "edit|42|" "[f4] body backfill ran"
 assert_contains "$log4" "comment|42|DONE" "[f4] DONE comment posted"
 assert_contains "$log4" "close|42" "[f4] gh issue close invoked (OPEN branch)"
 
-# --- Fixture 5: Probe failure ---------------------------------------------
+# --- Fixture 5: Probe failure, close succeeds -----------------------------
+# On probe failure, cmd_close logs a WARNING to stderr and falls through to
+# `gh issue close`. If close succeeds, the final outcome is CLOSED=true —
+# the OPEN-path reliability from pre-PR days is preserved even when the
+# read-side probe flakes.
 echo ""
-echo "=== 5: Probe failure ==="
-run_case "f5" "OPEN" "1" --issue 42 --comment DONE
-assert_eq "[f5] exit code" 1 "$RC"
-assert_contains "$CLOSE_STDOUT" "CLOSED=false" "[f5] stdout has CLOSED=false"
-assert_contains "$CLOSE_STDOUT" "ERROR=Failed to read state for issue #42" "[f5] stdout has ERROR=Failed to read state"
+echo "=== 5: Probe failure, close succeeds ==="
+run_case "f5" "OPEN" "1" "0" --issue 42 --comment DONE
+assert_eq "[f5] exit code" 0 "$RC"
+assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f5] stdout has CLOSED=true"
+assert_not_contains "$CLOSE_STDOUT" "CLOSED=false" "[f5] stdout has no CLOSED=false"
+assert_contains "$CLOSE_STDERR" "WARNING: failed to probe state for issue #42" "[f5] stderr WARNING on probe failure"
 log5=$(cat "$TMPROOT/f5/gh-invocations.log")
-assert_not_contains "$log5" "close|42" "[f5] gh issue close NOT invoked on probe failure"
+assert_contains "$log5" "comment|42|DONE" "[f5] DONE comment posted"
+assert_contains "$log5" "close|42" "[f5] gh issue close invoked (fallback on probe failure)"
+
+# --- Fixture 6: Probe failure, close also fails ---------------------------
+# If BOTH the probe AND the close fail, cmd_close reports the close failure
+# (the final observable error) rather than the probe failure — matching
+# the script's "last error wins" error-surfacing posture for gh calls.
+echo ""
+echo "=== 6: Probe failure, close also fails ==="
+run_case "f6" "OPEN" "1" "1" --issue 42 --comment DONE
+assert_eq "[f6] exit code" 1 "$RC"
+assert_contains "$CLOSE_STDOUT" "CLOSED=false" "[f6] stdout has CLOSED=false"
+assert_contains "$CLOSE_STDOUT" "ERROR=Failed to close issue #42" "[f6] stdout has ERROR=Failed to close"
+assert_contains "$CLOSE_STDERR" "WARNING: failed to probe state for issue #42" "[f6] stderr WARNING on probe failure"
+log6=$(cat "$TMPROOT/f6/gh-invocations.log")
+assert_contains "$log6" "close|42" "[f6] gh issue close attempted (fallback, though it failed)"
 
 # --- Summary --------------------------------------------------------------
 echo ""
