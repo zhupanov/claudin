@@ -175,7 +175,7 @@ Print: `✅ 9a.1: OOS issues — <ISSUES_CREATED> created, <ISSUES_DEDUPLICATED>
 
 ## Step 11 Post-execution PR body refresh
 
-Runs unconditionally after all Step 11 branches converge — including when Slack was skipped (`slack_available=false`) or when `PR_STATUS=existing`. All Step 11 early-exit paths must reach this section before proceeding to Step 12.
+Runs unconditionally after all Step 11 branches converge — including when Slack was skipped (`slack_enabled=false` or `slack_available=false`) or when `PR_STATUS=existing`. All Step 11 early-exit paths must reach this section before proceeding to Step 12.
 
 If `$IMPLEMENT_TMPDIR/execution-issues.md` exists and is non-empty, update the PR body to reflect the final execution issues (may include issues logged during Steps 10–11, after the initial PR body was written):
 
