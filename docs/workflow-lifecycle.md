@@ -100,7 +100,7 @@ flowchart TD
         COMMIT2 --> VERSION[Version bump]
         VERSION --> PR[Create PR]
         PR --> CI_MONITOR[Monitor CI + fix failures]
-        CI_MONITOR --> SLACK[Slack announcement]
+        CI_MONITOR --> SLACK["Slack announcement<br/>(only if --slack)"]
     end
 
     IMPL_PHASE --> MERGE_FLAG{--merge<br/>flag set?}
@@ -112,7 +112,7 @@ flowchart TD
         REBASE -->|Yes| DO_REBASE[Rebase + push]
         DO_REBASE --> CI_WAIT
         REBASE -->|No| MERGE[Merge PR]
-        MERGE --> EMOJI[Add :merged: emoji to Slack]
+        MERGE --> EMOJI["Add :merged: emoji to Slack<br/>(only if --slack)"]
         EMOJI --> CLEANUP[Local cleanup]
         CLEANUP --> VERIFY[Verify main]
     end
@@ -147,8 +147,8 @@ Flags modify behavior across the skill hierarchy:
 |---|---|---|
 | `--quick` | `/implement` | Skips `/design` (produces inline plan instead). Simplifies code review to 1 round with 1 Claude Code Reviewer subagent only (no external reviewers, no voting panel). |
 | `--auto` | `/implement`, `/design` | Suppresses all interactive question checkpoints. Skills run fully autonomously without user interaction. |
-| `--merge` | `/implement` | Runs the CI+rebase+merge loop, :merged: emoji, local branch cleanup, and main verification after PR creation. Without `--merge`, `/implement` creates the PR and stops (the initial CI wait, optional Slack announcement, rejected findings report, final report, and temp cleanup still run). |
-| `--slack` | `/implement` | Opt-in Slack posting. Step 11 posts a PR announcement and Step 13 adds a `:merged:` emoji after merge; both also require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration, and no "Slack not configured" warning is printed at session setup. |
+| `--merge` | `/implement` | Runs the CI+rebase+merge loop, local branch cleanup, and main verification after PR creation (and, when combined with `--slack`, adds a `:merged:` emoji to the Slack announcement). Without `--merge`, `/implement` creates the PR and stops (the initial CI wait, optional Slack announcement, rejected findings report, final report, and temp cleanup still run). |
+| `--slack` | `/implement` | Opt-in Slack posting. Step 11 posts a PR announcement; when combined with `--merge`, Step 13 adds a `:merged:` emoji after merge. Both also require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration, and no "Slack not configured" warning is printed at session setup. |
 | `--debug` | `/implement`, `/design`, `/review`, `/research`, `/loop-review` | Enables verbose output: descriptive Bash tool descriptions, full explanatory prose between tool calls, per-reviewer individual completion messages alongside the compact status table. Default (no `--debug`) uses minimal output with compact status tables and suppressed prose. `/implement` auto-propagates `--debug` to `/design` and `/review`. `/loop-review`'s `--debug` controls only its own verbosity (no downstream propagation — `/issue` has no `--debug` flag). |
 
 ## Conditional Steps
