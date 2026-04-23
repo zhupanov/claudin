@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.3] - 2026-04-23
+
+### Changed
+
+- Added `skills/compress-skill/SKILL.md` to the canonical pure-delegator scope lists in `skills/shared/subskill-invocation.md` (Pure forwarders parentheticals at the Post-invocation verification + Anti-halt continuation reminder Scope paragraphs, the "banner MUST NOT appear" bullet list, and the Update-triggers paragraph count) and to the `DELEGATORS` array in `scripts/test-anti-halt-banners.sh`. After PR #305 refactored `/compress-skill` into a pure delegator, the shared scope lists and the regression harness were not updated; this commit closes that gap so `test-anti-halt-banners.sh` now asserts banner-absence on `compress-skill/SKILL.md` (test summary 17 → 18 PASS, 0 FAIL). Doc + test-only change; no behavioral effect on plugin surface. Closes #309.
+
 ## [6.0.2] - 2026-04-23
 
 ### Fixed
