@@ -2,189 +2,24 @@
 
 Larch is a Claude Code workflow automation framework that orchestrates multi-agent design, code review, and implementation through collaborative AI-driven processes.
 
-## Installation
+## Table of Contents
 
-Larch is distributed as a [Claude Code plugin](https://code.claude.com/docs/en/plugin-marketplaces). Installation is a two-step process: register the marketplace that hosts larch, then install the plugin from that marketplace.
-
-Slack integration is optional and opt-in. `/implement` posts to Slack only when invoked with `--slack` (and the required environment variables are set). See [Environment Variables](#environment-variables) below — skills degrade gracefully when Slack is not configured or not requested.
-
-### Install from GitHub
-
-```bash
-claude plugin marketplace add zhupanov/larch
-claude plugin install larch@larch-local
-```
-
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, all larch skills (e.g., /implement) become available in every Claude Code session.
-
-To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
-
-### Install for local development (contributors)
-
-If you are hacking on larch itself and want Claude Code to load the plugin directly from your working checkout (so `${CLAUDE_PLUGIN_ROOT}` resolves to the repo you are editing), launch Claude Code with `--plugin-dir`:
-
-```bash
-git clone https://github.com/zhupanov/larch.git
-cd larch
-claude --plugin-dir .
-```
-
-Alternatively, add the working checkout as a local marketplace and install from it:
-
-```bash
-cd larch
-claude plugin marketplace add .
-claude plugin install larch@larch-local
-```
-
-### Setting Up Claude, Codex, Cursor, etc.
-- **Only `claude` is mandatory.** `codex` and `cursor` are optional — when either binary is missing or fails to authenticate, larch skills substitute Claude subagents automatically. See [Optional integrations](#optional-integrations) for the full fallback semantics.
-- **Larch is agent-agnostic about authentication.** Each agent can be set up either with an **API key** in your shell environment, or with a **subscription plan** via web-based login from the binary itself. Larch does not care which — it only needs the corresponding binary (`claude`, `codex`, `cursor`) to be on your `PATH` and to land in an authenticated session when invoked.
-- The subsections below document one concrete setup recipe per agent (API-key path). If you prefer the subscription-plan path, install the binary and follow its own web-login flow instead — the rest of larch's configuration (settings, model overrides) still applies.
-
-#### Claude
-- Via web UI of your Claude org, create your own API key
-- Add it to your env (e.g., in `.bashrc`: `export ANTHROPIC_API_KEY="<your-key>"` (replace `<your-key>`, of course))
-- Add/edit the following in `~/.claude/settings.json` (remember to replace `<your-API-key>` with actual value):
-```JSON
-  "env": {
-    "CLAUDE_CODE_EFFORT_LEVEL": "xhigh",
-  },
-  "model": "opus",
-```
-- Install claude code: `curl -fsSL https://claude.ai/install.sh | bash`
-- Run `claude` and verify the above settings
-
-#### Codex
-- Via web UI of your Codex org, create your own API key
-- Add it to your env (e.g., in `.bashrc`: `export OPENAI_API_KEY="<your-key>"` (replace `<your-key>`, of course))
-- Add to `~/.codex/config.toml`:
-`env_key = "OPENAI_API_KEY"`
-- Install Codex: `npm install -g @openai/codex`
-- Run `codex` and verify the above settings
-
-#### Cursor
-- Via web UI of your Cursor org, create your own API key
-- Add it to your env (e.g., in `.bashrc`: `export CURSOR_API_KEY="<your-key>"` (replace `<your-key>`, of course))
-- Edit `~/.cursor/cli-config.json` and change `model` section to read:
-```JSON
-  "model": {
-    "modelId": "composer-2",
-    "displayModelId": "composer-2",
-    "displayName": "Composer 2",
-    "displayNameShort": "Composer 2",
-    "aliases": [
-      "composer"
-    ],
-    "maxMode": true
-  }
-```
-
-> **Note — larch overrides the cli-config.json model for its own Cursor invocations.**
-
-### What the plugin provides
-
-| Component | Description |
-|---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
-| Agents | `code-reviewer` (unified archetype covering code quality, risk/integration, correctness, architecture, security) |
-| PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
-| SessionStart hook | `sessionstart-health.sh` — at session start/resume/clear/compact, probes `jq` and `git` on `PATH`; if either is missing, injects an advisory into session context so the issue is visible before the first `Edit`/`Write`. Non-blocking (always exits 0); silent when both tools are present |
-
-### `/relevant-checks` — required consumer dependency
-
-> **Important:** `/implement` and `/review` invoke `/relevant-checks` after each commit during their workflows. If your repo does not define one, these workflows will fail at the validation step.
-
-The `/relevant-checks` skill is **not part of the plugin surface** — it is present in the install directory but not loaded by the plugin runtime. Each consuming repo must provide its own `/relevant-checks` as a project-level skill at `.claude/skills/relevant-checks/` with build and lint commands tailored to that repo.
-
-**To create one for your repo:**
-
-1. Create `.claude/skills/relevant-checks/SKILL.md` with `allowed-tools: Bash`
-2. Add a `scripts/run-checks.sh` that runs your repo's linters, tests, or validators
-3. Reference the script from SKILL.md using `$PWD/.claude/skills/relevant-checks/scripts/run-checks.sh`
-
-Larch's own copy at `.claude/skills/relevant-checks/` serves as a reference implementation — it runs `pre-commit` linters plus `agent-lint` (if available on PATH).
-
-### Strict-permissions consumers — Skill permission entries
-
-> **Important:** Consumer repos running with strict permissions (no `"defaultMode": "bypassPermissions"`) must grant **both** the bare and fully-qualified form of each larch skill they invoke. Wildcards like `Skill(larch:*)` are **not currently documented** by Claude Code and will not authorize plugin skills. See the [Skill permission syntax](https://code.claude.com/docs/en/permissions) and [Extend Claude with skills](https://code.claude.com/docs/en/skills) docs for the upstream contract.
-
-**Why both forms?** `Skill(name)` is an exact-match rule — it does **not** also authorize `Skill(larch:name)`. Larch's alias-style skills (`/im`, `/imaq`, and anything generated by `/alias`) invoke their target skill with a bare-name-then-fully-qualified fallback: they try `Skill("implement")` first, then fall back to `Skill("larch:implement")`. Under strict permissions, a denied bare-name call may or may not trigger the LLM's fallback attempt, so the reliable convention is to allow both forms explicitly. `Skill(name *)` is argument-prefix matching (for `Skill(name <args>)`), not namespace matching — it does not help cover the `plugin:name` form.
-
-**Shadowing caveat:** A bare name like `Skill(implement)` may resolve to a project-local skill under `.claude/skills/implement/` in the consumer repo before it reaches the plugin. Consumers who need the plugin version specifically should use the qualified `larch:implement` form in their own orchestration, or avoid local skills that duplicate plugin short names.
-
-**Copy-paste settings.allow snippet (Skill entries only).** Add these to your `.claude/settings.json` `permissions.allow` list, maintaining strict ASCII code-point order across the entire list. This snippet covers only the `Skill(...)` authorizations; you will also need `Bash(...)` allowlist patterns for larch's shell helpers — see larch's own [`.claude/settings.json`](.claude/settings.json) for the full reference.
-
-```json
-"Skill(alias)",
-"Skill(compress-skill)",
-"Skill(create-skill)",
-"Skill(design)",
-"Skill(fix-issue)",
-"Skill(im)",
-"Skill(imaq)",
-"Skill(implement)",
-"Skill(issue)",
-"Skill(larch:alias)",
-"Skill(larch:compress-skill)",
-"Skill(larch:create-skill)",
-"Skill(larch:design)",
-"Skill(larch:fix-issue)",
-"Skill(larch:im)",
-"Skill(larch:imaq)",
-"Skill(larch:implement)",
-"Skill(larch:issue)",
-"Skill(larch:loop-improve-skill)",
-"Skill(larch:loop-review)",
-"Skill(larch:research)",
-"Skill(larch:review)",
-"Skill(loop-improve-skill)",
-"Skill(loop-review)",
-"Skill(research)",
-"Skill(review)"
-```
-
-Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, all `larch:`-prefixed entries sort **before** `Skill(loop-review)`, `Skill(research)`, and `Skill(review)` (whose first letters are `l`-then-`o`, `r`, and `r`). Sort the whole block with `sort -u` to verify if you extend it. This section reflects currently-documented Claude Code behavior; consult the upstream docs above if matching semantics change in a future release.
-
-### `--admin` merge behavior
-
-When `/implement --merge` encounters a PR that passes CI but cannot be merged due to branch protection rules (e.g., required reviews), it retries with `gh pr merge --admin` as a fallback. The `--admin` flag overrides **all** branch protection rules including review requirements.
-
-**Safety invariants enforced before `--admin` is attempted:**
-
-1. All CI checks must be passing (every check in the "pass" bucket)
-2. The branch must be up-to-date with main (not behind)
-
-These checks are re-verified immediately before the `--admin` attempt — the script does not rely on cached state. See `scripts/merge-pr.sh` for the implementation.
-
-## Prerequisites
-
-Larch skills have different dependency requirements depending on which features you use.
-
-### Installation
-
-- **Claude Code** — required. Install via [setup instructions](https://code.claude.com/docs/en/setup).
-
-### Workflow automation (`/implement --merge`, `/review`)
-
-These tools are required for the full design → implement → PR → merge workflow:
-
-- **git** — version control (used by all skills)
-- **gh** — [GitHub CLI](https://cli.github.com/), authenticated with repo write access (`gh auth login`). Required for PR creation, CI monitoring, and merge automation.
-- **jq** — [JSON processor](https://jqlang.github.io/jq/). Used by validation scripts and session setup.
-
-### Optional integrations
-
-These tools enhance the workflow but are not required. When unavailable, Claude replacement agents fill in automatically:
-
-- **Codex** — [OpenAI Codex CLI](https://github.com/openai/codex). Participates as an external reviewer and voter alongside Claude subagents. When unavailable, a Claude subagent replacement maintains the reviewer count.
-- **Cursor** — [Cursor AI editor](https://cursor.com/). Participates as an external reviewer and voter. When unavailable, a Claude subagent replacement maintains the reviewer count.
-- **Slack** — PR announcements and `:merged:` emoji reactions. Opt-in via `/implement --slack` (or `/fix-issue`'s own Slack steps). Also requires environment variables or plugin `userConfig` (see [Environment Variables](#environment-variables)). When `--slack` is not passed, all Slack operations are skipped silently. When `--slack` is passed but Slack is not configured, they are skipped with a warning. All other workflow steps proceed normally in either case.
-
-### Contributor development
-
-- **pre-commit** — `pip install pre-commit` for local linting (`make setup` installs git hooks)
-- **Python 3.12+** — required by pre-commit
+- **Setup**
+  - [Installation and Setup](docs/installation-and-setup.md) — plugin install, local development, agent setup recipes (Claude / Codex / Cursor), what the plugin provides, `/relevant-checks` consumer dependency, prerequisites
+  - [Configuration and Permissions](docs/configuration-and-permissions.md) — [Strict-permissions consumers](docs/configuration-and-permissions.md#strict-permissions-consumers--skill-permission-entries), [`--admin` merge behavior](docs/configuration-and-permissions.md#-admin-merge-behavior), [Environment Variables](docs/configuration-and-permissions.md#environment-variables) (`LARCH_SLACK_*`, `LARCH_CURSOR_MODEL`, `LARCH_CODEX_MODEL`, `LARCH_CODEX_EFFORT`)
+- **Reference**
+  - [Features](#features)
+  - [Skills](#skills)
+  - [Aliases](#aliases)
+  - [Review Agents](docs/review-agents.md) — the unified `code-reviewer` archetype
+  - [Linting](docs/linting.md) — linters, Makefile targets, halt-rate regression harness
+- **Architecture and workflow**
+  - [Workflow Lifecycle](docs/workflow-lifecycle.md) — how skills compose end-to-end
+  - [Agent System](docs/agents.md) — parallel subagent orchestration
+  - [Collaborative Sketches](docs/collaborative-sketches.md) — the diverge-then-converge design phase
+  - [External Reviewers](docs/external-reviewers.md) — Codex and Cursor integration
+  - [Voting Process](docs/voting-process.md) — the 3-agent voting panel
+  - [Point Competition](docs/point-competition.md) — reviewer scoring system
 
 ## Features
 
@@ -202,21 +37,21 @@ Slash commands available in Claude Code sessions. They automate multi-step workf
 
 | Command | Arguments | Description |
 |---|---|---|
+| [`/alias`](skills/alias/SKILL.md) | `[--merge] [--slack] <alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. `--slack` (when placed before the first positional) forwards to the `/implement` invocation so the alias-creation PR posts to Slack; `--slack` placed after the first positional is passed through verbatim as a preset flag for the generated alias. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
+| [`/compress-skill`](skills/compress-skill/SKILL.md) | `[--debug] [--slack] <skill-name-or-path>` | Compress an existing skill's Markdown prose to reduce size while preserving meaning. Discovers the transitive `.md` set (restricted to the skill's own directory tree — shared docs and sub-skills are excluded), snapshots baseline sizes, and delegates a behavior-preserving prose rewrite to `/imaq` applying Strunk & White's *Elements of Style* adapted for technical writing. Structural elements (YAML frontmatter, fenced code blocks, headings, link targets, inline code, file paths, numeric values) are preserved verbatim; only prose is rewritten. PR body includes a `## Token budget` section with per-file before/after byte and line deltas. `--slack` forwards to `/imaq` (and thence to `/implement`) so the compression PR posts to Slack. |
+| [`/create-skill`](skills/create-skill/SKILL.md) | `[--plugin] [--multi-step] [--merge] [--debug] [--slack] <skill-name> <description>` | Scaffold a new larch-style skill from a name and description. Validates the name (regex + reserved-name union + case-insensitive collision) and the description (length + XML / shell-dangerous pattern rejection), then delegates to `/im --quick --auto` which writes the scaffold via `skills/create-skill/scripts/render-skill-md.sh` and auto-merges the PR (via `/im`'s `--merge` pre-set). Default target is `.claude/skills/<name>/` (consumer mode); `--plugin` writes to `skills/<name>/`. `--multi-step` emits a multi-step scaffold; default is minimal. `--merge` is accepted as a backward-compat no-op since `/im` already auto-merges. `--slack` forwards to `/im` (and thence to `/implement`) so the scaffold PR posts to Slack. (see `skills/shared/skill-design-principles.md`) |
 | [`/design`](skills/design/SKILL.md) | `[--auto] [--debug] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/design/diagram.svg) |
+| [`/fix-issue`](skills/fix-issue/SKILL.md) | `[--debug] [--slack] [<number-or-url>]` | Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any blocked by an open dependency (GitHub's native blocked-by API plus conservative prose-keyword scanning of the body and comments — `Depends on #N`, `Blocked by #N`, etc., with fail-open posture), triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement`. With a number or URL argument, targets a specific issue instead of auto-picking. Single-iteration design — the caller handles repetition. `--slack` is forwarded to the delegated `/implement` run so the PR posts to Slack; without it, the delegated run does not post to Slack (the NON_PR path's own Slack announcement is unaffected). |
+| [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge \| --draft] [--slack] [--debug] <feature description>` | Full end-to-end feature workflow — design, implement, PR (Slack announce is opt-in via `--slack`). `--quick` skips `/design` and uses simplified code review (1 Claude Code Reviewer subagent, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. `--slack` posts a PR announcement to Slack after PR creation, and (when combined with `--merge`) adds a `:merged:` emoji after merge; both require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
+| [`/issue`](skills/issue/SKILL.md) | `[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [<issue description>]` | Create one or more GitHub issues with LLM-based semantic duplicate detection. Two modes: single (free-form description) and batch (`--input-file`). 2-phase dedup against open + recently-closed issues (default 90-day window). `/implement` Step 9a.1 calls this skill in batch mode to file OOS issues. `--go` posts a final `GO` comment on each newly-created issue so it becomes eligible for `/fix-issue` automation; works in both single and batch modes (duplicates, failed creates, and dry-run items never receive a GO comment). In single mode, if the sole item resolves to a duplicate, `--go` errors out; in batch mode, per-item duplicates are simply skipped for the GO comment. |
+| [`/loop-improve-skill`](skills/loop-improve-skill/SKILL.md) | `[--slack] <skill-name>` | Iteratively improve an existing larch skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via a bash driver that invokes each child skill as a fresh `claude -p` subprocess (halt class eliminated by construction, closes #273). Termination contract: strives for grade A on every `/skill-judge` dimension (D1..D8); exits happy when achieved, with written infeasibility justification when `/design` produces no plan, `/design` refuses, or `/im` cannot be verified, or with auto-generated infeasibility justification (post-iter-cap final `/skill-judge` re-evaluation listing remaining non-A dimensions) when the 10-iteration cap is reached. Justification is appended to the close-out tracking-issue comment. `--slack` is propagated to every iteration's `/larch:im` invocation so each PR posts to Slack; note that up to 10 iterations can produce up to 10 Slack posts, so opt in only when desired. Example: `/loop-improve-skill design`. |
+| [`/loop-review`](skills/loop-review/SKILL.md) | `[--debug] [partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, if available), and filing every actionable finding as a deduplicated GitHub issue via `/issue --input-file --label loop-review`. Uses the Negotiation Protocol to merge per-slice reviewer findings. Security-tagged findings are held locally per SECURITY.md. Batches accumulate up to 3 slices per `/issue` flush so its 2-phase LLM dedup runs once per batch. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). The `loop-review` label should be pre-created in the target repository — `/issue` silently drops unknown labels with a stderr warning. [(Diagram).](skills/loop-review/diagram.svg) |
+| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
 | [`/research`](skills/research/SKILL.md) | `[--debug] <research question or topic>` | Collaborative read-only research using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable. Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo: scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook), and `/issue` may be invoked via the Skill tool to file research-result issues. [(Diagram).](skills/research/diagram.svg) |
 | [`/review`](skills/review/SKILL.md) | `[--debug]` | Code review current branch changes with a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
-| [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge \| --draft] [--slack] [--debug] <feature description>` | Full end-to-end feature workflow — design, implement, PR (Slack announce is opt-in via `--slack`). `--quick` skips `/design` and uses simplified code review (1 Claude Code Reviewer subagent, 1 round). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. `--slack` posts a PR announcement to Slack after PR creation, and (when combined with `--merge`) adds a `:merged:` emoji after merge; both require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
-| [`/loop-review`](skills/loop-review/SKILL.md) | `[--debug] [partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, if available), and filing every actionable finding as a deduplicated GitHub issue via `/issue --input-file --label loop-review`. Uses the Negotiation Protocol to merge per-slice reviewer findings. Security-tagged findings are held locally per SECURITY.md. Batches accumulate up to 3 slices per `/issue` flush so its 2-phase LLM dedup runs once per batch. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). The `loop-review` label should be pre-created in the target repository — `/issue` silently drops unknown labels with a stderr warning. [(Diagram).](skills/loop-review/diagram.svg) |
-| [`/fix-issue`](skills/fix-issue/SKILL.md) | `[--debug] [--slack] [<number-or-url>]` | Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any blocked by an open dependency (GitHub's native blocked-by API plus conservative prose-keyword scanning of the body and comments — `Depends on #N`, `Blocked by #N`, etc., with fail-open posture), triages against the codebase, classifies complexity (SIMPLE/HARD), and delegates to `/implement`. With a number or URL argument, targets a specific issue instead of auto-picking. Single-iteration design — the caller handles repetition. `--slack` is forwarded to the delegated `/implement` run so the PR posts to Slack; without it, the delegated run does not post to Slack (the NON_PR path's own Slack announcement is unaffected). |
-| [`/issue`](skills/issue/SKILL.md) | `[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [<issue description>]` | Create one or more GitHub issues with LLM-based semantic duplicate detection. Two modes: single (free-form description) and batch (`--input-file`). 2-phase dedup against open + recently-closed issues (default 90-day window). `/implement` Step 9a.1 calls this skill in batch mode to file OOS issues. `--go` posts a final `GO` comment on each newly-created issue so it becomes eligible for `/fix-issue` automation; works in both single and batch modes (duplicates, failed creates, and dry-run items never receive a GO comment). In single mode, if the sole item resolves to a duplicate, `--go` errors out; in batch mode, per-item duplicates are simply skipped for the GO comment. |
-| [`/alias`](skills/alias/SKILL.md) | `[--merge] [--slack] <alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. `--slack` (when placed before the first positional) forwards to the `/implement` invocation so the alias-creation PR posts to Slack; `--slack` placed after the first positional is passed through verbatim as a preset flag for the generated alias. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
-| [`/create-skill`](skills/create-skill/SKILL.md) | `[--plugin] [--multi-step] [--merge] [--debug] [--slack] <skill-name> <description>` | Scaffold a new larch-style skill from a name and description. Validates the name (regex + reserved-name union + case-insensitive collision) and the description (length + XML / shell-dangerous pattern rejection), then delegates to `/im --quick --auto` which writes the scaffold via `skills/create-skill/scripts/render-skill-md.sh` and auto-merges the PR (via `/im`'s `--merge` pre-set). Default target is `.claude/skills/<name>/` (consumer mode); `--plugin` writes to `skills/<name>/`. `--multi-step` emits a multi-step scaffold; default is minimal. `--merge` is accepted as a backward-compat no-op since `/im` already auto-merges. `--slack` forwards to `/im` (and thence to `/implement`) so the scaffold PR posts to Slack. (see `skills/shared/skill-design-principles.md`) |
 | [`/simplify-skill`](skills/simplify-skill/SKILL.md) | `[--debug] [--slack] <skill-name>` | Refactor an existing larch skill for stronger adherence to `skills/shared/skill-design-principles.md` and to reduce SKILL.md token footprint. Resolves the target skill directory (plugin tree first, then consumer `.claude/skills/`), enumerates every `.md` file under it (excluding `scripts/` and `tests/`), does NOT follow sub-skills invoked via the `Skill` tool, and delegates the refactor to `/im` with a pinned behavior-preserving feature description that requires a `## Token budget` section in the PR body. `--slack` forwards to `/im` (and thence to `/implement`) so the refactor PR posts to Slack. Example: `/simplify-skill implement`. |
-| [`/compress-skill`](skills/compress-skill/SKILL.md) | `[--debug] [--slack] <skill-name-or-path>` | Compress an existing skill's Markdown prose to reduce size while preserving meaning. Discovers the transitive `.md` set (restricted to the skill's own directory tree — shared docs and sub-skills are excluded), snapshots baseline sizes, and delegates a behavior-preserving prose rewrite to `/imaq` applying Strunk & White's *Elements of Style* adapted for technical writing. Structural elements (YAML frontmatter, fenced code blocks, headings, link targets, inline code, file paths, numeric values) are preserved verbatim; only prose is rewritten. PR body includes a `## Token budget` section with per-file before/after byte and line deltas. `--slack` forwards to `/imaq` (and thence to `/implement`) so the compression PR posts to Slack. |
-| [`/loop-improve-skill`](skills/loop-improve-skill/SKILL.md) | `[--slack] <skill-name>` | Iteratively improve an existing larch skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via a bash driver that invokes each child skill as a fresh `claude -p` subprocess (halt class eliminated by construction, closes #273). Termination contract: strives for grade A on every `/skill-judge` dimension (D1..D8); exits happy when achieved, with written infeasibility justification when `/design` produces no plan, `/design` refuses, or `/im` cannot be verified, or with auto-generated infeasibility justification (post-iter-cap final `/skill-judge` re-evaluation listing remaining non-A dimensions) when the 10-iteration cap is reached. Justification is appended to the close-out tracking-issue comment. `--slack` is propagated to every iteration's `/larch:im` invocation so each PR posts to Slack; note that up to 10 iterations can produce up to 10 Slack posts, so opt in only when desired. Example: `/loop-improve-skill design`. |
-| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint) scoped to files modified on the current branch. Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
 
-### Aliases
+## Aliases
 
 Shortcut skills shipped with the plugin. Each alias forwards to an existing skill with preset flags.
 
@@ -224,196 +59,3 @@ Shortcut skills shipped with the plugin. Each alias forwards to an existing skil
 |---|---|
 | [`/im`](skills/im/SKILL.md) | `/implement --merge` |
 | [`/imaq`](skills/imaq/SKILL.md) | `/implement --merge --auto --quick` |
-
-## Review Agents
-
-Internal agent definitions used by skills like `/design`, `/review`, and `/loop-review`. They are not invoked directly — the skills launch them as specialized subagents during plan and code review.
-
-| Agent | Description |
-|---|---|
-| [`code-reviewer`](agents/code-reviewer.md) | Unified code reviewer combining code quality (bugs, reuse, tests, backward compat, style), risk/integration (breaking changes, thread safety, deployment, regressions, CI), correctness (logic errors, off-by-one, nil, types, races, errors, math), architecture (separation of concerns, contract boundaries, invariants, semantic boundaries), and security (injection, authn/authz, secrets, crypto, deserialization, SSRF, path traversal, dependency CVEs). Findings are tagged with their focus area. Generated from `skills/shared/reviewer-templates.md` via `scripts/generate-code-reviewer-agent.sh`. |
-
-### Migration note
-
-The previous two archetypes `general-reviewer` and `deep-analysis-reviewer` have been replaced by the single unified `code-reviewer`. Consumers that invoked those older agent slugs directly (via `--agents` or subagent_type references in downstream docs/scripts) must switch to `code-reviewer`.
-
-## Linting
-
-Larch uses [pre-commit](https://pre-commit.com/) as the single source of truth for linter configuration. All linter definitions, versions, and file filters live in `.pre-commit-config.yaml`.
-
-### Linters
-
-| Linter | File Types | Description |
-|--------|-----------|-------------|
-| [shellcheck](https://www.shellcheck.net/) | `.sh` | Shell script analysis |
-| [markdownlint](https://github.com/igorshubovych/markdownlint-cli) | `.md` | Markdown style enforcement (config: `.markdownlint.json`) |
-| [jq](https://jqlang.github.io/jq/) | `.json` | JSON syntax validation |
-| [actionlint](https://github.com/rhysd/actionlint) | `.yml`, `.yaml` | GitHub Actions workflow validation |
-| [agnix](https://github.com/agent-sh/agnix) | `SKILL.md`, `CLAUDE.md`, agent configs | AI agent configuration linting (config: `.agnix.toml`) |
-
-### Usage
-
-There are three ways to run linters, all backed by the same `.pre-commit-config.yaml`:
-
-- **CI** — Runs `make lint` (repo-wide) on every pull request.
-- **`/relevant-checks`** — Runs `pre-commit run --files <changed-files>` scoped to branch changes. Invoked automatically by `/implement` and `/review`.
-- **Local git hook** — Run `make setup` (or `pre-commit install`) to enable pre-commit hooks that lint staged files on every commit.
-
-### Makefile Targets
-
-| Target | Description |
-|--------|-------------|
-| `make lint` | Run all linters repo-wide |
-| `make shellcheck` | Run shellcheck only |
-| `make markdownlint` | Run markdownlint only |
-| `make jsonlint` | Run JSON validation only |
-| `make actionlint` | Run actionlint only |
-| `make agnix` | Run agnix only |
-| `make setup` | Install pre-commit git hooks |
-| `make smoke-dialectic` | Run the offline fixture-driven smoke test for `/design` Step 2a.5 (dialectic parser + tally + structural-invariant guard). Exercises `scripts/dialectic-smoke-test.sh` against `tests/fixtures/dialectic/`. |
-| `make test-block-submodule` | Run the regression harness for `scripts/block-submodule-edit.sh` (the PreToolUse hook that denies edits inside submodules). Exercises `scripts/test-block-submodule-edit.sh` end-to-end against a temporary superproject + submodule fixture. |
-| `make test-deny-edit-write` | Run the regression harness for `scripts/deny-edit-write.sh` (the skill-scoped PreToolUse hook registered by `/research` that permits `Edit`/`Write`/`NotebookEdit` only when the target path resolves under canonical `/tmp`, denies otherwise). Exercises `scripts/test-deny-edit-write.sh` — repo-deny, `/tmp`-allow, traversal-deny, relative-deny, `notebook_path` allow/deny, fail-closed on empty path, malformed JSON, idempotency, and `jq`-absent fallback byte-identity. |
-| `make test-lib-halt-ledger` | Run the offline regression harness for `scripts/lib-loop-improve-halt-ledger.sh` (the sourced-only halt-location classifier consumed by the halt-rate probe). Exercises `scripts/test-lib-loop-improve-halt-ledger.sh` — empty dir, nonexistent dir, each per-substep sentinel, multi-iteration highest-iter scan, and empty-sentinel-treated-as-missing cases. A `make lint` prerequisite. |
-| `make halt-rate-probe` | Run the **opt-in** halt-rate regression probe for `/larch:loop-improve-skill` (closes #278). Exercises `scripts/test-loop-improve-skill-halt-rate.sh` end-to-end against a throwaway fixture skill to measure how often the loop halts mid-turn after `/skill-judge` returns (the recurring failure from #273). **Not a `make lint` prerequisite** — too slow and non-deterministic for CI. See "Halt-rate regression harness" below for the output contract and caveats. |
-
-### Halt-rate regression harness
-
-Opt-in probe that measures how often `/larch:loop-improve-skill` halts mid-iteration. Closes #278; tracks the halt-problem umbrella #273. Invocation:
-
-```bash
-make halt-rate-probe
-# or with custom flags:
-bash scripts/test-loop-improve-skill-halt-rate.sh --runs 10 --timeout-per-run 2400
-```
-
-**Flags**: `--runs N` (default 5), `--timeout-per-run SEC` (default 1800), `--keep-tmpdirs` (skip cleanup for forensics).
-
-**Prerequisites**: `claude` CLI on `PATH` (headless mode) + GNU `timeout` (macOS: `brew install coreutils`, then `gtimeout` is detected automatically). The harness provisions a per-run bare git origin under `mktemp -d`, copies the fixture skill from `tests/fixtures/loop-halt-rate/SKILL.md`, PATH-shims `gh` to a no-op stub (so no live GitHub side effects), then invokes `claude --plugin-dir <larch-root> -p "/larch:loop-improve-skill loop-halt-rate"` bounded by `timeout --kill-after=10`.
-
-**Output contract** (stdout — automation should grep these tokens):
-
-```
-RUN <i>: status=<completed_by_outer|halt_mid_turn|halt_detected_by_outer|timeout|tool_failure|error> last_completed=<token> clause="<halt-location clause>" elapsed=<s>s
-...
-HALT_RATE=<halted>/<measured>
-MEASURED_RUNS=<measured>
-PROBE_STATUS=ok|skipped_no_claude|error
-PER_STATUS_BREAKDOWN: completed=<n> halt_mid_turn=<n> halt_detected_by_outer=<n> timeout=<n> tool_failure=<n> error=<n>
-PER_LOCATION_BREAKDOWN: none=<n> 3j=<n> 3jv=<n> 3d-pre-detect=<n> 3d-post-detect=<n> 3d-plan-post=<n> 3i=<n> done=<n>
-```
-
-- `HALT_RATE` numerator = `halt_mid_turn + halt_detected_by_outer`. Denominator = `MEASURED_RUNS` = runs excluding `error` and `tool_failure` (infrastructure failures that prevented measurement). Automation should check `PROBE_STATUS` before consuming `HALT_RATE`; the KV format `HALT_RATE=0/0` with `PROBE_STATUS=error` signals "no measurement" and must not be conflated with "zero halts observed".
-- `halt_mid_turn` is the halt-of-interest from #273: the outer skill itself ended its turn before reaching its Step 5 close-out.
-- `halt_detected_by_outer` is a LEGACY branch from the pre-rewrite split-skill topology (outer `/loop-improve-skill` delegating to inner `/loop-improve-skill-iter` via the Skill tool with a `#231` mechanical gate catching `iteration sentinel missing`). Under the new bash-driver topology (`skills/loop-improve-skill/scripts/driver.sh`, #273) this branch is never emitted and is expected to report `0` — the driver eliminates the inner-halt class by construction. True mid-turn halts under the new topology manifest as `claude -p` subprocess exit-code failures, which the driver handles via `break` with category-specific `EXIT_REASON` (e.g. `subprocess failure at /skill-judge iteration N`), classified as `completed_by_outer` since the outer itself reaches Step 5 close-out.
-- `completed_by_outer` includes all normal loop exits: `grade_a_achieved`, `max iterations (10) reached`, and infeasibility exits like `im_verification_failed`. `/im` is expected to fail under the stubbed `gh` — this is NOT the halt-of-interest; the halt-of-interest fires much earlier, at `/skill-judge` return.
-- `timeout` covers both `timeout --kill-after` TERM (exit 124) and SIGKILL escalation (exit 137 = 128+9).
-- `tool_failure` covers wrapper exits other than 0/124/137 where no LOOP_TMPDIR was ever emitted — claude itself crashed or the plugin failed to load.
-- `PROBE_STATUS=error` can be emitted from two paths with different exit codes — consumers should treat both the same way (don't consume `HALT_RATE` as signal), but should not rely on the exit code to distinguish: (a) **post-measurement** `PROBE_STATUS=error` with **exit 0** when `MEASURED_RUNS=0` OR any `error`/`tool_failure` run occurred; (b) **preflight** `PROBE_STATUS=error` with **exit 1** when a startup check fails (missing `timeout`/`gtimeout`, bad repo root, missing fixture). The stdout token is identical; check `PROBE_STATUS` before `HALT_RATE`.
-- `PROBE_STATUS=skipped_no_claude` is emitted (and the harness exits **non-zero**) when the `claude` binary is absent, per issue #278's explicit contract.
-- `PER_LOCATION_BREAKDOWN` tokens correspond to the `LAST_COMPLETED` taxonomy owned by `clause_for_last_completed()` in `scripts/lib-loop-improve-halt-ledger.sh`.
-
-**Caveats**:
-
-- Runtime is highly variable (~5-30min per run). Budget accordingly.
-- The fixture is a minimal deliberately-deficient skill; measured halt rate is a *lower bound* on production halt rate — real target skills produce longer reviewer chains that amplify the turn-end cue. Document this when publishing comparative numbers.
-- Each run consumes real Claude API tokens + external reviewer (Cursor/Codex) latency.
-- `gh` is PATH-shimmed to a no-op stub — no live GitHub issue creation, no PR creation, no live CI. `/im` will typically fail with `ITER_STATUS=im_verification_failed` (classified as `completed_by_outer`, not a halt).
-- Not wired into `make lint` by design — opt-in only.
-
-## Environment Variables
-
-Larch uses environment variables for Slack integration and external reviewer model configuration. All are optional — when not set, Slack-related features are skipped with warnings, and external reviewers use their default models.
-
-> **Important:** Slack posting in `/implement` is opt-in: pass `--slack` to request it. When `--slack` is set, both `LARCH_SLACK_BOT_TOKEN` **and** `LARCH_SLACK_CHANNEL_ID` must also be present in your shell environment — if either is missing, **all** Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent. When `--slack` is not set, no Slack calls are made regardless of environment configuration. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
-
-**Alternative: Plugin `userConfig`** — If you installed larch as a plugin, you can also configure Slack tokens via the plugin's `userConfig` (prompted at plugin enable time). The `userConfig` values are exported as `CLAUDE_PLUGIN_OPTION_*` environment variables to subprocesses. Larch checks both: environment variables take precedence if both are set.
-
-### `LARCH_SLACK_BOT_TOKEN`
-
-A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack API calls.
-
-**When set (and `/implement` is invoked with `--slack`):**
-- `/implement` posts PR announcements to Slack after creating a PR
-- `/implement` adds a `:merged:` emoji reaction to the Slack announcement after the PR is merged
-- The token's presence is checked during session setup and its availability is propagated to child skills
-
-**When not set (or `/implement` is invoked without `--slack`):**
-- All Slack operations in `/implement` are skipped. When `--slack` is set but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_BOT_TOKEN not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.`). When `--slack` is not set, no warning is printed — Slack is not in use.
-- The `:merged:` emoji step in `/implement` is skipped
-- All other workflow steps (design, implementation, code review, CI monitoring, merge) proceed normally
-
-### `LARCH_SLACK_CHANNEL_ID`
-
-The Slack channel ID (e.g., `C0123456789`) where PR announcements and emoji reactions are posted.
-
-**When set (and `/implement` is invoked with `--slack`):**
-- PR announcements are posted to this channel
-- The `:merged:` emoji reaction targets announcements in this channel
-
-**When not set (or `/implement` is invoked without `--slack`):**
-- All Slack operations in `/implement` are skipped. When `--slack` is set but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_CHANNEL_ID not set).`). When `--slack` is not set, no warning is printed.
-- The `:merged:` emoji step in `/implement` is also skipped
-- All other workflow steps proceed normally
-
-### `LARCH_SLACK_USER_ID`
-
-A Slack user ID (e.g., `U0123456789`) used to @-mention the PR author in Slack announcements.
-
-**When set:**
-- Slack announcements include an @-mention of this user, notifying them directly in the channel
-
-**When not set:**
-- Slack announcements are still posted, but without an @-mention — the message appears without a user notification
-
-### External Reviewer Model Configuration
-
-These variables control which model Cursor and Codex use when running as external reviewers. When unset, Cursor defaults to `composer-2` (with the `/max-mode on.` slash-command prefix applied to every substantive prompt via `scripts/cursor-wrap-prompt.sh`) and Codex uses its own configured default. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex). To restore the pre-`composer-2` behavior, set `LARCH_CURSOR_MODEL=composer-2-fast`.
-
-Model configuration is also available via plugin `userConfig` — environment variables take precedence if both are set.
-
-### `LARCH_CURSOR_MODEL`
-
-The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `claude-sonnet-4-6`).
-
-**When set:**
-- All Cursor invocations (reviews, sketches, voting, health probes, negotiations) use this model
-- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
-
-**When not set:**
-- Defaults to `composer-2` — Cursor's `cursor agent` CLI does not honor the model configured in `~/.cursor/cli-config.json`, so an explicit default is required to avoid falling back to a potentially rate-limited model
-- Every substantive Cursor prompt is additionally wrapped by `scripts/cursor-wrap-prompt.sh` which prepends ` /max-mode on. Prompt: ` to engage Cursor's max-mode for this invocation
-- To opt back into the previous default (faster, lower reasoning budget), set `LARCH_CURSOR_MODEL=composer-2-fast`
-
-### `LARCH_CODEX_MODEL`
-
-The model name to pass to Codex's `-m` flag (e.g., `o3`, `o4-mini`).
-
-**When set:**
-- All Codex invocations (reviews, sketches, voting, health probes, negotiations) use this model
-- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
-
-**When not set:**
-- Codex runs without an explicit `-m` flag, using its own configured default
-
-### `LARCH_CODEX_EFFORT`
-
-Codex reasoning effort for reviewer launches. Accepted values: `minimal`, `low`, `medium`, `high`. Default `high` (matches the plugin's `codex_effort` userConfig default).
-
-**When set at reviewer launch sites (design sketches, plan review, code review, conflict-resolution review, voting panel):**
-- `scripts/reviewer-model-args.sh --with-effort` emits `-c model_reasoning_effort="$LARCH_CODEX_EFFORT"`, raising Codex reasoning to the configured level.
-
-**When not set (or set to empty string):**
-- `--with-effort` falls back to the plugin userConfig value (`codex_effort`, default `high`).
-- Setting `LARCH_CODEX_EFFORT=""` explicitly does NOT disable emission; to suppress effort flags entirely, the callers already omit the `--with-effort` flag (e.g., `check-reviewers.sh` health probes do not use max effort regardless of env var setting).
-
-**Scope**: Claude and Cursor reviewers run at their defaults. Only Codex is bumped to `high` by default. This is deliberate — Claude's sonnet default is already well-suited to review work, and Cursor has no dedicated reasoning-effort CLI flag today.
-
-## Detailed Documentation
-
-- [Workflow Lifecycle](docs/workflow-lifecycle.md) — How skills compose to form the end-to-end development workflow
-- [Voting Process](docs/voting-process.md) — The 3-agent voting panel that adjudicates review findings
-- [Point Competition](docs/point-competition.md) — Reviewer scoring system and competition mechanics
-- [Collaborative Sketches](docs/collaborative-sketches.md) — The diverge-then-converge design phase
-- [External Reviewers](docs/external-reviewers.md) — Codex and Cursor integration procedures
-- [Review Agents](docs/review-agents.md) — The unified Code Reviewer archetype
-- [Agent System](docs/agents.md) — How skills orchestrate parallel subagents

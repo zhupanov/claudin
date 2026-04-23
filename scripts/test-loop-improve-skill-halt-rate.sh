@@ -10,7 +10,7 @@
 # sentinels are used only as forensic secondary for halt_mid_turn runs where
 # the outer's Step 6 cleanup never ran.
 #
-# Contract tokens (consumed by CI/ad-hoc automation; see README):
+# Contract tokens (consumed by CI/ad-hoc automation; see docs/linting.md):
 #   HALT_RATE=<halted>/<total>
 #   PROBE_STATUS=ok|skipped_no_claude|error
 #   PER_STATUS_BREAKDOWN: ...
@@ -132,7 +132,7 @@ case "$sub" in
     pr)
         # /im may call gh pr * — emit enough to keep things moving; specifics
         # may not match create-pr.sh / ci-status.sh / merge-pr.sh parsers, and
-        # that is intentional (we accept /im failing; see README).
+        # that is intentional (we accept /im failing; see docs/linting.md).
         echo "stub-ok" ;;
     auth)
         echo "Logged in to github.com as stub-user (stub)" ;;
