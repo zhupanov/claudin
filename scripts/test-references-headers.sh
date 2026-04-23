@@ -1,9 +1,12 @@
 #!/bin/bash
-# Cross-skill references/*.md header-triplet regression guard (closes #308).
+# Cross-skill references/*.md header-triplet regression guard (closes #308)
+# plus Contract-field line-range rejection (closes #322).
 #
 # Scans every `skills/*/references/*.md` and asserts each file contains the
 # Consumer / Contract / When-to-load header triplet required by the
-# progressive-disclosure reference contract.
+# progressive-disclosure reference contract, AND that the Contract paragraph
+# carries no `L\d+-\d+` line-range citation — the stale-citation drift
+# pattern v5.2.7 eradicated and #322 tracked as a regression guard.
 #
 # Header match is ANCHORED (line-start) to avoid false-passing on prose or
 # code-fenced examples that happen to mention `**Consumer**:` inside a body
@@ -65,7 +68,22 @@ for ref_path in "${ref_files[@]}"; do
     grep -Eq "$pattern" "$ref_path" \
       || fail "$rel_path lacks required anchored header matching '$pattern'"
   done
+
+  # Contract-field line-range rejection (closes #322). Stale `L<digits>-<digits>`
+  # citations inside Contract paragraphs drift silently when source-of-truth
+  # files are edited later; v5.2.7 replaced such citations across the 4
+  # implement/references/*.md files with range-free descriptions, and this
+  # guard prevents regression. See scripts/test-references-headers.md for the
+  # full contract. Both ASCII hyphen and en-dash are matched because GitHub
+  # markdown rendering occasionally substitutes the latter.
+  contract_block=$(awk '/^\*\*Contract\*\*:/{flag=1} flag{print} flag && /^$/{exit}' "$ref_path")
+  if [[ -n "$contract_block" ]]; then
+    stale_hit=$(grep -En 'L[0-9]+[-–][0-9]+' <<< "$contract_block" || true)
+    if [[ -n "$stale_hit" ]]; then
+      fail "$rel_path: Contract field contains stale line-range citation — $stale_hit (closes #322: use range-free descriptions)"
+    fi
+  fi
 done
 
-echo "PASS: test-references-headers.sh — triplet verified across ${#ref_files[@]} skills/*/references/*.md files"
+echo "PASS: test-references-headers.sh — triplet + no-stale-line-range verified across ${#ref_files[@]} skills/*/references/*.md files"
 exit 0
