@@ -154,14 +154,21 @@ emit_gh_failure() {
 # Implementation: the new-interior content can contain newlines, which
 # awk -v cannot accept. For each section we write the replacement
 # interior to a per-section temp file and have awk splice it in via
-# getline. A single TRUNCATE_WORK_DIR holds these temps; the caller's
-# EXIT trap covers cleanup transitively (all writes live under the
-# same per-subcommand tmp that's already trapped).
+# getline. A single work_dir (mktemp -d) holds these temps. Every call
+# site invokes truncate_body via command substitution
+# ($(truncate_body "$BODY_CONTENT")), so the EXIT trap below is scoped
+# to the command-substitution subshell and fires on both normal return
+# AND a set -e abort from any awk failure mid-function — guaranteeing
+# cleanup without relying on the caller's own EXIT trap (which is
+# installed later and only names BODY_TMP/ERR_TMP/JSON_TMP, not
+# work_dir).
 truncate_body() {
     local body="$1"
     local slug interior new_interior open_marker close_marker
     local work_dir
     work_dir=$(mktemp -d)
+    # shellcheck disable=SC2064
+    trap "rm -rf '$work_dir'" EXIT
 
     # Pass 1: per-section cap
     for slug in "${SECTION_MARKERS[@]}"; do
@@ -242,7 +249,6 @@ truncate_body() {
         done
     fi
 
-    rm -rf "$work_dir"
     printf '%s' "$body"
 }
 
