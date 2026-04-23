@@ -33,7 +33,7 @@ jobs:
       - name: Run pre-commit linters
         run: make lint-only
 
-  # Regression harnesses (the 22 `test-*` bash scripts in Makefile). Runs
+  # Regression harnesses (the `test-*` bash scripts in Makefile). Runs
   # in parallel with the `lint` job so a harness failure can be diagnosed
   # and re-run without waiting on pre-commit, and vice versa. PyYAML is
   # required because test-lint-skill-invocations invokes the python lint
