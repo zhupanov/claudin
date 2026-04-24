@@ -132,8 +132,11 @@ agnix:
 gitleaks:
 	pre-commit run gitleaks --all-files
 
-# Trufflehog is CI-only (not a pre-commit hook). The Makefile target runs
-# the same pinned Docker image the CI job uses so local reproduction matches CI.
+# Trufflehog is CI-only (not a pre-commit hook). This target runs the same
+# pinned Docker image as CI but in `filesystem` mode over the working tree;
+# CI's `trufflehog` job uses the upstream action's default `git` mode over
+# the PR range (different subcommand and scan scope). Image/tag and
+# `--only-verified` are identical between the two — the rest is not.
 trufflehog:
 	docker run --rm -v "$(PWD):/repo" ghcr.io/trufflesecurity/trufflehog:3.82.13 \
 		filesystem /repo --only-verified

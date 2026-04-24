@@ -32,7 +32,7 @@ Run the private check script:
 $PWD/.claude/skills/relevant-checks/scripts/run-checks.sh
 ```
 
-The script automatically detects which files were modified on the current branch, filters to existing files, and runs `pre-commit run --files` on them. Pre-commit handles file-type routing internally — only hooks whose file patterns match the changed files will execute.
+The script automatically detects which files were modified on the current branch, filters to existing files, and runs `pre-commit run --files` on them. Pre-commit handles file-type routing internally — only hooks whose file patterns match the changed files will execute. **Exception**: hooks configured with `pass_filenames: false` in `.pre-commit-config.yaml` (notably `gitleaks`) ignore the scoped `--files` arguments and always scan the full working tree. This is intentional for secret detection — a scoped scan could otherwise silently miss a secret that lives outside the changed file set. Expect gitleaks in particular to run on every `/relevant-checks` invocation, not just when the change set touches files gitleaks would normally match on.
 
 ## Retry semantics
 
