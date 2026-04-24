@@ -37,6 +37,18 @@ Public docs (`README.md`, `docs/review-agents.md`, `docs/workflow-lifecycle.md`)
 
 All three are matched as fixed strings (`grep -F`) to avoid false positives on unrelated prose.
 
+### Required cross-references
+
+A third check family guards prose path citations in public docs against silent drift. Each entry is a (doc, xref) pair with two independent assertions:
+
+| Doc | Cross-reference path | What each assertion catches |
+|-----|----------------------|------------------------------|
+| `docs/review-agents.md` | `skills/shared/voting-protocol.md` | (a) `grep -Fq` against doc — fails if the Note A paragraph is reworded to drop the literal path; (b) `-e` existence check against `$REPO_ROOT/<path>` — fails if the target file is renamed / moved / deleted without updating the citation. |
+
+Both assertions are required. Dropping (a) would let a rename pass silently whenever the citation text was updated in sync; dropping (b) would let a rewording that removes the path pass silently whenever the target file still existed under the old name. Together they pin the two-way invariant: **the cited path is present in the doc AND resolves to a real file**.
+
+The check is implemented by `check_xref` (a dedicated function kept separate from `check_file`). Target-specific — NOT applied to every public doc — so it does not affect the existing self-test's "exactly 1 failure" invariant on the pre-existing bad fixture, which exercises `check_file` only. New xref targets extend the `XREF_DOC` / `XREF_PATH` constants at the top of the script and add a `check_xref` call in `run_default` (with matching self-test coverage).
+
 ### SKILL.md negative-check exemption
 
 `skills/implement/SKILL.md` is **exempted from negative checks**. Rationale: SKILL.md is the canonical contract and may legitimately quote historical/comment references to these phrases in unrelated contexts (e.g. NEVER-list examples, changelog-style prose).
@@ -53,6 +65,11 @@ The harness ships with a `--self-test` flag that runs the check against two embe
 2. **Bad fixture**: contains all three positive markers AND one stale phrase — structured so the ONLY reason `check_file` can fail on this fixture is the negative-check path firing on the stale phrase. `--self-test` asserts the bad fixture produces exactly **1** failure.
 
 The same `check_file` function used in default mode is called against each. The "exactly 1 failure" assertion on the bad fixture is the load-bearing guarantee: if the negative-check block in `check_file` were deleted or bypassed, the bad fixture would produce 0 failures and the self-test would exit non-zero. If the positive-anchor block were deleted, the good fixture would still produce 0 failures (unchanged), but the bad fixture's positive markers would never be checked — the default-mode run against real repo files remains the primary guard against positive-check regressions. The fixture temp dir is cleaned up via `trap` on EXIT.
+
+Additionally, the self-test exercises `check_xref` against two xref-specific fixtures carved from sub-directories inside the same `FIXTURE_DIR`:
+
+1. **xref-good**: a doc file containing the literal xref path, PLUS the target file present on disk under the fixture root. `--self-test` asserts 0 failures.
+2. **xref-bad**: a doc file containing the literal xref path, but the target file deliberately NOT created. `--self-test` asserts exactly 1 failure — driven entirely by the existence assertion. If the existence assertion were removed, this fixture would produce 0 failures and the self-test would exit non-zero. Symmetric in spirit to the `check_file` bad-fixture invariant.
 
 ## Makefile wiring
 
@@ -76,7 +93,8 @@ Whenever any of the following change, update them in the same PR:
 
 - **The canonical contract in `skills/implement/SKILL.md` Step 5 quick-mode changes** — update the `POS_MARKER_*` and `STALE_*` constants at the top of `test-quick-mode-docs-sync.sh` FIRST; then update this `.md`; then propagate the new phrasing to each public doc target.
 - **A new public doc surfaces that also describes `/implement --quick`** — add it to the `PUBLIC_DOCS` array in the script and list it in the Target Files table above.
-- **The self-test fixture shape needs to change** — keep `check_file` usage byte-identical between default mode and self-test so self-test exercises the same code path.
+- **The self-test fixture shape needs to change** — keep `check_file` usage byte-identical between default mode and self-test so self-test exercises the same code path. Same rule for `check_xref`: default-mode and self-test must call the same function.
+- **Note A's cited path in `docs/review-agents.md` is renamed / moved / replaced** — update the `XREF_PATH` constant in the script to the new path AND update the "Required cross-references" table above in the same PR. If the rename's intent is to drop the xref entirely, remove the `check_xref` call from `run_default` plus its self-test fixtures, and delete the corresponding row from the table.
 
 ## CI & portability
 
