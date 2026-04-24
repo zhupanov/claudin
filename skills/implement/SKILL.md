@@ -258,11 +258,16 @@ ANCHOR_ID=$(gh api "/repos/$REPO/issues/$ISSUE_ARG/comments" --jq '.[] | select(
   gh api "/repos/$REPO/issues/comments/$ANCHOR_ID" --jq '.body' > "$IMPLEMENT_TMPDIR/anchor-hydrate/anchor-body.md"
   ```
   Run the inline awk section-extraction loop (matching `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs) over `anchor-body.md`, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. Do NOT call `upsert-anchor` at this point — future fragment writes will update sections in place without clobbering hydrated content.
-- If `ANCHOR_ID` is empty: no existing anchor. Compose a seed body (anchor first-line marker + empty section-marker pairs only) and plant the anchor:
+- If `ANCHOR_ID` is empty: no existing anchor. Compose a seed body via `scripts/assemble-anchor.sh` (passing an empty or partially-populated `$IMPLEMENT_TMPDIR/anchor-sections/` — the helper emits the anchor first-line marker and 8 empty section-marker pairs when no fragments exist yet), then plant the anchor:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_ARG --body-file <seed-body>
+  mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
+    --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" \
+    --issue "$ISSUE_ARG" \
+    --output "$IMPLEMENT_TMPDIR/anchor-seed.md"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_ARG --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
   ```
-  Parse `ANCHOR_COMMENT_ID` from stdout. If `FAILED=true`, print `**⚠ 0.5: tracking issue — upsert-anchor failed: $ERROR. Aborting.**` and skip to Step 18.
+  Parse `ANCHOR_COMMENT_ID` from stdout. If either call reports `FAILED=true`, print `**⚠ 0.5: tracking issue — seed anchor planting failed: $ERROR. Aborting.**` and skip to Step 18.
 
 On either branch, write `$IMPLEMENT_TMPDIR/parent-issue.md`:
 
@@ -289,7 +294,7 @@ ANCHOR_ID=$(gh api "/repos/$REPO/issues/$RECOVERED_N/comments" --jq '.[] | selec
 ```
 
 - If `ANCHOR_ID` is non-empty: fetch its body and hydrate local fragments (same as Branch 2 — direct `gh api /repos/.../issues/comments/$ANCHOR_ID` + awk section-extraction). Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. No upsert.
-- If `ANCHOR_ID` is empty: plant a fresh seed anchor via `tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file <seed-body>`. Parse `ANCHOR_COMMENT_ID` from stdout.
+- If `ANCHOR_ID` is empty: plant a fresh seed anchor using the shared helper (`mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"` then `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" --issue "$RECOVERED_N" --output "$IMPLEMENT_TMPDIR/anchor-seed.md"`, then `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"`). Parse `ANCHOR_COMMENT_ID` from stdout.
 
 On either branch, write sentinel with `ADOPTED=true` (Phase 3 Branch 3 adopts an existing open issue via PR-body recovery; per the `scripts/tracking-issue-read.md` contract). Set `ISSUE_NUMBER=$RECOVERED_N`. Print `✅ 0.5: tracking issue — recovered #$ISSUE_NUMBER from PR body (<elapsed>)`. Proceed to Step 1.
 
@@ -327,14 +332,18 @@ Each step covered by the accumulation mechanism writes its fragment to `$IMPLEME
 
 **Assembly + upsert procedure** (when `ISSUE_NUMBER` set):
 
-1. Walk the 8 canonical section slugs in `SECTION_MARKERS` order (defined in `anchor-comment-template.md`): `plan-goals-test`, `plan-review-tally`, `code-review-tally`, `diagrams`, `version-bump-reasoning`, `oos-issues`, `execution-issues`, `run-statistics`.
-2. For each slug, if `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md` exists, emit `<!-- section:<slug> -->\n<content>\n<!-- section-end:<slug> -->`. If absent, emit only the marker pair with empty content (preserves section shape for `tracking-issue-write.sh`'s truncation algorithm).
-3. Prepend the first-line HTML marker: `<!-- larch:implement-anchor v1 issue=$ISSUE_NUMBER -->`.
-4. Write assembled body to `$IMPLEMENT_TMPDIR/anchor-assembled.md`.
-5. ```bash
+1. Assemble the anchor body via the shared helper (single source of truth for the 8-slug walk, first-line HTML marker, and empty-marker-pair emission — see `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.md`):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
+     --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" \
+     --issue "$ISSUE_NUMBER" \
+     --output "$IMPLEMENT_TMPDIR/anchor-assembled.md"
+   ```
+   Parse stdout for `ASSEMBLED=true` on success, or `FAILED=true` + `ERROR=<msg>` on failure. The helper walks `SECTION_MARKERS` (sourced from `scripts/anchor-section-markers.sh`, also sourced by `tracking-issue-write.sh`) so all anchor-body creation paths share one executable definition of slug order.
+2. ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --anchor-id $ANCHOR_COMMENT_ID --body-file $IMPLEMENT_TMPDIR/anchor-assembled.md
    ```
-6. On `FAILED=true`, log to `Warnings` (`Step <N> — anchor upsert failed: $ERROR`) and proceed; do NOT bail. Fragments still accumulate locally; Step 9a.1's final upsert is the last attempt.
+3. On `FAILED=true` (either step), log to `Warnings` (`Step <N> — anchor assemble/upsert failed: $ERROR`) and proceed; do NOT bail. Fragments still accumulate locally; Step 9a.1's final upsert is the last attempt.
 
 **Compose-time sanitization**: every fragment composed into an anchor section MUST apply prompt-level sanitization (secrets → `<REDACTED-TOKEN>`, internal URLs → `<INTERNAL-URL>`, PII → `<REDACTED-PII>`). `scripts/redact-secrets.sh` (invoked inside `tracking-issue-write.sh`) is the shell-layer backstop but does NOT cover internal URLs or PII — compose-time sanitization is the first-line defense. See `anchor-comment-template.md` Compose-time sanitization rule.
 
@@ -610,7 +619,7 @@ Parse `HAS_BUMP`, `COMMITS_BEFORE`, `STATUS` (`ok|missing_main_ref|git_error` pe
 
 Compose the `version-bump-reasoning` fragment from the contents of `$BUMP_REASONING_FILE` if it exists and is non-empty; otherwise use `"No version bump reasoning available (skill may have skipped via BUMP_TYPE=NONE, or /bump-version was not invoked)."`. Write to `$IMPLEMENT_TMPDIR/anchor-sections/version-bump-reasoning.md`. If `ISSUE_NUMBER` is set, assemble and upsert (see Step 0.5).
 
-**Transient gap until Phase 5**: `rebase-rebump-subprocedure.md` step 6 currently refreshes the PR body's `<details><summary>Version Bump Reasoning</summary>` marker, which no longer exists in the slim PR body (Phase 3). Until Phase 5 of umbrella #348 retargets sub-procedure step 6 to refresh the anchor's `version-bump-reasoning` section instead, step 6 becomes a silent no-op during re-bump cycles (Steps 10 / 12). Version bump reasoning IS still captured at this Step 8 fragment write (and refreshed on the adopted path via `upsert-anchor`), so no information is lost on normal rebase-free runs. Phase 5 will close the mid-loop refresh gap.
+**Mid-loop refresh during rebase cycles**: `rebase-rebump-subprocedure.md` step 6 (Steps 10 / 12's rebase + re-bump path) refreshes the anchor's `version-bump-reasoning` section directly. It reads the session's tracking-issue sentinel via `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-read.sh --sentinel`, rewrites this fragment when `/bump-version` produced a fresh reasoning file in that invocation (preserves the prior fragment otherwise), and calls `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh` + `upsert-anchor`. Umbrella #348 Phase 5 closed the earlier gap where sub-procedure step 6 refreshed a PR-body block that no longer existed in the slim PR body (Phase 3). Anchor refresh failure in that step is non-fatal (logged to `Warnings`); the next successful progressive upsert (this Step 8, or Step 11 post-execution) repairs any stale anchor state.
 
 ## Step 8a — CHANGELOG Update
 
@@ -667,19 +676,24 @@ At Step 9a.1 entry, if no sentinel exists (`deferred=true`) and `repo_unavailabl
 
 1. Derive the tracking-issue title from `FEATURE_DESCRIPTION`: take the first line if present (everything before the first `\n`), else the first 80 characters; strip leading/trailing whitespace; collapse internal whitespace runs to a single space. Do NOT use `PR_TITLE` — the PR is not yet created at Step 9a.1 entry (Step 9b creates it).
 
-2. Compose a seed body (anchor first-line marker + all 8 canonical section marker pairs wrapping any fragments already written in Steps 1/3/5/7a/8). Write to `$IMPLEMENT_TMPDIR/anchor-seed.md`.
+2. Compose a minimal tracking-issue body — one paragraph describing the tracking-issue purpose (e.g., *"Tracking issue for &lt;derived-title&gt;. The anchor comment below carries plan, review, diagram, version-bump, OOS, and execution-issue summaries maintained by /implement."*). Write to `$IMPLEMENT_TMPDIR/tracking-issue-body.md`. The anchor machinery lives in a comment (step 4 below), not in the issue description, so the issue body is human-readable.
 
 3. Create the tracking issue:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh create-issue --title "<derived-title>" --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh create-issue --title "<derived-title>" --body-file "$IMPLEMENT_TMPDIR/tracking-issue-body.md"
    ```
    Parse `ISSUE_NUMBER` and `ISSUE_URL`. On `FAILED=true`, print `**⚠ 9a.1: OOS issues — create-issue failed: $ERROR. Aborting Step 9a.1 and proceeding with deferred/absent anchor.**` Log to `Tool Failures`. Skip anchor accumulation for the rest of the run; PR body's `Closes #<N>` line will be absent (substitute `# (no tracking issue created)` in the slim PR body).
 
-4. `tracking-issue-write.sh` treats the anchor as a standalone comment on the issue (not the issue body — `list_anchor_comments` in `tracking-issue-write.sh` scans `/repos/.../issues/{issue}/comments`, never the issue description). After `create-issue` returns `ISSUE_NUMBER`, plant the anchor as a first comment on the newly-created issue by calling `upsert-anchor`:
+4. `tracking-issue-write.sh` treats the anchor as a standalone comment on the issue (not the issue body — `list_anchor_comments` in `tracking-issue-write.sh` scans `/repos/.../issues/{issue}/comments`, never the issue description). After `create-issue` returns `ISSUE_NUMBER`, assemble the anchor seed via the shared helper (with the real issue number now available) and plant it as the first comment on the newly-created issue:
    ```bash
+   mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
+     --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" \
+     --issue "$ISSUE_NUMBER" \
+     --output "$IMPLEMENT_TMPDIR/anchor-seed.md"
    ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
    ```
-   Parse `ANCHOR_COMMENT_ID` from stdout. On `FAILED=true`, print `**⚠ 9a.1: OOS issues — anchor planting failed after create-issue: $ERROR. Continuing with ANCHOR_COMMENT_ID empty; subsequent upserts will fall back to marker-search.**` and log to `Tool Failures`.
+   The assembled seed body contains the anchor first-line marker (embedding `$ISSUE_NUMBER`) plus all 8 canonical section marker pairs wrapping any fragments already written in Steps 1/3/5/7a/8 (empty pairs where no fragment exists). Parse `ANCHOR_COMMENT_ID` from `upsert-anchor`'s stdout. On `FAILED=true` from either call, print `**⚠ 9a.1: OOS issues — anchor planting failed after create-issue: $ERROR. Continuing with ANCHOR_COMMENT_ID empty; subsequent upserts will fall back to marker-search.**` and log to `Tool Failures`.
 
 5. Write `$IMPLEMENT_TMPDIR/parent-issue.md`:
    ```
@@ -731,7 +745,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file 
 
 Print the PR URL. Save `PR_NUMBER`, `PR_URL`, `PR_TITLE` for Steps 10–15.
 
-**MANDATORY — READ ENTIRE FILE** before invoking the sub-procedure from Step 10 or Step 12: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/rebase-rebump-subprocedure.md`. Contains the `Inputs` schema (`rebase_already_done`, `caller_kind`), Happy-path steps 1–7 (drop bump → rebase → fast-forward local main → re-bump → push with recovery → PR body refresh → return to caller), Phase 4 caller path (`rebase_already_done=true, caller_kind=step12_phase4`), caller-family failure semantics (step12 = hard-bail to 12d; step10 = break to Step 11), and the anti-halt continuation reminder for `/bump-version`. **Do NOT load** when Step 12 early-exits on `merge=false` / `repo_unavailable=true`, or when Step 10 returns `ACTION=merge` / `already_merged` / `evaluate_failure` / `bail` (only load on rebase-family actions).
+**MANDATORY — READ ENTIRE FILE** before invoking the sub-procedure from Step 10 or Step 12: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/rebase-rebump-subprocedure.md`. Contains the `Inputs` schema (`rebase_already_done`, `caller_kind`), Happy-path steps 1–7 (drop bump → rebase → fast-forward local main → re-bump → push with recovery → anchor `version-bump-reasoning` refresh → return to caller), Phase 4 caller path (`rebase_already_done=true, caller_kind=step12_phase4`), caller-family failure semantics (step12 = hard-bail to 12d; step10 = break to Step 11), and the anti-halt continuation reminder for `/bump-version`. **Do NOT load** when Step 12 early-exits on `merge=false` / `repo_unavailable=true`, or when Step 10 returns `ACTION=merge` / `already_merged` / `evaluate_failure` / `bail` (only load on rebase-family actions).
 
 ## Step 10 — CI Monitor (initial wait for green)
 

@@ -108,7 +108,7 @@ Mixed-version state on a single issue (a legacy `<!-- larch:implement-anchor v1`
 
 ## Section markers — exact slug list
 
-The `SECTION_MARKERS` array in `scripts/tracking-issue-write.sh` must list these exact eight slugs in this order (truncation algorithm walks sections in this order for pass 1):
+The `SECTION_MARKERS` array — sourced from `scripts/anchor-section-markers.sh` by both `scripts/tracking-issue-write.sh` (truncation algorithm) and `scripts/assemble-anchor.sh` (anchor-body assembly) — must list these exact eight slugs in this order (truncation algorithm walks sections in this order for pass 1; assembly walk emits `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs in the same order):
 
 1. `plan-goals-test`
 2. `plan-review-tally`
@@ -182,7 +182,9 @@ This is a defense-in-depth layer above `scripts/redact-secrets.sh`'s outbound sc
 
 | File | Relationship |
 |---|---|
-| `scripts/tracking-issue-write.sh` | `SECTION_MARKERS` and `COLLAPSE_PRIORITY` arrays must match the slug list here. |
+| `scripts/anchor-section-markers.sh` | Single source of truth for the `SECTION_MARKERS` array (sourced by `tracking-issue-write.sh` and `assemble-anchor.sh`); slug set must match the list here. |
+| `scripts/tracking-issue-write.sh` | Inline `COLLAPSE_PRIORITY` array must be a permutation of the slug list here (same set, body-cap collapse priority order). Enforced by a test-harness invariant in `scripts/test-tracking-issue-write.sh`. |
+| `scripts/assemble-anchor.sh` | Consumes `SECTION_MARKERS` via the shared helper; emits marker pairs and the first-line HTML marker documented here. |
 | `scripts/tracking-issue-read.sh` | Anchor-marker filter uses the same strict `<!-- larch:implement-anchor v1` prefix. |
 | `skills/implement/references/pr-body-template.md` | Sibling slim-projection template for the PR body (Summary + Diagrams + Test plan + `Closes #<N>` + footer only); Phase 3+ the anchor comment is canonical for rich content. |
 | `scripts/test-implement-structure.sh` | Phase 3 test-harness assertion (9a) pins the three load-bearing literals here (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`); assertion (9b) pins a ≥3 reference floor for `anchor-comment-template.md` in SKILL.md. |

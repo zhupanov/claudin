@@ -2,13 +2,13 @@
 
 **Consumer**: `/implement` Steps 10 and 12 — shared sub-procedure invoked from `ACTION=rebase`, `ACTION=rebase_then_evaluate`, and Phase 4 exit-0 paths. Includes the "Continue after child returns" anti-halt micro-reminder that travels with the `/bump-version` Skill-tool call per `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md`.
 
-**Contract**: Authoritative source for the drop/rebase/fast-forward/bump/push/PR-body-refresh sequence. All `caller_kind` tokens (`step12_rebase`, `step12_rebase_then_evaluate`, `step12_phase4`, `step10_rebase`, `step10_rebase_then_evaluate`) are contract tokens — do NOT rename. The #172 STATUS-first evaluation ordering is the degraded-git fail-closed enforcement point for Step 12 (Load-Bearing Invariant #3 in SKILL.md).
+**Contract**: Authoritative source for the drop/rebase/fast-forward/bump/push/anchor-refresh sequence (the tracking-issue anchor's `version-bump-reasoning` section, per `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/anchor-comment-template.md`; the slim PR body no longer carries a Version Bump Reasoning block). All `caller_kind` tokens (`step12_rebase`, `step12_rebase_then_evaluate`, `step12_phase4`, `step10_rebase`, `step10_rebase_then_evaluate`) are contract tokens — do NOT rename. The #172 STATUS-first evaluation ordering is the degraded-git fail-closed enforcement point for Step 12 (Load-Bearing Invariant #3 in SKILL.md).
 
 **When to load**: before invoking the sub-procedure from Step 10 (any `ACTION=rebase*` return from `ci-wait.sh`), before invoking from Step 12a (any `ACTION=rebase*` return), or at the entry of Step 12 Phase 4's `rebase-push.sh --continue` exit-0 handler. Do NOT load when Step 12's `merge=false` or `repo_unavailable=true` early-exits fire, or when Step 10's `ACTION=merge` / `already_merged` / `evaluate_failure` / `bail` is returned.
 
 ---
 
-After the initial version bump in Step 8, every subsequent rebase of the feature branch onto latest `origin/main` must be followed by a fresh `/bump-version` run so the merged state reflects the version in latest main **at merge time**, not at PR-creation time. This sub-procedure consolidates the drop/rebase/fast-forward/bump/push/refresh sequence so that Steps 10 and 12 can invoke it from multiple places without duplication.
+After the initial version bump in Step 8, every subsequent rebase of the feature branch onto latest `origin/main` must be followed by a fresh `/bump-version` run so the merged state reflects the version in latest main **at merge time**, not at PR-creation time. This sub-procedure consolidates the drop/rebase/fast-forward/bump/push/anchor-refresh sequence so that Steps 10 and 12 can invoke it from multiple places without duplication.
 
 ## Inputs
 - `rebase_already_done` — if `true`, steps 1–2 are skipped (the rebase has already happened and been pushed by the caller, e.g., Step 12 Phase 4's `rebase-push.sh --continue`). If `false`, the sub-procedure performs the rebase itself.
@@ -61,15 +61,15 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
    - **step12 family**: **HARD FAILURE** — bail to 12d immediately. Print `**⚠ 12: CI+merge loop — check-bump-version.sh reported pre-check STATUS=$STATUS (baseline untrustworthy). Cannot safely verify bump freshness. Bailing to 12d.**` Log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `CI Issues`. Rationale: without a trustworthy baseline, the post-check comparison is meaningless — the merged version cannot be guaranteed correct.
    - **step10 family**: log warning `**⚠ 10: CI monitor — check-bump-version.sh reported pre-check STATUS=$STATUS (baseline untrustworthy). Skipping numeric-delta verification; Step 12 will re-verify.**` to `CI Issues`, then:
      - **If `HAS_BUMP=false`** (no `/bump-version` skill installed): skip the `/bump-version` invocation entirely and proceed directly to step 5 (push) → step 6 → step 7 — same as the `HAS_BUMP=false` path under `STATUS=ok` below. Do NOT attempt to call a skill that does not exist.
-     - **If `HAS_BUMP=true`**: invoke `/bump-version` via the Skill tool anyway (the rebase still needs its re-bump commit), but **SKIP the post-check commit-delta verification below** since the baseline is untrustworthy. After `/bump-version` returns, skip directly to step 5 (push) → step 6 (PR body refresh) → step 7 (return to caller). The post-check `STATUS`-first branches below and the numeric-comparison branches both rely on a trustworthy pre-check baseline that this invocation does not have.
+     - **If `HAS_BUMP=true`**: invoke `/bump-version` via the Skill tool anyway (the rebase still needs its re-bump commit), but **SKIP the post-check commit-delta verification below** since the baseline is untrustworthy. After `/bump-version` returns, skip directly to step 5 (push) → step 6 (anchor Version Bump Reasoning refresh) → step 7 (return to caller). The post-check `STATUS`-first branches below and the numeric-comparison branches both rely on a trustworthy pre-check baseline that this invocation does not have.
 
    Only if pre-check `STATUS=ok`, proceed with the bump workflow below:
    - **If `HAS_BUMP=false`**:
      - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version not found, cannot re-bump. Bailing to 12d.**` Bail to 12d.
-     - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (PR body refresh — nothing new to refresh) and step 7 (return to caller).
+     - **step10 family**: Print `**⚠ 10: CI monitor — /bump-version not found, skipping re-bump. Proceeding to Step 11.**` Log to `Warnings`. Skip ahead to step 5 — the push still needs to happen because the rebase in step 2 rewrote branch history, and that rewritten history must be force-pushed so the remote PR branch reflects the new base (there is just no new bump commit stacked on top). Then fall through to step 6 (anchor Version Bump Reasoning refresh — nothing new to refresh, so the fragment write is skipped; see step 6's preservation rule) and step 7 (return to caller).
    - **If `HAS_BUMP=true`**:
 
-     > **Continue after child returns.** When `/bump-version` returns, execute the NEXT steps of this sub-procedure in order — do NOT end the turn. The first mandatory action is the post-verification block immediately below (commit-delta check via `check-bump-version.sh --mode post`, then the sentinel-file check); only after those gates pass do you proceed to step 4a's CHANGELOG re-apply, step 5's push, step 6's PR body refresh, and step 7's return to caller. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+     > **Continue after child returns.** When `/bump-version` returns, execute the NEXT steps of this sub-procedure in order — do NOT end the turn. The first mandatory action is the post-verification block immediately below (commit-delta check via `check-bump-version.sh --mode post`, then the sentinel-file check); only after those gates pass do you proceed to step 4a's CHANGELOG re-apply, step 5's push, step 6's anchor Version Bump Reasoning refresh, and step 7's return to caller. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
      Invoke `/bump-version` via the Skill tool. If the skill invocation itself fails (returns an error, or bails internally):
      - **step12 family**: hard failure — bail to 12d.
@@ -98,16 +98,40 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
 
    **Critical (step12 family only)**: Do NOT simply "log and return to caller" on push failure. That would let the merge loop proceed to `ACTION=merge` on a remote branch that does NOT contain the fresh bump commit, violating the feature's core invariant. `ci-wait.sh` and `merge-pr.sh` operate on remote PR state only; they cannot see unpushed local commits.
 
-6. **Refresh PR body Version Bump Reasoning block**:
-   After `/bump-version` runs in step 4 above, capture the new reasoning-file path from its `REASONING_FILE=<path>` output line and use it as `$BUMP_REASONING_FILE` (same semantics as Step 8 — see that step for details on why the path must be parsed from stdout rather than constructed from `$IMPLEMENT_TMPDIR`). If `$BUMP_REASONING_FILE` exists and is non-empty:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-read.sh --pr <PR_NUMBER> --output "$IMPLEMENT_TMPDIR/live-body.md"
-   ```
-   Read `$IMPLEMENT_TMPDIR/live-body.md`, replace the entire inner content of the `<details><summary>Version Bump Reasoning</summary>...</details>` block with the current contents of `$BUMP_REASONING_FILE` (preserving blank lines after the opening tag and before the closing `</details>` for GitHub Markdown rendering — see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/pr-body-template.md` for the template). Write the result to `$IMPLEMENT_TMPDIR/pr-body.md` (same file Step 11 writes to, so subsequent refreshes operate on the fresh canonical copy). Then:
-   ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file "$IMPLEMENT_TMPDIR/pr-body.md"
-   ```
-   If the `<details><summary>Version Bump Reasoning</summary>` marker is not found in the fetched body, print `**⚠ Step <N> — Version Bump Reasoning block not found in live PR body. Skipping refresh.**` and skip the update. Log to `Warnings`. **PR body refresh failure is NOT a hard failure** — the bump is already pushed and the merge will be correct; the stale body is documentation-only.
+6. **Refresh anchor's `version-bump-reasoning` section** (best-effort, non-fatal):
+
+   Umbrella #348 Phase 5 retargets this step from the PR body to the tracking-issue anchor's `version-bump-reasoning` section (see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/anchor-comment-template.md` for the section contract). Unlike the old PR-body refresh, this step is a no-op when no tracking issue was adopted for the session — non-umbrella `/implement` runs, deferred-Branch-4 runs, and `repo_unavailable=true` runs all skip silently.
+
+   a. **Read the session's tracking-issue sentinel**:
+      ```bash
+      ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-read.sh --sentinel "$IMPLEMENT_TMPDIR/parent-issue.md"
+      ```
+      Parse both the script's exit status and its `FAILED=true` / `ERROR=<msg>` stdout envelope. On success, also extract `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` from the emitted KEY=value lines.
+
+   b. **Skip gate**: if non-zero exit OR stdout contains `FAILED=true` OR `ISSUE_NUMBER` is empty OR `ANCHOR_COMMENT_ID` is empty (the `tracking-issue-read.sh` `--sentinel` contract treats empty values as "unusable" — see `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-read.sh`), log to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`: `Step <N> — tracking-issue sentinel unusable (<reason>); anchor Version Bump Reasoning refresh skipped.` Then skip to step 7. Do NOT pass an empty `--anchor-id` to `tracking-issue-write.sh upsert-anchor` and do NOT fall back to marker-search-with-create — either would risk accidental anchor creation during rebase loops.
+
+   c. **Compose the fragment (preservation-aware)**: after `/bump-version` runs in step 4 above, it emits a `REASONING_FILE=<path>` line on stdout and that path is saved as `$BUMP_REASONING_FILE` (same semantics as Step 8 — see that step for details on why the path must be parsed from stdout rather than constructed from `$IMPLEMENT_TMPDIR`). Behavior branches on whether step 4 produced a fresh reasoning file:
+      - **Fresh reasoning file available** (`$BUMP_REASONING_FILE` was set by THIS sub-procedure invocation's step 4 AND the file exists AND is non-empty): `mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"` then copy the reasoning content into `$IMPLEMENT_TMPDIR/anchor-sections/version-bump-reasoning.md`. Fragment content flows verbatim; compose-time sanitization applies at the call-site layer (see SKILL.md "Compose-time sanitization").
+      - **No fresh reasoning file** (HAS_BUMP=false degraded path or degraded-STATUS path where `/bump-version` did not run in this invocation): preserve the existing `$IMPLEMENT_TMPDIR/anchor-sections/version-bump-reasoning.md` fragment unchanged. **Do NOT overwrite with a placeholder** — that would destroy information written at Step 8 of the prior bump cycle. This matches the documented "nothing new to refresh" semantics of the HAS_BUMP=false path.
+
+   d. **Assemble the anchor body** using the shared helper (same helper used by SKILL.md's progressive-upsert assembly; see `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.md` for the contract):
+      ```bash
+      ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
+        --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" \
+        --issue "$ISSUE_NUMBER" \
+        --output "$IMPLEMENT_TMPDIR/anchor-assembled.md"
+      ```
+      Parse stdout for `ASSEMBLED=true` or `FAILED=true` + `ERROR=<msg>`.
+
+   e. **Upsert the anchor**:
+      ```bash
+      ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor \
+        --issue "$ISSUE_NUMBER" --anchor-id "$ANCHOR_COMMENT_ID" \
+        --body-file "$IMPLEMENT_TMPDIR/anchor-assembled.md"
+      ```
+      Parse stdout for `ANCHOR_COMMENT_ID=<id>` / `UPDATED=true|false` on success, or `FAILED=true` + `ERROR=<msg>` on failure.
+
+   f. **Non-fatal failure handling**: if step d's assemble or step e's upsert reports `FAILED=true` OR exits non-zero, print `**⚠ Step <N> — anchor Version Bump Reasoning refresh failed. Continuing.**` and log the specific `ERROR=<msg>` to `$IMPLEMENT_TMPDIR/execution-issues.md` under `Warnings`. **Anchor refresh failure is NOT a hard failure** — the bump is already pushed and the merge will be correct; the stale anchor section is documentation-only. A later successful progressive upsert (Step 11 post-execution refresh, or Step 9a.1's final upsert) may repair it.
 
 7. **Return to caller based on `caller_kind`**:
    - **`step12_rebase`** (from 12a `ACTION=rebase`): increment `rebase_count`, `iteration`, reset `transient_retries`, **sleep 30s** via `${CLAUDE_PLUGIN_ROOT}/scripts/sleep-seconds.sh 30` (give GitHub CI time to register the force-push before polling again), then re-invoke `ci-wait.sh` in Step 12.
@@ -118,4 +142,4 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
 
 ## Phase 4 caller path (`rebase_already_done=true`, `caller_kind=step12_phase4`)
 
-Phase 4 enters the sub-procedure AFTER `rebase-push.sh --continue` has already pushed the resolved rebase. **Skip steps 1–2 entirely.** Still run steps 3 (fast-forward local main), 4 (re-bump with step12 hard-failure semantics), 5 (push with recovery), 6 (PR body refresh), 7 (return with `step12_phase4`). This path necessarily double-pushes (Phase 4 pushed the rebase, then step 5 pushes the new bump), but the Conflict Resolution Procedure is rare enough that the second push cost is acceptable.
+Phase 4 enters the sub-procedure AFTER `rebase-push.sh --continue` has already pushed the resolved rebase. **Skip steps 1–2 entirely.** Still run steps 3 (fast-forward local main), 4 (re-bump with step12 hard-failure semantics), 5 (push with recovery), 6 (anchor Version Bump Reasoning refresh), 7 (return with `step12_phase4`). This path necessarily double-pushes (Phase 4 pushed the rebase, then step 5 pushes the new bump), but the Conflict Resolution Procedure is rare enough that the second push cost is acceptable.

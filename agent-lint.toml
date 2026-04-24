@@ -313,6 +313,17 @@ exclude = [
   # Phase 3 (skills/implement/SKILL.md wiring) removes both exclusions.
   "scripts/tracking-issue-read.sh",
   "scripts/tracking-issue-write.sh",
+  # Phase 5 of umbrella #348 (rebase-rebump sub-procedure anchor refresh) —
+  # scripts/anchor-section-markers.sh is a sourced-only helper (no shebang,
+  # not executable, defines SECTION_MARKERS consumed by tracking-issue-write.sh
+  # and assemble-anchor.sh via `source`). Same "sourced library" shape as
+  # scripts/lib-count-commits.sh above.
+  "scripts/anchor-section-markers.sh",
+  # scripts/test-assemble-anchor.sh is the regression harness for
+  # scripts/assemble-anchor.sh, wired into Makefile test-assemble-anchor
+  # target only (no SKILL.md invocation). Same Makefile-only shape as the
+  # other test-* harnesses above.
+  "scripts/test-assemble-anchor.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by

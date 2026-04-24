@@ -260,5 +260,75 @@ fi
 grep -Fq 'IMPLEMENT_BAIL_REASON=adopted-issue-closed' "$SKILL_MD" \
   || fail "(10) skills/implement/SKILL.md must contain the cross-skill bail token literal 'IMPLEMENT_BAIL_REASON=adopted-issue-closed'"
 
-echo "PASS: test-implement-structure.sh — all 10 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (11) Phase 5 (umbrella #348) rebase-rebump-subprocedure.md reference set.
+#      Sub-procedure step 6 retargeted from PR-body refresh to anchor
+#      `version-bump-reasoning` refresh (via tracking-issue sentinel read +
+#      assemble-anchor.sh + upsert-anchor). Assertions:
+#      (11a) references anchor-comment-template.md ≥1 (Contract citation).
+#      (11b) references `tracking-issue-read.sh --sentinel` ≥1 (Step 6a).
+#      (11c) references `assemble-anchor.sh` ≥1 AND `upsert-anchor` ≥1 (Step 6d,e).
+#      (11d) zero invocation lines of `gh-pr-body-read.sh` or `gh-pr-body-update.sh`
+#            — scoped to invocation patterns (the literal
+#            `${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-{read,update}.sh`) to
+#            preserve historical/prose mentions if any remain (per design
+#            FINDING_7). A lingering invocation is a Phase 5 regression.
+# ---------------------------------------------------------------------------
+REBASE_SUBPROC="$REFS_DIR/rebase-rebump-subprocedure.md"
+[[ -f "$REBASE_SUBPROC" ]] || fail "(11) rebase-rebump-subprocedure.md missing: $REBASE_SUBPROC"
+
+anchor_template_refs=$(grep -cF 'anchor-comment-template.md' "$REBASE_SUBPROC" || true)
+if ! [[ "$anchor_template_refs" =~ ^[0-9]+$ ]] || (( anchor_template_refs < 1 )); then
+  fail "(11a) expected at least 1 reference to 'anchor-comment-template.md' in rebase-rebump-subprocedure.md (Contract citation), found ${anchor_template_refs:-0}"
+fi
+
+sentinel_refs=$(grep -cF 'tracking-issue-read.sh --sentinel' "$REBASE_SUBPROC" || true)
+if ! [[ "$sentinel_refs" =~ ^[0-9]+$ ]] || (( sentinel_refs < 1 )); then
+  fail "(11b) expected at least 1 reference to 'tracking-issue-read.sh --sentinel' in rebase-rebump-subprocedure.md (Step 6a), found ${sentinel_refs:-0}"
+fi
+
+assemble_refs=$(grep -cF 'assemble-anchor.sh' "$REBASE_SUBPROC" || true)
+if ! [[ "$assemble_refs" =~ ^[0-9]+$ ]] || (( assemble_refs < 1 )); then
+  fail "(11c-1) expected at least 1 reference to 'assemble-anchor.sh' in rebase-rebump-subprocedure.md (Step 6d), found ${assemble_refs:-0}"
+fi
+
+upsert_refs=$(grep -cF 'upsert-anchor' "$REBASE_SUBPROC" || true)
+if ! [[ "$upsert_refs" =~ ^[0-9]+$ ]] || (( upsert_refs < 1 )); then
+  fail "(11c-2) expected at least 1 reference to 'upsert-anchor' in rebase-rebump-subprocedure.md (Step 6e), found ${upsert_refs:-0}"
+fi
+
+# (11d) No remaining invocation patterns. Match the literal
+# `${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-read.sh` or `…/gh-pr-body-update.sh`
+# only — historical prose mentions (e.g., "replaced the old gh-pr-body-*.sh")
+# are allowed.
+gh_pr_body_read_invocations=$(grep -cF '${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-read.sh' "$REBASE_SUBPROC" || true)
+if ! [[ "$gh_pr_body_read_invocations" =~ ^[0-9]+$ ]] || (( gh_pr_body_read_invocations > 0 )); then
+  fail "(11d-1) rebase-rebump-subprocedure.md still invokes 'gh-pr-body-read.sh' (found ${gh_pr_body_read_invocations:-0}); Phase 5 retargeted to assemble-anchor.sh + upsert-anchor"
+fi
+gh_pr_body_update_invocations=$(grep -cF '${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh' "$REBASE_SUBPROC" || true)
+if ! [[ "$gh_pr_body_update_invocations" =~ ^[0-9]+$ ]] || (( gh_pr_body_update_invocations > 0 )); then
+  fail "(11d-2) rebase-rebump-subprocedure.md still invokes 'gh-pr-body-update.sh' (found ${gh_pr_body_update_invocations:-0}); Phase 5 retargeted to assemble-anchor.sh + upsert-anchor"
+fi
+
+# ---------------------------------------------------------------------------
+# (12) Phase 5 single-source-of-truth invariant for SECTION_MARKERS.
+#      tracking-issue-write.sh must source anchor-section-markers.sh and
+#      must NOT contain a standalone `SECTION_MARKERS=(` declaration
+#      (the old inline declaration was removed; any re-inline would silently
+#      diverge tracking-issue-write.sh's ordering from assemble-anchor.sh).
+# ---------------------------------------------------------------------------
+TRACKING_WRITE_SH="$REPO_ROOT/scripts/tracking-issue-write.sh"
+[[ -f "$TRACKING_WRITE_SH" ]] || fail "(12) tracking-issue-write.sh missing: $TRACKING_WRITE_SH"
+
+markers_sourced=$(grep -cF 'anchor-section-markers.sh' "$TRACKING_WRITE_SH" || true)
+if ! [[ "$markers_sourced" =~ ^[0-9]+$ ]] || (( markers_sourced < 1 )); then
+  fail "(12a) tracking-issue-write.sh must reference 'anchor-section-markers.sh' (source-of-truth helper); found ${markers_sourced:-0}"
+fi
+
+inline_markers=$(grep -cE '^[[:space:]]*SECTION_MARKERS=\(' "$TRACKING_WRITE_SH" || true)
+if ! [[ "$inline_markers" =~ ^[0-9]+$ ]] || (( inline_markers > 0 )); then
+  fail "(12b) tracking-issue-write.sh must NOT contain a standalone 'SECTION_MARKERS=(' declaration (now lives in anchor-section-markers.sh); found ${inline_markers:-0}"
+fi
+
+echo "PASS: test-implement-structure.sh — all 12 structural invariants hold"
 exit 0
