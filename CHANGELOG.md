@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.13] - 2026-04-23
+
+### Changed
+
+- Move `/implement` tracking-issue creation from Step 9a.1 to Step 0.5 Branch 4 so the tracking issue exists immediately on a fresh run. The issue body carries the original `FEATURE_DESCRIPTION` verbatim (after mandatory compose-time prompt-level sanitization — secrets / internal URLs / PII) wrapped in a blockquote for fence-injection safety. The anchor comment is now populated progressively as the run executes (`plan-goals-test` and `plan-review-tally` at Step 1, `code-review-tally` at Step 5, `diagrams` at Step 7a, `version-bump-reasoning` at Step 8, `oos-issues` + `run-statistics` at Step 9a.1, `execution-issues` at Step 11). Step 2 adds a new `Q/A` category to `execution-issues.md` with a progressive anchor upsert after each opportunistic question or mid-coding ambiguity, so Q/A appears on the issue live rather than batched until Step 11. Step 18 prints `📎 Tracking issue: <url>` at the end of the run (derived via `gh issue view --json url` so it works on GitHub Enterprise). Step 9a.1 no longer performs the first-remote-write (removed "Deferred-Creation" sub-step); it is OOS + run-stats only. Step 9a drops the `<PLACEHOLDER_TRACKING_ISSUE>` path entirely: the degraded run (create-issue failure or `repo_unavailable=true`) omits the `Closes` line and writes `_No tracking issue — auto-close N/A._` instead of a malformed `Closes #...` reference. Load-Bearing Invariant #4 text tightened: on Branch 4 first-creation, the sentinel is written ONLY after both `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` resolve to non-empty values; any create-issue or upsert-anchor failure flips to `deferred=true` and skips the sentinel. `scripts/tracking-issue-read.md`, `skills/implement/references/rebase-rebump-subprocedure.md`, `skills/implement/references/anchor-comment-template.md`, `skills/implement/references/pr-body-template.md`, `scripts/assemble-anchor.sh`, and `scripts/assemble-anchor.md` updated in sync. One follow-up OOS filed (Step 2 pre-existing ambiguity-log sanitization gap for entries that flow into the public anchor comment).
+
 ## [6.2.12] - 2026-04-23
 
 ### Changed
