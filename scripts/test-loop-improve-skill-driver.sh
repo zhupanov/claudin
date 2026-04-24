@@ -89,6 +89,22 @@ check_contains 'Grade History'                                 'close-out Grade 
 check_contains 'LOOP_IMPROVE_SKIP_PREFLIGHT'                   'opt-in preflight-skip env var (FINDING_11)'
 check_contains '--skip-preflight'                              'session-setup.sh --skip-preflight forwarding (FINDING_11)'
 
+# ---------- Issue #399 — tmpdir retention + stderr dump contracts ----------
+check_contains 'LOOP_PRESERVE_TMPDIR'                          'retention flag (issue #399 remedy (a))'
+check_contains 'Retained working directory'                    'close-out + stdout breadcrumb literal (issue #399)'
+check_contains '── subprocess stderr (label='                  'subprocess-stderr banner literal (issue #399 remedy (b))'
+check_contains '── subprocess stdout tail (label='             'subprocess-stdout-tail banner literal (issue #399 remedy (b))'
+check_contains 'tail -n 50'                                    'stdout-tail 50-line cap (issue #399 remedy (b))'
+check_contains 'dump_subprocess_diagnostics'                   'subprocess-diagnostics helper function (issue #399)'
+check_contains 'dump_helper_stderr'                            'helper-stderr dump function (issue #399 remedy (c))'
+check_contains 'preserve.sentinel'                             'cross-boundary preserve sentinel (issue #399)'
+check_contains 'banner-redacted'                               'sed spoof-guard for ### iteration-result (issue #399)'
+check_contains 'gh-create-issue.stderr'                        'gh issue create stderr sidecar (issue #399 remedy (c))'
+check_contains 'gh-comment.stderr'                             'gh issue comment stderr sidecar (issue #399 remedy (c))'
+check_contains 'redact.stderr'                                 'redact-secrets stderr sidecar (issue #399 remedy (c))'
+# shellcheck disable=SC2016
+check_contains 'LOOP_TMPDIR=%s'                                'always-emit LOOP_TMPDIR= stdout token (issue #399)'
+
 # ---------- Iteration delegation (post-refactor) ----------
 # Driver must invoke iteration.sh via an ITERATION_SCRIPT variable resolved
 # from LARCH_ITERATION_SCRIPT_OVERRIDE (test-only) or the default kernel path.
@@ -145,11 +161,22 @@ echo "--- Behavioral smoke fixtures ---"
 
 # Run one fixture: set up stubs + LARCH_ITERATION_SCRIPT_OVERRIDE, invoke
 # driver, assert on observable output.
+#
+# Args:
+#   $1 name             Fixture name for pass/fail labels.
+#   $2 iter_body        Shell body written into the stub iteration shim.
+#   $3 expect_grep      Regex that MUST appear in driver stdout.
+#   $4 not_grep         Optional regex that must NOT appear in driver stdout.
+#   $5 expect_retained  Optional — "true" asserts LOOP_TMPDIR persists after
+#                       driver exit; "false" asserts LOOP_TMPDIR was cleaned.
+#                       Driver always emits `LOOP_TMPDIR=<path>` to stdout at
+#                       EXIT (issue #399) so the harness can extract it.
 run_fixture() {
   local name="$1"
   local iter_body="$2"        # shell body written into the stub iteration shim
   local expect_grep="$3"      # regex to grep in driver stdout
   local not_grep="${4:-}"     # regex that must NOT appear in driver stdout
+  local expect_retained="${5:-}"  # "true" / "false" / "" (skip) — issue #399
 
   local fixture_tmp
   fixture_tmp="$(mktemp -d)"
@@ -245,12 +272,16 @@ CLAUDE_EOF
   # Stub iteration.sh shim (LARCH_ITERATION_SCRIPT_OVERRIDE target).
   cat > "$fixture_tmp/stub-iteration.sh" <<'SHIM_EOF'
 #!/usr/bin/env bash
-# Parse minimal args to find --iter-num and the skill name.
+# Parse minimal args to find --iter-num, the skill name, and --work-dir
+# (exported as WORK_DIR so fixture bodies can touch $WORK_DIR/preserve.sentinel
+# for issue #399 cross-boundary signal testing).
 ITER_NUM=1
+WORK_DIR=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --iter-num) ITER_NUM="$2"; shift 2 ;;
-    --issue|--work-dir|--breadcrumb-prefix) shift 2 ;;
+    --work-dir) WORK_DIR="$2"; shift 2 ;;
+    --issue|--breadcrumb-prefix) shift 2 ;;
     --no-slack) shift ;;
     --) shift; break ;;
     --*) shift ;;
@@ -300,6 +331,39 @@ SHIM_EOF
         pass "fixture [$name]: correctly absent '$not_grep'"
       fi
     fi
+
+    # Issue #399 retention assertion. Driver emits `LOOP_TMPDIR=<path>` on
+    # every exit path — extract it from the log and check persistence vs
+    # cleanup. The extracted path lives under /tmp or /private/tmp (outside
+    # $fixture_tmp), so the fixture's own `rm -rf $fixture_tmp` does not
+    # affect it; we must clean it up manually on retention paths to avoid
+    # /tmp leakage between test runs.
+    if [[ -n "$expect_retained" ]]; then
+      local loop_tmpdir
+      loop_tmpdir="$(grep -E '^LOOP_TMPDIR=' "$driver_log" 2>/dev/null | tail -1 | cut -d= -f2-)"
+      if [[ -z "$loop_tmpdir" ]]; then
+        fail "fixture [$name]: could not extract LOOP_TMPDIR= from driver output"
+      else
+        case "$expect_retained" in
+          true)
+            if [[ -d "$loop_tmpdir" ]]; then
+              pass "fixture [$name]: LOOP_TMPDIR retained on failure path ($loop_tmpdir)"
+              rm -rf "$loop_tmpdir" 2>/dev/null || true
+            else
+              fail "fixture [$name]: expected LOOP_TMPDIR retained, but $loop_tmpdir was cleaned"
+            fi
+            ;;
+          false)
+            if [[ -d "$loop_tmpdir" ]]; then
+              fail "fixture [$name]: expected LOOP_TMPDIR cleaned on success path, but $loop_tmpdir persisted"
+              rm -rf "$loop_tmpdir" 2>/dev/null || true
+            else
+              pass "fixture [$name]: LOOP_TMPDIR cleaned on success path"
+            fi
+            ;;
+        esac
+      fi
+    fi
   fi
 
   rm -rf "$fixture_tmp" 2>/dev/null || true
@@ -311,7 +375,8 @@ if [[ -x "$REPO_ROOT/scripts/session-setup.sh" && \
       -x "$REPO_ROOT/scripts/redact-secrets.sh" && \
       -x "$REPO_ROOT/scripts/parse-skill-judge-grade.sh" ]]; then
 
-  # Fixture 1: iteration returns ITER_STATUS=grade_a on iteration 1
+  # Fixture 1: iteration returns ITER_STATUS=grade_a on iteration 1.
+  # Success path — LOOP_TMPDIR must be cleaned (issue #399).
   # shellcheck disable=SC2016
   run_fixture \
     "grade_a_at_iter1" \
@@ -329,12 +394,15 @@ printf "ITERATION_TMPDIR=\n"
 printf "ISSUE_NUM=42\n"
 exit 0' \
     'grade A achieved|Loop finished' \
-    ''
+    '' \
+    'false'
 
-  # Fixture 2: iteration returns ITER_STATUS=no_plan on iteration 1
+  # Fixture 2: iteration returns ITER_STATUS=no_plan on iteration 1.
+  # Retention path — LOOP_TMPDIR must persist + close-out body has Diagnostics
+  # block + driver stdout has the "Retained working directory" breadcrumb.
   # shellcheck disable=SC2016
   run_fixture \
-    "no_plan_at_iter1" \
+    "preserve_tmpdir_on_no_plan" \
     'printf "> **🔶 4.1.d: design**\n"
 printf "\n### iteration-result\n"
 printf "ITER_STATUS=no_plan\n"
@@ -347,10 +415,12 @@ printf "TOTAL_DEN=120\n"
 printf "ITERATION_TMPDIR=\n"
 printf "ISSUE_NUM=42\n"
 exit 0' \
-    'no plan at iteration 1|Infeasibility' \
-    ''
+    'Retained working directory' \
+    '' \
+    'true'
 
-  # Fixture 3: iteration returns ITER_STATUS=im_verification_failed
+  # Fixture 3: iteration returns ITER_STATUS=im_verification_failed.
+  # Retention path (same shape as no_plan but different terminal status).
   # shellcheck disable=SC2016
   run_fixture \
     "im_verification_failed_at_iter1" \
@@ -366,7 +436,37 @@ printf "ITERATION_TMPDIR=\n"
 printf "ISSUE_NUM=42\n"
 exit 0' \
     'im did not reach canonical completion line|Infeasibility' \
-    ''
+    '' \
+    'true'
+
+  # Fixture 4: iteration returns ITER_STATUS=grade_a (a nominally clean-success
+  # status), BUT also touches the cross-boundary preserve sentinel at
+  # $WORK_DIR/preserve.sentinel — simulating a helper-script-failure path in
+  # the kernel signaling retention to the driver via sentinel (issue #399
+  # FINDING_4). The driver's cleanup_on_exit must honor the sentinel and
+  # retain LOOP_TMPDIR despite the clean-success status.
+  # shellcheck disable=SC2016
+  run_fixture \
+    "preserve_tmpdir_on_sentinel" \
+    '# Simulate a kernel-side helper-script failure: touch the preserve sentinel
+# before emitting the (clean) KV footer. The driver must pick up the signal.
+if [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
+  : > "$WORK_DIR/preserve.sentinel"
+fi
+printf "\n### iteration-result\n"
+printf "ITER_STATUS=grade_a\n"
+printf "EXIT_REASON=grade A achieved on all dimensions at iteration 1\n"
+printf "PARSE_STATUS=ok\n"
+printf "GRADE_A=true\n"
+printf "NON_A_DIMS=\n"
+printf "TOTAL_NUM=120\n"
+printf "TOTAL_DEN=120\n"
+printf "ITERATION_TMPDIR=\n"
+printf "ISSUE_NUM=42\n"
+exit 0' \
+    'Retained working directory' \
+    '' \
+    'true'
 
 else
   echo "SKIP: behavioral fixtures skipped — required helper scripts not all present."

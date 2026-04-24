@@ -107,6 +107,19 @@ check_contains 'iter-${ITER_NUM}-infeasibility.md'             'infeasibility fi
 # FINDING_11 parallel: IMPROVE_SKILL_SKIP_PREFLIGHT opt-in for test harnesses.
 check_contains 'IMPROVE_SKILL_SKIP_PREFLIGHT'                  'opt-in preflight-skip env var'
 
+# ---------- Issue #399 — tmpdir retention + stderr dump contracts ----------
+check_contains 'PRESERVE_WORK_DIR'                             'retention flag (issue #399 remedy (a))'
+check_contains 'dump_subprocess_diagnostics'                   'subprocess-diagnostics helper (issue #399 remedy (b))'
+check_contains 'dump_helper_stderr'                            'helper-stderr dump helper (issue #399 remedy (c))'
+check_contains '── subprocess stderr (label='                  'subprocess-stderr banner literal (issue #399)'
+check_contains '── subprocess stdout tail (label='             'subprocess-stdout-tail banner literal (issue #399)'
+check_contains 'tail -n 50'                                    'stdout-tail 50-line cap (issue #399)'
+check_contains 'banner-redacted'                               'sed spoof-guard for ### iteration-result (issue #399)'
+check_contains 'preserve.sentinel'                             'cross-boundary preserve sentinel (issue #399)'
+check_contains 'grade_a|ok'                                    'status-gate case pattern in cleanup_on_exit (issue #399)'
+check_contains 'gh-create-issue.stderr'                        'standalone gh issue create stderr sidecar (issue #399)'
+check_contains 'gh-comment.stderr'                             'post_gh_comment stderr sidecar (issue #399)'
+
 # ---------- Argv flags ----------
 check_contains '--no-slack'                                    '--no-slack flag handling'
 check_contains '--issue'                                       '--issue flag handling'
@@ -376,6 +389,96 @@ HEREDOC_EOF" \
     "printf '## Implementation Plan\n\n- Step one\n- Step two\n'" \
     "printf 'Some output but no canonical completion line.\n'" \
     "im_verification_failed"
+
+  # Fixture 5 — issue #399: subprocess failure triggers diagnostics dump +
+  # work-dir retention. The judge stub exits non-zero with stderr content;
+  # iteration.sh's invoke_claude_p must (a) dump a redacted ── subprocess
+  # stderr banner + stdout tail to stdout, (b) NOT clean up the work-dir
+  # (PRESERVE_WORK_DIR=true via the KV_ITER_STATUS != grade_a|ok gate).
+  judge_failure_fixture() {
+    local name="judge_subprocess_failure"
+    local fixture_tmp stub_dir work_dir iter_workdir
+    fixture_tmp="$(mktemp -d -p /tmp tmp.XXXXXXXXXX 2>/dev/null || mktemp -d /tmp/tmp.XXXXXXXXXX)"
+    stub_dir="$fixture_tmp/stubs"
+    work_dir="$fixture_tmp/work"
+    iter_workdir="$fixture_tmp/iter-workdir"
+    mkdir -p "$stub_dir" "$work_dir/skills/testskill" "$iter_workdir"
+    cat > "$work_dir/skills/testskill/SKILL.md" <<'SKILL_EOF'
+---
+name: testskill
+description: "Fixture skill"
+---
+# testskill
+SKILL_EOF
+    cat > "$stub_dir/gh" <<'GH_EOF'
+#!/usr/bin/env bash
+exit 0
+GH_EOF
+    chmod +x "$stub_dir/gh"
+    # claude stub: always fails, writes a distinctive stderr marker so the
+    # fixture can assert the dump captured it verbatim.
+    cat > "$stub_dir/claude" <<'CLAUDE_EOF'
+#!/usr/bin/env bash
+if [[ "$1" == "--version" ]]; then echo "claude stub 0.0.0"; exit 0; fi
+printf 'FIXTURE_STDERR_MARKER: subprocess failure\n' >&2
+exit 3
+CLAUDE_EOF
+    chmod +x "$stub_dir/claude"
+
+    local iter_log="$fixture_tmp/iter.log"
+    local rc=0
+    (
+      cd "$work_dir"
+      PATH="$stub_dir:$PATH" \
+      CLAUDE_PLUGIN_ROOT="$REPO_ROOT" \
+        bash "$KERNEL" \
+          --issue 42 \
+          --work-dir "$iter_workdir" \
+          --iter-num 1 \
+          testskill
+    ) > "$iter_log" 2>&1 || rc=$?
+
+    # Assert the dump banner appeared.
+    if grep -Fq '── subprocess stderr (label=judge) ──' "$iter_log" 2>/dev/null; then
+      pass "fixture [$name]: subprocess-stderr banner emitted"
+    else
+      fail "fixture [$name]: missing '── subprocess stderr (label=judge) ──' banner"
+      echo "    === iter.log (tail) ===" >&2
+      tail -60 "$iter_log" >&2 || true
+    fi
+
+    # Assert the stderr marker itself reached stdout (verbatim — redact-secrets
+    # does not alter non-secret content).
+    if grep -Fq 'FIXTURE_STDERR_MARKER: subprocess failure' "$iter_log" 2>/dev/null; then
+      pass "fixture [$name]: verbatim stderr content reached stdout after redaction"
+    else
+      fail "fixture [$name]: stderr marker 'FIXTURE_STDERR_MARKER' not in iter.log"
+    fi
+
+    # Assert ITER_STATUS was flipped to judge_failed (invoke_claude_p non-zero
+    # on judge phase maps to judge_failed in iteration.sh).
+    local got_status
+    got_status="$(awk -F= '/^ITER_STATUS=/{print $2; exit}' "$iter_log" 2>/dev/null || true)"
+    if [[ "$got_status" == "judge_failed" ]]; then
+      pass "fixture [$name]: ITER_STATUS=judge_failed (as expected)"
+    else
+      fail "fixture [$name]: expected ITER_STATUS=judge_failed, got '$got_status' (rc=$rc)"
+    fi
+
+    # Assert the iteration work-dir persists (retention path). In loop mode
+    # iteration.sh does not clean the caller-supplied work-dir anyway; for
+    # standalone retention we would need OWNS_WORK_DIR=true. This fixture
+    # supplies --work-dir so retention is a driver-level concern; we check
+    # instead that the sentinel would have been touchable (the dir exists).
+    if [[ -d "$iter_workdir" ]]; then
+      pass "fixture [$name]: work-dir persists (caller-owned in loop mode)"
+    else
+      fail "fixture [$name]: work-dir unexpectedly cleaned"
+    fi
+
+    rm -rf "$fixture_tmp" 2>/dev/null || true
+  }
+  judge_failure_fixture
 
 else
   echo "SKIP: behavioral fixtures skipped — required helper scripts not all present."

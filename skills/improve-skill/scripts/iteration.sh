@@ -140,6 +140,7 @@ emit_kv_footer() {
 
 WORK_DIR=""
 OWNS_WORK_DIR="false"   # true only in standalone mode (no --work-dir passed)
+PRESERVE_WORK_DIR="false"  # sticky; once true, cleanup is suppressed (issue #399)
 
 # shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
@@ -154,8 +155,17 @@ cleanup_on_exit() {
   # Emit KV footer so parsers see the result even when work-dir cleanup fails
   # (FINDING_2 guarantee).
   emit_kv_footer || true
+  # Retention gate (issue #399): preserve the work-dir on any non-success
+  # iteration status so operators can inspect per-iteration artifacts
+  # (iter-<N>-*.txt and .stderr sidecars). Cleanup still runs on grade_a/ok.
+  case "$KV_ITER_STATUS" in
+    grade_a|ok) : ;;
+    *) PRESERVE_WORK_DIR="true" ;;
+  esac
   if [[ "$OWNS_WORK_DIR" == "true" && -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
-    if [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then
+    if [[ "$PRESERVE_WORK_DIR" == "true" ]]; then
+      breadcrumb_warn "retained work-dir at ${WORK_DIR} for diagnostics (status=${KV_ITER_STATUS})." >&2
+    elif [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then
       "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$WORK_DIR" || true
     fi
   fi
@@ -387,10 +397,12 @@ else
     printf 'Tracking issue for one-round improvement of /%s via /improve-skill. Runs /skill-judge + /design + /im as fresh `claude -p` subprocesses via a bash iteration kernel. Halt class eliminated by construction (closes #273).\n\n' "${SKILL_NAME}"
     printf 'Target: %s\n' "${TARGET_SKILL_PATH}"
   } > "$ISSUE_BODY_FILE"
+  ISSUE_CREATE_STDERR="$WORK_DIR/gh-create-issue.stderr"
   ISSUE_URL="$(gh issue create \
     --title "Improve /${SKILL_NAME} skill via /improve-skill (one iteration)" \
-    --body-file "$ISSUE_BODY_FILE")" || {
+    --body-file "$ISSUE_BODY_FILE" 2> "$ISSUE_CREATE_STDERR")" || {
     breadcrumb_warn "3: issue — gh issue create failed. Aborting."
+    dump_helper_stderr "gh-create-issue" "$ISSUE_CREATE_STDERR"
     KV_EXIT_REASON="gh issue create failed"
     exit 1
   }
@@ -406,6 +418,87 @@ fi
 KV_ISSUE_NUM="$ISSUE_NUM"
 
 # --------------------------------------------------------------------------
+# Helper: dump_subprocess_diagnostics (issue #399 remedy (b))
+# --------------------------------------------------------------------------
+#
+# dump_subprocess_diagnostics <label> <out-file>
+#
+# Emits to stdout (in order): a breadcrumb_warn signal for Monitor filters,
+# a banner, the FULL stderr sidecar (${out_file}.stderr), another banner,
+# the LAST 50 lines of <out-file>, and a closing banner. Both diagnostic
+# streams are piped through redact-secrets.sh. The stdout tail is also
+# spoof-guarded with `sed` so that any accidental `### iteration-result`
+# line inside the model output cannot shift the driver's KV-footer parse
+# window (parse_kv awk at driver.sh:355-361 flips in_block on the FIRST
+# header match).
+#
+# Appears BEFORE emit_kv_footer (which runs in the EXIT trap), so the KV
+# footer is still the last stdout block and KV parse integrity is preserved.
+#
+# shellcheck disable=SC2317  # called from invoke_claude_p / helper paths
+dump_subprocess_diagnostics() {
+  local label="$1" out_file="$2" stderr_file="${2}.stderr"
+  local redact="${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh"
+  breadcrumb_warn "${label}: subprocess non-zero; dumping diagnostics (redacted)."
+  printf '── subprocess stderr (label=%s) ──\n' "$label"
+  if [[ -s "$stderr_file" ]]; then
+    if [[ -x "$redact" ]]; then
+      "$redact" < "$stderr_file" || printf '(redaction failed; omitting stderr)\n'
+    else
+      printf '(redact-secrets.sh unavailable; omitting stderr)\n'
+    fi
+  else
+    printf '(stderr empty)\n'
+  fi
+  printf '── subprocess stdout tail (label=%s, last 50 lines) ──\n' "$label"
+  if [[ -s "$out_file" ]]; then
+    if [[ -x "$redact" ]]; then
+      tail -n 50 "$out_file" \
+        | sed 's/^### iteration-result/### (banner-redacted)/' \
+        | "$redact" || printf '(redaction failed; omitting stdout tail)\n'
+    else
+      printf '(redact-secrets.sh unavailable; omitting stdout tail)\n'
+    fi
+  else
+    printf '(stdout empty)\n'
+  fi
+  printf '── end subprocess diagnostics (label=%s) ──\n' "$label"
+}
+
+# --------------------------------------------------------------------------
+# Helper: dump_helper_stderr (issue #399 remedy (c))
+# --------------------------------------------------------------------------
+#
+# dump_helper_stderr <label> <stderr-sidecar-path>
+#
+# Emits a redacted dump of a helper-script stderr sidecar (non claude -p —
+# used for gh issue comment / gh issue create). Also sets the cross-boundary
+# preserve sentinel when $WORK_DIR is populated so the driver's cleanup_on_exit
+# can pick up the signal (issue #399 FINDING_4).
+#
+# shellcheck disable=SC2317
+dump_helper_stderr() {
+  local label="$1" stderr_file="$2"
+  local redact="${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh"
+  breadcrumb_warn "${label}: helper failure; dumping stderr (redacted)."
+  printf '── helper stderr (label=%s) ──\n' "$label"
+  if [[ -s "$stderr_file" ]]; then
+    if [[ -x "$redact" ]]; then
+      "$redact" < "$stderr_file" || printf '(redaction failed; omitting stderr)\n'
+    else
+      printf '(redact-secrets.sh unavailable; omitting stderr)\n'
+    fi
+  else
+    printf '(stderr empty)\n'
+  fi
+  printf '── end helper stderr (label=%s) ──\n' "$label"
+  PRESERVE_WORK_DIR="true"
+  if [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
+    : > "$WORK_DIR/preserve.sentinel" 2>/dev/null || true
+  fi
+}
+
+# --------------------------------------------------------------------------
 # Helper: invoke_claude_p
 # --------------------------------------------------------------------------
 #
@@ -416,13 +509,16 @@ KV_ISSUE_NUM="$ISSUE_NUM"
 # Stdout is captured to <out-file>; stderr to <out-file>.stderr sidecar
 # (FINDING_10: stderr MUST NOT be posted to public gh issue comments).
 # Background-poll pattern (no external `timeout`/`gtimeout` dependency).
-# Returns child exit code (0 on success; 124 on timeout).
+# Returns child exit code (0 on success; 124 on timeout). On non-zero rc
+# (issue #399 remedy (b)), emits a redacted subprocess-diagnostics block to
+# stdout before returning.
 invoke_claude_p() {
   local prompt_file="$1"
   local out_file="$2"
   local label="$3"
   local timeout_s="${4:-1200}"
   local stderr_file="${out_file}.stderr"
+  local rc=0
 
   : > "$out_file"
   : > "$stderr_file"
@@ -449,7 +545,12 @@ invoke_claude_p() {
       elapsed=$(( elapsed + 10 ))
     done
     wait "$pid"
-  )
+  ) || rc=$?
+
+  if [[ "$rc" -ne 0 ]]; then
+    dump_subprocess_diagnostics "$label" "$out_file"
+  fi
+  return "$rc"
 }
 
 # post_gh_comment <body-file> <label>
@@ -460,9 +561,11 @@ post_gh_comment() {
   local body_file="$1"
   local label="$2"
   local redacted="${body_file}.redacted"
+  local gh_stderr="${body_file}.gh-comment.stderr"
   "${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh" < "$body_file" > "$redacted"
-  if ! gh issue comment "$ISSUE_NUM" --body-file "$redacted"; then
+  if ! gh issue comment "$ISSUE_NUM" --body-file "$redacted" 2> "$gh_stderr"; then
     breadcrumb_warn "gh issue comment failed for ${label}. Continuing."
+    dump_helper_stderr "gh-comment-${label}" "$gh_stderr"
   fi
 }
 
@@ -702,6 +805,9 @@ if [[ "$PLAN_STATUS" == "plan_ok" ]]; then
       printf 'Your previous response had no structured-plan markers (no markdown headings, numbered list counters, or bulleted items). Focus this re-attempt exclusively on the single highest-leverage /skill-judge finding from this iteration. The re-attempt MUST use /design'"'"'s standard plan schema: a top-level `## Implementation Plan` section with `Files to modify/create`, `Approach`, `Edge cases`, `Testing strategy`, and `Failure modes` subheadings. No preamble prose. No budget excuses. No no-plan sentinels.\n\n'
       printf 'Non-A dimensions were: %s.\n' "${KV_NON_A_DIMS}"
     } > "$RESCUE_PROMPT"
+    # Rescue is best-effort (design continues even on failure), but we still
+    # want diagnostics captured when it fails — invoke_claude_p already dumps
+    # on rc!=0 before returning, so `|| true` only swallows the exit code.
     invoke_claude_p "$RESCUE_PROMPT" "$DESIGN_OUT" "design-rescue" 1800 || true
     PLAN_STATUS="$(detect_plan_status "$DESIGN_OUT")"
   fi
