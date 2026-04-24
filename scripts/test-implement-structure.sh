@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 9 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 10 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -162,7 +162,7 @@ while IFS= read -r hit; do
 done <<< "$enum_hits"
 
 # ---------------------------------------------------------------------------
-# (7) Four expected references/*.md files exist.
+# (7) Five expected references/*.md files exist.
 # ---------------------------------------------------------------------------
 for ref in "${expected_refs[@]}"; do
   [[ -f "$REFS_DIR/$ref" ]] \
@@ -177,7 +177,7 @@ done
 #     The step-number token is `[0-9][0-9a-z.]*` so bare digits (`8`), letter-suffix
 #     forms (`9a`), and dotted substep forms (`9a.1`, `3c.2`) are all caught — matching
 #     /implement's dotted substep numbering (closes #253).
-#     Scans every *.md under references/ (not just the four expected refs) so new
+#     Scans every *.md under references/ (not just the five expected refs) so new
 #     reference files added in the future are covered automatically — the contract
 #     documented in the header and scripts/test-implement-structure.md (sibling contract) covers "references/*.md" generally.
 #     Cross-skill Consumer/Contract/When-to-load header-triplet invariant lives in

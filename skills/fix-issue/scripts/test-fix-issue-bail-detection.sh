@@ -8,12 +8,17 @@
 # conformance test. Runtime enforcement is the LLM-level orchestration of
 # Step 6a per the prose contract.
 #
-# Five assertions against the extracted Step 6a block:
-#   (a) Two occurrences of "--issue $ISSUE_NUMBER" (SIMPLE + HARD bullets).
-#   (b) Literal token "IMPLEMENT_BAIL_REASON=adopted-issue-closed" present.
-#   (c) Warning prefix "/implement bailed: issue #" present.
-#   (d) Directive fragment "Do NOT call" present (skip-Step-7 contract guard).
-#   (e) Literal "Skip to Step 9" present (cleanup redirect guard).
+# Six assertions against the extracted Step 6a block:
+#   (a1) SIMPLE bullet forwards "--issue $ISSUE_NUMBER".
+#   (a2) HARD bullet forwards "--issue $ISSUE_NUMBER".
+#   (b)  Literal token "IMPLEMENT_BAIL_REASON=adopted-issue-closed" present.
+#   (c)  Warning prefix "/implement bailed: issue #" present.
+#   (d)  Specific directive "Do NOT call `issue-lifecycle.sh close`" present
+#        (skip-Step-7 contract guard). The full phrase — not a bare
+#        "Do NOT call" substring — is required because the awk extraction
+#        window also includes section 6b, which contains the unrelated
+#        sentence "Do NOT call `/implement`"; a bare match would false-pass.
+#   (e)  Literal "Skip to Step 9" present (cleanup redirect guard).
 #
 # Block extraction boundary: "### 6a " (start) through "## Step 7" prefix match
 # (end — the real heading is "## Step 7 — Close Issue"; prefix pattern handles it).
@@ -102,7 +107,10 @@ assert_contains "b: IMPLEMENT_BAIL_REASON=adopted-issue-closed literal" 'IMPLEME
 assert_contains "c: warning prefix '/implement bailed: issue #'" '/implement bailed: issue #'
 
 # (d) Skip-Step-7 directive present — guard against silent re-route back to Step 7.
-assert_contains "d: 'Do NOT call' directive (Step-7-skip guard)" 'Do NOT call'
+# The specific phrase "Do NOT call `issue-lifecycle.sh close`" is required; a
+# bare "Do NOT call" substring would false-pass on section 6b's unrelated
+# "Do NOT call `/implement`" line (the awk window includes 6b up to ## Step 7).
+assert_contains "d: 'Do NOT call \`issue-lifecycle.sh close\`' directive (Step-7-skip guard)" 'Do NOT call `issue-lifecycle.sh close`'
 
 # (e) Cleanup redirect present.
 assert_contains "e: 'Skip to Step 9' cleanup redirect" 'Skip to Step 9'

@@ -115,12 +115,16 @@ suppress = [
 # test-* harnesses above.
 #
 # skills/fix-issue/scripts/test-fix-issue-bail-detection.sh is the regression
-# harness pinning the five load-bearing literals in skills/fix-issue/SKILL.md
-# Step 6a bail-detection prose (Phase 4 of umbrella #348): `--issue
-# $ISSUE_NUMBER` forwarding in both SIMPLE and HARD bullets, the cross-skill
-# bail token `IMPLEMENT_BAIL_REASON=adopted-issue-closed`, the user-visible
-# warning prefix `/implement bailed: issue #`, and the `Do NOT call` +
-# `Skip to Step 9` directive fragments that guard against silent re-routing of
+# harness pinning six load-bearing literals (five conceptual checks;
+# `--issue $ISSUE_NUMBER` counted once per SIMPLE and HARD bullet) in
+# skills/fix-issue/SKILL.md Step 6a bail-detection prose (Phase 4 of umbrella
+# #348): `--issue $ISSUE_NUMBER` forwarding in both SIMPLE and HARD bullets,
+# the cross-skill bail token `IMPLEMENT_BAIL_REASON=adopted-issue-closed`,
+# the user-visible warning prefix `/implement bailed: issue #`, the specific
+# `Do NOT call `issue-lifecycle.sh close`` directive (full phrase, not a
+# bare `Do NOT call` substring — the bare form would false-pass on section
+# 6b's unrelated `Do NOT call `/implement`` line), and the `Skip to Step 9`
+# cleanup redirect — both directive pins guard against silent re-routing of
 # the bail path back to Step 7. The harness is referenced only from Makefile
 # (test-fix-issue-bail-detection target) and
 # skills/fix-issue/scripts/test-fix-issue-bail-detection.md (sibling
