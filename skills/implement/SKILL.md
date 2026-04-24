@@ -114,7 +114,7 @@ Standardizes the four post-step rebase checkpoints (Steps 1.r, 4.r, 7.r, 7a.r). 
   ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed
   ```
 
-- **M3 — On non-zero exit**: print `**⚠ Rebase onto main failed. Bailing to cleanup.**` and skip to Step 18.
+- **M3 — On non-zero exit**: print `**⚠ Rebase onto main failed. Bailing to cleanup.**`, set `STALL_TRACKING=true` (signals Step 18 to rename the tracking issue to `[STALLED]` — see "Title-prefix lifecycle" below), and skip to Step 18.
 
 - **M4 — On success**, branch on stdout (check `SKIPPED_ALREADY_PUSHED` BEFORE `SKIPPED_ALREADY_FRESH` — `rebase-push.sh` exits early on already-pushed before fetch):
   - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ <step-prefix>: <short-name> | rebase — already pushed` Otherwise silently continue.
@@ -308,6 +308,8 @@ Create the tracking issue **immediately** so all subsequent anchor-accumulation 
 
 1. **Derive the tracking-issue title** from `FEATURE_DESCRIPTION`: take the first line if present (everything before the first `\n`), else the first 80 characters; strip leading/trailing whitespace; collapse internal whitespace runs to a single space. Do NOT use any PR-related identifier — the PR is not created until Step 9.
 
+   **Prepend `[IN PROGRESS]` (followed by a space)** to the derived title. This is the tracking-issue title-prefix lifecycle (see `scripts/tracking-issue-write.md` "Title-prefix lifecycle"): `[IN PROGRESS]` signals an active run, later flipped to `[DONE]` on confirmed merge (Step 12a/12b), or `[STALLED]` on failure paths (Step 18). `/fix-issue`'s `fetch-eligible-issue.sh` excludes any title starting with a managed prefix from auto-pick, so prefixed tracking issues never appear as candidates. Adopted issues (Branch 2/3) do NOT get the prefix — user may own the title, and the title-prefix lifecycle is machine-owned. Distinct from `/fix-issue`'s comment-based "IN PROGRESS" lock (concurrency control on the subject issue); the two mechanisms coexist.
+
 2. **Sanitize `FEATURE_DESCRIPTION` at compose time** (MANDATORY — parallel to the anchor compose-time sanitization rule in `anchor-comment-template.md`, and a strict gate because the issue body is a public GitHub surface). Apply prompt-level redaction to the prompt text BEFORE it is written to the issue body:
    - Secrets / API keys / OAuth / JWT / passwords / certificates → `<REDACTED-TOKEN>`
    - Internal hostnames / URLs / private IPs → `<INTERNAL-URL>`
@@ -327,9 +329,9 @@ Create the tracking issue **immediately** so all subsequent anchor-accumulation 
    > **Note**: the prompt above was sanitized at compose time (secrets / internal URLs / PII redacted where detected). Operators should still avoid pasting sensitive content into the /implement prompt because sanitization is best-effort and not comprehensive.
    ```
 
-4. **Create the tracking issue**:
+4. **Create the tracking issue** with the `[IN PROGRESS]` prefix (plus a trailing space) applied to the title (see step 1):
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh create-issue --title "<derived-title>" --body-file "$IMPLEMENT_TMPDIR/tracking-issue-body.md"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh create-issue --title "[IN PROGRESS] <derived-title>" --body-file "$IMPLEMENT_TMPDIR/tracking-issue-body.md"
    ```
    Parse `ISSUE_NUMBER` and `ISSUE_URL` from stdout. On `FAILED=true` OR non-zero exit, print `**⚠ 0.5: tracking issue — Branch 4 create-issue failed: $ERROR. Continuing with deferred/absent anchor.**`, log to `Tool Failures`, set `deferred=true`, leave `$ISSUE_NUMBER` unset, and proceed to Step 1. Downstream: Step 9a omits the `Closes #<N>` line entirely and replaces it with `_No tracking issue — auto-close N/A._`; Step 11 branch 3 skips cleanly; Step 18 URL print is silently skipped.
 
@@ -860,7 +862,7 @@ Use `timeout: 1860000` on the Bash call. Parse the same fields as Step 10.
 
    - **`ACTION=rebase`**: print a context-specific message from `CI_STATUS` — `CI_STATUS=pass` → `🔃 12: CI+merge loop — CI passed, main advanced, rebasing + re-bumping`; `CI_STATUS=pending` → `🔃 12: CI+merge loop — main advanced, rebasing + re-bumping`. Invoke the Rebase + Re-bump Sub-procedure with `rebase_already_done=false`, `caller_kind=step12_rebase`. Counter updates and `ci-wait.sh` re-invocation happen inside the sub-procedure's step 7. On hard failure, the sub-procedure bails to 12d directly.
    - **`ACTION=merge`**: print `✅ 12: CI+merge loop — CI passed, main up-to-date, merging! (<elapsed>)` → proceed to **12b**.
-   - **`ACTION=already_merged`**: print `✅ PR was force-merged externally — skipping CI wait and merge. (<elapsed>)`. Set `pr_closed=true` (consumed by Step 16a's outcome state machine). Skip 12b, proceed to Step 14. Counts as merged for Steps 14–15.
+   - **`ACTION=already_merged`**: print `✅ PR was force-merged externally — skipping CI wait and merge. (<elapsed>)`. Set `pr_closed=true` (consumed by Step 16a's outcome state machine). **Title-prefix lifecycle terminal transition**: if `$ISSUE_NUMBER` is set AND the tracking issue is fresh-created (sentinel `ADOPTED=false` — see Step 0.5) AND `repo_unavailable=false`, call `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state done`. Best-effort: on `FAILED=true` or non-zero exit, log to `Tool Failures` and continue. Set `DONE_RENAME_APPLIED=true` on any return (including `RENAMED=false` no-op) so Step 18 does not double-fire. Skip 12b, proceed to Step 14. Counts as merged for Steps 14–15.
    - **`ACTION=rebase_then_evaluate`**: invoke the sub-procedure with `rebase_already_done=false`, `caller_kind=step12_rebase_then_evaluate`. On success, **fall through to 12c** (counter updates already done; do NOT re-invoke `ci-wait.sh` here — the sub-procedure's `step12_rebase_then_evaluate` branch skips the re-invocation for this path). On hard failure, the sub-procedure bails to 12d.
    - **`ACTION=evaluate_failure`**: → **12c**.
    - **`ACTION=bail`**: print `BAIL_REASON` → **12d**.
@@ -878,11 +880,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/merge-pr.sh --pr <PR-NUMBER> --repo $REPO
 ```
 
 Parse `MERGE_RESULT` and `ERROR`:
-- **`merged`**: print `✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true` (consumed by Step 16a's outcome state machine). Continue.
-- **`admin_merged`**: print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true`. Continue.
-- **`main_advanced`**: back to **12a** (next iteration detects behind and rebases).
-- **`ci_not_ready`**: back to **12a** (CI may need more time or a rerun).
-- **`admin_failed`** / **`error`**: bail (12d) with `ERROR`.
+- **`merged`**: print `✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true` (consumed by Step 16a's outcome state machine). **Title-prefix lifecycle terminal transition**: if `$ISSUE_NUMBER` set AND `ADOPTED=false` AND `repo_unavailable=false`, call `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state done`. Best-effort (log to `Tool Failures` on failure; do not abort the run — the merge has already succeeded). Set `DONE_RENAME_APPLIED=true` on any return. Continue.
+- **`admin_merged`**: print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true`. Apply the same terminal rename-to-done as the `merged` branch (same guards; same `DONE_RENAME_APPLIED=true` on return). Continue.
+- **`main_advanced`**: back to **12a** (next iteration detects behind and rebases). Do NOT rename the tracking issue — the PR is not yet merged.
+- **`ci_not_ready`**: back to **12a** (CI may need more time or a rerun). Do NOT rename.
+- **`admin_failed`** / **`error`**: bail (12d) with `ERROR`. Do NOT rename (12d sets `STALL_TRACKING=true`).
 
 **CRITICAL: The `--admin` safety invariant is enforced inside `merge-pr.sh` — it re-verifies CI and branch freshness before attempting `--admin`. See the script's header for the full invariant. This is the canonical `--admin` implementation.**
 
@@ -911,6 +913,7 @@ Bail if any: 3 fix iterations attempted without progress; failure fundamentally 
 
 **Before proceeding to Step 14**, persist the bail reason + user-input signal into parent scope so Step 16a's outcome state machine can read them:
 - Set `FINAL_BAIL_REASON` = the `BAIL_REASON` value from the `ci-wait.sh` output that triggered the bail (or the caller-synthesized reason if the bail came from the Rebase + Re-bump Sub-procedure, a conflict, or fix-attempt exhaustion). Leave `BAIL_NEEDS_USER_INPUT` alone if it was already set by the Conflict Resolution Procedure Phase 2 under `auto_mode=true`; otherwise it stays `false`.
+- Set `STALL_TRACKING=true` — signals Step 18 to rename the tracking issue's title from `[IN PROGRESS]` to `[STALLED]` (see Step 18 "Title-prefix lifecycle terminal transition").
 
 ## Step 14 — Local Cleanup
 
@@ -993,6 +996,30 @@ If `quick_mode=true`: print `✅ 17: final report — quick mode, /design skippe
 If `quick_mode=false`: print a summary noting plan review findings were reported by `/design` (visible above) and code review findings by `/review` (visible above). If both phases reported all suggestions implemented, print `✅ 17: final report — all suggestions implemented, plan + code review (<elapsed>)`.
 
 ## Step 18 — Cleanup and Final Warnings
+
+### Title-prefix lifecycle terminal transition
+
+Before `cleanup-tmpdir.sh` runs (so `$IMPLEMENT_TMPDIR/parent-issue.md` is still available if needed), flip the tracking issue's title prefix to its terminal state. All three branches share the same pre-conditions:
+
+- `$ISSUE_NUMBER` is set (Branch 4 succeeded, or Branch 1/2/3 adopted).
+- `$ADOPTED=false` (parsed from sentinel at Step 0.5 — Branch 4 fresh-creates). Adopted issues (Branch 2/3) are NEVER retitled by this step; the user may own the title.
+- `$repo_unavailable=false`.
+
+If any precondition is missing, skip the rename block entirely.
+
+**Branch A — STALLED (failure path)**: if `$STALL_TRACKING=true`, check that the issue is still OPEN before renaming (renaming a closed issue to `[STALLED]` is semantically wrong — closed means merged means done):
+
+```bash
+ISSUE_STATE=$(gh issue view "$ISSUE_NUMBER" --json state --jq '.state' 2>/dev/null || echo "")
+```
+
+If `ISSUE_STATE == "OPEN"`, call `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state stalled`. Best-effort: on `FAILED=true` or non-zero exit, log to `Tool Failures` and continue. Do not print a completion line; the Step 18 `✅` is sufficient.
+
+**Branch B — DONE (clean non-merge / draft completion)**: if `$STALL_TRACKING=false` AND `$DONE_RENAME_APPLIED` is NOT `true` (merge-path rename didn't already fire) AND `$PR_NUMBER` is set (a PR was created this run), call `rename --state done`. This handles the `--merge=false` and `--draft` paths where `/implement` completes successfully without attempting auto-merge — the run is logically done and the title should reflect that.
+
+**Branch C — no-op**: neither stall nor late-done applies. The merge-path rename (Step 12a `already_merged` / Step 12b `merged` / `admin_merged`) has already set `DONE_RENAME_APPLIED=true`, so this branch is the expected merge-path code flow; nothing more to do.
+
+The `rename` subcommand is idempotent — calling it with the same target state is a no-op (`RENAMED=false`) — so the only practical risk from guard-check errors is a redundant best-effort `gh` call. Failures never abort Step 18.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$IMPLEMENT_TMPDIR"

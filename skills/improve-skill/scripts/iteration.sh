@@ -13,7 +13,7 @@
 # transitions in the parent shell. See SECURITY.md /improve-skill subsection.
 #
 # Usage:
-#   iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] \
+#   iteration.sh [--no-slack] [--subordinate] [--issue <N>] [--breadcrumb-prefix <P>] \
 #                [--work-dir <path>] [--iter-num <N>] <skill-name>
 #
 # Flags:
@@ -142,6 +142,17 @@ WORK_DIR=""
 OWNS_WORK_DIR="false"   # true only in standalone mode (no --work-dir passed)
 PRESERVE_WORK_DIR="false"  # sticky; once true, cleanup is suppressed (issue #399)
 
+# Tracking-issue title-prefix lifecycle state (see scripts/tracking-issue-write.md).
+# ITERATION_SUCCESS=true → on_success() called before exit; rename-to-done
+# already invoked. EXIT trap skips its best-effort stall rename.
+# ITERATION_SUCCESS=false at EXIT → trap calls rename-to-stalled (best-effort).
+# SUBORDINATE=true (driver.sh sets via --subordinate) → iteration.sh does NOT
+# own the lifecycle; trap skips rename entirely. ADOPTED=true (user passed
+# --issue) → iteration.sh does NOT rename the issue — user may own the title.
+ITERATION_SUCCESS="false"
+SUBORDINATE="false"
+ADOPTED="false"
+
 # shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
   local rc=$?
@@ -153,8 +164,23 @@ cleanup_on_exit() {
     breadcrumb_done "tracking issue URL: ${ISSUE_URL}" || true
   fi
   # Emit KV footer so parsers see the result even when work-dir cleanup fails
-  # (FINDING_2 guarantee).
+  # (FINDING_2 guarantee). MUST stay before the rename call below so the
+  # driver's subprocess-failure detector always sees the footer — a failing
+  # `gh issue edit` MUST NOT starve the footer emission.
   emit_kv_footer || true
+  # Title-prefix lifecycle terminal transition (best-effort; MUST NOT touch
+  # kernel stdout shape or exit semantics — all gh output suppressed, errors
+  # swallowed with `|| true`). Skip entirely when this iteration does NOT own
+  # the lifecycle: SUBORDINATE=true (driver owns), ADOPTED=true (user-owned
+  # title), or ISSUE_NUM unset (creation failed before we got here).
+  if [[ "$SUBORDINATE" != "true" && "$ADOPTED" != "true" && -n "${ISSUE_NUM:-}" ]]; then
+    if [[ "$ITERATION_SUCCESS" != "true" ]]; then
+      # on_success not called — iteration stalled / failed. Rename to [STALLED].
+      "${CLAUDE_PLUGIN_ROOT:-}/scripts/tracking-issue-write.sh" rename \
+        --issue "$ISSUE_NUM" --state stalled >/dev/null 2>&1 || true
+    fi
+    # ITERATION_SUCCESS=true → on_success already ran rename-to-done; no-op here.
+  fi
   # Retention gate (issue #399): preserve the work-dir on any non-success
   # iteration status so operators can inspect per-iteration artifacts
   # (iter-<N>-*.txt and .stderr sidecars). Cleanup still runs on grade_a/ok.
@@ -173,6 +199,22 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT
 
+# on_success — called before both success terminals (grade-A short-circuit at
+# Step 4.j.v, and normal `ok` exit at Step 5). Flips ITERATION_SUCCESS=true
+# so the EXIT trap skips the stall rename, then renames the tracking issue
+# to [DONE] (only when this iteration owns the lifecycle — same guards as
+# the trap). Best-effort: gh failures are swallowed; success flag is set
+# FIRST so a gh failure cannot cause the trap to later overwrite [DONE]
+# with [STALLED].
+# shellcheck disable=SC2317  # invoked via explicit call site at success exits
+on_success() {
+  ITERATION_SUCCESS="true"
+  if [[ "$SUBORDINATE" != "true" && "$ADOPTED" != "true" && -n "${ISSUE_NUM:-}" ]]; then
+    "${CLAUDE_PLUGIN_ROOT:-}/scripts/tracking-issue-write.sh" rename \
+      --issue "$ISSUE_NUM" --state 'done' >/dev/null 2>&1 || true
+  fi
+}
+
 # --------------------------------------------------------------------------
 # Step 1 — Parse flags + positional arg
 # --------------------------------------------------------------------------
@@ -185,6 +227,7 @@ ITER_NUM="1"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-slack) NO_SLACK_FLAG="--no-slack "; shift ;;
+    --subordinate) SUBORDINATE="true"; shift ;;
     --issue)
       if [[ $# -lt 2 || -z "${2:-}" ]]; then
         breadcrumb_warn "1: parse args — --issue requires a value. Aborting."
@@ -229,7 +272,7 @@ while [[ $# -gt 0 ]]; do
       shift 2 ;;
     --) shift; break ;;
     --*)
-      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --no-slack, --issue, --breadcrumb-prefix, --work-dir, --iter-num."
+      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --no-slack, --subordinate, --issue, --breadcrumb-prefix, --work-dir, --iter-num."
       KV_EXIT_REASON="unknown flag '$1'"
       exit 1
       ;;
@@ -238,7 +281,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $# -lt 1 ]]; then
-  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>"
+  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: iteration.sh [--no-slack] [--subordinate] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>"
   KV_EXIT_REASON="missing <skill-name>"
   exit 1
 fi
@@ -376,6 +419,8 @@ KV_ITERATION_TMPDIR="$WORK_DIR"
 
 if [[ -n "$ISSUE_ARG" ]]; then
   ISSUE_NUM="$ISSUE_ARG"
+  ADOPTED="true"  # Title-prefix lifecycle: adopted issues are NOT retitled
+                  # (user may own the title). See scripts/tracking-issue-write.md.
   # Hydrate ISSUE_URL so the EXIT-trap URL breadcrumb fires on standalone-adopt
   # runs too. Loop mode (OWNS_WORK_DIR=false) suppresses the trap line and the
   # driver emits its own URL at loop end, so the hydration is only load-bearing
@@ -398,8 +443,12 @@ else
     printf 'Target: %s\n' "${TARGET_SKILL_PATH}"
   } > "$ISSUE_BODY_FILE"
   ISSUE_CREATE_STDERR="$WORK_DIR/gh-create-issue.stderr"
+  # Tracking-issue title-prefix lifecycle: [IN PROGRESS] at fresh-create;
+  # flipped to [DONE] via on_success helper below on success terminal exits,
+  # or to [STALLED] by the EXIT trap on failure paths. See
+  # scripts/tracking-issue-write.md "Title-prefix lifecycle".
   ISSUE_URL="$(gh issue create \
-    --title "Improve /${SKILL_NAME} skill via /improve-skill (one iteration)" \
+    --title "[IN PROGRESS] Improve /${SKILL_NAME} skill via /improve-skill (one iteration)" \
     --body-file "$ISSUE_BODY_FILE" 2> "$ISSUE_CREATE_STDERR")" || {
     breadcrumb_warn "3: issue — gh issue create failed. Aborting."
     dump_helper_stderr "gh-create-issue" "$ISSUE_CREATE_STDERR"
@@ -722,6 +771,7 @@ if [[ "$KV_GRADE_A" == "true" && "$KV_PARSE_STATUS" == "ok" ]]; then
   KV_ITER_STATUS="grade_a"
   KV_EXIT_REASON="grade A achieved on all dimensions at iteration ${ITER_NUM}"
   breadcrumb_done "4.j.v: grade parse — grade A achieved (iteration done)"
+  on_success
   exit 0
 fi
 
@@ -889,4 +939,5 @@ KV_EXIT_REASON="iteration ${ITER_NUM} completed (continue loop)"
 
 breadcrumb_done "5: iteration complete"
 
+on_success
 exit 0
