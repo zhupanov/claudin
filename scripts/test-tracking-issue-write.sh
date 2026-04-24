@@ -2,10 +2,11 @@
 # test-tracking-issue-write.sh — regression harness for tracking-issue-write.sh.
 #
 # Mirrors the stub-gh + PATH-override pattern of scripts/test-redact-secrets.sh.
-# Seven assertion categories (a-g) covering redaction, exit codes, truncation,
-# anchor-skeleton preservation, anchor-upsert semantics, and gh-failure
-# redaction. All assertions run in a hermetic mktemp -d tmproot with a
-# stub gh binary on PATH.
+# Nine assertion categories (a-i) covering redaction, exit codes, truncation,
+# anchor-skeleton preservation, anchor-upsert semantics, gh-failure redaction,
+# the anchor-section-markers.sh startup-guard fail-closed, and the
+# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant. All assertions run in a
+# hermetic mktemp -d tmproot with a stub gh binary on PATH.
 #
 # Usage:
 #   bash scripts/test-tracking-issue-write.sh
