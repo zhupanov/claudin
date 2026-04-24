@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.3] - 2026-04-23
+
+### Changed
+
+- `/fix-issue` Step 6a now forwards `--issue $ISSUE_NUMBER` to `/implement` (both SIMPLE and HARD branches) so the child skill adopts the queue issue as its tracking issue via Phase 3 Branch 2, avoiding a duplicate tracking-issue on the `/fix-issue` path. On `IMPLEMENT_BAIL_REASON=adopted-issue-closed` (emitted when the adopted tracking issue is closed externally), Step 6a prints a specific warning and skips Step 7's `issue-lifecycle.sh close` call entirely — cleanup redirects straight to Step 9. Generic-failure path unchanged (IN PROGRESS retained as manual-intervention indicator). Phase 4 of umbrella #348 (closes #352). Adds two Known Limitations bullets (external-close recovery, token-never-seen caveat), a new offline regression harness `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` pinning six load-bearing literals inside the Step 6a block, a paired token-literal assertion in `scripts/test-implement-structure.sh` (now 10 structural invariants), and doc-only syncs in `skills/implement/SKILL.md` (line 247 parenthetical + `/fix-issue coordination` paragraph at lines 308-310) to reflect post-Phase-4 landed state.
+
 ## [6.2.2] - 2026-04-23
 
 ### Changed
