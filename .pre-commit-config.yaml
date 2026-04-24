@@ -38,6 +38,23 @@ repos:
     hooks:
       - id: actionlint
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        # Override upstream's `gitleaks protect --staged` and use
+        # `detect --no-git` so the hook scans the working tree (which
+        # includes staged/uncommitted content at commit time). `--no-git`
+        # is load-bearing: without it, `gitleaks detect` scans only git
+        # history and silently passes secrets that are staged but not
+        # yet committed. `pass_filenames: false` is intentional — the
+        # hook always scans the whole tree, even when pre-commit is
+        # invoked with a scoped `--files <path>` argument. Git-history
+        # scanning is the dedicated CI job's responsibility (see
+        # .github/workflows/ci.yaml `gitleaks` job).
+        entry: gitleaks detect --source . --no-git --redact --no-banner
+        pass_filenames: false
+
   - repo: local
     hooks:
       - id: lint-skill-invocations

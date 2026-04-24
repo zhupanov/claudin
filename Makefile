@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix setup test-redact test-parse-input test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-references-headers test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-parse-input test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-references-headers test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe
 
 # CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
 # (regression harnesses). `lint` remains the local-dev convenience target
@@ -128,6 +128,18 @@ agent-lint:
 
 agnix:
 	pre-commit run agnix --all-files
+
+gitleaks:
+	pre-commit run gitleaks --all-files
+
+# Trufflehog is CI-only (not a pre-commit hook). This target runs the same
+# pinned Docker image as CI but in `filesystem` mode over the working tree;
+# CI's `trufflehog` job uses the upstream action's default `git` mode over
+# the PR range (different subcommand and scan scope). Image/tag and
+# `--only-verified` are identical between the two — the rest is not.
+trufflehog:
+	docker run --rm -v "$(PWD):/repo" ghcr.io/trufflesecurity/trufflehog:3.82.13 \
+		filesystem /repo --only-verified
 
 setup:
 	pre-commit install

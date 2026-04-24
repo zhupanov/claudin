@@ -1,6 +1,6 @@
 # Linting
 
-Larch uses [pre-commit](https://pre-commit.com/) as the single source of truth for linter configuration. All linter definitions, versions, and file filters live in `.pre-commit-config.yaml`.
+Larch uses [pre-commit](https://pre-commit.com/) as the source of truth for linter configuration. Linter definitions, versions, and file filters live in `.pre-commit-config.yaml`. CI adds dedicated per-tool jobs on top of pre-commit for the most safety-relevant checks (secret scanning, agent-config linting) so individual failures can be diagnosed and re-run independently.
 
 ## Linters
 
@@ -11,14 +11,24 @@ Larch uses [pre-commit](https://pre-commit.com/) as the single source of truth f
 | [jq](https://jqlang.github.io/jq/) | `.json` | JSON syntax validation |
 | [actionlint](https://github.com/rhysd/actionlint) | `.yml`, `.yaml` | GitHub Actions workflow validation |
 | [agnix](https://github.com/agent-sh/agnix) | `SKILL.md`, `CLAUDE.md`, agent configs | AI agent configuration linting (config: `.agnix.toml`) |
+| [gitleaks](https://github.com/gitleaks/gitleaks) | all tracked files | Secret detection (pre-commit + dedicated CI job, full-history). Path allowlist in `.gitleaks.toml`. See `SECURITY.md` → "Layered secret scanning". |
 
 ## Usage
 
-There are three ways to run linters, all backed by the same `.pre-commit-config.yaml`:
+There are three pre-commit-driven paths:
 
-- **CI** — Runs `make lint` (repo-wide) on every pull request.
-- **`/relevant-checks`** — Runs `pre-commit run --files <changed-files>` scoped to branch changes. Invoked automatically by `/implement` and `/review`.
-- **Local git hook** — Run `make setup` (or `pre-commit install`) to enable pre-commit hooks that lint staged files on every commit.
+- **CI** — The `lint` job runs `make lint-only` (repo-wide pre-commit over all files). CI also runs separate dedicated jobs on top of the `lint` job: `agent-lint`, `agnix`, `gitleaks` (installs the same pinned engine and runs a full git-history scan on its own so the signal is independently re-runnable), `trufflehog` (CI-only; see "CI secret scanning" below), and `agent-sync` / `smoke-dialectic` for internal invariants.
+- **`/relevant-checks`** — Runs `pre-commit run --files <changed-files>` scoped to branch changes. Invoked automatically by `/implement` and `/review`. Hooks with `pass_filenames: false` (gitleaks) scan the full tree regardless of the scoped path argument — intentional so scoped checks cannot silently miss secrets outside the changed file set.
+- **Local git hook** — Run `make setup` (or `pre-commit install`) to enable pre-commit hooks on every commit. Bypassable via `git commit --no-verify`; the CI jobs are the enforced backstop.
+
+## CI secret scanning
+
+Two scanners run as dedicated CI jobs in `.github/workflows/ci.yaml`:
+
+- **`gitleaks`** — Installs the same pinned `v8.18.4` engine used by the pre-commit hook (via a checksum-verified direct download of `gitleaks_8.18.4_linux_x64.tar.gz`) and scans the git log (`gitleaks detect --source .`) with `fetch-depth: 0`. Complementary to the `lint` job, which runs the pre-commit hook in `--no-git` mode over the working tree only — together they cover working-tree + full history with one pinned engine version.
+- **`trufflehog`** — Runs `trufflesecurity/trufflehog` pinned to its commit SHA for `v3.82.13` (supply-chain: tags are mutable) with `version: 3.82.13` pinning the Docker image and `--only-verified`, so findings fire only for credentials that authenticate against a live provider API.
+
+See `SECURITY.md` → "Layered secret scanning" for the full three-layer model and allowlist discussion.
 
 ## Makefile Targets
 
@@ -30,6 +40,8 @@ There are three ways to run linters, all backed by the same `.pre-commit-config.
 | `make jsonlint` | Run JSON validation only |
 | `make actionlint` | Run actionlint only |
 | `make agnix` | Run agnix only |
+| `make gitleaks` | Run gitleaks only (via pre-commit; scans the working tree with `--no-git`) |
+| `make trufflehog` | Run trufflehog via Docker in `filesystem` mode over the working tree (same pinned image and `--only-verified` flag as the CI `trufflehog` job, but CI uses the action's default `git` mode over the PR range — local and CI are not byte-identical invocations). Requires Docker daemon running locally |
 | `make setup` | Install pre-commit git hooks |
 | `make smoke-dialectic` | Run the offline fixture-driven smoke test for `/design` Step 2a.5 (dialectic parser + tally + structural-invariant guard). Exercises `scripts/dialectic-smoke-test.sh` against `tests/fixtures/dialectic/`. |
 | `make test-block-submodule` | Run the regression harness for `scripts/block-submodule-edit.sh` (the PreToolUse hook that denies edits inside submodules). Exercises `scripts/test-block-submodule-edit.sh` end-to-end against a temporary superproject + submodule fixture. |

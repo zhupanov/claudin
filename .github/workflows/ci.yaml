@@ -11,9 +11,10 @@ permissions:
 
 jobs:
   # Linters only: pre-commit over all files (shellcheck, markdownlint,
-  # jsonlint, actionlint, agent-lint, agnix, lint-skill-invocations).
-  # Test harnesses run in the separate `test-harnesses` job below so
-  # harness failures and linter failures can be re-run independently.
+  # jsonlint, actionlint, agent-lint, agnix, lint-skill-invocations,
+  # gitleaks). Test harnesses run in the separate `test-harnesses` job
+  # below so harness failures and linter failures can be re-run
+  # independently.
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -70,6 +71,59 @@ jobs:
         with:
           target: 'claude-code'
           config: '.agnix.toml'
+
+  # Dedicated gitleaks gate — git-HISTORY scan (complementary to the
+  # `lint` job, which runs the pre-commit gitleaks hook over the working
+  # tree only via `--no-git`). Installs the same pinned v8.18.4 engine
+  # directly so local-pre-commit and CI agree on engine version.
+  # `fetch-depth: 0` is required because `gitleaks detect` walks the
+  # git log.
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks v8.18.4
+        # SHA256 pinned for supply-chain integrity — a swapped release
+        # asset would change this hash. Sourced from the upstream
+        # gitleaks_8.18.4_checksums.txt; verify on bump:
+        #   curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_checksums.txt \
+        #     | grep linux_x64
+        env:
+          GITLEAKS_SHA256: ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp/
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan git history
+        run: gitleaks detect --source . --redact --no-banner
+
+  # Trufflehog verified-only scan. Independent of gitleaks — catches
+  # credentials that authenticate against a live provider API even if
+  # gitleaks' regex rules miss them. Action pinned to commit SHA
+  # (supply-chain: tags are mutable; a force-pushed tag could silently
+  # swap the scanner binary). `version: 3.82.13` also pins the scanner
+  # Docker image so both action driver and scanner engine are pinned.
+  trufflehog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      # Pinned to commit SHA for v3.82.13 (verify with
+      # `git ls-remote https://github.com/trufflesecurity/trufflehog refs/tags/v3.82.13`).
+      - uses: trufflesecurity/trufflehog@1aa1871f9ae24a8c8a3a48a9345514acf42beb39
+        with:
+          version: 3.82.13
+          path: ./
+          extra_args: --only-verified
 
   agent-sync:
     runs-on: ubuntu-latest
