@@ -324,6 +324,14 @@ exclude = [
   "scripts/test-improve-skill-iteration.sh",
   "scripts/test-improve-skill-skill-md.sh",
   "scripts/test-parse-skill-judge-grade.sh",
+  # scripts/test-parse-args.sh is the regression harness for
+  # skills/create-skill/scripts/parse-args.sh (closes the sibling parse-args.md
+  # "add a dedicated harness when the stdout grammar changes materially"
+  # requirement, triggered by the SLACK=true|false → NO_SLACK=true|false
+  # rename). Invoked only from Makefile (test-parse-args target) and
+  # scripts/test-parse-args.md (sibling contract), matching the same
+  # Makefile-only pattern as the other test-* harnesses above.
+  "scripts/test-parse-args.sh",
   "scripts/test-loop-improve-skill-halt-rate.sh",
   "scripts/lib-loop-improve-halt-ledger.sh",
   "scripts/test-lib-loop-improve-halt-ledger.sh",

@@ -1,7 +1,7 @@
 ---
 name: fix-issue
 description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues with open blockers, triages, classifies intent, then either delegates to /implement or follows the issue's instructions inline for research/review tasks."
-argument-hint: "[--debug] [--slack] [--issue <number-or-url>] [<number-or-url>]"
+argument-hint: "[--debug] [--no-slack] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
@@ -16,9 +16,9 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 **Flags**: Parse flags from the start of `$ARGUMENTS`.
 
 - `--debug`: Set `debug_mode=true`. Forward `--debug` to `/implement` in Step 6. Default: `debug_mode=false`.
-- `--slack`: Set `slack_enabled=true`. Forward `--slack` to `/implement` in Step 6a. Default: `slack_enabled=false`. Without `--slack`, the delegated `/implement` run does not post to Slack regardless of whether Slack env vars are configured. Has no effect on the `NON_PR` path — that path's own Step 8 Slack announcement continues to post whenever `slack_available=true` and is not gated by this flag.
+- `--no-slack`: Set `slack_enabled=false`. Forward `--no-slack` to `/implement` in Step 6a. Default: `slack_enabled=true`. When `slack_enabled=true` (default), the delegated `/implement` run posts to Slack (Step 16a) when Slack env vars are configured; the `NON_PR` path's Step 8 Slack announcement also posts via the shared `scripts/post-issue-slack.sh`. When `slack_enabled=false` (user passed `--no-slack`), no Slack calls are made on either path.
 - `--issue <number-or-url>`: **Deprecated** — recognized for backward compatibility. Prefer passing the issue number or URL as a positional argument (e.g., `/fix-issue 42`). When this flag is encountered, print: `**ℹ '--issue' is deprecated; pass the issue number or URL as a positional argument instead (e.g., /fix-issue 42).**`
-- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping all flags defined above (`--debug`, `--slack`, `--issue`), treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 1 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
+- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping all flags defined above (`--debug`, `--no-slack`, `--issue`), treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 1 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
 
 ## Mindset
 
@@ -79,7 +79,7 @@ If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository. GitHub 
 
 If `SLACK_OK=true`, set `slack_available=true`. **Do NOT make a separate Bash call to resolve Slack env vars.** When Slack tokens are needed (Steps 4 and 8), use inline shell expansion: `"${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}"` and `"${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"`.
 
-If `SLACK_OK=false`, print `**⚠ Slack not configured ($SLACK_MISSING). Slack announcements will be skipped.**` Set `slack_available=false`.
+If `SLACK_OK=false`, print (only when `slack_enabled=true`) `**⚠ Slack not configured ($SLACK_MISSING). Slack announcements will be skipped.**` Set `slack_available=false`. When `slack_enabled=false` (user passed `--no-slack`), suppress the warning.
 
 Write session-env for forwarding to `/implement`:
 
@@ -142,14 +142,15 @@ Decide whether the issue is still material against the codebase (see the referen
    ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
      --issue $ISSUE_NUMBER --comment "Closing: <detailed explanation with research summary>"
    ```
-2. If `slack_available=true`, post Slack notification:
+2. If `slack_enabled=true` AND `slack_available=true`, post Slack notification via the shared script (carries the closure reason as `--detail`):
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
-     --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/post-issue-slack.sh \
+     --issue-number "$ISSUE_NUMBER" --status closed --repo "$REPO" \
      --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
      --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
-     --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence reason>"
+     --detail "<one-sentence reason>"
    ```
+   On non-zero exit, log to `Tool Failures` and continue. Do not abort.
 3. Print `✅ 4: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 9.
 
 **If the issue is still actual**, print `✅ 4: triage — issue is active, proceeding (<elapsed>)` and continue.
@@ -181,8 +182,8 @@ Compose the feature description from the issue content: use the issue title as t
 
 Invoke `/implement` via the Skill tool. Forwarding `--issue $ISSUE_NUMBER` makes `/implement` adopt the queue issue as its tracking issue (Phase 3 Branch 2 adoption), so the two skills converge on the same tracking issue and `/fix-issue` avoids a duplicate tracking-issue on its path:
 
-- **SIMPLE**: `/implement --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
-- **HARD**: `/implement --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
+- **SIMPLE**: `/implement --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--no-slack if !slack_enabled] [--debug if debug_mode] <feature description>`
+- **HARD**: `/implement --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--no-slack if !slack_enabled] [--debug if debug_mode] <feature description>`
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
@@ -233,36 +234,29 @@ ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
 
 Print `✅ 7: close issue — #$ISSUE_NUMBER closed (<elapsed>)`
 
-## Step 8 — Slack Announce
+## Step 8 — Slack Announce (NON_PR path only)
+
+The PR path's Slack announcement is handled by the child `/implement` at its Step 16a — this skill does NOT post again to avoid duplication. This step runs only for `INTENT=NON_PR`.
+
+If `INTENT=PR`, print `⏭️ 8: slack announce — skipped (PR path — /implement posted at Step 16a) (<elapsed>)` and proceed to Step 9.
+
+If `slack_enabled=false` (user passed `--no-slack`), print `⏭️ 8: slack announce — skipped (--no-slack) (<elapsed>)` and proceed to Step 9.
 
 If `slack_available=false`, print `⏭️ 8: slack announce — skipped (Slack not configured) (<elapsed>)` and proceed to Step 9.
 
-Branch on `INTENT`.
-
-### 8a — `INTENT=PR`
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
-  --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" --pr-url "$PR_URL" \
-  --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
-  --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"
-```
-
 ### 8b — `INTENT=NON_PR`
 
-Post a free-form Slack message summarizing the non-PR work (no PR URL). Compose the `--message` value from `WORK_SUMMARY` — a one-sentence summary is ideal (e.g., "research complete, filed #123 and #124" or "code review complete, filed 5 issues"):
+Post a Slack message summarizing the non-PR work via the shared script. Compose the `--detail` value from `WORK_SUMMARY` — a one-sentence summary is ideal (e.g., "research complete, filed #123 and #124" or "code review complete, filed 5 issues"):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
-  --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" \
+${CLAUDE_PLUGIN_ROOT}/scripts/post-issue-slack.sh \
+  --issue-number "$ISSUE_NUMBER" --status closed --repo "$REPO" \
   --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
   --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
-  --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence summary from WORK_SUMMARY>"
+  --detail "<one-sentence summary from WORK_SUMMARY>"
 ```
 
-### After the branch
-
-If the script exits non-zero, print `**⚠ 8: slack announce — failed. Continuing.**`
+If the script exits non-zero, print `**⚠ 8: slack announce — failed. Continuing.**` and log to `Tool Failures`.
 
 Print `✅ 8: slack announce — posted (<elapsed>)`
 

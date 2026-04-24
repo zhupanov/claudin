@@ -185,11 +185,6 @@ if [[ "$SKIP_SLACK_CHECK" == "false" ]]; then
         if [[ -n "$EFFECTIVE_CHANNEL_ID" && -z "${LARCH_SLACK_CHANNEL_ID:-}" ]]; then
             export LARCH_SLACK_CHANNEL_ID="$EFFECTIVE_CHANNEL_ID"
         fi
-        # Also bridge user ID (optional, used for @-mentions)
-        if [[ -z "${LARCH_SLACK_USER_ID:-}" && -n "${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID:-}" ]]; then
-            export LARCH_SLACK_USER_ID="${CLAUDE_PLUGIN_OPTION_SLACK_USER_ID}"
-        fi
-
         SLACK_MISSING_VARS=""
         if [[ -z "$EFFECTIVE_BOT_TOKEN" ]]; then
             SLACK_MISSING_VARS="LARCH_SLACK_BOT_TOKEN"

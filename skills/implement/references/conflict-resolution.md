@@ -37,7 +37,7 @@ For each file in `CONFLICT_FILES`:
 **If there are no uncertain conflicts**, skip to Phase 3.
 
 - **If `auto_mode=false`**: Call `AskUserQuestion` with the upstream (main) version, the feature branch commit version, and a proposed resolution for each uncertain file, batched into a single call. Use explicit "upstream (main)" and "feature branch commit" labels. Incorporate the user's answer, write the resolved file, and stage with `${CLAUDE_PLUGIN_ROOT}/scripts/git-stage.sh <file>`. If the user indicates the conflict cannot be resolved or asks to abort, run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh` and **bail out** (Step 12d).
-- **If `auto_mode=true`**: Attempt best-effort resolution for uncertain conflicts. If confidence is too low for any file (e.g., modify/delete conflict, conflicting business logic with no composable path, one side deleted code the other modified), run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh` and **bail out** (Step 12d).
+- **If `auto_mode=true`**: Attempt best-effort resolution for uncertain conflicts. If confidence is too low for any file (e.g., modify/delete conflict, conflicting business logic with no composable path, one side deleted code the other modified), set `BAIL_NEEDS_USER_INPUT=true` in parent scope (persists through Step 12d into Step 16a's outcome state machine — maps to the ❓ emoji), run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh`, and **bail out** (Step 12d). The flag signals that this bail specifically needs human input to proceed — distinct from CI-failure or fix-exhaustion bails which stay `blocked` (❌).
 
 ## Phase 3 — Reviewer Panel on Conflict Resolution
 

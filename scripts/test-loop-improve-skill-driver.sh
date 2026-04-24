@@ -251,7 +251,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --iter-num) ITER_NUM="$2"; shift 2 ;;
     --issue|--work-dir|--breadcrumb-prefix) shift 2 ;;
-    --slack) shift ;;
+    --no-slack) shift ;;
     --) shift; break ;;
     --*) shift ;;
     *) break ;;

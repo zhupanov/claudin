@@ -108,13 +108,13 @@ check_contains 'iter-${ITER_NUM}-infeasibility.md'             'infeasibility fi
 check_contains 'IMPROVE_SKILL_SKIP_PREFLIGHT'                  'opt-in preflight-skip env var'
 
 # ---------- Argv flags ----------
-check_contains '--slack'                                       '--slack flag handling'
+check_contains '--no-slack'                                    '--no-slack flag handling'
 check_contains '--issue'                                       '--issue flag handling'
 check_contains '--work-dir'                                    '--work-dir flag handling'
 check_contains '--iter-num'                                    '--iter-num flag handling'
 check_contains '--breadcrumb-prefix'                           '--breadcrumb-prefix flag handling'
-# SLACK_FLAG byte-parallel literal (trailing space matters for /larch:im prompt composition).
-check_contains 'SLACK_FLAG="--slack "'                         'SLACK_FLAG byte-parallel literal'
+# NO_SLACK_FLAG byte-parallel literal (trailing space matters for /larch:im prompt composition).
+check_contains 'NO_SLACK_FLAG="--no-slack "'                   'NO_SLACK_FLAG byte-parallel literal'
 
 # ---------- KV footer (EXIT trap + schema) ----------
 check_contains 'trap cleanup_on_exit EXIT'                     'EXIT trap (guarantees KV footer emission)'
