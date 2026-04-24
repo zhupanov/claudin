@@ -85,11 +85,11 @@ Under `/implement`, the tracking-issue anchor comment is the durable store for v
 | `/design` | Plan review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Voting Protocol) |
 | `/review` | Code review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Voting Protocol) |
 | `/implement` | Phase 3 conflict review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total) |
-| `/implement` (quick mode) | Simplified review | 1 Claude Code Reviewer subagent (no external reviewers, no voting) |
+| `/implement` (quick mode) | Simplified review | Cursor or Codex or Claude Code Reviewer subagent per round (fallback chain), single-reviewer loop of up to 7 rounds, no voting panel |
 | `/loop-review` | Slice review | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Negotiation Protocol) |
 | `/research` | Validation | 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor (3 total, Negotiation Protocol); Claude Code Reviewer subagent fallbacks (1 per unavailable external) preserve the 3-lane invariant |
 
-**Note A**: Both `/loop-review` and `/research` use a 3-lane composition under the Negotiation Protocol, matching the `/design` and `/review` shape. Lane count is independent of protocol choice — the Negotiation Protocol supports any per-reviewer independent negotiation count. Every full 3-reviewer panel in this repo shares the same 3-attribution shape (`Code`, `Codex`, `Cursor`), with a single Claude Code Reviewer subagent fallback per unavailable external preserving the 3-lane invariant. Exceptions: `/implement` quick mode runs only 1 Claude Code Reviewer subagent (no externals, no voting), and voting panels may collapse to 2 or skip per the threshold rules in `skills/shared/voting-protocol.md`.
+**Note A**: Both `/loop-review` and `/research` use a 3-lane composition under the Negotiation Protocol, matching the `/design` and `/review` shape. Lane count is independent of protocol choice — the Negotiation Protocol supports any per-reviewer independent negotiation count. Every full 3-reviewer panel in this repo shares the same 3-attribution shape (`Code`, `Codex`, `Cursor`), with a single Claude Code Reviewer subagent fallback per unavailable external preserving the 3-lane invariant. Exceptions: `/implement` quick mode runs a single-reviewer loop of up to 7 rounds with a per-round Cursor → Codex → Claude Code Reviewer subagent fallback chain (no voting panel), and voting panels may collapse to 2 or skip per the threshold rules in `skills/shared/voting-protocol.md`.
 
 **Claude fallback for externals**: When Cursor or Codex is unavailable in the 3-reviewer skills, a Claude Code Reviewer subagent is launched in its place so the total reviewer count remains 3.
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.8] - 2026-04-23
+
+### Fixed
+
+- Align public `/implement --quick` descriptions in `README.md`, `docs/review-agents.md`, and `docs/workflow-lifecycle.md` with the current `skills/implement/SKILL.md` Step 5 contract (up to 7 rounds, per-round Cursor → Codex → Claude Code Reviewer subagent fallback chain, no voting panel). Add `scripts/test-quick-mode-docs-sync.sh` regression harness with a `--self-test` mode that proves the negative-check path fires, wired into `make lint` via the `test-harnesses` target. Closes #370.
+
 ## [6.2.7] - 2026-04-23
 
 ### Changed
