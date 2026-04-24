@@ -1,6 +1,6 @@
 # test-quick-mode-docs-sync.sh
 
-Cross-validation harness that asserts alignment between the normative `/implement --quick` contract in `skills/implement/SKILL.md` Step 5 and the public user-facing documentation in `README.md`, `docs/review-agents.md`, and `docs/workflow-lifecycle.md`. Closes #370.
+Cross-validation harness with two check families: (1) alignment between the normative `/implement --quick` contract in `skills/implement/SKILL.md` Step 5 and the public user-facing documentation in `README.md`, `docs/review-agents.md`, and `docs/workflow-lifecycle.md` (closes #370); and (2) required cross-references — currently `docs/review-agents.md` → `skills/shared/voting-protocol.md` (closes #377). See the Target files and Required cross-references sections below for full coverage.
 
 ## Purpose
 
@@ -43,11 +43,13 @@ A third check family guards prose path citations in public docs against silent d
 
 | Doc | Cross-reference path | What each assertion catches |
 |-----|----------------------|------------------------------|
-| `docs/review-agents.md` | `skills/shared/voting-protocol.md` | (a) `grep -Fq` against doc — fails if the Note A paragraph is reworded to drop the literal path; (b) `-e` existence check against `$REPO_ROOT/<path>` — fails if the target file is renamed / moved / deleted without updating the citation. |
+| `docs/review-agents.md` | `skills/shared/voting-protocol.md` | (a) `grep -Fq` against the whole doc — fails if the literal path is absent from the file (substring-level; not anchored to Note A — see "Scope limitation" below); (b) regular-file check `[[ -f "$REPO_ROOT/<path>" ]]` — fails if the target file is renamed / moved / deleted without updating the citation (a directory at the cited path is deliberately NOT accepted, matching the contract that the citation resolves to a file). |
 
-Both assertions are required. Dropping (a) would let a rename pass silently whenever the citation text was updated in sync; dropping (b) would let a rewording that removes the path pass silently whenever the target file still existed under the old name. Together they pin the two-way invariant: **the cited path is present in the doc AND resolves to a real file**.
+Both assertions are required. Dropping (a) would let a **rewording** that removes the literal path from the doc pass silently (the target file still exists on disk, so (b) alone would still pass). Dropping (b) would let a **rename / move / delete** of the target file pass silently (the old literal is still in the doc, so (a) alone would still pass). Together they pin the two-way invariant: **the cited path is present in the doc AND resolves to a real file**.
 
 The check is implemented by `check_xref` (a dedicated function kept separate from `check_file`). Target-specific — NOT applied to every public doc — so it does not affect the existing self-test's "exactly 1 failure" invariant on the pre-existing bad fixture, which exercises `check_file` only. New xref targets extend the `XREF_DOC` / `XREF_PATH` constants at the top of the script and add a `check_xref` call in `run_default` (with matching self-test coverage).
+
+**Scope limitation**: assertion (a) is a substring-level `grep -Fq` against the whole doc — it does NOT pin the citation to the specific Note A paragraph or any structural anchor. If Note A is reorganized elsewhere in the file, or the literal path is quoted in an unrelated paragraph (e.g., a historical note), the grep still passes. The guard is strong enough for the recurring failure modes #377 targeted (Note A rewording that drops the path, target-file rename breaking the reference), and stronger semantic binding would require a line-anchored check or an explicit marker string in the source doc.
 
 ### SKILL.md negative-check exemption
 
@@ -59,17 +61,22 @@ If the canonical contract itself changes (e.g. the round cap goes to 10 or the f
 
 ## `--self-test` mode
 
-The harness ships with a `--self-test` flag that runs the check against two embedded fixtures:
+The harness ships with a `--self-test` flag that runs two `check_file` fixtures + three `check_xref` fixtures (see next block), all against embedded temp-dir content.
+
+`check_file` fixtures:
 
 1. **Good fixture**: contains all three positive markers and no stale phrases. `--self-test` asserts the good fixture produces exactly **0** failures.
 2. **Bad fixture**: contains all three positive markers AND one stale phrase — structured so the ONLY reason `check_file` can fail on this fixture is the negative-check path firing on the stale phrase. `--self-test` asserts the bad fixture produces exactly **1** failure.
 
 The same `check_file` function used in default mode is called against each. The "exactly 1 failure" assertion on the bad fixture is the load-bearing guarantee: if the negative-check block in `check_file` were deleted or bypassed, the bad fixture would produce 0 failures and the self-test would exit non-zero. If the positive-anchor block were deleted, the good fixture would still produce 0 failures (unchanged), but the bad fixture's positive markers would never be checked — the default-mode run against real repo files remains the primary guard against positive-check regressions. The fixture temp dir is cleaned up via `trap` on EXIT.
 
-Additionally, the self-test exercises `check_xref` against two xref-specific fixtures carved from sub-directories inside the same `FIXTURE_DIR`:
+Additionally, the self-test exercises `check_xref` against three xref-specific fixtures carved from sub-directories inside the same `FIXTURE_DIR`:
 
-1. **xref-good**: a doc file containing the literal xref path, PLUS the target file present on disk under the fixture root. `--self-test` asserts 0 failures.
-2. **xref-bad**: a doc file containing the literal xref path, but the target file deliberately NOT created. `--self-test` asserts exactly 1 failure — driven entirely by the existence assertion. If the existence assertion were removed, this fixture would produce 0 failures and the self-test would exit non-zero. Symmetric in spirit to the `check_file` bad-fixture invariant.
+1. **xref-good**: doc contains the literal xref path AND target file exists on disk. `--self-test` asserts 0 failures.
+2. **xref-bad-existence**: doc contains the literal xref path BUT target file is missing on disk. `--self-test` asserts exactly 1 failure, driven entirely by the existence assertion. Regression-guards the `-f` branch: if the existence block were removed from `check_xref`, this fixture would produce 0 failures.
+3. **xref-bad-grep**: target file exists on disk BUT doc omits the literal xref path. `--self-test` asserts exactly 1 failure, driven entirely by the grep assertion. Regression-guards the `grep -Fq` branch: if the grep block were removed, this fixture would produce 0 failures.
+
+The bad-existence and bad-grep fixtures are symmetric — together they pin both assertions in place, matching the two-way invariant that the `check_xref` contract exists to enforce. Each fixture's "exactly 1 failure" assertion is the load-bearing guarantee for its respective branch. Symmetric in spirit to the `check_file` bad-fixture invariant.
 
 ## Makefile wiring
 
