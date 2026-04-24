@@ -21,7 +21,7 @@ Four invariants enforced across multiple steps. Anchor cross-step questions here
 
 3. **Degraded-Git Fail-Closed** — `check-bump-version.sh STATUS != ok` MUST force `VERIFIED=false` at Step 12 regardless of `COMMITS_AFTER`. **Enforcement**: STATUS-first evaluation ordering in the Rebase + Re-bump Sub-procedure step 4 (see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/bump-verification.md` Block β); Step 8 permissive, Step 12 strict (bail to 12d). **Why**: a coerced 0 baseline from a transient git error routes to a bogus "wrong commit count" mis-diagnosis — the fail-closed rule prevents silently wrong merged versions.
 
-4. **Tracking-Issue Sentinel Idempotency** (umbrella #348) — re-running `/implement` in the same session MUST NOT double-create a tracking issue or double-adopt under a mismatched anchor. **Enforcement**: the `$IMPLEMENT_TMPDIR/parent-issue.md` sentinel detected at Step 0.5 entry; prior `ISSUE_NUMBER` + `ANCHOR_COMMENT_ID` are recovered from it so no `tracking-issue-write.sh create-issue` call (Branch 4 path, which runs at Step 0.5 on first-remote-write) runs twice, and no duplicate `upsert-anchor` without `--anchor-id` runs (which could create a second anchor comment). Ordering invariant on Branch 4 first-creation: `create-issue` → `assemble-anchor.sh` + `upsert-anchor` (capture `ANCHOR_COMMENT_ID`) → write sentinel last — the sentinel is written ONLY after both `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` are known. **Why**: `tracking-issue-write.sh upsert-anchor`'s marker-search fallback is deterministic but single-shot; the sentinel is the byte-exact session-scope guard against double-creation on retry or resume. Parallel to Invariant #2 — sentinel-based byte-exact idempotency guards for distinct session artifacts.
+4. **Tracking-Issue Sentinel Idempotency** (umbrella #348) — re-running `/implement` in the same session MUST NOT double-create a tracking issue or double-adopt under a mismatched anchor. **Enforcement**: the `$IMPLEMENT_TMPDIR/parent-issue.md` sentinel detected at Step 0.5 entry; prior `ISSUE_NUMBER` + `ANCHOR_COMMENT_ID` are recovered from it so no `tracking-issue-write.sh create-issue` call (Branch 4 path, which runs at Step 0.5 on first-remote-write) runs twice, and no duplicate `upsert-anchor` without `--anchor-id` runs (which could create a second anchor comment). Ordering invariant on Branch 4 first-creation: `create-issue` → `assemble-anchor.sh` + `upsert-anchor` (capture `ANCHOR_COMMENT_ID`) → write sentinel last — the sentinel is written ONLY after both `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` have resolved to non-empty values. If either the create-issue or upsert-anchor step fails (or returns an empty `ANCHOR_COMMENT_ID`), Step 0.5 flips to `deferred=true` and skips the sentinel write entirely — there is no partial sentinel, no empty-`ANCHOR_COMMENT_ID` sentinel. **Why**: `tracking-issue-write.sh upsert-anchor`'s marker-search fallback is deterministic but single-shot; the sentinel is the byte-exact session-scope guard against double-creation on retry or resume. Parallel to Invariant #2 — sentinel-based byte-exact idempotency guards for distinct session artifacts.
 
 ## NEVER List
 
@@ -212,6 +212,8 @@ Resolve a stable `ISSUE_NUMBER` + (when available) `ANCHOR_COMMENT_ID` for the s
 
 **Decision order** (top-to-bottom; first match wins):
 
+**Step 0.5 entry default**: set `deferred=false`. Branches 1 / 2 / 3 succeed → `deferred` stays `false`. Branch 4 on success → `deferred` stays `false`. Branch 4 on any failure (create-issue, upsert-anchor, sentinel write) → set `deferred=true` explicitly. This establishes a clean binary state for Steps 1 / 2 / 5 / 7a / 8 / 9a / 9a.1 / 11 / 18 — there is no tri-state "unset" to handle.
+
 **Branch 1 — sentinel exists** (`$IMPLEMENT_TMPDIR/parent-issue.md` present):
 
 ```bash
@@ -329,7 +331,7 @@ Create the tracking issue **immediately** so all subsequent anchor-accumulation 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh create-issue --title "<derived-title>" --body-file "$IMPLEMENT_TMPDIR/tracking-issue-body.md"
    ```
-   Parse `ISSUE_NUMBER` and `ISSUE_URL` from stdout. On `FAILED=true` OR non-zero exit, print `**⚠ 0.5: tracking issue — Branch 4 create-issue failed: $ERROR. Continuing with deferred/absent anchor.**`, log to `Tool Failures`, set `deferred=true`, leave `$ISSUE_NUMBER` unset, and proceed to Step 1. Downstream: Step 9a substitutes `(no tracking issue created)`, Step 11 branch 3 skips cleanly, Step 18 URL print is silently skipped.
+   Parse `ISSUE_NUMBER` and `ISSUE_URL` from stdout. On `FAILED=true` OR non-zero exit, print `**⚠ 0.5: tracking issue — Branch 4 create-issue failed: $ERROR. Continuing with deferred/absent anchor.**`, log to `Tool Failures`, set `deferred=true`, leave `$ISSUE_NUMBER` unset, and proceed to Step 1. Downstream: Step 9a omits the `Closes #<N>` line entirely and replaces it with `_No tracking issue — auto-close N/A._`; Step 11 branch 3 skips cleanly; Step 18 URL print is silently skipped.
 
 5. **Seed the anchor** as the first comment on the newly-created issue (`tracking-issue-write.sh` treats the anchor as a standalone comment, not the issue description):
    ```bash
@@ -340,17 +342,17 @@ Create the tracking issue **immediately** so all subsequent anchor-accumulation 
      --output "$IMPLEMENT_TMPDIR/anchor-seed.md"
    ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"
    ```
-   The seed body contains the anchor first-line marker (embedding `$ISSUE_NUMBER`) plus all 8 canonical section marker pairs wrapping empty interiors (no fragments yet). Parse `ANCHOR_COMMENT_ID` from `upsert-anchor`'s stdout. On `FAILED=true` from either call, print `**⚠ 0.5: tracking issue — Branch 4 anchor planting failed: $ERROR. Continuing with ANCHOR_COMMENT_ID empty; subsequent upserts will fall back to marker-search.**`, log to `Tool Failures`, and proceed (do NOT bail — the issue exists and progressive upserts can still succeed via marker-search).
+   The seed body contains the anchor first-line marker (embedding `$ISSUE_NUMBER`) plus all 8 canonical section marker pairs wrapping empty interiors (no fragments yet). Parse `ANCHOR_COMMENT_ID` from `upsert-anchor`'s stdout. On `FAILED=true` from either call OR if parsed `ANCHOR_COMMENT_ID` is empty, print `**⚠ 0.5: tracking issue — Branch 4 anchor planting failed: $ERROR. Continuing with deferred/absent anchor.**`, log to `Tool Failures`, set `deferred=true`, clear `$ISSUE_NUMBER`, and proceed to Step 1 (skipping the sentinel write in step 6). Do NOT continue with an empty `$ANCHOR_COMMENT_ID` — an empty value breaks downstream `upsert-anchor --anchor-id "$ANCHOR_COMMENT_ID"` calls at the shell-expansion layer (the empty expansion would cause the next flag to be consumed as the anchor-id value) and we cannot safely assert sentinel idempotency (Invariant #4) without a resolved anchor id.
 
-6. **Write the sentinel LAST**, only after both `$ISSUE_NUMBER` and `$ANCHOR_COMMENT_ID` are in hand (Load-Bearing Invariant #4 ordering):
+6. **Write the sentinel LAST**, only after BOTH `$ISSUE_NUMBER` and `$ANCHOR_COMMENT_ID` resolved to non-empty values in steps 4 and 5 (Load-Bearing Invariant #4 ordering):
    ```
    ISSUE_NUMBER=<created-N>
-   ANCHOR_COMMENT_ID=<id-or-empty>
+   ANCHOR_COMMENT_ID=<id>
    ADOPTED=false
    ```
-   Write to `$IMPLEMENT_TMPDIR/parent-issue.md`. `ADOPTED=false` per the `scripts/tracking-issue-read.md` contract: Branch 4 CREATED a fresh tracking issue, not adopted an existing one.
+   Write to `$IMPLEMENT_TMPDIR/parent-issue.md`. `ADOPTED=false` per the `scripts/tracking-issue-read.md` contract: Branch 4 CREATED a fresh tracking issue, not adopted an existing one. Skip this step on any step-4/step-5 failure per the deferred-fallback wiring above.
 
-7. **Set `deferred=false`** (enables progressive upserts in subsequent steps per the "Anchor-section accumulation" procedure). Print: `✅ 0.5: tracking issue — created #$ISSUE_NUMBER (Branch 4, fresh) (<elapsed>)` and proceed to Step 1.
+7. **Leave `deferred=false`** (the Step 0.5 entry default is unchanged on Branch 4 success — progressive upserts in subsequent steps are enabled). Print: `✅ 0.5: tracking issue — created #$ISSUE_NUMBER (Branch 4, fresh) (<elapsed>)` and proceed to Step 1.
 
 **Orphan-issue recovery note**: if a session crashes between step 4 (issue created on GitHub) and step 6 (sentinel written locally), a rerun will Branch-4 again and create a duplicate. Recovery: the operator passes `--issue <N>` on rerun to adopt the originally-created issue via Branch 2 (same behavior as the pre-change deferred-creation orphan case — not a regression).
 
@@ -461,7 +463,7 @@ Write two anchor fragments from `/design`'s visible output. See Step 0.5 "Anchor
 
 1. **`plan-goals-test` fragment** — compose from `/design`'s `## Goal` and `## Test plan` sections (or their quick-mode inline equivalents). Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-goals-test.md`.
 2. **`plan-review-tally` fragment** — compose from the plan review voting tally + Reviewer Competition Scoreboard visible in conversation context (or `"Voting was skipped (insufficient voters)."` / `"No findings were raised — voting was not needed."` / `"Quick mode — no plan review voting."` as appropriate). Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-review-tally.md`.
-3. If `ISSUE_NUMBER` is set (Branches 1, 2, 3 from Step 0.5), assemble the anchor body and invoke `upsert-anchor`. If `deferred=true` (Branch 4) or `repo_unavailable=true`, skip the upsert.
+3. If `$ISSUE_NUMBER` is set (any of: Branch 1 sentinel reuse, Branch 2 `--issue` adoption, Branch 3 PR-body recovery, Branch 4 success), assemble the anchor body and invoke `upsert-anchor`. If `deferred=true` (Branch 4 create-issue/anchor/sentinel failure) or `repo_unavailable=true`, skip the upsert.
 
 ### Rebase onto latest main (before implementation)
 
@@ -485,7 +487,19 @@ Apply the Rebase Checkpoint Macro with `<step-prefix>=1.r` and `<short-name>=des
 **Progressive upsert** (if `$ISSUE_NUMBER` is set, i.e. `deferred=false` and `repo_unavailable=false`):
 1. Compose the `execution-issues` anchor fragment from the full contents of `$IMPLEMENT_TMPDIR/execution-issues.md`, wrapped in `<details><summary>Execution Issues</summary>` / `</details>` per `anchor-comment-template.md` section `execution-issues`. Preserve load-bearing blank lines.
 2. Write to `$IMPLEMENT_TMPDIR/anchor-sections/execution-issues.md`.
-3. Invoke `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh` then `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $ISSUE_NUMBER --anchor-id $ANCHOR_COMMENT_ID --body-file "$IMPLEMENT_TMPDIR/anchor-assembled.md"`.
+3. Assemble:
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
+     --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" \
+     --issue "$ISSUE_NUMBER" \
+     --output "$IMPLEMENT_TMPDIR/anchor-assembled.md"
+   ```
+   Then upsert — `$ANCHOR_COMMENT_ID` is guaranteed non-empty at Step 2 entry (Step 0.5 flips to `deferred=true` and clears `$ISSUE_NUMBER` on any anchor-planting failure; the `deferred=false` precondition above rules out the empty case):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor \
+     --issue "$ISSUE_NUMBER" --anchor-id "$ANCHOR_COMMENT_ID" \
+     --body-file "$IMPLEMENT_TMPDIR/anchor-assembled.md"
+   ```
 4. On `FAILED=true` from either call: log `Step 2 — anchor Q/A refresh failed: $ERROR` to `Warnings` and continue. Non-fatal.
 
 If `deferred=true` or `repo_unavailable=true`: local-only append; Step 11's post-execution refresh remains the catch-all.
@@ -724,8 +738,8 @@ The anchor comment on the tracking issue is the single source of truth for repor
 
 Write the slim PR body to `$IMPLEMENT_TMPDIR/pr-body.md`. Substitute `<TRACKING_ISSUE_NUMBER>`:
 
-- **Issue-known path** (any of: Branch 1 sentinel reuse, Branch 2 `--issue` adoption, Branch 3 PR-body recovery, Branch 4 successful immediate creation — in all cases `$ISSUE_NUMBER` is set at Step 9a entry): substitute `$ISSUE_NUMBER` directly.
-- **Degraded path** (`repo_unavailable=true` OR Step 0.5 Branch 4 create-issue/anchor/sentinel failure left `deferred=true` with `$ISSUE_NUMBER` unset): substitute `(no tracking issue created)` as the issue reference — the PR body will not have an auto-close link, and Step 0.5 Branch 3 recovery on subsequent sessions will fall through.
+- **Issue-known path** (any of: Branch 1 sentinel reuse, Branch 2 `--issue` adoption, Branch 3 PR-body recovery, Branch 4 successful immediate creation — in all cases `$ISSUE_NUMBER` is set at Step 9a entry): substitute `$ISSUE_NUMBER` directly, yielding a well-formed `Closes #<N>` line.
+- **Degraded path** (`repo_unavailable=true` OR Step 0.5 Branch 4 create-issue/anchor/sentinel failure left `deferred=true` with `$ISSUE_NUMBER` unset): **omit the `Closes #<TRACKING_ISSUE_NUMBER>` line entirely** (do NOT substitute `(no tracking issue created)` into a `Closes #...` prefix — that would produce the malformed literal `Closes #(no tracking issue created)`). Replace the line with the single prose line `_No tracking issue — auto-close N/A._` so the PR body stays well-formed. The PR body has no auto-close link on this path, and Step 0.5 Branch 3 recovery on subsequent sessions will fall through (no `Closes #<N>` to match).
 
 The `Closes #<N>` line auto-closes the tracking issue on merge and anchors Step 0.5 Branch 3 recovery on subsequent sessions.
 

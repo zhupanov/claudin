@@ -4,7 +4,7 @@
 
 Assemble the anchor comment body from local per-section fragment files under a sections directory. Walks the canonical `SECTION_MARKERS` slug list (sourced from `anchor-section-markers.sh`), emits paired `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` markers wrapping each fragment's content (empty marker pairs when a fragment file is absent), prepends the first-line HTML anchor marker `<!-- larch:implement-anchor v1 issue=<N> -->`, and writes the result to `--output`.
 
-Umbrella #348 Phase 5 extracted this helper to eliminate prose-vs-shell drift across the multiple callsites that previously implemented the walk inline (SKILL.md Step 0.5 Branch 2/3, Steps 1/5/7a/8/9a.1/11, and the new rebase-rebump sub-procedure Step 6). Every anchor body creation and progressive upsert now routes through this one helper.
+Umbrella #348 Phase 5 extracted this helper to eliminate prose-vs-shell drift across the multiple callsites that previously implemented the walk inline (SKILL.md Step 0.5 Branch 2/3 adoption-seed, Step 0.5 Branch 4 fresh-run first-remote-write, Steps 1/2/5/7a/8/9a.1/11 progressive upserts — Step 2 covers Q/A anchor refresh, and the rebase-rebump sub-procedure Step 6). Every anchor body creation and progressive upsert now routes through this one helper.
 
 ## Interface
 

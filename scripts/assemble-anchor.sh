@@ -7,8 +7,10 @@
 # first-line HTML anchor marker, and writes the assembled body to --output.
 #
 # Consumers:
-#   - skills/implement/SKILL.md Step 0.5 (Branch 2/3 seed body), Steps 1/5/7a/8/9a.1/11
-#     (progressive upserts).
+#   - skills/implement/SKILL.md Step 0.5 (Branch 2/3 adoption seed body, Branch 4
+#     first-remote-write seed body), Steps 1/2/5/7a/8/9a.1/11 (progressive upserts —
+#     Step 2 covers Q/A anchor refresh after each opportunistic question or
+#     mid-coding ambiguity resolution).
 #   - skills/implement/references/rebase-rebump-subprocedure.md Step 6 (Phase 5 —
 #     post-rebase anchor version-bump-reasoning refresh).
 #
