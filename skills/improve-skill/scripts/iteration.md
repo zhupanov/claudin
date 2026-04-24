@@ -25,6 +25,12 @@ iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <p
 - Does NOT clean up the work-dir — driver owns LOOP_TMPDIR cleanup via its own EXIT trap.
 - Invoked by `/loop-improve-skill/scripts/driver.sh` with `--work-dir $LOOP_TMPDIR --iter-num $ITER --issue $ISSUE_NUM`, so all `iter-${ITER_NUM}-*.txt` artifacts accumulate in LOOP_TMPDIR and the driver's close-out (Step 5) reads them directly at known paths.
 
+## Retention on non-success (issue #399)
+
+Standalone-mode cleanup is **conditional** on the terminal iteration status: the EXIT trap skips `cleanup-tmpdir.sh` whenever `KV_ITER_STATUS` is NOT in `{grade_a, ok}` — so `$WORK_DIR` is retained for `no_plan`, `design_refusal`, `im_verification_failed`, `judge_failed`, subprocess-exit-nonzero, and any `unknown` fall-through. Cleanup still runs on success paths. The EXIT trap also emits a `breadcrumb_warn` to stderr announcing the retained path (stderr to preserve the KV-footer-first stdout invariant).
+
+Helper-script failure paths (`post_gh_comment`, standalone `gh issue create`) also touch a **cross-boundary preserve sentinel** at `$WORK_DIR/preserve.sentinel` so the driver's `cleanup_on_exit` (which cannot observe the child's `PRESERVE_WORK_DIR` variable) can pick up the signal in loop mode.
+
 ## Per-iteration artifacts (under `$WORK_DIR`)
 
 - `iter-${ITER_NUM}-judge-prompt.txt` / `iter-${ITER_NUM}-judge.txt` — `/skill-judge` in/out.
@@ -61,15 +67,15 @@ Stdout is reserved for:
 2. Final tracking-issue URL breadcrumb, emitted by the EXIT trap in standalone mode only (`OWNS_WORK_DIR=true` AND `ISSUE_URL` non-empty). Precedes the KV footer block. Uses `breadcrumb_done` (`✅` prefix) so Monitor surfaces the URL as the last visible breadcrumb. Loop mode suppresses this line — `driver.sh` holds the URL form and emits it itself at its Step 5.
 3. The `### iteration-result` header + 9 KV lines from the EXIT trap.
 
-All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p`'s `> "$out_file"` and `2> "$stderr_file"` redirects). No third-party `KEY=value` text leaks onto iteration.sh's own stdout, so the loop driver's awk KV extraction is always unambiguous (the KV parser is scoped to post-`### iteration-result` lines, so the URL breadcrumb above it is invisible to the parser).
+All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p`'s `> "$out_file"` and `2> "$stderr_file"` redirects) — with **one carve-out**: on subprocess non-zero exit (issue #399 remedy (b)), `invoke_claude_p` emits a redacted `── subprocess stderr/stdout-tail ──` diagnostics block to stdout BEFORE returning, so the driver's `cat "$ITER_OUT"` re-emits it to the retained driver log and Monitor. The stderr sidecar contents are piped through `redact-secrets.sh`, and the stdout tail is additionally passed through `sed 's/^### iteration-result/### (banner-redacted)/'` to neutralize any accidental header that could spoof the driver's awk-based KV footer parser. No third-party `KEY=value` text leaks onto iteration.sh's own stdout; the loop driver's KV parser is scoped to post-`### iteration-result` lines, so neither the URL breadcrumb (item 2 above) nor the subprocess-diagnostics dump — both emitted before the footer — can displace it.
 
 ## Security invariants
 
 - `$WORK_DIR` MUST start with `/tmp/` or `/private/tmp/` and contain no `..` path component.
 - `invoke_claude_p` uses `--plugin-dir "$CLAUDE_PLUGIN_ROOT"` (FINDING_7) and routes prompts via STDIN (FINDING_9: prompts may exceed macOS default `ARG_MAX=262144`).
-- Stderr is captured to a `.stderr` sidecar beside each out-file (FINDING_10: stderr may contain filesystem paths, hostnames, and unredacted `gh` diagnostics).
+- Stderr is captured to a `.stderr` sidecar beside each out-file (FINDING_10: stderr may contain filesystem paths, hostnames, and unredacted `gh` diagnostics). On subprocess non-zero exit, the sidecar contents reach stdout ONLY after passing through `redact-secrets.sh` (issue #399).
 - `gh issue comment` bodies always pass through `redact-secrets.sh`.
-- In loop mode, iteration.sh does NOT clean up the caller-supplied work-dir (`OWNS_WORK_DIR=false`) — driver owns `cleanup-tmpdir.sh`.
+- In loop mode, iteration.sh does NOT clean up the caller-supplied work-dir (`OWNS_WORK_DIR=false`) — driver owns `cleanup-tmpdir.sh`. Standalone-mode cleanup is now conditional on terminal status (see Retention on non-success above).
 
 ## Amended `/design` prompt — four-rule directive set
 

@@ -62,7 +62,10 @@
 #   - The retained slim invoke_claude_p (used only for the Step 5a post-iter-
 #     cap re-judge) preserves FINDING_9 STDIN + FINDING_10 stderr-sidecar
 #     contracts.
-#   - $LOOP_TMPDIR always cleaned via EXIT trap.
+#   - $LOOP_TMPDIR cleaned via EXIT trap on success; retained on any abnormal
+#     exit (non-grade_a iteration terminals, subprocess failures, KV parse
+#     failures, helper-script failures, or iteration-kernel preserve sentinel)
+#     per issue #399 so operators can inspect per-iteration artifacts.
 
 set -euo pipefail
 
@@ -86,21 +89,112 @@ breadcrumb_skip()       { printf '⏩ %s\n' "$*"; }
 breadcrumb_warn()       { printf '**⚠ %s**\n' "$*"; }
 
 # --------------------------------------------------------------------------
-# Cleanup trap (always runs)
+# Cleanup trap (conditional retention per issue #399)
 # --------------------------------------------------------------------------
+#
+# Cleanup runs on success (terminal grade_a / post-cap grade-A reclassification).
+# It is SKIPPED when `$LOOP_PRESERVE_TMPDIR` is true — set at every abnormal
+# exit path (non-grade_a iteration terminals, subprocess failures, KV parse
+# failures, helper-script failures) — or when the cross-boundary preserve
+# sentinel `$LOOP_TMPDIR/preserve.sentinel` was touched by the iteration
+# kernel (iteration.sh's helper-script failure path writes this sentinel; the
+# kernel's PRESERVE_WORK_DIR variable is child-process-local and cannot by
+# itself gate the driver's trap).
+#
+# `LOOP_TMPDIR=` is always printed to stdout at EXIT so test harnesses have
+# a stable parse token on both success and retention paths.
 
 LOOP_TMPDIR=""
+LOOP_PRESERVE_TMPDIR="false"   # sticky; once true, cleanup is suppressed
 # shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
   local rc=$?
+  # Pick up the iteration kernel's cross-boundary preserve signal if set.
+  if [[ -n "$LOOP_TMPDIR" && -f "$LOOP_TMPDIR/preserve.sentinel" ]]; then
+    LOOP_PRESERVE_TMPDIR="true"
+  fi
+  # Always emit LOOP_TMPDIR for test-harness parse stability.
+  printf 'LOOP_TMPDIR=%s\n' "${LOOP_TMPDIR}"
   if [[ -n "$LOOP_TMPDIR" && -d "$LOOP_TMPDIR" ]]; then
-    if [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then
+    if [[ "$LOOP_PRESERVE_TMPDIR" == "true" ]]; then
+      breadcrumb_warn "6: cleanup — Retained working directory: ${LOOP_TMPDIR}"
+    elif [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then
       "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$LOOP_TMPDIR" || true
     fi
   fi
   return "$rc"
 }
 trap cleanup_on_exit EXIT
+
+# --------------------------------------------------------------------------
+# Helper: dump_subprocess_diagnostics (issue #399 remedy (b), driver copy)
+# --------------------------------------------------------------------------
+#
+# Mirror of iteration.sh's helper. Kept inline rather than in a new
+# scripts/ module because the driver's invoke_claude_p is intentionally
+# minimal-surface (dialectic resolution on DECISION_1: inline duplication).
+#
+# Also sets LOOP_PRESERVE_TMPDIR=true — any subprocess failure detected by
+# this helper flips retention. Both streams are piped through redact-secrets.sh
+# so secrets in the local .stderr sidecar do not leak to stdout / Monitor.
+#
+# shellcheck disable=SC2317
+dump_subprocess_diagnostics() {
+  local label="$1" out_file="$2" stderr_file="${2}.stderr"
+  local redact="${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh"
+  breadcrumb_warn "${label}: subprocess non-zero; dumping diagnostics (redacted)."
+  printf '── subprocess stderr (label=%s) ──\n' "$label"
+  if [[ -s "$stderr_file" ]]; then
+    if [[ -x "$redact" ]]; then
+      "$redact" < "$stderr_file" || printf '(redaction failed; omitting stderr)\n'
+    else
+      printf '(redact-secrets.sh unavailable; omitting stderr)\n'
+    fi
+  else
+    printf '(stderr empty)\n'
+  fi
+  printf '── subprocess stdout tail (label=%s, last 50 lines) ──\n' "$label"
+  if [[ -s "$out_file" ]]; then
+    if [[ -x "$redact" ]]; then
+      tail -n 50 "$out_file" \
+        | sed 's/^### iteration-result/### (banner-redacted)/' \
+        | "$redact" || printf '(redaction failed; omitting stdout tail)\n'
+    else
+      printf '(redact-secrets.sh unavailable; omitting stdout tail)\n'
+    fi
+  else
+    printf '(stdout empty)\n'
+  fi
+  printf '── end subprocess diagnostics (label=%s) ──\n' "$label"
+  LOOP_PRESERVE_TMPDIR="true"
+}
+
+# --------------------------------------------------------------------------
+# Helper: dump_helper_stderr (issue #399 remedy (c), driver copy)
+# --------------------------------------------------------------------------
+#
+# Dumps a redacted helper-script stderr sidecar (non claude -p) and flips
+# LOOP_PRESERVE_TMPDIR. Used for gh issue create / gh issue comment /
+# session-setup / redact-secrets failure paths.
+#
+# shellcheck disable=SC2317
+dump_helper_stderr() {
+  local label="$1" stderr_file="$2"
+  local redact="${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh"
+  breadcrumb_warn "${label}: helper failure; dumping stderr (redacted)."
+  printf '── helper stderr (label=%s) ──\n' "$label"
+  if [[ -s "$stderr_file" ]]; then
+    if [[ -x "$redact" ]]; then
+      "$redact" < "$stderr_file" || printf '(redaction failed; omitting stderr)\n'
+    else
+      printf '(redact-secrets.sh unavailable; omitting stderr)\n'
+    fi
+  else
+    printf '(stderr empty)\n'
+  fi
+  printf '── end helper stderr (label=%s) ──\n' "$label"
+  LOOP_PRESERVE_TMPDIR="true"
+}
 
 # --------------------------------------------------------------------------
 # Step 1 — Parse + validate flags and <skill-name>
@@ -239,10 +333,12 @@ ISSUE_BODY_FILE="$LOOP_TMPDIR/issue-body.md"
   printf 'Target: %s\n' "${TARGET_SKILL_PATH}"
 } > "$ISSUE_BODY_FILE"
 
+ISSUE_CREATE_STDERR="$LOOP_TMPDIR/gh-create-issue.stderr"
 ISSUE_URL="$(gh issue create \
   --title "Improve /${SKILL_NAME} skill via loop-improve-skill" \
-  --body-file "$ISSUE_BODY_FILE")" || {
+  --body-file "$ISSUE_BODY_FILE" 2> "$ISSUE_CREATE_STDERR")" || {
   breadcrumb_warn "3: create issue — gh issue create failed. Aborting."
+  dump_helper_stderr "gh-create-issue" "$ISSUE_CREATE_STDERR"
   exit 1
 }
 
@@ -268,12 +364,15 @@ breadcrumb_done "3: create issue — #${ISSUE_NUM}"
 #   - Stderr redirected to <out-file>.stderr sidecar (FINDING_10: never posted)
 #   - --plugin-dir "$CLAUDE_PLUGIN_ROOT" (FINDING_7: plugin resolution)
 #   - Background-poll pattern (no external `timeout`/`gtimeout` dependency)
+#   - On rc!=0: emits redacted subprocess diagnostics (issue #399 remedy (b))
+#     and flips LOOP_PRESERVE_TMPDIR via dump_subprocess_diagnostics.
 invoke_claude_p() {
   local prompt_file="$1"
   local out_file="$2"
   local label="$3"
   local timeout_s="${4:-1200}"
   local stderr_file="${out_file}.stderr"
+  local rc=0
 
   : > "$out_file"
   : > "$stderr_file"
@@ -300,7 +399,12 @@ invoke_claude_p() {
       elapsed=$(( elapsed + 10 ))
     done
     wait "$pid"
-  )
+  ) || rc=$?
+
+  if [[ "$rc" -ne 0 ]]; then
+    dump_subprocess_diagnostics "$label" "$out_file"
+  fi
+  return "$rc"
 }
 
 # --------------------------------------------------------------------------
@@ -379,6 +483,7 @@ while [[ $ITER -le 10 ]]; do
   if [[ -z "$ITER_STATUS" ]]; then
     breadcrumb_warn "4: loop — iteration ${ITER} did not emit a KV footer (stdout missing '### iteration-result' block). Treating as subprocess failure."
     EXIT_REASON="subprocess failure at iteration ${ITER}: no KV footer (rc=${ITER_RC})"
+    LOOP_PRESERVE_TMPDIR="true"
     break
   fi
 
@@ -391,21 +496,25 @@ while [[ $ITER -le 10 ]]; do
     no_plan)
       EXIT_REASON="${EXIT_REASON_ITER:-no plan at iteration ${ITER}}"
       breadcrumb_done "4: loop — iteration ${ITER}: no_plan (break)"
+      LOOP_PRESERVE_TMPDIR="true"
       break
       ;;
     design_refusal)
       EXIT_REASON="${EXIT_REASON_ITER:-/design refusal or error at iteration ${ITER}}"
       breadcrumb_done "4: loop — iteration ${ITER}: design_refusal (break)"
+      LOOP_PRESERVE_TMPDIR="true"
       break
       ;;
     im_verification_failed)
       EXIT_REASON="${EXIT_REASON_ITER:-/im did not reach canonical completion line at iteration ${ITER}}"
       breadcrumb_done "4: loop — iteration ${ITER}: im_verification_failed (break)"
+      LOOP_PRESERVE_TMPDIR="true"
       break
       ;;
     judge_failed)
       EXIT_REASON="${EXIT_REASON_ITER:-subprocess failure at /skill-judge iteration ${ITER}}"
       breadcrumb_done "4: loop — iteration ${ITER}: judge_failed (break)"
+      LOOP_PRESERVE_TMPDIR="true"
       break
       ;;
     ok)
@@ -414,9 +523,17 @@ while [[ $ITER -le 10 ]]; do
     *)
       breadcrumb_warn "4: loop — iteration ${ITER} returned unknown ITER_STATUS '${ITER_STATUS}'. Breaking."
       EXIT_REASON="unknown ITER_STATUS '${ITER_STATUS}' at iteration ${ITER}"
+      LOOP_PRESERVE_TMPDIR="true"
       break
       ;;
   esac
+
+  # Non-zero iteration subprocess exit: iteration.sh's EXIT trap emitted a KV
+  # footer (caught above) AND dumped diagnostics via invoke_claude_p inside
+  # the iteration. Flip retention here so the driver trap preserves $LOOP_TMPDIR.
+  if [[ "$ITER_RC" -ne 0 ]]; then
+    LOOP_PRESERVE_TMPDIR="true"
+  fi
 
   # Advance ITER
   ITER=$(( ITER + 1 ))
@@ -465,6 +582,13 @@ if [[ "$EXIT_REASON" == "max iterations (10) reached" ]]; then
   fi
 
   breadcrumb_done "5a: final /skill-judge post-iter-cap"
+
+  # Iter-cap retention gate (issue #399 FINDING_3): only preserve when Step 5a
+  # did NOT reclassify to grade_a. Must run AFTER Step 5a so a successful
+  # post-cap reclassification is not masked by an earlier flag set.
+  if [[ "$EXIT_REASON" != "grade A achieved after final post-iter-cap re-evaluation" ]]; then
+    LOOP_PRESERVE_TMPDIR="true"
+  fi
 fi
 
 # --------------------------------------------------------------------------
@@ -517,6 +641,32 @@ CLOSEOUT_BODY="$LOOP_TMPDIR/closeout-body.md"
       fi
       ;;
   esac
+
+  # Diagnostics block (issue #399): when $LOOP_TMPDIR is retained, print its
+  # path + a pointer list so operators can open per-iteration artifacts. The
+  # literal "Retained working directory" is also emitted to stdout by the
+  # EXIT trap's breadcrumb so test harnesses and Monitor have parallel signals.
+  if [[ "$LOOP_PRESERVE_TMPDIR" == "true" ]]; then
+    printf '## Diagnostics\n\n'
+    printf 'Retained working directory:\n\n'
+    # shellcheck disable=SC2016  # backticks are literal markdown fence, not command substitution
+    printf '```\n%s\n```\n\n' "$LOOP_TMPDIR"
+    printf 'Relevant files:\n'
+    # shellcheck disable=SC2016  # backticks inside literal prose, not command substitution
+    printf -- '- `iter-<N>-iteration-stdout.txt` (forwarded iteration.sh stdout — captures subprocess-diagnostics dumps + KV footer)\n'
+    # shellcheck disable=SC2016
+    printf -- '- `iter-<N>-judge.txt` / `iter-<N>-judge.txt.stderr`\n'
+    # shellcheck disable=SC2016
+    printf -- '- `iter-<N>-design.txt` / `iter-<N>-design.txt.stderr`\n'
+    # shellcheck disable=SC2016
+    printf -- '- `iter-<N>-im.txt` / `iter-<N>-im.txt.stderr`\n'
+    # shellcheck disable=SC2016
+    printf -- '- `iter-<N>-infeasibility.md`\n'
+    # shellcheck disable=SC2016
+    printf -- '- `grade-history.txt`\n'
+    # shellcheck disable=SC2016
+    printf -- '- `claude-version.txt`\n\n'
+  fi
 } > "$CLOSEOUT_BODY"
 
 # --------------------------------------------------------------------------
@@ -524,11 +674,18 @@ CLOSEOUT_BODY="$LOOP_TMPDIR/closeout-body.md"
 # --------------------------------------------------------------------------
 
 CLOSEOUT_REDACTED="${CLOSEOUT_BODY}.redacted"
-"${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh" < "$CLOSEOUT_BODY" > "$CLOSEOUT_REDACTED"
-gh issue comment "$ISSUE_NUM" --body-file "$CLOSEOUT_REDACTED" || {
-  GH_RC=$?
-  breadcrumb_warn "5: close out — gh comment failed (exit ${GH_RC}). Continuing to cleanup."
-}
+REDACT_STDERR="${CLOSEOUT_BODY}.redact.stderr"
+if ! "${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh" < "$CLOSEOUT_BODY" > "$CLOSEOUT_REDACTED" 2> "$REDACT_STDERR"; then
+  breadcrumb_warn "5: close out — redact-secrets.sh failed; skipping gh comment to avoid posting unredacted body."
+  dump_helper_stderr "redact-secrets-closeout" "$REDACT_STDERR"
+else
+  GH_COMMENT_STDERR="${CLOSEOUT_BODY}.gh-comment.stderr"
+  gh issue comment "$ISSUE_NUM" --body-file "$CLOSEOUT_REDACTED" 2> "$GH_COMMENT_STDERR" || {
+    GH_RC=$?
+    breadcrumb_warn "5: close out — gh comment failed (exit ${GH_RC}). Continuing to cleanup."
+    dump_helper_stderr "gh-comment-closeout" "$GH_COMMENT_STDERR"
+  }
+fi
 printf 'done\n' > "$LOOP_TMPDIR/closeout.sentinel"
 
 breadcrumb_done "5: close out — issue #${ISSUE_NUM}, exit: ${EXIT_REASON}"
