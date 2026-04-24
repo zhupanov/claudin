@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.14] - 2026-04-23
+
+### Changed
+
+- Remove `--auto` from the two `/implement` invocation examples in `skills/fix-issue/SKILL.md` Step 6a (closes #389). Both SIMPLE and HARD delegation paths now invoke `/implement` without `--auto`; all other flags (`--quick` on SIMPLE, `--merge`, `--session-env`, `--issue`, conditional `--slack`/`--debug`) and the `<feature description>` positional arg are unchanged. Surgical two-token prose edit; no behaviour gated on `--auto` elsewhere in `/fix-issue` was affected.
+
 ## [6.2.13] - 2026-04-23
 
 ### Changed
