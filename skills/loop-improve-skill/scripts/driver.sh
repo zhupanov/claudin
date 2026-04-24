@@ -653,6 +653,8 @@ CLOSEOUT_BODY="$LOOP_TMPDIR/closeout-body.md"
     printf '```\n%s\n```\n\n' "$LOOP_TMPDIR"
     printf 'Relevant files:\n'
     # shellcheck disable=SC2016  # backticks inside literal prose, not command substitution
+    printf -- '- `iter-<N>-iteration-stdout.txt` (forwarded iteration.sh stdout — captures subprocess-diagnostics dumps + KV footer)\n'
+    # shellcheck disable=SC2016
     printf -- '- `iter-<N>-judge.txt` / `iter-<N>-judge.txt.stderr`\n'
     # shellcheck disable=SC2016
     printf -- '- `iter-<N>-design.txt` / `iter-<N>-design.txt.stderr`\n'
