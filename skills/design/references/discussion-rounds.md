@@ -163,11 +163,13 @@ Print: `✅ 3.5: discussion r2 — <N> decisions resolved (<elapsed>)`
 
 ## Step 3a — Post-Review Confirmation (auto_mode=false AND (qa_happened OR dialectic_adjudicated) body)
 
-Use `AskUserQuestion` to confirm the plan addresses the user's original intent, now that the design stage has engaged the user or resolved contested opinions. Present a brief summary tailored to what triggered this step, then ask the user to approve or reject:
+Use `AskUserQuestion` to confirm the plan addresses the user's original intent, now that the design stage has engaged the user or resolved contested opinions. Present a brief summary tailored to what triggered this step, then ask the user to approve or reject. Source the summary bullets as follows:
 
-- **If `qa_happened`**: one-line summary of the user decisions captured in `$DESIGN_TMPDIR/discussion-round1.md` and/or `$DESIGN_TMPDIR/discussion-round2.md` (whichever exist and are non-empty), plus the clarifying answers from Step 1c if the feature was shaped by those.
-- **If `dialectic_adjudicated`**: one-line summary of the adjudicated decisions in `$DESIGN_TMPDIR/dialectic-resolutions.md` (only entries with `Disposition: voted` or `Disposition: fallback-to-synthesis`).
+- **If `qa_happened`** (the user-qa-happened sentinel exists — at least one of Steps 1c/1d/3.5 asked the user a question):
+  - If `$DESIGN_TMPDIR/discussion-round1.md` or `$DESIGN_TMPDIR/discussion-round2.md` exists and is non-empty, summarize user decisions from those files (one-line Q/A per decision).
+  - If Q/A came only from Step 1c (no round files exist — 1d/3.5 short-circuited or were skipped), summarize the clarifying answers from Step 1c as visible in this session's conversation context (Step 1c does not define a separate artifact file in this reference — its answers live in context only).
+- **If `dialectic_adjudicated`**: one-line summary of the adjudicated decisions in `$DESIGN_TMPDIR/dialectic-resolutions.md` (only entries with `**Disposition**: voted` or `**Disposition**: fallback-to-synthesis`).
 - **If both**: cover both.
-- **If the plan was also revised by reviewers**: additionally note what reviewers changed.
+- **If the plan was also revised by reviewers** (Step 3 accepted at least one in-scope finding — i.e., `$DESIGN_TMPDIR/accepted-plan-findings.md` exists and is non-empty): additionally note what reviewers changed.
 
 **This step is strictly approval-only** — the user confirms the plan is acceptable to proceed with implementation. No substantive plan changes are accepted at this point — the reviewed/voted plan is the canonical artifact. If the user rejects the plan, print a warning and proceed anyway (the plan has already been reviewed and voted on; the user can adjust during implementation or in a follow-up PR).
