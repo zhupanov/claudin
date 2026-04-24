@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.11] - 2026-04-23
+
+### Changed
+
+- Extend `scripts/test-quick-mode-docs-sync.sh` with a target-specific cross-reference check guarding the Note A citation in `docs/review-agents.md` to `skills/shared/voting-protocol.md` (closes #377). The new `check_xref` function asserts both (a) the literal path is present in the doc (`grep -Fq`) AND (b) the path resolves to a regular file on disk (`[[ -f ]]`, directories deliberately rejected). Self-test is extended with three xref fixtures: `xref-good` (both assertions pass), `xref-bad-existence` (existence assertion only fires), and `xref-bad-grep` (grep assertion only fires) — symmetric guards so removal of either assertion is caught by exactly one bad fixture. Sibling `scripts/test-quick-mode-docs-sync.md` documents the two-assertion design, the substring-level scope limitation of assertion (a), and updated edit-in-sync rules for future rename / removal of the cited target. `docs/linting.md` row for `make test-quick-mode-docs-sync` refreshed to name the new check family.
+
 ## [6.2.10] - 2026-04-23
 
 ### Changed
