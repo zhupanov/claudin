@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.9] - 2026-04-23
+
+### Changed
+
+- `.gitleaks.toml` path allowlist narrowed to scripts + config + tracking-issue-write contract docs (closes #375). The five high-churn documentation paths previously whole-file-exempted — `README.md`, `CHANGELOG.md`, `SECURITY.md`, `skills/issue/SKILL.md`, and `skills/issue/scripts/create-one.sh` — are now scanned by gitleaks in both pre-commit (`--no-git`) and CI (full-history) modes. Empirical finding inventory against the pinned `v8.18.4` engine reported 0 leaks across 290 commits after the narrowing, confirming the existing short-prefix mentions in those docs don't trigger default detectors; a canary synthetic `ghp_…` token in a non-allowlisted path correctly fires rule `github-pat`. `SECURITY.md` "Layered secret scanning" updated to reflect the narrower scope and the explicit gitleaks/trufflehog layer split — trufflehog `--only-verified` catches only live, authenticable credentials and is non-redundant with gitleaks for that reason, NOT a replacement for it; tokens whose format falls outside gitleaks' covered rule families may slip both Layer 1–2 and Layer 3, so contributors must not rely on scanner layers as a substitute for editorial discipline in docs. Out-of-scope files that retain whole-file allowlists — `scripts/redact-secrets.sh`, `scripts/test-redact-secrets.sh`, `scripts/tracking-issue-write.sh`, `scripts/tracking-issue-write.md`, `scripts/test-tracking-issue-write.md` — legitimately carry token-shaped strings throughout.
+
 ## [6.2.8] - 2026-04-23
 
 ### Fixed
