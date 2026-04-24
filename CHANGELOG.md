@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.2] - 2026-04-24
+
+### Changed
+
+- `/loop-improve-skill` and `/improve-skill` retain `$LOOP_TMPDIR` / `$WORK_DIR` on any non-success iteration status (`no_plan`, `design_refusal`, `im_verification_failed`, `judge_failed`, subprocess exit non-zero, KV parse failure, iter-cap without grade-A reclassification) so per-iteration artifacts survive for post-mortem analysis. Cleanup still runs on `grade_a` / `ok`. The driver's close-out comment gains a `## Diagnostics` section with the retained path + a pointer list to the relevant per-iteration files, and the driver always emits `LOOP_TMPDIR=<path>` to stdout at EXIT. Closes #399.
+- On any `invoke_claude_p` non-zero rc, both `driver.sh` and `iteration.sh` dump a redacted `── subprocess stderr (label=<label>) ──` banner + full stderr sidecar + last 50 lines of the subprocess stdout (tail sanitized via `sed 's/^### iteration-result/### (banner-redacted)/'` to prevent KV-footer spoofing) to stdout, so both the live Monitor stream and the retained driver log capture the verbatim error. Applied uniformly to judge / design / design-rescue / im / final re-judge subprocess sites plus helper-script failure sites (session-setup parse, standalone `gh issue create`, close-out `gh issue comment`, close-out `redact-secrets.sh`). Iteration-kernel helper-script failures signal cross-boundary retention to the driver via a `$WORK_DIR/preserve.sentinel` file that the driver's `cleanup_on_exit` reads.
+- `SECURITY.md` and `skills/improve-skill/scripts/iteration.md` carve out the new post-failure diagnostic dump path in the Stdout discipline / KV-footer discipline sections.
+- No `invoke_claude_p` timeout modified per user directive (judge 1200s / design 1800s / design-rescue 1800s / im 3600s / final re-judge 1200s — all ≥20 min).
+
 ## [7.0.1] - 2026-04-24
 
 ### Changed
