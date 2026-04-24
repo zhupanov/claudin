@@ -23,34 +23,102 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
 
 ## Features
 
-- **Multi-agent design planning** — 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches before a full implementation plan is written, preventing anchoring bias
-- **Dialectic adjudication** — Contested design decisions from the sketch phase are resolved by a 3-judge binary panel (Claude Code Reviewer subagent + Codex + Cursor) after a thesis/antithesis debate run on external Cursor/Codex. Ballots are attribution-stripped with deterministic position rotation to cancel judge bias.
-- **Voting-based review resolution** — A 3-agent voting panel (YES/NO/EXONERATE) adjudicates review findings for both plan review and code review
-- **Reviewer competition scoring** — Reviewers earn points based on finding quality, with a scoreboard tracking accepted, neutral, exonerated, and rejected findings
-- **End-to-end automation** — From feature design through PR creation and initial CI wait in a single command. With `--slack`, also posts a PR announcement to Slack (and, when combined with `--merge`, adds a `:merged:` emoji after merge). With `--merge`, also runs the CI+rebase+merge loop, local branch cleanup, and main verification. With `--draft` (mutually exclusive with `--merge`), creates a draft PR and keeps the feature branch checked out so the user can keep iterating
-- **External reviewer integration** — Codex and Cursor participate alongside Claude subagents as both reviewers and voters
-- **Systematic codebase review** — Partition an entire repository into slices, review each with specialized subagents, and file every actionable finding as a deduplicated GitHub issue (labeled `loop-review`). Security-tagged findings are held locally per SECURITY.md rather than auto-filed.
-- **Tracked runs** — `/implement` PRs carry a slim body (Summary, diagrams, Test plan, `Closes #<N>`); the linked tracking issue's anchor comment is the single source of truth for full report content (voting tallies, rejected findings, version-bump reasoning, diagrams, OOS observation links, execution issues, run statistics). Pass `/implement --issue <N>` to attach to an existing tracking issue; otherwise fresh creation is deferred to Step 9a.1. `/fix-issue` forwards its queue issue automatically on the PR path.
+- **[Multi-agent design planning, reviews, and adjudication](docs/collaborative-sketches.md)** — 5 sketch agents diverge, a dialectic 3-judge binary panel resolves contested decisions, and a 3-reviewer panel validates the final plan.
+- **[Voting-based review resolution](docs/voting-process.md)** — A 3-agent YES/NO/EXONERATE panel adjudicates plan and code review findings.
+- **[Reviewer competition scoring](docs/point-competition.md)** — Reviewers earn points based on finding quality; a scoreboard tracks accepted, neutral, exonerated, and rejected findings.
+- **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation and initial CI wait in one command; `--merge` adds the CI+rebase+merge loop, local cleanup, and main verification. `--slack` announces the PR; `--draft` creates a draft PR and keeps the branch for further iteration.
+- **[External reviewer integration](docs/external-reviewers.md)** — Codex and Cursor participate alongside Claude subagents as sketch agents, debaters, judges, reviewers, and voters.
+- **[Systematic codebase review](skills/loop-review/SKILL.md)** — `/loop-review` partitions the repo into slices, reviews each with a 3-reviewer panel, and files every actionable finding as a deduplicated GitHub issue. Security-tagged findings are held locally per `SECURITY.md`.
+- **[Tracked runs](skills/implement/SKILL.md)** — `/implement` PRs link to a tracking issue whose anchor comment is the single source of truth for full report content (voting tallies, rejected findings, version-bump reasoning, diagrams, OOS links, execution issues, run statistics).
 
 ## Skills
 
-Slash commands available in Claude Code sessions. They automate multi-step workflows by orchestrating git, GitHub, Slack, and other tools.
+<table>
+  <thead>
+    <tr><th>Name</th><th>Arguments</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="docs/skills.md#alias"><code>/alias</code></a></td>
+      <td><code>[--merge] [--slack] &lt;alias-name&gt; &lt;target-skill&gt; [preset-flags...]</code></td>
+    </tr>
+    <tr><td colspan="2">Create a project-level alias for a larch skill with preset flags.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#compress-skill"><code>/compress-skill</code></a></td>
+      <td><code>[--debug] [--slack] &lt;skill-name-or-path&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Compress a skill's Markdown prose via a behavior-preserving rewrite.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#create-skill"><code>/create-skill</code></a></td>
+      <td><code>[--plugin] [--multi-step] [--merge] [--debug] [--slack] &lt;skill-name&gt; &lt;description&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Scaffold a new larch-style skill from a name and description.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#design"><code>/design</code></a></td>
+      <td><code>[--auto] [--debug] &lt;feature description&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Design an implementation plan with 5 sketch agents, dialectic adjudication, and a 3-reviewer validation panel.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#fix-issue"><code>/fix-issue</code></a></td>
+      <td><code>[--debug] [--slack] [&lt;number-or-url&gt;]</code></td>
+    </tr>
+    <tr><td colspan="2">Process one approved GitHub issue per invocation, classifying intent and delegating PR work to <code>/implement</code>.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#implement"><code>/implement</code></a></td>
+      <td><code>[--quick] [--auto] [--merge | --draft] [--slack] [--debug] [--issue &lt;N&gt;] &lt;feature description&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Full end-to-end feature workflow — design, implement, PR. <code>--quick</code> skips <code>/design</code> and runs a simplified single-reviewer loop of up to 7 rounds with a per-round Cursor → Codex → Claude fallback chain (no voting panel).</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#issue"><code>/issue</code></a></td>
+      <td><code>[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [&lt;issue description&gt;]</code></td>
+    </tr>
+    <tr><td colspan="2">Create one or more GitHub issues with LLM-based semantic duplicate detection.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#loop-improve-skill"><code>/loop-improve-skill</code></a></td>
+      <td><code>[--slack] &lt;skill-name&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Iteratively improve an existing larch skill via a judge → design → implement loop (up to 10 rounds).</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#loop-review"><code>/loop-review</code></a></td>
+      <td><code>[--debug] [partition criteria]</code></td>
+    </tr>
+    <tr><td colspan="2">Systematic code review of the entire repository; files every actionable finding as a deduplicated GitHub issue.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#relevant-checks"><code>/relevant-checks</code></a></td>
+      <td><em>(none)</em></td>
+    </tr>
+    <tr><td colspan="2">Run pre-commit linters scoped to changed files. <strong>Not part of the plugin surface; each consuming repo provides its own.</strong></td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#research"><code>/research</code></a></td>
+      <td><code>[--debug] &lt;research question or topic&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Collaborative read-only research with 3 research agents and a 3-reviewer validation panel.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#review"><code>/review</code></a></td>
+      <td><code>[--debug]</code></td>
+    </tr>
+    <tr><td colspan="2">Code review current branch changes with a 3-reviewer panel, implementing accepted suggestions in a recursive loop.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#simplify-skill"><code>/simplify-skill</code></a></td>
+      <td><code>[--debug] [--slack] &lt;skill-name&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Refactor a skill for stronger adherence to design principles and reduced SKILL.md footprint.</td></tr>
+  </tbody>
+</table>
 
-| Command | Arguments | Description |
-|---|---|---|
-| [`/alias`](skills/alias/SKILL.md) | `[--merge] [--slack] <alias-name> <target-skill> [preset-flags...]` | Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. `--slack` (when placed before the first positional) forwards to the `/implement` invocation so the alias-creation PR posts to Slack; `--slack` placed after the first positional is passed through verbatim as a preset flag for the generated alias. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`. |
-| [`/compress-skill`](skills/compress-skill/SKILL.md) | `[--debug] [--slack] <skill-name-or-path>` | Compress an existing skill's Markdown prose to reduce size while preserving meaning. Discovers the transitive `.md` set (restricted to the skill's own directory tree — shared docs and sub-skills are excluded), snapshots baseline sizes, and delegates a behavior-preserving prose rewrite to `/imaq` applying Strunk & White's *Elements of Style* adapted for technical writing. Structural elements (YAML frontmatter, fenced code blocks, headings, link targets, inline code, file paths, numeric values) are preserved verbatim; only prose is rewritten. PR body includes a `## Token budget` section with per-file before/after byte and line deltas. `--slack` forwards to `/imaq` (and thence to `/implement`) so the compression PR posts to Slack. |
-| [`/create-skill`](skills/create-skill/SKILL.md) | `[--plugin] [--multi-step] [--merge] [--debug] [--slack] <skill-name> <description>` | Scaffold a new larch-style skill from a name and description. Validates the name (regex + reserved-name union + case-insensitive collision) and the description (length + XML / shell-dangerous pattern rejection), then delegates to `/im --quick --auto` which writes the scaffold via `skills/create-skill/scripts/render-skill-md.sh` and auto-merges the PR (via `/im`'s `--merge` pre-set). Default target is `.claude/skills/<name>/` (consumer mode); `--plugin` writes to `skills/<name>/`. `--multi-step` emits a multi-step scaffold; default is minimal. `--merge` is accepted as a backward-compat no-op since `/im` already auto-merges. `--slack` forwards to `/im` (and thence to `/implement`) so the scaffold PR posts to Slack. (see `skills/shared/skill-design-principles.md`) |
-| [`/design`](skills/design/SKILL.md) | `[--auto] [--debug] <feature description>` | Design an implementation plan with collaborative multi-reviewer review. 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/design/diagram.svg) |
-| [`/fix-issue`](skills/fix-issue/SKILL.md) | `[--debug] [--slack] [<number-or-url>]` | Process one approved GitHub issue per invocation. Fetches open issues with a `GO` sentinel comment, skips any blocked by an open dependency (GitHub's native blocked-by API plus conservative prose-keyword scanning of the body and comments — `Depends on #N`, `Blocked by #N`, etc., with fail-open posture), triages, and classifies intent (PR/NON_PR) and — for PR tasks — complexity (SIMPLE/HARD). PR tasks delegate to `/implement` with `--issue $ISSUE_NUMBER` forwarded so the queue issue is adopted as the tracking issue (no separate tracking issue is created); NON_PR tasks run inline (typically filing findings via `/issue`) and never call `/implement`. With a number or URL argument, targets a specific issue instead of auto-picking. Single-iteration design — the caller handles repetition. `--slack` is forwarded to the delegated `/implement` run so the PR posts to Slack; without it, the delegated run does not post to Slack (the NON_PR path's own Slack announcement is unaffected). |
-| [`/implement`](skills/implement/SKILL.md) | `[--quick] [--auto] [--merge \| --draft] [--slack] [--debug] [--issue <N>] <feature description>` | Full end-to-end feature workflow — design, implement, PR (Slack announce is opt-in via `--slack`). `--quick` skips `/design` and uses a simplified single-reviewer loop of up to 7 rounds with a per-round `Cursor → Codex → Claude Code Reviewer subagent` fallback chain (no voting panel; main agent unilaterally accepts or rejects each finding). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. `--slack` posts a PR announcement to Slack after PR creation, and (when combined with `--merge`) adds a `:merged:` emoji after merge; both require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration. `--issue <N>` attaches `/implement` to an existing tracking issue (Step 0.5 adoption); otherwise fresh creation is deferred to Step 9a.1. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output). [(Diagram).](skills/implement/diagram.svg) |
-| [`/issue`](skills/issue/SKILL.md) | `[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [<issue description>]` | Create one or more GitHub issues with LLM-based semantic duplicate detection. Two modes: single (free-form description) and batch (`--input-file`). 2-phase dedup against open + recently-closed issues (default 90-day window). `/implement` Step 9a.1 calls this skill in batch mode to file OOS issues. `--go` posts a final `GO` comment on each newly-created issue so it becomes eligible for `/fix-issue` automation; works in both single and batch modes (duplicates, failed creates, and dry-run items never receive a GO comment). In single mode, if the sole item resolves to a duplicate, `--go` errors out; in batch mode, per-item duplicates are simply skipped for the GO comment. |
-| [`/loop-improve-skill`](skills/loop-improve-skill/SKILL.md) | `[--slack] <skill-name>` | Iteratively improve an existing larch skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via a bash driver that invokes each child skill as a fresh `claude -p` subprocess (halt class eliminated by construction, closes #273). Termination contract: strives for grade A on every `/skill-judge` dimension (D1..D8); exits happy when achieved, with written infeasibility justification when `/design` produces no plan, `/design` refuses, or `/im` cannot be verified, or with auto-generated infeasibility justification (post-iter-cap final `/skill-judge` re-evaluation listing remaining non-A dimensions) when the 10-iteration cap is reached. Justification is appended to the close-out tracking-issue comment. `--slack` is propagated to every iteration's `/larch:im` invocation so each PR posts to Slack; note that up to 10 iterations can produce up to 10 Slack posts, so opt in only when desired. Example: `/loop-improve-skill design`. |
-| [`/loop-review`](skills/loop-review/SKILL.md) | `[--debug] [partition criteria]` | Systematic code review of entire repository by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, if available), and filing every actionable finding as a deduplicated GitHub issue via `/issue --input-file --label loop-review`. Uses the Negotiation Protocol to merge per-slice reviewer findings. Security-tagged findings are held locally per SECURITY.md. Batches accumulate up to 3 slices per `/issue` flush so its 2-phase LLM dedup runs once per batch. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). The `loop-review` label should be pre-created in the target repository — `/issue` silently drops unknown labels with a stderr warning. [(Diagram).](skills/loop-review/diagram.svg) |
-| [`/relevant-checks`](.claude/skills/relevant-checks/SKILL.md) | *(none)* | Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint, gitleaks) scoped to changed files (except gitleaks, which always scans the full working tree; see the relevant-checks skill). Invoked automatically by `/implement` and `/review` after code changes. **Not part of the plugin surface; each consuming repo provides its own.** |
-| [`/research`](skills/research/SKILL.md) | `[--debug] <research question or topic>` | Collaborative read-only research using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable. Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Does not modify the repo: scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook), and `/issue` may be invoked via the Skill tool to file research-result issues. [(Diagram).](skills/research/diagram.svg) |
-| [`/review`](skills/review/SKILL.md) | `[--debug]` | Code review current branch changes with a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor, if available), implementing accepted suggestions in a recursive loop (up to 5 rounds). Reviews the diff between main and HEAD. [(Diagram).](skills/review/diagram.svg) |
-| [`/simplify-skill`](skills/simplify-skill/SKILL.md) | `[--debug] [--slack] <skill-name>` | Refactor an existing larch skill for stronger adherence to `skills/shared/skill-design-principles.md` and to reduce SKILL.md token footprint. Resolves the target skill directory (plugin tree first, then consumer `.claude/skills/`), enumerates every `.md` file under it (excluding `scripts/` and `tests/`), does NOT follow sub-skills invoked via the `Skill` tool, and delegates the refactor to `/im` with a pinned behavior-preserving feature description that requires a `## Token budget` section in the PR body. `--slack` forwards to `/im` (and thence to `/implement`) so the refactor PR posts to Slack. Example: `/simplify-skill implement`. |
+See [docs/skills.md](docs/skills.md) for full details on each skill.
 
 ## Aliases
 

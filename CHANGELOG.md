@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.12] - 2026-04-23
+
+### Changed
+
+- Cleanup `README.md`: move full skill descriptions to a new `docs/skills.md` reference (skills table now shows command, arguments, and a one-line summary, with the command linking into the detailed doc); shorten the Features section to 1-2 line entries, each linking to the relevant in-repo doc; drop the redundant "Slash commands available in Claude Code sessions…" intro line; restructure the skills table as an HTML `<table>` with alternating Name+Arguments and full-width description rows separated by `<hr>` so argument lists no longer wrap awkwardly. Aliases table and other sections are unchanged. `scripts/test-quick-mode-docs-sync.sh` still passes (required `7 rounds`, `Cursor → Codex → Claude`, and `no voting panel` markers are retained in the `/implement` description cell).
+
 ## [6.2.11] - 2026-04-23
 
 ### Changed
