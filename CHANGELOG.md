@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.6] - 2026-04-23
+
+### Added
+
+- Two-layer secret scanning: `gitleaks` as pre-commit hook (with an `entry` override to `gitleaks detect --no-git --source .` so the hook scans the working tree/staged content — upstream's default `protect --staged` scans zero commits on a clean tree) plus a dedicated CI job that installs the same pinned `v8.18.4` engine via SHA256-verified direct download and runs a full git-history scan. `trufflehog` as a CI-only job, pinned to commit SHA `1aa1871f9ae24a8c8a3a48a9345514acf42beb39` for `v3.82.13` with `version: 3.82.13` pinning the scanner Docker image and `--only-verified` for live credential verification.
+- `.gitleaks.toml` path-based allowlist for files that legitimately contain token-shaped strings (test fixtures, regex-defining source, token-family documentation in release notes and security policy).
+- `make gitleaks` and `make trufflehog` Makefile targets matching the existing per-hook one-liner pattern.
+- `SECURITY.md` "Layered secret scanning" subsection documenting the three-layer model (Layer 1 commit-time working-tree scan, Layer 2 PR-gate git-history scan, Layer 3 PR-gate verified-only live check) and allowlist rationale. `docs/linting.md` updates gain a "CI secret scanning" subsection. `.claude/skills/relevant-checks/SKILL.md` documents the `pass_filenames: false` exception.
+
 ## [6.2.5] - 2026-04-23
 
 ### Changed
