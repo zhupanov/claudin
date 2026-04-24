@@ -2,11 +2,13 @@
 # test-tracking-issue-write.sh — regression harness for tracking-issue-write.sh.
 #
 # Mirrors the stub-gh + PATH-override pattern of scripts/test-redact-secrets.sh.
-# Nine assertion categories (a-i) covering redaction, exit codes, truncation,
+# Ten assertion categories (a-j) covering redaction, exit codes, truncation,
 # anchor-skeleton preservation, anchor-upsert semantics, gh-failure redaction,
-# the anchor-section-markers.sh startup-guard fail-closed, and the
-# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant. All assertions run in a
-# hermetic mktemp -d tmproot with a stub gh binary on PATH.
+# the anchor-section-markers.sh startup-guard fail-closed, the
+# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, and the rename subcommand
+# (idempotency, strip-exactly-one, redaction, invalid --state). All
+# assertions run in a hermetic mktemp -d tmproot with a stub gh binary on
+# PATH.
 #
 # Usage:
 #   bash scripts/test-tracking-issue-write.sh
@@ -471,6 +473,128 @@ else
     FAIL=$((FAIL + 1))
     FAILED_TESTS+=("(i) SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant")
     echo "  FAIL: (i) $invariant_out" >&2
+fi
+
+echo ""
+echo "=== (j) rename subcommand — idempotency, strip-exactly-one, redaction ==="
+
+# Stub gh for rename scenarios. Reads the mock title from $MOCK_TITLE_FILE
+# (set by each test case). Captures `gh issue edit --title <T>` into
+# $EDIT_CAPTURE. Also tracks whether an edit call was made via
+# $EDIT_CALLED_FILE.
+build_stub_rename() {
+    local stub_dir="$1"
+    mkdir -p "$stub_dir"
+    cat > "$stub_dir/gh" <<'GHSTUB'
+#!/usr/bin/env bash
+if [[ "$1" == "repo" ]] && [[ "$2" == "view" ]]; then
+    echo 'owner/repo'
+    exit 0
+fi
+if [[ "$1" == "issue" ]] && [[ "$2" == "view" ]]; then
+    # Return the mock title verbatim (no JSON wrapper; --jq .title would
+    # have extracted the field, but the stub just emits the raw value).
+    cat "$MOCK_TITLE_FILE"
+    exit 0
+fi
+if [[ "$1" == "issue" ]] && [[ "$2" == "edit" ]]; then
+    touch "$EDIT_CALLED_FILE"
+    for ((i=1; i<=$#; i++)); do
+        if [[ "${!i}" == "--title" ]]; then
+            next=$((i + 1))
+            printf '%s' "${!next}" > "$EDIT_CAPTURE"
+        fi
+    done
+    exit 0
+fi
+exit 0
+GHSTUB
+    chmod +x "$stub_dir/gh"
+}
+
+STUB_J="$TMPROOT/stub-j"
+build_stub_rename "$STUB_J"
+MOCK_TITLE_FILE="$TMPROOT/mock-title.txt"
+EDIT_CAPTURE="$TMPROOT/edit-capture.txt"
+EDIT_CALLED_FILE="$TMPROOT/edit-called.marker"
+export MOCK_TITLE_FILE EDIT_CAPTURE EDIT_CALLED_FILE
+
+# (j1) base rename: no prefix → prepends [IN PROGRESS]
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf '%s' 'My feature work' > "$MOCK_TITLE_FILE"
+out_j1=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state in-progress --repo owner/repo 2>&1)
+assert_contains "$out_j1" 'RENAMED=true' '(j1) base rename emits RENAMED=true'
+assert_contains "$out_j1" 'NEW_TITLE=[IN PROGRESS] My feature work' '(j1) base rename NEW_TITLE correct'
+if [[ -f "$EDIT_CAPTURE" ]]; then
+    cap_j1=$(cat "$EDIT_CAPTURE")
+    assert_equal "$cap_j1" '[IN PROGRESS] My feature work' '(j1) gh issue edit received prefixed title'
+fi
+
+# (j2) transition rename: [IN PROGRESS] → [DONE]
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf '%s' '[IN PROGRESS] My feature work' > "$MOCK_TITLE_FILE"
+out_j2=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state 'done' --repo owner/repo 2>&1)
+assert_contains "$out_j2" 'RENAMED=true' '(j2) transition rename emits RENAMED=true'
+assert_contains "$out_j2" 'NEW_TITLE=[DONE] My feature work' '(j2) transition rename NEW_TITLE correct'
+if [[ -f "$EDIT_CAPTURE" ]]; then
+    cap_j2=$(cat "$EDIT_CAPTURE")
+    assert_equal "$cap_j2" '[DONE] My feature work' '(j2) gh issue edit received transitioned title'
+fi
+
+# (j3) idempotent no-op: already [DONE] → rename to done → RENAMED=false, no edit call
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf '%s' '[DONE] My feature work' > "$MOCK_TITLE_FILE"
+out_j3=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state 'done' --repo owner/repo 2>&1)
+assert_contains "$out_j3" 'RENAMED=false' '(j3) idempotent no-op emits RENAMED=false'
+if [[ -f "$EDIT_CALLED_FILE" ]]; then
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("(j3) gh issue edit was called despite idempotent no-op")
+    echo "  FAIL: (j3) gh issue edit was called despite idempotent no-op" >&2
+else
+    PASS=$((PASS + 1))
+    echo "  ok: (j3) gh issue edit was NOT called (idempotent no-op)"
+fi
+
+# (j4) strip exactly one: [IN PROGRESS] [DONE] Foo → rename to stalled → [STALLED] [DONE] Foo
+# Stacked residue is preserved — helper does not heal corruption.
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf '%s' '[IN PROGRESS] [DONE] Foo' > "$MOCK_TITLE_FILE"
+out_j4=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state stalled --repo owner/repo 2>&1)
+assert_contains "$out_j4" 'RENAMED=true' '(j4) strip-exactly-one emits RENAMED=true'
+assert_contains "$out_j4" 'NEW_TITLE=[STALLED] [DONE] Foo' '(j4) strip-exactly-one preserves stacked residue'
+
+# (j5) redact pipeline applied to new title
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf 'Work on %s handler' "$SK_TOKEN" > "$MOCK_TITLE_FILE"
+out_j5=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state in-progress --repo owner/repo 2>&1)
+assert_contains "$out_j5" 'RENAMED=true' '(j5) redact-applied rename emits RENAMED=true'
+assert_not_contains "$out_j5" "$SK_TOKEN" '(j5) stdout does not leak sk-ant token'
+if [[ -f "$EDIT_CAPTURE" ]]; then
+    cap_j5=$(cat "$EDIT_CAPTURE")
+    assert_contains "$cap_j5" '<REDACTED-TOKEN>' '(j5) outbound title contains <REDACTED-TOKEN>'
+    assert_not_contains "$cap_j5" "$SK_TOKEN" '(j5) outbound title does NOT leak sk-ant'
+fi
+
+# (j6) invalid --state → FAILED=true exit 1
+out_j6=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state bogus --repo owner/repo 2>&1 || true)
+assert_contains "$out_j6" 'FAILED=true' '(j6) invalid --state emits FAILED=true'
+assert_contains "$out_j6" 'ERROR=invalid --state: bogus' '(j6) invalid --state emits full canonical ERROR=invalid --state: bogus'
+
+# (j7) idempotency + redactable token in current title: rename to same state
+# must be a no-op even when CUR_TITLE contains a secret. Without redacting
+# both sides of the comparison, the raw CUR_TITLE (with token) would never
+# equal the redacted NEW_TITLE, spuriously firing gh issue edit.
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf '[DONE] Fix %s handler' "$SK_TOKEN" > "$MOCK_TITLE_FILE"
+out_j7=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state 'done' --repo owner/repo 2>&1)
+assert_contains "$out_j7" 'RENAMED=false' '(j7) redactable title already at target state emits RENAMED=false'
+if [[ -f "$EDIT_CALLED_FILE" ]]; then
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("(j7) gh issue edit was called despite redactable idempotent no-op")
+    echo "  FAIL: (j7) gh issue edit was called despite redactable idempotent no-op" >&2
+else
+    PASS=$((PASS + 1))
+    echo "  ok: (j7) gh issue edit was NOT called (redactable idempotent no-op)"
 fi
 
 echo ""

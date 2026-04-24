@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.5] - 2026-04-24
+
+### Added
+
+- Tracking-issue title-prefix lifecycle: `/implement`, `/improve-skill`, and `/loop-improve-skill` now create their tracking issues with `[IN PROGRESS]` in the title, rename to `[DONE]` on successful completion (right before merge for `/implement`; pre-closeout for `/loop-improve-skill`; both success exits for `/improve-skill`), and rename to `[STALLED]` on bail / failure paths. `/fix-issue` excludes issues whose titles start with any managed prefix from both auto-pick and explicit-issue selection, so tracking issues never appear as fix-issue candidates. New `tracking-issue-write.sh rename --issue N --state in-progress|done|stalled` subcommand is the single idempotent mutator (strip-exactly-one-then-prepend, redact parity with `create-issue`, char-oriented 256 truncation). Bash drivers (`iteration.sh`, `driver.sh`) install an EXIT trap with footer-first ordering so the KV footer contract is preserved even when the best-effort stall rename fails.
+
 ## [7.0.4] - 2026-04-24
 
 ### Changed

@@ -4,11 +4,26 @@
 # Without --issue: lists open issues, checks each for the "GO" sentinel as
 # the last comment, excludes issues locked with "IN PROGRESS", excludes
 # issues blocked by other open issues (via GitHub's native issue dependencies),
-# and emits the first match (oldest first).
+# excludes issues whose titles start with a managed lifecycle prefix
+# ([IN PROGRESS], [DONE], [STALLED] — see below), and emits the first match
+# (oldest first).
 #
 # With --issue: targets a specific issue (by number or GitHub URL), verifies
-# it is open, has "GO" as the last comment, and has no currently-open
-# blocking dependencies.
+# it is open, does not carry a managed lifecycle title prefix, has "GO" as
+# the last comment, and has no currently-open blocking dependencies.
+#
+# Two orthogonal mechanisms coexist in this script:
+#   1) Comment-based "IN PROGRESS" lock — concurrency control on the
+#      fix-issue subject issue. Set at /fix-issue step 2 (last comment =
+#      exactly "IN PROGRESS"); cleared when work completes. Prevents two
+#      concurrent /fix-issue runners from picking the same subject.
+#   2) Title-based "[IN PROGRESS]" / "[DONE]" / "[STALLED]" lifecycle —
+#      machine-owned tracking-issue state on /implement-created issues
+#      (and /improve-skill / /loop-improve-skill standalone issues). Set
+#      at creation, flipped to [DONE] on confirmed merge, or [STALLED] on
+#      failure paths. Excluded by this script so tracking issues never
+#      appear as fix-issue candidates. See scripts/tracking-issue-write.md
+#      "Title-prefix lifecycle" for the full state machine.
 #
 # Usage:
 #   fetch-eligible-issue.sh [<number-or-url>]
@@ -26,6 +41,21 @@
 #   2 — error: gh CLI failure, or explicit issue not eligible
 
 set -euo pipefail
+
+# Returns 0 if the title starts with a managed lifecycle prefix
+# ("[IN PROGRESS] ", "[DONE] ", "[STALLED] "), 1 otherwise. Anchored at
+# the start; trailing-space-sensitive (matches the helper exactly — no
+# fuzzy match, so user titles containing the literal substring "[IN
+# PROGRESS]" mid-text are NOT excluded).
+has_managed_prefix() {
+    local t="$1"
+    case "$t" in
+        '[IN PROGRESS] '*) return 0 ;;
+        '[DONE] '*)        return 0 ;;
+        '[STALLED] '*)     return 0 ;;
+        *)                 return 1 ;;
+    esac
+}
 
 ISSUE_ARG=""
 
@@ -260,6 +290,18 @@ if [[ -n "$ISSUE_ARG" ]]; then
         exit 2
     fi
 
+    # Exclude issues with a managed lifecycle title prefix
+    # ([IN PROGRESS] / [DONE] / [STALLED]). These are machine-owned
+    # tracking issues (/implement, /improve-skill, /loop-improve-skill),
+    # not candidates for /fix-issue automated work. Placed BEFORE the
+    # comment pagination to save API calls on an obviously-excluded
+    # issue.
+    if has_managed_prefix "$ISSUE_TITLE"; then
+        echo "ELIGIBLE=false"
+        echo "ERROR=Issue #$ISSUE_NUM has a managed lifecycle title prefix ([IN PROGRESS] / [DONE] / [STALLED]); not a fix-issue candidate"
+        exit 2
+    fi
+
     # Verify last comment is GO.
     # Using --slurp so `jq` sees a single array-of-arrays and can select the
     # globally-last comment via `add // [] | .[-1]`. The older `--jq '.[-1].body'`
@@ -324,6 +366,15 @@ fi
 while IFS= read -r issue_row; do
     ISSUE_NUM=$(echo "$issue_row" | jq -r '.number')
     ISSUE_TITLE=$(echo "$issue_row" | jq -r '.title')
+
+    # Skip issues with a managed lifecycle title prefix
+    # ([IN PROGRESS] / [DONE] / [STALLED]) — machine-owned tracking
+    # issues, not fix-issue candidates. Placed BEFORE the comment
+    # pagination to save one API round-trip per excluded issue.
+    if has_managed_prefix "$ISSUE_TITLE"; then
+        echo "Skipping issue #$ISSUE_NUM: managed lifecycle title prefix" >&2
+        continue
+    fi
 
     # Get the globally-last comment body. See the explicit-issue path above for
     # the rationale on `--slurp` + `add // [] | .[-1]`.

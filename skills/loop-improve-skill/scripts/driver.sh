@@ -106,6 +106,14 @@ breadcrumb_warn()       { printf '**⚠ %s**\n' "$*"; }
 
 LOOP_TMPDIR=""
 LOOP_PRESERVE_TMPDIR="false"   # sticky; once true, cleanup is suppressed
+# Tracking-issue title-prefix lifecycle state (see scripts/tracking-issue-write.md).
+# LOOP_SUCCESS=true → on_success() called before exit; rename-to-done already
+# invoked. EXIT trap skips its best-effort stall rename.
+# LOOP_SUCCESS=false at EXIT → trap calls rename-to-stalled (best-effort).
+# ISSUE_NUM is populated at Step 3 ("create issue"); empty when the trap
+# fires before issue creation (skip rename entirely in that case).
+LOOP_SUCCESS="false"
+ISSUE_NUM=""
 # shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
   local rc=$?
@@ -113,8 +121,17 @@ cleanup_on_exit() {
   if [[ -n "$LOOP_TMPDIR" && -f "$LOOP_TMPDIR/preserve.sentinel" ]]; then
     LOOP_PRESERVE_TMPDIR="true"
   fi
-  # Always emit LOOP_TMPDIR for test-harness parse stability.
+  # Always emit LOOP_TMPDIR for test-harness parse stability. MUST stay
+  # first so test harnesses always see the parse token even when the
+  # rename call below encounters gh failures.
   printf 'LOOP_TMPDIR=%s\n' "${LOOP_TMPDIR}"
+  # Title-prefix lifecycle terminal transition (best-effort; gh output
+  # suppressed; errors swallowed with `|| true`). Skip entirely when
+  # ISSUE_NUM is empty (pre-Step-3 exit).
+  if [[ -n "$ISSUE_NUM" && "$LOOP_SUCCESS" != "true" ]]; then
+    "${CLAUDE_PLUGIN_ROOT:-}/scripts/tracking-issue-write.sh" rename \
+      --issue "$ISSUE_NUM" --state stalled >/dev/null 2>&1 || true
+  fi
   if [[ -n "$LOOP_TMPDIR" && -d "$LOOP_TMPDIR" ]]; then
     if [[ "$LOOP_PRESERVE_TMPDIR" == "true" ]]; then
       breadcrumb_warn "6: cleanup — Retained working directory: ${LOOP_TMPDIR}"
@@ -334,8 +351,11 @@ ISSUE_BODY_FILE="$LOOP_TMPDIR/issue-body.md"
 } > "$ISSUE_BODY_FILE"
 
 ISSUE_CREATE_STDERR="$LOOP_TMPDIR/gh-create-issue.stderr"
+# Tracking-issue title-prefix lifecycle: [IN PROGRESS] at create; flipped
+# to [DONE] via on_success helper below (pre-closeout) or to [STALLED] by
+# the EXIT trap on any bail. See scripts/tracking-issue-write.md.
 ISSUE_URL="$(gh issue create \
-  --title "Improve /${SKILL_NAME} skill via loop-improve-skill" \
+  --title "[IN PROGRESS] Improve /${SKILL_NAME} skill via loop-improve-skill" \
   --body-file "$ISSUE_BODY_FILE" 2> "$ISSUE_CREATE_STDERR")" || {
   breadcrumb_warn "3: create issue — gh issue create failed. Aborting."
   dump_helper_stderr "gh-create-issue" "$ISSUE_CREATE_STDERR"
@@ -438,6 +458,11 @@ while [[ $ITER -le 10 ]]; do
   if [[ -n "$NO_SLACK_FLAG" ]]; then
     ITER_ARGV+=(--no-slack)
   fi
+  # --subordinate: driver owns the tracking-issue title-prefix lifecycle
+  # (see scripts/tracking-issue-write.md). iteration.sh MUST NOT rename the
+  # issue in this mode — the driver renames to [DONE] pre-closeout and the
+  # driver's EXIT trap renames to [STALLED] on bail.
+  ITER_ARGV+=(--subordinate)
   ITER_ARGV+=(--issue "$ISSUE_NUM")
   ITER_ARGV+=(--work-dir "$LOOP_TMPDIR")
   ITER_ARGV+=(--iter-num "$ITER")
@@ -672,6 +697,22 @@ CLOSEOUT_BODY="$LOOP_TMPDIR/closeout-body.md"
 # --------------------------------------------------------------------------
 # Step 5c — Post close-out comment (redacted)
 # --------------------------------------------------------------------------
+
+# Tracking-issue title-prefix lifecycle terminal transition (rename-to-done).
+# Runs BEFORE the closeout comment so the [DONE] flip is the final visible
+# title if the closeout comment later triggers auto-close (it doesn't —
+# driver.sh never calls `gh issue close` — but the ordering is still the
+# semantically correct one: the work is done at this point). Only flip
+# to [DONE] on the grade-A success paths; all other EXIT_REASON values
+# (max iterations, infeasibility, subprocess failures) let the EXIT trap
+# mark [STALLED]. LOOP_SUCCESS is consumed by the EXIT trap.
+case "$EXIT_REASON" in
+  "grade A achieved on all dimensions at iteration "*|"grade A achieved after final post-iter-cap re-evaluation")
+    LOOP_SUCCESS="true"
+    "${CLAUDE_PLUGIN_ROOT:-}/scripts/tracking-issue-write.sh" rename \
+      --issue "$ISSUE_NUM" --state 'done' >/dev/null 2>&1 || true
+    ;;
+esac
 
 CLOSEOUT_REDACTED="${CLOSEOUT_BODY}.redacted"
 REDACT_STDERR="${CLOSEOUT_BODY}.redact.stderr"

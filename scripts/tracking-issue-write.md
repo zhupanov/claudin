@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Phase 1 (umbrella #348) foundation layer: outbound helper for the tracking-issue lifecycle. Three narrow subcommands that each perform exactly one GitHub write, sharing a KEY=value stdout envelope and fail-closed redaction posture modelled on `skills/issue/scripts/create-one.sh`. No consumers wired in Phase 1; Phase 3 is the first consumer.
+Phase 1 (umbrella #348) foundation layer: outbound helper for the tracking-issue lifecycle. Four narrow subcommands (`create-issue`, `append-comment`, `upsert-anchor`, `rename`) that each perform exactly one GitHub write, sharing a KEY=value stdout envelope and fail-closed redaction posture modelled on `skills/issue/scripts/create-one.sh`. The first three were added in Phase 1; `rename` was added alongside the tracking-issue title-prefix lifecycle (see "Title-prefix lifecycle" below).
 
 ## Subcommands
 
@@ -10,6 +10,7 @@ Phase 1 (umbrella #348) foundation layer: outbound helper for the tracking-issue
 tracking-issue-write.sh create-issue   --title T --body-file F [--repo OWNER/REPO]
 tracking-issue-write.sh append-comment --issue N --body-file F [--lifecycle-marker ID] [--repo OWNER/REPO]
 tracking-issue-write.sh upsert-anchor  --issue N [--anchor-id ID] --body-file F [--repo OWNER/REPO]
+tracking-issue-write.sh rename         --issue N --state in-progress|done|stalled [--repo OWNER/REPO]
 ```
 
 ## Output contract (KEY=value on stdout)
@@ -25,6 +26,7 @@ This script emits `FAILED=true` / `ERROR=<msg>` on failure — NOT the `ISSUE_FA
 | `create-issue` | `ISSUE_NUMBER=<N>`, `ISSUE_URL=<url>` |
 | `append-comment` | `COMMENT_ID=<id>`, `COMMENT_URL=<url>` |
 | `upsert-anchor` | `ANCHOR_COMMENT_ID=<id>`, `ANCHOR_COMMENT_URL=<url>`, `UPDATED=true\|false` (`true` when an existing anchor was PATCHed; `false` when a new anchor comment was created) |
+| `rename` | `RENAMED=true\|false`, `NEW_TITLE=<title>` (`false` when the current title already starts with the target prefix — no `gh issue edit` call was made) |
 
 ### Failure keys
 
@@ -77,6 +79,30 @@ Truncation is byte-length based. Multibyte UTF-8 splitting is tolerated because 
 
 `append-comment` accepts `--lifecycle-marker <id>`, which prepends `<!-- larch:lifecycle-marker:<id> -->\n` to the body before redaction+truncation. Three canonical markers for Phase 2+ callers: `pr-opened`, `pr-closed`, `in-progress`. These machine-owned markers replace the prose-prefix filters (`PR opened:`, `Closed by PR #`) from the original design — prose prefixes were too loose (matched ordinary English comments).
 
+## Title-prefix lifecycle (rename subcommand)
+
+Tracking issues carry a machine-owned title-prefix lifecycle: `[IN PROGRESS]` during active work, `[DONE]` after the tracking run completes, `[STALLED]` when a run fails without closing. Each prefix is followed by a single space before the rest of the title (e.g., `[IN PROGRESS] Fix login bug`). `rename` is the single mutator for these prefixes; every consumer MUST use this subcommand rather than inlining `gh issue edit --title`.
+
+### Algorithm
+
+1. Fetch the current title via `gh issue view --json title`.
+2. Strip **exactly one** leading managed prefix (anchored at start; regex matching one of `[IN PROGRESS]`, `[DONE]`, or `[STALLED]` followed by a single space). Stacked prefixes beyond the first are preserved — the helper does not "heal" corrupted titles because the healing policy (prefer first vs. last vs. middle) is ambiguous.
+3. Prepend the target-state prefix (`[IN PROGRESS]`, `[DONE]`, or `[STALLED]`) followed by one space.
+4. Pipe the prospective new title through `scripts/redact-secrets.sh` (same posture as `create-issue`).
+5. Truncate to 256 chars if the result exceeds GitHub's title limit. Truncation uses bash string semantics (`${#var}` + `${var:0:256}`), which matches GitHub's character-based 256 limit under UTF-8 locales. The prefix is preserved (tail is sliced). Managed prefixes are ASCII so truncation is stable regardless of locale.
+6. If the resulting title equals the current title (already in target state), emit `RENAMED=false` and skip the `gh` call.
+7. Otherwise call `gh issue edit --title` and emit `RENAMED=true`.
+
+### Idempotency
+
+Re-calling `rename --state X` on an issue already at state X is a no-op (`RENAMED=false`). This matters for resumed `/implement` sessions and for the bash drivers' EXIT-trap paths (the trap may fire after a successful explicit rename-to-done; the re-rename to `[STALLED]` is a no-op because the guard flag prevents it, but even without that the helper would emit `RENAMED=false` for an already-stalled title).
+
+### Distinction from `/fix-issue`'s "IN PROGRESS" comment lock
+
+The title prefix `[IN PROGRESS]` (followed by a space) is the **tracking-issue lifecycle state** — whose job is to signal human triage and filter `/fix-issue` auto-pick. It is orthogonal to `/fix-issue`'s existing **comment-based** lock (last comment equal to the bare text `IN PROGRESS`), which is the **concurrency lock** preventing two concurrent `/fix-issue` runners from picking the same subject issue. Both mechanisms coexist:
+- Comment lock: applies to any `/fix-issue` subject issue; set at step 2 of `/fix-issue`; cleared when work completes.
+- Title prefix: applies only to `/implement`-created tracking issues AND to `/improve-skill` / `/loop-improve-skill` standalone issues; never applied to adopted issues.
+
 ## Conventions
 
 Uses Bash 3.2-compatible constructs (indexed arrays only; no associative arrays, no `mapfile`) so macOS-default bash runs match Ubuntu CI. Precedent: `scripts/dialectic-smoke-test.sh`.
@@ -87,7 +113,7 @@ The regression harness `scripts/test-tracking-issue-write.sh` is wired into `mak
 
 ## Test harness
 
-`scripts/test-tracking-issue-write.sh` covers nine assertion categories:
+`scripts/test-tracking-issue-write.sh` covers ten assertion categories (a-j):
 
 - **(a)** `create-issue` redacts title + body (`sk-ant-*` secret → `<REDACTED-TOKEN>`).
 - **(b)** `create-issue` exits 3 with `FAILED=true` / `ERROR=redaction:…` when the redactor is missing. Pins exact key literals `FAILED=true` (not `ISSUE_FAILED`).
@@ -99,6 +125,7 @@ The regression harness `scripts/test-tracking-issue-write.sh` is wired into `mak
 - **(g) gh-failure redaction**: stub-gh emits a token-bearing stderr on failure → the `FAILED=true ERROR=…` line contains `<REDACTED-TOKEN>` and not the raw token.
 - **(h) Missing `anchor-section-markers.sh` helper**: when the script's sourced helper is missing from the script's `$SCRIPT_DIR`, it fails closed with `FAILED=true` / `ERROR=missing helper: …` on stdout and exits 1 — preserving the stdout contract invariant.
 - **(i) `SECTION_MARKERS` ⊆ `COLLAPSE_PRIORITY` invariant**: every slug defined in `scripts/anchor-section-markers.sh` appears in `COLLAPSE_PRIORITY`, so the body-level truncation pass has a collapse target for every section.
+- **(j) `rename` subcommand**: base rename (no existing prefix → prepend), transition rename (`[IN PROGRESS]` → `[DONE]`), idempotent no-op (already at target state → `RENAMED=false`, no `gh` call), strip-exactly-one (stacked-prefix residue preserved), redact pipeline applied (token in title → `<REDACTED-TOKEN>` in outbound), invalid `--state` → `FAILED=true ERROR=invalid --state: ...`.
 
 ## Edit-in-sync pointers
 

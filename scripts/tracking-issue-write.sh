@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # tracking-issue-write.sh — outbound helper for the tracking-issue lifecycle.
 #
-# Phase 1 (umbrella #348) foundation layer. Ships three narrow subcommands
-# that each perform exactly one GitHub write, all sharing the same KEY=value
-# stdout envelope and fail-closed redaction posture as
-# skills/issue/scripts/create-one.sh.
+# Phase 1 (umbrella #348) foundation layer. Ships four narrow subcommands
+# (create-issue, append-comment, upsert-anchor, rename) that each perform
+# exactly one GitHub write, all sharing the same KEY=value stdout envelope
+# and fail-closed redaction posture as skills/issue/scripts/create-one.sh.
 #
 # Subcommands:
 #   create-issue   --title T --body-file F [--repo OWNER/REPO]
 #   append-comment --issue N --body-file F [--lifecycle-marker ID] [--repo OWNER/REPO]
 #   upsert-anchor  --issue N [--anchor-id ID] --body-file F [--repo OWNER/REPO]
+#   rename         --issue N --state in-progress|done|stalled [--repo OWNER/REPO]
 #
 # Output contract (KEY=value on stdout; warnings on stderr). NAMESPACE note:
 # this script emits FAILED=true / ERROR=<msg> on failure — NOT the
@@ -24,6 +25,20 @@
 #   create-issue:   ISSUE_NUMBER=<N>  ISSUE_URL=<url>
 #   append-comment: COMMENT_ID=<id>   COMMENT_URL=<url>
 #   upsert-anchor:  ANCHOR_COMMENT_ID=<id>  ANCHOR_COMMENT_URL=<url>  UPDATED=true|false
+#   rename:         RENAMED=true|false  NEW_TITLE=<title>
+#
+# Rename semantics (tracking-issue title-prefix lifecycle):
+#   Strips exactly ONE leading managed prefix (anchored regex
+#   ^\[(IN PROGRESS|DONE|STALLED)\] ) from the current title, then prepends
+#   the target-state prefix. No-op when the current title already starts
+#   with the target prefix (RENAMED=false). The new title is piped through
+#   scripts/redact-secrets.sh before the gh call, matching the security
+#   posture of create-issue. Stacked-prefix corruption (e.g., "[IN PROGRESS]
+#   [DONE] Foo") is NOT healed — only one prefix is stripped. Title length:
+#   truncated to 256 chars using bash string semantics (`${#var}` + slice).
+#   GitHub's limit is 256 characters — matching bash's native length under
+#   UTF-8 locales. Managed prefixes are ASCII so truncation is stable
+#   regardless of locale.
 #
 # Failure keys:
 #   FAILED=true  ERROR=<single-line message>
@@ -104,7 +119,50 @@ Usage:
   tracking-issue-write.sh create-issue   --title T --body-file F [--repo OWNER/REPO]
   tracking-issue-write.sh append-comment --issue N --body-file F [--lifecycle-marker ID] [--repo OWNER/REPO]
   tracking-issue-write.sh upsert-anchor  --issue N [--anchor-id ID] --body-file F [--repo OWNER/REPO]
+  tracking-issue-write.sh rename         --issue N --state in-progress|done|stalled [--repo OWNER/REPO]
 USAGE
+}
+
+# State-to-prefix mapping for the rename subcommand. Using a function rather
+# than an associative array keeps us Bash 3.2 compatible (see top-of-file
+# conventions).
+state_to_prefix() {
+    case "$1" in
+        in-progress) printf '[IN PROGRESS] ' ;;
+        done)        printf '[DONE] ' ;;
+        stalled)     printf '[STALLED] ' ;;
+        *)           return 1 ;;
+    esac
+}
+
+# strip_managed_prefix <title> — prints the title with exactly ONE leading
+# managed prefix removed (if present). Anchored at the start; stacked
+# prefixes beyond the first are preserved. Uses shell parameter expansion
+# so the stripper is regex-engine-agnostic and safe for bash 3.2.
+strip_managed_prefix() {
+    local t="$1"
+    case "$t" in
+        '[IN PROGRESS] '*) printf '%s' "${t#\[IN PROGRESS\] }" ;;
+        '[DONE] '*)        printf '%s' "${t#\[DONE\] }" ;;
+        '[STALLED] '*)     printf '%s' "${t#\[STALLED\] }" ;;
+        *)                 printf '%s' "$t" ;;
+    esac
+}
+
+# truncate_title_to_256 <title> — character-oriented truncation to 256
+# chars using bash string semantics (`${#var}` + `${var:0:256}`). GitHub's
+# title limit is 256 characters, matching bash's native string semantics
+# under UTF-8 locales. Preserves leading managed prefix by design: the
+# caller prepends the prefix, and if the result exceeds 256 chars we
+# slice the TAIL, leaving the prefix intact. Managed prefixes are ASCII,
+# so the truncation is stable regardless of locale.
+truncate_title_to_256() {
+    local t="$1"
+    if (( ${#t} <= 256 )); then
+        printf '%s' "$t"
+    else
+        printf '%s' "${t:0:256}"
+    fi
 }
 
 # emit_redaction_failure — runs outside command substitution (via `|| ...`)
@@ -582,6 +640,74 @@ case "$cmd" in
             ERR_CONTENT=$(cat "$ERR_TMP")
             emit_gh_failure "$ERR_CONTENT"
         fi
+        ;;
+
+    rename)
+        ISSUE=""
+        STATE=""
+        REPO=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --issue) ISSUE="${2:?--issue requires a value}"; shift 2 ;;
+                --state) STATE="${2:?--state requires a value}"; shift 2 ;;
+                --repo)  REPO="${2:?--repo requires a value}"; shift 2 ;;
+                *) echo "Unknown option for rename: $1" >&2; usage; exit 1 ;;
+            esac
+        done
+        if [[ -z "$ISSUE" ]] || [[ -z "$STATE" ]]; then
+            usage
+            exit 1
+        fi
+        TARGET_PREFIX=$(state_to_prefix "$STATE") || {
+            echo "FAILED=true"
+            echo "ERROR=invalid --state: $STATE (expected in-progress|done|stalled)"
+            exit 1
+        }
+        if [[ -z "$REPO" ]]; then
+            REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || REPO=""
+            if [[ -z "$REPO" ]]; then
+                echo "FAILED=true"
+                echo "ERROR=could not determine repo"
+                exit 2
+            fi
+        fi
+        ERR_TMP=$(mktemp)
+        # shellcheck disable=SC2317
+        cleanup() { rm -f "$ERR_TMP"; }
+        trap cleanup EXIT
+        if ! CUR_TITLE=$(gh issue view "$ISSUE" --repo "$REPO" --json title --jq '.title' 2>"$ERR_TMP"); then
+            ERR_CONTENT=$(cat "$ERR_TMP")
+            emit_gh_failure "gh issue view failed: $ERR_CONTENT"
+        fi
+        STRIPPED=$(strip_managed_prefix "$CUR_TITLE")
+        NEW_TITLE="${TARGET_PREFIX}${STRIPPED}"
+        # Redact before length check: redacted content may differ in byte
+        # length from input (e.g., "<REDACTED-TOKEN>" replaces a longer
+        # token). Length check must be on the actual outbound title.
+        NEW_TITLE=$(redact "$NEW_TITLE") || emit_redaction_failure
+        NEW_TITLE=$(truncate_title_to_256 "$NEW_TITLE")
+        # Idempotency comparison: compare the prospective outbound title
+        # against the redacted+truncated form of the CURRENT title so a
+        # title that already carries a redactable token is not spuriously
+        # re-edited (which would both violate the no-op contract AND
+        # rewrite the on-GitHub title to the redacted form without
+        # changing the lifecycle state). CUR_TITLE is the raw GitHub
+        # title; applying the same redact+truncate pipeline yields the
+        # canonical "what would we emit if the state was already X?" form.
+        CUR_TITLE_CANONICAL=$(redact "$CUR_TITLE") || emit_redaction_failure
+        CUR_TITLE_CANONICAL=$(truncate_title_to_256 "$CUR_TITLE_CANONICAL")
+        if [[ "$NEW_TITLE" == "$CUR_TITLE_CANONICAL" ]]; then
+            echo "RENAMED=false"
+            echo "NEW_TITLE=$NEW_TITLE"
+            exit 0
+        fi
+        if ! gh issue edit "$ISSUE" --repo "$REPO" --title "$NEW_TITLE" >/dev/null 2>"$ERR_TMP"; then
+            ERR_CONTENT=$(cat "$ERR_TMP")
+            emit_gh_failure "gh issue edit failed: $ERR_CONTENT"
+        fi
+        echo "RENAMED=true"
+        echo "NEW_TITLE=$NEW_TITLE"
+        exit 0
         ;;
 
     *)
