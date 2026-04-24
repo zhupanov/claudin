@@ -26,7 +26,7 @@ Before processing each invocation, hold these four questions.
 
 **Is the issue still real?** Codebases move. A two-week-old bug may already be fixed; a "refactor X" request may reference deleted code. Triage (Step 4) is the cheap first-line filter — closing a stale issue with a research-summary comment is always cheaper than drafting a no-op PR.
 
-**What shape of output does the issue want back?** A code change (merged PR) vs. new GitHub issues or a written summary (NON_PR). Classification (Step 5) is a low-variance binary call; most issues are unambiguous. Default to `PR` when uncertain — a mis-classified `NON_PR` is recoverable through `/implement`'s `/review` phase, while a mis-classified `PR` silently skips real work.
+**What shape of output does the issue want back?** A code change (merged PR) vs. new GitHub issues or a written summary (NON_PR). Classification (Step 5) is a low-variance binary call; most issues are unambiguous. Default to `PR` **only when the issue is genuinely ambiguous** — a mis-classified `NON_PR` may sometimes surface during `/implement`'s `/review` phase (which reviews code changes, not the shape-of-work contract), in which case the operator may need to stop the run. When the issue text explicitly forbids a PR or mandates research/issues as the deliverable, pick `NON_PR` regardless of the default — overriding the stated deliverable is not recoverable downstream. A mis-classified `PR` (picking `NON_PR` for a genuine code-change request) silently skips real work.
 
 **How fragile is the change?** Complexity (Step 5) picks `/implement --quick` (SIMPLE — single-reviewer loop) or the full `/design` + `/review` panel (HARD). Default to HARD — an extra design round on a truly simple issue costs little, while skipping `/design` on a multi-file refactor costs a broken PR.
 
@@ -131,7 +131,7 @@ Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
 Print `> **🔶 4: triage**`
 
-**MANDATORY — READ ENTIRE FILE** before beginning triage: `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/references/triage-classification.md`. Contains the triage check list, the not-material closure flow detail (rationale composition, research-summary-into-issue-body rule), and the Step 5 classification detail that shares the same file. **Do NOT load** outside Steps 4 and 5 — this file is not consumed anywhere else. **Do NOT load** when Step 1's `fetch-eligible-issue.sh` returned exit 1 (no approved issues) or exit 2+ (error) — Steps 4 and 5 do not run on those paths.
+**MANDATORY — READ ENTIRE FILE** before beginning triage: `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/references/triage-classification.md`. Contains the triage check list, the not-material closure flow detail (rationale composition with research summary), and the Step 5 classification detail that shares the same file. **Do NOT load** outside Steps 4 and 5 — this file is not consumed anywhere else. **Do NOT load** when Step 1's `fetch-eligible-issue.sh` returned exit 1 (no approved issues) or exit 2+ (error) — Steps 4 and 5 do not run on those paths.
 
 Decide whether the issue is still material against the codebase (see the reference for the check list and the triage-targets rule for investigation/review-only issues).
 
@@ -160,7 +160,7 @@ Print `> **🔶 5: classify**`
 
 The reference loaded at Step 4 (`skills/fix-issue/references/triage-classification.md`) owns the decision rules for both dimensions — do not re-load it here.
 
-- **Intent** (`PR` vs `NON_PR`): does this issue prescribe work whose natural output is a pull request, or something else (new issues, a written report)? Default to `PR` when uncertain.
+- **Intent** (`PR` vs `NON_PR`): does this issue prescribe work whose natural output is a pull request, or something else (new issues, a written report)? Default to `PR` only when the issue is genuinely ambiguous; when the issue text explicitly forbids a PR or mandates research/issues as the deliverable, pick `NON_PR` regardless of the default.
 - **Complexity** (only when `INTENT=PR`): `SIMPLE` (isolated fix in ≤2 files with no architectural decisions) vs `HARD` (everything else). Default to `HARD` when uncertain. Leave `COMPLEXITY` unset when `INTENT=NON_PR`.
 
 Set `INTENT` and (when `INTENT=PR`) `COMPLEXITY` per those rules using the issue details and Step 4's codebase exploration.
