@@ -1,10 +1,10 @@
 # Anchor Comment Template
 
-**Consumer**: `/implement` Phase 3 (umbrella #348) — the canonical anchor-comment markdown template written via `scripts/tracking-issue-write.sh upsert-anchor` and parsed from issue comments by consumers. Active consumers wired in Phase 3: Step 0.5 (resolve tracking issue, hydrate fragments, plant seed anchor on adoption), Anchor-section accumulation at Steps 1 / 5 / 7a / 8 / 9a.1 / 11, Step 9a.1 OOS pipeline (first-remote-write + anchor section population), Step 11 post-execution `execution-issues` refresh.
+**Consumer**: `/implement` Phase 3 (umbrella #348) — the canonical anchor-comment markdown template written via `scripts/tracking-issue-write.sh upsert-anchor` and parsed from issue comments by consumers. Active consumers wired in Phase 3: Step 0.5 (resolve tracking issue, hydrate fragments, plant seed anchor on adoption OR Branch 4 first-remote-write: create-issue + seed anchor + sentinel), Anchor-section accumulation at Steps 1 / 2 / 5 / 7a / 8 / 9a.1 / 11, Step 2 progressive `execution-issues` upsert for Q/A entries, Step 9a.1 OOS pipeline (anchor section population), Step 11 post-execution `execution-issues` refresh.
 
 **Contract**: single normative source for (1) the eight canonical section markers, (2) the first-line HTML anchor marker literal, (3) the Voting Tally extraction guidance, (4) the Step 9a.1 OOS pipeline procedure in anchor-comment context, (5) the Quick-mode anchor guidance, and (6) the three load-bearing string literals pinned by `scripts/test-implement-structure.sh` assertion (9a) (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`). Section headers and HTML comment markers must NOT drift — the executable source of truth for `SECTION_MARKERS` is `scripts/anchor-section-markers.sh` (sourced by both `scripts/tracking-issue-write.sh` for truncation ordering and `scripts/assemble-anchor.sh` for assembly ordering); `scripts/tracking-issue-write.sh`'s inline `COLLAPSE_PRIORITY` array is a permutation of the same slug set (body-cap collapse priority). The template below must list the same eight slugs. `test-implement-structure.sh` assertion (9a) pins these literals; assertion (9b) pins a ≥3 reference floor for `anchor-comment-template.md` in SKILL.md.
 
-**When to load**: before composing any anchor-section fragment or invoking `tracking-issue-write.sh upsert-anchor`. Do NOT load outside Step 0.5, the Anchor-section accumulation procedure, Step 9a.1, and Step 11's post-execution anchor refresh.
+**When to load**: before composing any anchor-section fragment or invoking `tracking-issue-write.sh upsert-anchor`. Do NOT load outside Step 0.5 (including Branch 4 first-remote-write), the Anchor-section accumulation procedure, Step 2 (progressive `execution-issues` upsert for Q/A), Step 9a.1, and Step 11's post-execution anchor refresh.
 
 ---
 
@@ -86,7 +86,7 @@ Mixed-version state on a single issue (a legacy `<!-- larch:implement-anchor v1`
 <!-- section:execution-issues -->
 <details><summary>Execution Issues</summary>
 
-<verbatim contents of $IMPLEMENT_TMPDIR/execution-issues.md — categorized entries: Pre-existing Code Issues, Tool Failures, Permission Prompts, External Reviewer Issues, CI Issues, Warnings>
+<verbatim contents of $IMPLEMENT_TMPDIR/execution-issues.md — categorized entries: Pre-existing Code Issues, Tool Failures, Permission Prompts, External Reviewer Issues, CI Issues, Warnings, Q/A (Step 2 opportunistic questions + mid-coding ambiguity resolutions)>
 
 </details>
 

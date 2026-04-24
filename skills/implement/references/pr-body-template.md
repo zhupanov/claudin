@@ -43,6 +43,6 @@ Generated with [Claude Code](https://claude.com/claude-code)
 
 ## Composition notes
 
-- `<TRACKING_ISSUE_NUMBER>` is `$ISSUE_NUMBER` from the Step 0.5 sentinel (`$IMPLEMENT_TMPDIR/parent-issue.md`), or the newly-created issue number on the deferred-creation path after Step 9a.1's first-remote-write.
+- `<TRACKING_ISSUE_NUMBER>` is `$ISSUE_NUMBER` from Step 0.5 — set on all four branches when the path succeeds (Branch 1 sentinel reuse, Branch 2 `--issue` adoption, Branch 3 PR-body recovery, Branch 4 immediate first-remote-write). On degraded runs (`repo_unavailable=true` OR Step 0.5 Branch 4 create-issue/anchor/sentinel failure set `deferred=true` with `$ISSUE_NUMBER` unset), Step 9a substitutes `(no tracking issue created)` and the auto-close link is absent.
 - The `Closes #<N>` line is load-bearing for three consumers: (1) GitHub's auto-close-on-merge behavior (closes the tracking issue when the PR merges); (2) Step 0.5 Branch 3 (PR-body-recovery) uses the FIRST `Closes #<N>` match on an existing PR body to adopt the same tracking issue on a subsequent session; (3) `/fix-issue`'s Phase 2 close idempotency relies on this auto-close to transition the tracking issue cleanly.
 - Rich report content (voting tallies, diagrams, execution issues, OOS list, run statistics, version bump reasoning) is written to the anchor comment via `tracking-issue-write.sh upsert-anchor`, not to this PR body. See `skills/implement/references/anchor-comment-template.md` for the anchor's canonical template and section markers.
