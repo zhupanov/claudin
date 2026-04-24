@@ -327,8 +327,8 @@ NON_A_DIMS=""
 while [[ $ITER -le 10 ]]; do
   breadcrumb_inprogress "4: loop — iteration ${ITER}"
 
-  # Invoke iteration.sh. Append a trailing blank so the NO_SLACK_FLAG split
-  # consistently when empty.
+  # Invoke iteration.sh. Build argv as an array so flag presence is explicit;
+  # conditionally prepend --no-slack when the caller passed it to the driver.
   ITER_OUT="$LOOP_TMPDIR/iter-${ITER}-iteration-stdout.txt"
   ITER_ARGV=()
   if [[ -n "$NO_SLACK_FLAG" ]]; then

@@ -74,19 +74,37 @@ case "$STATUS" in
     user-input) EMOJI="❓"; STATUS_SUMMARY="needs user input" ;;
 esac
 
-# Fetch issue title + URL via gh (best-effort; fall back to repo-synthesized URL)
+# Fetch issue title + URL via gh, scoped to $REPO (defends against gh's default-repo
+# context differing from the caller-supplied $REPO — e.g., GH_REPO env, fork layouts,
+# working tree not matching the intended remote).
 ISSUE_URL=""
 ISSUE_TITLE=""
 if command -v gh >/dev/null 2>&1; then
     set +e
-    ISSUE_JSON=$(gh issue view "$ISSUE_NUMBER" --json url,title 2>/dev/null)
+    ISSUE_JSON=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json url,title 2>/dev/null)
     set -e
     if [[ -n "$ISSUE_JSON" ]]; then
         ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url // empty' 2>/dev/null || echo "")
         ISSUE_TITLE=$(echo "$ISSUE_JSON" | jq -r '.title // empty' 2>/dev/null || echo "")
     fi
 fi
+# If `gh issue view` didn't return a URL, try deriving the repo's host URL via
+# `gh repo view --json url` before hardcoding github.com. This resolves the host
+# correctly for GitHub Enterprise — the same mechanism /implement Step 18 uses
+# for the tracking-issue URL print. On any failure, fall through to a last-resort
+# github.com synthesis.
+if [[ -z "$ISSUE_URL" ]] && command -v gh >/dev/null 2>&1; then
+    set +e
+    REPO_URL=$(gh repo view "$REPO" --json url --jq .url 2>/dev/null)
+    set -e
+    if [[ -n "$REPO_URL" ]]; then
+        ISSUE_URL="${REPO_URL}/issues/${ISSUE_NUMBER}"
+    fi
+fi
 if [[ -z "$ISSUE_URL" ]]; then
+    # Last-resort synthesis. Documented limitation: incorrect host on GitHub
+    # Enterprise deployments when BOTH `gh issue view` AND `gh repo view` failed.
+    # The caller's --repo is "OWNER/REPO" with no host, so we cannot do better here.
     ISSUE_URL="https://github.com/${REPO}/issues/${ISSUE_NUMBER}"
 fi
 
@@ -99,6 +117,14 @@ SAFE_TITLE="${SAFE_TITLE//</\\<}"
 SAFE_TITLE="${SAFE_TITLE//>/\\>}"
 [[ -z "$SAFE_TITLE" ]] && SAFE_TITLE="untitled"
 
+# Sanitize DETAIL the same way — it flows from caller-composed free-form text
+# (bail reasons, WORK_SUMMARY one-liners) that can contain mrkdwn-reserved
+# characters capable of breaking formatting or mimicking link syntax.
+SAFE_DETAIL="${DETAIL//\"/${LDQUOTE}}"
+SAFE_DETAIL="${SAFE_DETAIL//|/\\|}"
+SAFE_DETAIL="${SAFE_DETAIL//</\\<}"
+SAFE_DETAIL="${SAFE_DETAIL//>/\\>}"
+
 # Compose link + title prefix
 LINK="<${ISSUE_URL}|Issue #${ISSUE_NUMBER}>"
 
@@ -107,8 +133,8 @@ TAIL="$STATUS_SUMMARY"
 if [[ "$STATUS" == "pr-opened" ]] && [[ -n "$PR_URL" ]]; then
     TAIL="PR <${PR_URL}|opened>, awaiting merge"
 fi
-if [[ -n "$DETAIL" ]]; then
-    TAIL="${TAIL} — ${DETAIL}"
+if [[ -n "$SAFE_DETAIL" ]]; then
+    TAIL="${TAIL} — ${SAFE_DETAIL}"
 fi
 
 MESSAGE="${EMOJI} ${LINK} (${SAFE_TITLE}) — ${TAIL}"

@@ -18,7 +18,7 @@
 #     the amended /design prompt's four-rule directive set (rules 1-3 plus
 #     the new rule 4 pushback carve-out — load-bearing "## Pushback on judge
 #     findings" subsection + "MAY disagree with specific" key phrase), and
-#     the SLACK_FLAG="--slack " byte-parallel literal.
+#     the NO_SLACK_FLAG="--no-slack " byte-parallel literal.
 #
 #   Tier 2 — Behavioral (best-effort smoke tests with stubbed claude + gh):
 #     Stubs `claude` and `gh` on PATH under a mktemp'd fixture skill dir and

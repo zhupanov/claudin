@@ -11,8 +11,8 @@
 #                 to the child skill. Kept in the parser to avoid breaking existing
 #                 invocations that pass it explicitly.
 #   --debug       Forward to /im (which forwards to /implement).
-#   --no-slack    Forward to /im (which forwards to /implement). When set, the delegated
-#                 /implement run does NOT post a Slack announcement. Default (no --no-slack):
+#   --no-slack    Forward to /im (which forwards to /implement). When set, /implement's
+#                 Step 16a tracking-issue Slack post is suppressed. Default (no --no-slack):
 #                 delegated run posts per /implement's default-on behavior (gated on
 #                 Slack env vars).
 #

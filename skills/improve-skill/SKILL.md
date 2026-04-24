@@ -15,7 +15,7 @@ The companion `/loop-improve-skill` skill calls the same `iteration.sh` kernel u
 
 ## Flags
 
-- `--no-slack`: When present before `<skill-name>`, forwarded to the `/larch:im` invocation inside the iteration so the PR does NOT post to Slack. Default: absent — `/larch:im` posts to Slack per `/implement`'s default-on behavior (gated on Slack env vars).
+- `--no-slack`: When present before `<skill-name>`, forwarded to the `/larch:im` invocation inside the iteration so `/implement`'s Step 16a tracking-issue Slack post is suppressed. Default: absent — `/larch:im` (and thence `/implement`) posts per its default-on behavior (gated on Slack env vars).
 - `--issue <N>`: When present, the iteration reuses tracking issue #N instead of creating a new one. Used by `/loop-improve-skill`'s driver to accumulate all 10 iterations' comments on one issue. Standalone users who want their iteration comments on an existing issue can also supply `--issue <N>`.
 
 **Termination contract: strives for grade A in this single iteration.** The iteration's success exit is when `${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh` reports per-dimension grade A on every D1..D8 immediately from the first `/skill-judge` call (short-circuits before `/design`). Otherwise the iteration runs `/design` + `/larch:im`, then exits with `ITER_STATUS=ok` if `/larch:im` reached its canonical completion line, or `ITER_STATUS=no_plan` / `design_refusal` / `im_verification_failed` on recoverable halts (each writes an infeasibility justification under the work-dir).

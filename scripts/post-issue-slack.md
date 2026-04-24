@@ -11,10 +11,10 @@ One-liner body (Slack mrkdwn):
 ```
 
 - **Emoji**: `✅` (`closed`), `📝` (`pr-opened`), `❌` (`blocked`), `❓` (`user-input`).
-- **Link**: mrkdwn link composed from `gh issue view` output when available; falls back to `https://github.com/$REPO/issues/$N`.
+- **Link**: mrkdwn link composed from `gh issue view --repo "$REPO"` output when available (scoped to the caller-supplied repo so gh's default-repo context cannot fetch the wrong issue). When `gh issue view` fails, falls back to `gh repo view "$REPO" --json url` and appends `/issues/$N` — preserves GitHub Enterprise host correctly. Last-resort synthesis hardcodes `https://github.com/$REPO/issues/$N` only when both gh calls fail.
 - **Safe-title**: `|`, `<`, `>` are backslash-escaped; `"` is replaced with U+201C left curly quote (matching the pre-existing convention from the deleted `slack-announce.sh`).
 - **Status tail**: fixed per status enum (e.g. `closed`, `PR opened, awaiting merge`). When `--pr-url` is given with `pr-opened`, the tail renders the PR URL as a nested link.
-- **Detail suffix**: when `--detail` is provided, appended (preceded by ` — `) after the status tail. Used by `/fix-issue` to preserve closure reason context (Step 4 not-material reason; Step 8b WORK_SUMMARY one-liner).
+- **Detail suffix**: when `--detail` is provided, appended (preceded by ` — `) after the status tail, with the same mrkdwn-reserved-character escaping as the title. Used by `/fix-issue` to preserve closure reason context (Step 4 not-material reason; Step 8b WORK_SUMMARY one-liner).
 
 ## Identity
 
