@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.5] - 2026-04-23
+
+### Changed
+
+- Add `/loop-improve-skill` to the skills inventory in `docs/installation-and-setup.md` (closes #371). The skill is shipped at `skills/loop-improve-skill/` and documented in `README.md`, but was omitted from the "What the plugin provides" table when the setup docs were split out in 6fe1262.
+
 ## [6.2.4] - 2026-04-23
 
 ### Changed
