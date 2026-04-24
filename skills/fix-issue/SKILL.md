@@ -170,8 +170,8 @@ Compose the feature description from the issue content: use the issue title as t
 
 Invoke `/implement` via the Skill tool. Forwarding `--issue $ISSUE_NUMBER` makes `/implement` adopt the queue issue as its tracking issue (Phase 3 Branch 2 adoption), so the two skills converge on the same tracking issue and `/fix-issue` avoids a duplicate tracking-issue on its path:
 
-- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
-- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
+- **SIMPLE**: `/implement --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
+- **HARD**: `/implement --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
