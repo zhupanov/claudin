@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.2] - 2026-04-23
+
+### Changed
+
+- Slim `README.md` by factoring verbose reference sections into three new `docs/*.md` files — `docs/installation-and-setup.md`, `docs/configuration-and-permissions.md`, `docs/linting.md`. Adds a Table of Contents at the top of `README.md` in reader-journey order, alphabetizes the Skills table by slash-command name (case-insensitive), and drops the small Review Agents block (replaced by a TOC pointer to the canonical `docs/review-agents.md`). Downstream contracts retargeted in lockstep: `AGENTS.md` canonical-sources list, `SECURITY.md` strict-permissions pointer, `Makefile` halt-rate-probe comment, `skills/create-skill/scripts/post-scaffold-hints.{sh,md}` + `skills/create-skill/SKILL.md` strict-permissions pointer, `scripts/test-loop-improve-skill-halt-rate.{sh,md}` README references. Also adds a "Migration from legacy agent slugs" section to `docs/review-agents.md` preserving the `general-reviewer` / `deep-analysis-reviewer` → `code-reviewer` guidance formerly in README.
+
 ## [6.2.1] - 2026-04-23
 
 ### Changed
