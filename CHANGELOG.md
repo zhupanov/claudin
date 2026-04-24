@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.1] - 2026-04-24
+
+### Changed
+
+- `/loop-improve-skill` and `/improve-skill` now print the tracking-issue URL as the final `✅` breadcrumb so the user gets a clickable link at the end of a run. `driver.sh` emits the URL after the Step 5 close-out comment; `iteration.sh` emits it from the EXIT trap in standalone mode (create OR `--issue <N>` adopt), gated on `OWNS_WORK_DIR=true` and a non-empty `ISSUE_URL`. Loop-mode invocations stay silent so `driver.sh` owns the final URL output.
+- `iteration.sh` hydrates `ISSUE_URL` on the standalone `--issue <N>` adopt path via `gh issue view --json url --jq .url`. Graceful degradation: on `gh` failure `ISSUE_URL` stays empty, a warning is logged to stderr, and the EXIT trap's `-n` gate silently falls through.
+
 ## [7.0.0] - 2026-04-24
 
 ### Changed
