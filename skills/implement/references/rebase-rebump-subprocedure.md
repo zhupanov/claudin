@@ -100,7 +100,7 @@ After the initial version bump in Step 8, every subsequent rebase of the feature
 
 6. **Refresh anchor's `version-bump-reasoning` section** (best-effort, non-fatal):
 
-   Umbrella #348 Phase 5 retargets this step from the PR body to the tracking-issue anchor's `version-bump-reasoning` section (see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/anchor-comment-template.md` for the section contract). Unlike the old PR-body refresh, this step is a no-op when no tracking issue was adopted for the session — non-umbrella `/implement` runs, deferred-Branch-4 runs, and `repo_unavailable=true` runs all skip silently.
+   Umbrella #348 Phase 5 retargets this step from the PR body to the tracking-issue anchor's `version-bump-reasoning` section (see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/anchor-comment-template.md` for the section contract). Unlike the old PR-body refresh, this step is a no-op when no tracking issue is resolved for the session — non-umbrella `/implement` runs, Step 0.5 Branch 4 create-failure runs (`deferred=true`, no sentinel), and `repo_unavailable=true` runs all skip silently.
 
    a. **Read the session's tracking-issue sentinel**:
       ```bash
