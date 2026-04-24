@@ -76,6 +76,8 @@ The Code Reviewer archetype produces **dual-list output**:
 
 External reviewers (Codex, Cursor) produce single-list output — their entire output is treated as in-scope findings.
 
+Under `/implement`, accepted findings and OOS observations are persisted via the tracking-issue anchor comment (voting tallies, rejected-finding summaries, execution issues), while the PR body remains a slim projection carrying `Closes #<N>` — see [Workflow Lifecycle](workflow-lifecycle.md) for the anchor-comment routing contract.
+
 ## Usage Across Skills
 
 | Skill | Phase | Reviewers Used |
