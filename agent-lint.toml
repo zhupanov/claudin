@@ -237,6 +237,15 @@ suppress = [
 # scripts/test-orchestrator-scope-sync.md (sibling contract); matches the
 # Makefile-only pattern as the other harnesses above.
 #
+# scripts/test-quick-mode-docs-sync.sh is the cross-validation harness
+# (closes #370) that asserts the public /implement --quick description in
+# README.md, docs/review-agents.md, and docs/workflow-lifecycle.md stays
+# aligned with the normative contract in skills/implement/SKILL.md Step 5
+# (up to 7 rounds, Cursor → Codex → Claude fallback chain, no voting panel).
+# Referenced only from Makefile (test-quick-mode-docs-sync target) and
+# scripts/test-quick-mode-docs-sync.md (sibling contract); matches the
+# Makefile-only pattern as the other harnesses above.
+#
 # scripts/test-research-structure.sh is the structural regression harness
 # for skills/research/SKILL.md and skills/research/references/ invariants
 # (2-reference progressive-disclosure topology introduced by the /research
@@ -294,6 +303,7 @@ exclude = [
   "scripts/lib-loop-improve-halt-ledger.sh",
   "scripts/test-lib-loop-improve-halt-ledger.sh",
   "scripts/test-orchestrator-scope-sync.sh",
+  "scripts/test-quick-mode-docs-sync.sh",
   "scripts/test-research-structure.sh",
   "scripts/test-review-structure.sh",
   # Phase 1 of umbrella #348 (tracking-issue foundation helpers) —
