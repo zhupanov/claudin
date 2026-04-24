@@ -1,23 +1,34 @@
 #!/usr/bin/env bash
 # test-loop-improve-skill-driver.sh — Regression harness for
-# skills/loop-improve-skill/scripts/driver.sh (Option B topology, closes #273).
+# skills/loop-improve-skill/scripts/driver.sh (Option B topology, closes #273;
+# post-refactor: iteration body factored out into
+# skills/improve-skill/scripts/iteration.sh and invoked from the driver's
+# loop body via direct bash call).
 #
 # Two tiers of assertions:
 #
 #   Tier 1 — Structural (always runs):
-#     Greps the driver.sh source for contract tokens that the Option B
-#     topology requires (parse-skill-judge-grade.sh, claude --version,
-#     set -euo pipefail, verify-skill-called.sh --stdout-line, LOOP_TMPDIR
-#     validation literals /tmp/ and /private/tmp/, `..` rejection check,
-#     file-based prompt writes via $LOOP_TMPDIR/iter-${ITER}-*-prompt.txt,
-#     redact-secrets.sh piped into gh-comment path).
+#     Greps the driver.sh source for contract tokens the loop-driver layer
+#     retains: session-setup.sh, LOOP_TMPDIR /tmp/ + /private/tmp/ prefix
+#     literals, `..` rejection, gh issue create/comment, redact-secrets.sh
+#     + cleanup-tmpdir.sh, close-out exit-reason literals, delegation to the
+#     improve-skill iteration kernel via ${LARCH_ITERATION_SCRIPT_OVERRIDE:-
+#     ${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh}, and
+#     the retained slim invoke_claude_p (used only for the post-iter-cap
+#     re-judge) including its FINDING_7/9/10 security contracts (--plugin-dir,
+#     STDIN prompt, stderr sidecar).
 #
-#   Tier 2 — Behavioral (best-effort smoke tests with stubbed claude/gh):
-#     Stubs `claude` and `gh` on PATH under a mktemp'd fixture skill dir,
-#     then invokes driver.sh and asserts on observable side effects (gh.log
-#     invocation records, presence/absence of per-iter artifacts). These are
-#     a minimum-viable subset — 2-3 fixtures is the acceptable floor per
-#     the Option B spec.
+#     Iteration-body tokens (verify-skill-called.sh, /larch:design, /larch:im,
+#     per-ITER judge/design/im prompt filenames) live in iteration.sh and are
+#     pinned by scripts/test-improve-skill-iteration.sh.
+#
+#   Tier 2 — Behavioral (best-effort smoke tests with stubbed claude/gh and
+#     a stub iteration shim redirected via LARCH_ITERATION_SCRIPT_OVERRIDE):
+#     Stubs `claude` and `gh` on PATH under a mktemp'd fixture skill dir, and
+#     plants a stub iteration.sh shim that emits deterministic KV footers
+#     mapping to the test cases. The harness exports
+#     LARCH_ITERATION_SCRIPT_OVERRIDE=<stub-path> so the driver invokes the
+#     shim instead of the real iteration. Asserts on observable driver output.
 #
 # Invoked via:  bash scripts/test-loop-improve-skill-driver.sh
 # Wired into:   make lint (via the test-loop-improve-skill-driver target).
@@ -56,21 +67,14 @@ check_contains() {
   fi
 }
 
-check_contains 'parse-skill-judge-grade.sh'                    'parse-skill-judge-grade.sh invocation'
+# ---------- Core driver contract (loop-layer concerns) ----------
+check_contains 'parse-skill-judge-grade.sh'                    'parse-skill-judge-grade.sh invocation (final re-judge)'
 check_contains 'claude --version'                              'claude --version forensic capture'
 check_contains 'set -euo pipefail'                             'set -euo pipefail'
-check_contains "verify-skill-called.sh"                        'verify-skill-called.sh invocation'
-check_contains "--stdout-line '^✅ 18: cleanup'"               'verify-skill-called.sh stdout-line mechanical gate'
 check_contains '/tmp/'                                         'LOOP_TMPDIR /tmp/ prefix literal'
 check_contains '/private/tmp/'                                 'LOOP_TMPDIR /private/tmp/ prefix literal'
 check_contains "'..'"                                          '.. rejection check (single-quoted literal in message/case)'
-# shellcheck disable=SC2016  # literal substrings asserted via grep against driver.sh source — NOT command substitution
-check_contains 'iter-${ITER}-judge-prompt.txt'                 'file-based judge prompt write'
-# shellcheck disable=SC2016
-check_contains 'iter-${ITER}-design-prompt.txt'                'file-based design prompt write'
-# shellcheck disable=SC2016
-check_contains 'iter-${ITER}-im-prompt.txt'                    'file-based im prompt write'
-check_contains 'redact-secrets.sh'                             'redact-secrets.sh in gh-comment pipeline'
+check_contains 'redact-secrets.sh'                             'redact-secrets.sh in close-out gh-comment pipeline'
 check_contains 'cleanup-tmpdir.sh'                             'cleanup-tmpdir.sh invocation'
 check_contains 'gh issue comment'                              'gh issue comment posting'
 check_contains 'gh issue create'                               'gh issue create (tracking issue)'
@@ -80,32 +84,47 @@ check_contains 'grade A achieved on all dimensions'            'grade-A exit rea
 check_contains 'grade A achieved after final post-iter-cap'   'post-cap A reclassification literal'
 check_contains 'Infeasibility Justification'                   'close-out infeasibility section heading'
 check_contains 'Grade History'                                 'close-out Grade History section heading'
-check_contains 'claude -p'                                     'claude -p subprocess invocation'
-# FINDING_7: every child claude invocation must pass --plugin-dir so contributor
-# dev-mode (claude --plugin-dir .) or shadowed-repo installs still resolve the
-# target skills from the larch plugin tree.
-check_contains '--plugin-dir'                                  'claude -p --plugin-dir argument (FINDING_7)'
-# shellcheck disable=SC2016
-check_contains '"$CLAUDE_PLUGIN_ROOT"'                         'CLAUDE_PLUGIN_ROOT passed as --plugin-dir value'
-# FINDING_7: fully-qualified slash-command names for larch-shipped children
-# (design, im) so they never resolve against a user-local shadow.
-check_contains '/larch:design'                                 'fully-qualified /larch:design invocation'
-check_contains '/larch:im'                                     'fully-qualified /larch:im invocation'
-# FINDING_10: stderr MUST NOT merge into stdout (which is posted publicly) —
-# invoke_claude_p redirects stdout and stderr to separate files; the .stderr
-# sidecar stays in LOOP_TMPDIR for diagnostics only.
-# shellcheck disable=SC2016
-check_contains '2> "$stderr_file"'                             'stderr redirected to separate file (FINDING_10)'
-# shellcheck disable=SC2016
-check_contains 'local stderr_file="${out_file}.stderr"'        '.stderr sidecar naming (FINDING_10)'
-# FINDING_9: the /im plan body is piped via STDIN (not argv) so large plans do
-# not exceed macOS ARG_MAX = 262144.
-# shellcheck disable=SC2016
-check_contains '< "$prompt_file"'                              'prompt-file fed via STDIN (FINDING_9)'
 # FINDING_11: the driver honors LOOP_IMPROVE_SKIP_PREFLIGHT=1 so the fixture
 # harness can exercise control-flow under a non-git-repo mktemp'd workdir.
 check_contains 'LOOP_IMPROVE_SKIP_PREFLIGHT'                   'opt-in preflight-skip env var (FINDING_11)'
 check_contains '--skip-preflight'                              'session-setup.sh --skip-preflight forwarding (FINDING_11)'
+
+# ---------- Iteration delegation (post-refactor) ----------
+# Driver must invoke iteration.sh via an ITERATION_SCRIPT variable resolved
+# from LARCH_ITERATION_SCRIPT_OVERRIDE (test-only) or the default kernel path.
+check_contains 'LARCH_ITERATION_SCRIPT_OVERRIDE'               'iteration-script test-only override env var'
+check_contains 'skills/improve-skill/scripts/iteration.sh'     'default iteration kernel path'
+check_contains 'ITERATION_SCRIPT'                              'ITERATION_SCRIPT variable (delegation binding)'
+# Driver must pass --issue / --work-dir / --iter-num / --breadcrumb-prefix
+# to the kernel (contract surface between driver and iteration.sh).
+check_contains '--work-dir'                                    'iteration.sh --work-dir flag passthrough'
+check_contains '--iter-num'                                    'iteration.sh --iter-num flag passthrough'
+check_contains '--breadcrumb-prefix'                           'iteration.sh --breadcrumb-prefix flag passthrough'
+check_contains '--issue'                                       'iteration.sh --issue flag passthrough'
+# Driver parses the kernel's KV footer from iteration.sh stdout.
+check_contains '### iteration-result'                          'KV-footer delimiter literal (expected in iteration.sh stdout)'
+check_contains 'ITER_STATUS'                                   'KV footer key: ITER_STATUS'
+check_contains 'EXIT_REASON'                                   'KV footer key: EXIT_REASON'
+check_contains 'PARSE_STATUS'                                  'KV footer key: PARSE_STATUS'
+check_contains 'GRADE_A'                                       'KV footer key: GRADE_A'
+check_contains 'NON_A_DIMS'                                    'KV footer key: NON_A_DIMS'
+
+# ---------- Retained slim invoke_claude_p (post-iter-cap re-judge only) ----------
+# The final re-judge is NOT delegated to iteration.sh; it uses a slim local
+# helper in driver.sh. That helper MUST preserve the same security contracts.
+check_contains 'claude -p'                                     'claude -p subprocess invocation (slim final re-judge)'
+check_contains '--plugin-dir'                                  'claude -p --plugin-dir argument (FINDING_7)'
+# shellcheck disable=SC2016
+check_contains '"$CLAUDE_PLUGIN_ROOT"'                         'CLAUDE_PLUGIN_ROOT passed as --plugin-dir value'
+# FINDING_10: stderr MUST NOT merge into stdout (which is posted publicly).
+# shellcheck disable=SC2016
+check_contains '2> "$stderr_file"'                             'stderr redirected to separate file (FINDING_10)'
+# shellcheck disable=SC2016
+check_contains 'local stderr_file="${out_file}.stderr"'        '.stderr sidecar naming (FINDING_10)'
+# FINDING_9: prompt body fed via STDIN so large final-judge prompts do not
+# exceed macOS ARG_MAX = 262144.
+# shellcheck disable=SC2016
+check_contains '< "$prompt_file"'                              'prompt-file fed via STDIN (FINDING_9)'
 
 # -----------------------------------------------------------------------
 # Tier 1b — Syntax check
@@ -118,42 +137,19 @@ else
 fi
 
 # -----------------------------------------------------------------------
-# Tier 2 — Behavioral smoke fixtures with stubbed claude + gh
+# Tier 2 — Behavioral smoke fixtures
 # -----------------------------------------------------------------------
 
 echo ""
 echo "--- Behavioral smoke fixtures ---"
 
-# Build a grade-A /skill-judge output (score/max >= 0.90 in every dim)
-build_grade_a_judge() {
-  cat <<'EOF'
-# Report
-
-## Dimension Scores
-
-| Dim | Score | Max |
-|-----|-------|-----|
-| D1  | 20    | 20  |
-| D2  | 15    | 15  |
-| D3  | 15    | 15  |
-| D4  | 15    | 15  |
-| D5  | 15    | 15  |
-| D6  | 15    | 15  |
-| D7  | 10    | 10  |
-| D8  | 15    | 15  |
-
-Grade A on every dimension.
-EOF
-}
-
-# Run one fixture: set up stubs on PATH, invoke driver, capture + assert.
+# Run one fixture: set up stubs + LARCH_ITERATION_SCRIPT_OVERRIDE, invoke
+# driver, assert on observable output.
 run_fixture() {
   local name="$1"
-  local judge_body_cmd="$2"     # shell code that writes judge output on stdout
-  local design_body_cmd="$3"    # shell code that writes design output on stdout
-  local im_body_cmd="$4"        # shell code that writes im output on stdout
-  local expect_grep="$5"        # regex to grep in driver stdout
-  local not_grep="${6:-}"       # regex that must NOT appear in driver stdout
+  local iter_body="$2"        # shell body written into the stub iteration shim
+  local expect_grep="$3"      # regex to grep in driver stdout
+  local not_grep="${4:-}"     # regex that must NOT appear in driver stdout
 
   local fixture_tmp
   fixture_tmp="$(mktemp -d)"
@@ -171,24 +167,19 @@ description: "Fixture skill"
 Fixture.
 SKILL_EOF
 
-  # Write the stub scripts.
+  # Stub gh (records invocations).
   cat > "$stub_dir/gh" <<GH_EOF
 #!/usr/bin/env bash
-# gh stub — records invocations + synthesizes outputs.
 printf '%s\n' "gh \$*" >> "$fixture_tmp/gh.log"
 case "\$1" in
-  auth)
-    # 'gh auth status' → exit 0
-    exit 0 ;;
+  auth) exit 0 ;;
   issue)
     shift
     case "\$1" in
       create)
-        # Parse --body-file (ignore); emit fake URL
         printf 'https://github.com/example/repo/issues/42\n'
         exit 0 ;;
       comment)
-        # record body-file if present for inspection
         while [[ \$# -gt 0 ]]; do
           if [[ "\$1" == "--body-file" ]]; then
             printf 'gh-comment body-file=%s\n' "\$2" >> "$fixture_tmp/gh.log"
@@ -205,49 +196,45 @@ exit 0
 GH_EOF
   chmod +x "$stub_dir/gh"
 
-  # Build per-phase output files — claude stub switches by prompt contents.
-  cat > "$fixture_tmp/judge-body.sh" <<JBODY
-$judge_body_cmd
-JBODY
-  cat > "$fixture_tmp/design-body.sh" <<DBODY
-$design_body_cmd
-DBODY
-  cat > "$fixture_tmp/im-body.sh" <<IBODY
-$im_body_cmd
-IBODY
-  chmod +x "$fixture_tmp/judge-body.sh" "$fixture_tmp/design-body.sh" "$fixture_tmp/im-body.sh"
-
-  cat > "$stub_dir/claude" <<CLAUDE_EOF
+  # Stub claude (only used by Step 5a final re-judge in this fixture shape;
+  # the iteration body is intercepted by the iteration shim below).
+  cat > "$stub_dir/claude" <<'CLAUDE_EOF'
 #!/usr/bin/env bash
-# claude stub — picks body by prompt prefix. Supports the FINDING_7/9 contract:
-# claude -p --plugin-dir <root>  (prompt is read from STDIN, not argv).
-if [[ "\$1" == "--version" ]]; then
+if [[ "$1" == "--version" ]]; then
   echo "claude stub 0.0.0"
   exit 0
 fi
-# Skip any leading flags until we've consumed -p and --plugin-dir.
-while [[ \$# -gt 0 ]]; do
-  case "\$1" in
+# Skip leading flags
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     -p) shift ;;
     --plugin-dir) shift 2 ;;
     --*) shift ;;
     *) break ;;
   esac
 done
-# Prompt may be on stdin (FINDING_9) or as a positional arg (legacy fallback).
-if [[ \$# -gt 0 ]]; then
-  prompt="\$1"
-else
-  prompt="\$(cat)"
-fi
-# Match against the leading slash-command token.
-case "\$prompt" in
+if [[ $# -gt 0 ]]; then prompt="$1"; else prompt="$(cat)"; fi
+# For the post-iter-cap re-judge in fixture 3 (iter-cap), synthesize a
+# grade-A judge report so reclassification can be exercised.
+case "$prompt" in
   "/skill-judge"*|"/larch:skill-judge"*)
-    bash "$fixture_tmp/judge-body.sh" ;;
-  "/design"*|"/larch:design"*)
-    bash "$fixture_tmp/design-body.sh" ;;
-  "/im"*|"/larch:im"*)
-    bash "$fixture_tmp/im-body.sh" ;;
+    cat <<'GRADE_EOF'
+# Report
+
+## Dimension Scores
+
+| Dim | Score | Max |
+|-----|-------|-----|
+| D1  | 20    | 20  |
+| D2  | 15    | 15  |
+| D3  | 15    | 15  |
+| D4  | 15    | 15  |
+| D5  | 15    | 15  |
+| D6  | 15    | 15  |
+| D7  | 10    | 10  |
+| D8  | 15    | 15  |
+GRADE_EOF
+    ;;
   *)
     printf 'unknown-prompt-stub\n' ;;
 esac
@@ -255,7 +242,27 @@ exit 0
 CLAUDE_EOF
   chmod +x "$stub_dir/claude"
 
-  # Invoke driver with PATH prefix — suppress long output, capture to file.
+  # Stub iteration.sh shim (LARCH_ITERATION_SCRIPT_OVERRIDE target).
+  cat > "$fixture_tmp/stub-iteration.sh" <<'SHIM_EOF'
+#!/usr/bin/env bash
+# Parse minimal args to find --iter-num and the skill name.
+ITER_NUM=1
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --iter-num) ITER_NUM="$2"; shift 2 ;;
+    --issue|--work-dir|--breadcrumb-prefix) shift 2 ;;
+    --slack) shift ;;
+    --) shift; break ;;
+    --*) shift ;;
+    *) break ;;
+  esac
+done
+SHIM_EOF
+  # Append the fixture-specific iteration body (sets KV footer fields + emits).
+  printf '%s\n' "$iter_body" >> "$fixture_tmp/stub-iteration.sh"
+  chmod +x "$fixture_tmp/stub-iteration.sh"
+
+  # Invoke driver with PATH prefix + iteration override.
   local driver_log="$fixture_tmp/driver.log"
   local rc=0
   (
@@ -263,25 +270,11 @@ CLAUDE_EOF
     PATH="$stub_dir:$PATH" \
     CLAUDE_PLUGIN_ROOT="$REPO_ROOT" \
     LOOP_IMPROVE_SKIP_PREFLIGHT=1 \
+    LARCH_ITERATION_SCRIPT_OVERRIDE="$fixture_tmp/stub-iteration.sh" \
       bash "$DRIVER" testskill
   ) > "$driver_log" 2>&1 || rc=$?
 
-  # Best-effort: some fixtures are smoke-only and the driver may legitimately
-  # exit non-zero because of the stubbed environment (no git repo, etc.).
-  # Assert on observable output tokens rather than exit code.
-
-  # Behavioral fixtures are best-effort smoke tests — the driver depends on
-  # helper scripts (preflight, session-setup, run-external-reviewer) that
-  # have environmental requirements not always satisfiable from the harness.
-  # If session-setup fails preflight in the fixture work_dir, the driver
-  # aborts before the phase under test. In that case we SKIP the fixture
-  # rather than fail the harness — the structural assertions above are the
-  # primary contract; behavioral fixtures are smoke aids only.
-  # Driver dies at SETUP_OUT=$(...) under `set -e` when session-setup.sh exits
-  # non-zero due to preflight failure in the fixture work_dir (not a git repo
-  # with origin main configured). The driver log stops after "2: session
-  # setup" breadcrumb with no further output; detect either that shape or a
-  # rc >= 2 (session-setup or preflight error codes).
+  # Skip fixture if preflight failed in the fixture env (same policy as before).
   local skip_reason=""
   if grep -q 'PREFLIGHT=fail\|PREFLIGHT_ERROR\|session setup — failed' "$driver_log" 2>/dev/null; then
     skip_reason="session-setup preflight not satisfiable in fixture work_dir"
@@ -297,7 +290,7 @@ CLAUDE_EOF
     else
       fail "fixture [$name]: missing expected pattern '$expect_grep' (rc=$rc)"
       echo "    === driver.log (tail) ===" >&2
-      tail -40 "$driver_log" >&2 || true
+      tail -60 "$driver_log" >&2 || true
     fi
 
     if [[ -n "$not_grep" ]]; then
@@ -312,66 +305,67 @@ CLAUDE_EOF
   rm -rf "$fixture_tmp" 2>/dev/null || true
 }
 
-# Only run behavioral fixtures if the helper scripts exist — they reference
-# session-setup.sh, run-external-reviewer.sh, etc., which must be on disk
-# for the driver to work even with stubs.
+# Only run behavioral fixtures if the helper scripts exist.
 if [[ -x "$REPO_ROOT/scripts/session-setup.sh" && \
-      -x "$REPO_ROOT/scripts/run-external-reviewer.sh" && \
       -x "$REPO_ROOT/scripts/cleanup-tmpdir.sh" && \
       -x "$REPO_ROOT/scripts/redact-secrets.sh" && \
-      -x "$REPO_ROOT/scripts/parse-skill-judge-grade.sh" && \
-      -x "$REPO_ROOT/scripts/verify-skill-called.sh" ]]; then
+      -x "$REPO_ROOT/scripts/parse-skill-judge-grade.sh" ]]; then
 
-  GRADE_A_JUDGE="$(build_grade_a_judge)"
-
-  # Fixture 1: grade_a_achieved at iter 1
+  # Fixture 1: iteration returns ITER_STATUS=grade_a on iteration 1
+  # shellcheck disable=SC2016
   run_fixture \
-    "grade_a_achieved_iter1" \
-    "cat <<'HEREDOC_EOF'
-$GRADE_A_JUDGE
-HEREDOC_EOF" \
-    "echo 'should not be called'" \
-    "echo '✅ 18: cleanup'" \
-    'grade A achieved|grade_a_achieved|Loop finished' \
+    "grade_a_at_iter1" \
+    'printf "> **🔶 4.1.j: judge**\n"
+printf "✅ 4.1.j: judge — grade A\n"
+printf "\n### iteration-result\n"
+printf "ITER_STATUS=grade_a\n"
+printf "EXIT_REASON=grade A achieved on all dimensions at iteration 1\n"
+printf "PARSE_STATUS=ok\n"
+printf "GRADE_A=true\n"
+printf "NON_A_DIMS=\n"
+printf "TOTAL_NUM=120\n"
+printf "TOTAL_DEN=120\n"
+printf "ITERATION_TMPDIR=\n"
+printf "ISSUE_NUM=42\n"
+exit 0' \
+    'grade A achieved|Loop finished' \
     ''
 
-  # Fixture 2: no_plan at iter 1 (non-A judge, design returns "No plan.")
-  NON_A_JUDGE="$(cat <<'EOF'
-# Report
-
-## Dimension Scores
-
-| Dim | Score | Max |
-|-----|-------|-----|
-| D1  | 18    | 20  |
-| D2  | 14    | 15  |
-| D3  | 14    | 15  |
-| D4  | 14    | 15  |
-| D5  | 14    | 15  |
-| D6  | 14    | 15  |
-| D7  | 8     | 10  |
-| D8  | 14    | 15  |
-EOF
-)"
+  # Fixture 2: iteration returns ITER_STATUS=no_plan on iteration 1
+  # shellcheck disable=SC2016
   run_fixture \
-    "no_plan" \
-    "cat <<'HEREDOC_EOF'
-$NON_A_JUDGE
-HEREDOC_EOF" \
-    "printf 'No plan.\n'" \
-    "echo 'should not be called'" \
-    'no plan at iteration 1|no_plan|Infeasibility' \
+    "no_plan_at_iter1" \
+    'printf "> **🔶 4.1.d: design**\n"
+printf "\n### iteration-result\n"
+printf "ITER_STATUS=no_plan\n"
+printf "EXIT_REASON=no plan at iteration 1\n"
+printf "PARSE_STATUS=ok\n"
+printf "GRADE_A=false\n"
+printf "NON_A_DIMS=D2,D7\n"
+printf "TOTAL_NUM=100\n"
+printf "TOTAL_DEN=120\n"
+printf "ITERATION_TMPDIR=\n"
+printf "ISSUE_NUM=42\n"
+exit 0' \
+    'no plan at iteration 1|Infeasibility' \
     ''
 
-  # Fixture 3: im_verification_failed (valid plan, /im output lacks ✅ 18: cleanup)
+  # Fixture 3: iteration returns ITER_STATUS=im_verification_failed
+  # shellcheck disable=SC2016
   run_fixture \
-    "im_verification_failed" \
-    "cat <<'HEREDOC_EOF'
-$NON_A_JUDGE
-HEREDOC_EOF" \
-    "printf '## Implementation Plan\n\n- Step one\n- Step two\n'" \
-    "printf 'Some output but no canonical completion line.\n'" \
-    'im did not reach canonical completion line|im_verification_failed|Infeasibility' \
+    "im_verification_failed_at_iter1" \
+    'printf "\n### iteration-result\n"
+printf "ITER_STATUS=im_verification_failed\n"
+printf "EXIT_REASON=/im did not reach canonical completion line at iteration 1\n"
+printf "PARSE_STATUS=ok\n"
+printf "GRADE_A=false\n"
+printf "NON_A_DIMS=D2,D7\n"
+printf "TOTAL_NUM=100\n"
+printf "TOTAL_DEN=120\n"
+printf "ITERATION_TMPDIR=\n"
+printf "ISSUE_NUM=42\n"
+exit 0' \
+    'im did not reach canonical completion line|Infeasibility' \
     ''
 
 else

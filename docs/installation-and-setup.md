@@ -82,7 +82,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/loop-improve-skill`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/loop-improve-skill`, `/improve-skill`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
 | Agents | `code-reviewer` (unified archetype covering code quality, risk/integration, correctness, architecture, security) |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 | SessionStart hook | `sessionstart-health.sh` — at session start/resume/clear/compact, probes `jq` and `git` on `PATH`; if either is missing, injects an advisory into session context so the issue is visible before the first `Edit`/`Write`. Non-blocking (always exits 0); silent when both tools are present |
