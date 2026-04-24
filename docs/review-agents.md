@@ -90,3 +90,7 @@ External reviewers (Codex, Cursor) produce single-list output — their entire o
 **Note A**: Both `/loop-review` and `/research` use a 3-lane composition under the Negotiation Protocol, matching the `/design` and `/review` shape. Lane count is independent of protocol choice — the Negotiation Protocol supports any per-reviewer independent negotiation count. Every full 3-reviewer panel in this repo shares the same 3-attribution shape (`Code`, `Codex`, `Cursor`), with a single Claude Code Reviewer subagent fallback per unavailable external preserving the 3-lane invariant. Exceptions: `/implement` quick mode runs only 1 Claude Code Reviewer subagent (no externals, no voting), and voting panels may collapse to 2 or skip per the threshold rules in `skills/shared/voting-protocol.md`.
 
 **Claude fallback for externals**: When Cursor or Codex is unavailable in the 3-reviewer skills, a Claude Code Reviewer subagent is launched in its place so the total reviewer count remains 3.
+
+## Migration from legacy agent slugs
+
+The previous two archetypes `general-reviewer` and `deep-analysis-reviewer` have been replaced by the single unified `code-reviewer`. Consumers that invoked those older agent slugs directly (via `--agents` or subagent_type references in downstream docs/scripts) must switch to `code-reviewer`.
