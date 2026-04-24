@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.4] - 2026-04-23
+
+### Changed
+
+- Phase 5 of umbrella #348 (closes #353): retarget the rebase-rebump sub-procedure's Version Bump Reasoning refresh from the PR body to the tracking-issue anchor's `version-bump-reasoning` section. Extract a shared anchor-body assembler (`scripts/assemble-anchor.sh` + `scripts/anchor-section-markers.sh`) so `tracking-issue-write.sh` and the assembly walk share one executable source of truth for the 8 canonical `SECTION_MARKERS`. `skills/implement/references/rebase-rebump-subprocedure.md` Step 6 now reads the tracking-issue sentinel, preserves the prior fragment on `HAS_BUMP=false` degraded paths (no placeholder overwrite), assembles via the shared helper, and upserts the anchor — with fail-soft skip semantics when the sentinel is unusable. `skills/implement/SKILL.md` routes all anchor assembly (Step 0.5 Branch 2/3 seed, Steps 1/5/7a/8/9a.1/11 progressive upserts) through the same helper. Doc sweep across `rebase-rebump-subprocedure.md`, `conflict-resolution.md`, `anchor-comment-template.md` retargets every "PR body refresh" mention. New test harnesses: `scripts/test-assemble-anchor.sh` (10 assertions — empty/partial/full fragment shapes, missing-helper fail-closed, non-directory `--sections-dir`, unreadable fragment, first-line marker, trailing-newline regression guard). `scripts/test-tracking-issue-write.sh` gains (h) missing-helper-contract + (i) `SECTION_MARKERS ⊆ COLLAPSE_PRIORITY` invariant. `scripts/test-implement-structure.sh` gains (11) sub-procedure reference set + (12) SSoT source-call invariant (now 12 structural invariants total).
+
 ## [6.2.3] - 2026-04-23
 
 ### Changed
