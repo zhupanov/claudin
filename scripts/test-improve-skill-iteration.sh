@@ -18,7 +18,7 @@
 #     the amended /design prompt's four-rule directive set (rules 1-3 plus
 #     the new rule 4 pushback carve-out — load-bearing "## Pushback on judge
 #     findings" subsection + "MAY disagree with specific" key phrase), and
-#     the SLACK_FLAG="--slack " byte-parallel literal.
+#     the NO_SLACK_FLAG="--no-slack " byte-parallel literal.
 #
 #   Tier 2 — Behavioral (best-effort smoke tests with stubbed claude + gh):
 #     Stubs `claude` and `gh` on PATH under a mktemp'd fixture skill dir and
@@ -108,13 +108,13 @@ check_contains 'iter-${ITER_NUM}-infeasibility.md'             'infeasibility fi
 check_contains 'IMPROVE_SKILL_SKIP_PREFLIGHT'                  'opt-in preflight-skip env var'
 
 # ---------- Argv flags ----------
-check_contains '--slack'                                       '--slack flag handling'
+check_contains '--no-slack'                                    '--no-slack flag handling'
 check_contains '--issue'                                       '--issue flag handling'
 check_contains '--work-dir'                                    '--work-dir flag handling'
 check_contains '--iter-num'                                    '--iter-num flag handling'
 check_contains '--breadcrumb-prefix'                           '--breadcrumb-prefix flag handling'
-# SLACK_FLAG byte-parallel literal (trailing space matters for /larch:im prompt composition).
-check_contains 'SLACK_FLAG="--slack "'                         'SLACK_FLAG byte-parallel literal'
+# NO_SLACK_FLAG byte-parallel literal (trailing space matters for /larch:im prompt composition).
+check_contains 'NO_SLACK_FLAG="--no-slack "'                   'NO_SLACK_FLAG byte-parallel literal'
 
 # ---------- KV footer (EXIT trap + schema) ----------
 check_contains 'trap cleanup_on_exit EXIT'                     'EXIT trap (guarantees KV footer emission)'

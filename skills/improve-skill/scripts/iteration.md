@@ -9,7 +9,7 @@
 ## Invocation
 
 ```
-iteration.sh [--slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>
+iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>
 ```
 
 ## Modes

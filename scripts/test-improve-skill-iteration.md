@@ -6,7 +6,7 @@
 
 **Tier 1 — Structural**: pins contract tokens in `iteration.sh` source:
 - subprocess invocation and security contracts: `parse-skill-judge-grade.sh`, `claude --version`, `set -euo pipefail`, `verify-skill-called.sh --stdout-line '^✅ 18: cleanup'`, work-dir `/tmp/` + `/private/tmp/` prefix literals, `'..'` rejection, `--plugin-dir` + `"$CLAUDE_PLUGIN_ROOT"` (FINDING_7), fully-qualified `/larch:design` / `/larch:im`, `2> "$stderr_file"` + `local stderr_file="${out_file}.stderr"` (FINDING_10), `< "$prompt_file"` (FINDING_9), `redact-secrets.sh`, `cleanup-tmpdir.sh`, `gh issue comment` + `gh issue create`, `session-setup.sh`, `IMPROVE_SKILL_SKIP_PREFLIGHT` opt-in;
-- argv flags: `--slack`, `--issue`, `--work-dir`, `--iter-num`, `--breadcrumb-prefix`; `SLACK_FLAG="--slack "` byte-parallel literal;
+- argv flags: `--no-slack`, `--issue`, `--work-dir`, `--iter-num`, `--breadcrumb-prefix`; `NO_SLACK_FLAG="--no-slack "` byte-parallel literal;
 - per-iteration artifact filename template: `iter-${ITER_NUM}-judge-prompt.txt`, `iter-${ITER_NUM}-design-prompt.txt`, `iter-${ITER_NUM}-im-prompt.txt`, `iter-${ITER_NUM}-infeasibility.md`;
 - KV-footer machinery: `trap cleanup_on_exit EXIT`, `emit_kv_footer`, the `### iteration-result` delimiter, and all 9 KV keys (`ITER_STATUS`, `EXIT_REASON`, `PARSE_STATUS`, `GRADE_A`, `NON_A_DIMS`, `TOTAL_NUM`, `TOTAL_DEN`, `ITERATION_TMPDIR`, `ISSUE_NUM`);
 - amended `/design` prompt four-rule directive set — rules 1-3 byte-present alongside rule 4 (pushback carve-out: `MAY disagree with specific /skill-judge findings`, `## Pushback on judge findings`, `does NOT override rules 1-3`);

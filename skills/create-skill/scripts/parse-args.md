@@ -1,6 +1,6 @@
 # parse-args.sh contract
 
-`skills/create-skill/scripts/parse-args.sh` parses `/create-skill`'s `$ARGUMENTS` string and emits the six named values (`NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`, `SLACK`) that Step 1 of `skills/create-skill/SKILL.md` consumes. The authoritative developer-facing specification is the in-file header (lines 1–30 of the script) — edits that change the flag list, the stdout `KEY=VALUE` grammar, the positional-argument rules, or the error-message format MUST update both the in-file header and this sibling in the same PR per `AGENTS.md § Editing rules` (per-script contract rule).
+`skills/create-skill/scripts/parse-args.sh` parses `/create-skill`'s `$ARGUMENTS` string and emits the seven named values (`NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`, `NO_SLACK`) that Step 1 of `skills/create-skill/SKILL.md` consumes. The authoritative developer-facing specification is the in-file header (lines 1–33 of the script) — edits that change the flag list, the stdout `KEY=VALUE` grammar, the positional-argument rules, or the error-message format MUST update both the in-file header and this sibling in the same PR per `AGENTS.md § Editing rules` (per-script contract rule).
 
 ## Stdout contract (success, one line per `KEY=VALUE`)
 
@@ -10,11 +10,11 @@
 - `MULTI_STEP=true|false` — whether `--multi-step` was present.
 - `MERGE=true|false` — whether `--merge` was present. Retained for backward compatibility only; `/create-skill` already delegates to `/im` (which prepends `--merge`), so this value is NOT forwarded at delegation time.
 - `DEBUG=true|false` — whether `--debug` was present. Forwarded to `/im` (and thence to `/implement`) when `true`.
-- `SLACK=true|false` — whether `--slack` was present. Forwarded to `/im` (and thence to `/implement`) when `true` so the scaffold PR posts to Slack. When `false` (the default), no Slack calls are made regardless of Slack env-var presence.
+- `NO_SLACK=true|false` — whether `--no-slack` was present. Forwarded to `/im` (and thence to `/implement`) when `true`, suppressing the delegated run's Slack announcement. When `false` (the default), the delegated run posts per `/implement`'s default-on behavior (gated on Slack env vars).
 
 ## Error contract
 
-- Unknown flag → emits `ERROR=Unknown flag '<flag>'. Valid flags: --plugin, --multi-step, --merge, --debug, --slack.` to stdout and exits non-zero.
+- Unknown flag → emits `ERROR=Unknown flag '<flag>'. Valid flags: --plugin, --multi-step, --merge, --debug, --no-slack.` to stdout and exits non-zero.
 - Missing `<skill-name>` → emits `ERROR=Missing <skill-name>. Usage: ...` to stdout and exits non-zero.
 - Missing `<description>` → emits `ERROR=Missing <description>. Usage: ...` to stdout and exits non-zero.
 
@@ -26,4 +26,4 @@
 
 ## Test coverage
 
-No dedicated offline harness exists for `parse-args.sh`. The script is exercised indirectly via every `/create-skill` invocation and by the repo's `agent-lint` pass over `SKILL.md`. If the stdout grammar changes materially (new output key, renamed key, new error code), add a minimal shell-level regression harness under `skills/create-skill/scripts/test-parse-args.sh` and wire it into `make lint` in the same PR.
+A dedicated offline harness exists at `scripts/test-parse-args.sh` and is wired into `make lint`. Add new test cases there whenever the stdout grammar, flag list, or error-message format changes. The script is also exercised indirectly via every `/create-skill` invocation and by the repo's `agent-lint` pass over `SKILL.md`.

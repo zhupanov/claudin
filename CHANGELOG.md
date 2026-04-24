@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] - 2026-04-24
+
+### Changed
+
+- **BREAKING**: Rename `/implement`'s `--slack` flag to `--no-slack` and invert the default. Slack posting is now **on by default** when `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` are configured; pass `--no-slack` to opt out. The old `--slack` flag is rejected (no deprecation shim — existing aliases that embed `--slack` must be updated).
+- **BREAKING**: Remove all PR Slack posting. `/implement` no longer posts about the PR at Step 11 and no longer adds a `:merged:` emoji at Step 13 (both deleted). Replaced with a single **tracking-issue** Slack post at new Step 16a near the end of each run. Message body is a one-liner: `<emoji> <https://github.com/$REPO/issues/$N|Issue #$N> (<title>) — <status>[ — <detail>]`. Emoji: ✅ closed (PR merged and issue auto-closed via `Closes #N`), 📝 PR opened but not merged (`--merge` not set or `--draft`), ❌ blocked (CI failure, merge failure, Step 12d bail for non-user-input reason), ❓ needs user input (auto-mode conflict-resolution bail under `auto_mode=true`). `Issue #N` is a clickable GitHub link. The post identifies as the git user (`git config user.name` → Slack `chat.postMessage` `username` field), matching the identity the deleted PR-announce path used — not as the bot's display name.
+- `/fix-issue` drops its own Slack post on the PR path (Step 8a deleted) — the delegated `/implement` run handles the Slack post via its Step 16a. The NON_PR path (Step 8b) still posts directly, now via the new shared `scripts/post-issue-slack.sh` and now gated on `--no-slack` in addition to `slack_available`. `/fix-issue` accepts `--no-slack` and forwards it to `/implement`.
+- All downstream skills that forward the flag renamed `--slack` → `--no-slack`: `/alias` (dual-role preserved with the new name), `/simplify-skill`, `/compress-skill`, `/create-skill` (`SLACK=true|false` output key renamed to `NO_SLACK=true|false` in `scripts/parse-args.sh`), `/loop-improve-skill`, `/improve-skill`. Driver scripts updated: `skills/loop-improve-skill/scripts/driver.sh`, `skills/improve-skill/scripts/iteration.sh`.
+- `scripts/post-issue-slack.sh` (new, at repo-root `scripts/`): thin composer that accepts `--issue-number --status --repo [--pr-url] [--detail] --token --channel-id`. Fetches issue title and URL via `gh issue view --repo` (scoped to the caller-supplied repo so gh's default-repo context cannot fetch the wrong issue). Falls back to `gh repo view --json url` to derive the GHE-safe host before hardcoding github.com. Escapes mrkdwn-reserved characters in both title and detail. Delegates the API call to `scripts/post-slack-message.sh --username "$(git config user.name)"`. Sibling contract at `scripts/post-issue-slack.md` documents the interface, invariants, and edit-in-sync triggers.
+- `/implement` Step 12 now sets `pr_closed=true` on merge success (both Step 12b `MERGE_RESULT in (merged, admin_merged)` and `ACTION=already_merged`) so Step 16a's outcome state machine classifies externally-merged PRs as `closed` instead of `blocked`. Step 12d persists `FINAL_BAIL_REASON` into parent scope so the state machine has the bail reason available as the `--detail` tail.
+- `/implement` conflict-resolution procedure Phase 2 sets `BAIL_NEEDS_USER_INPUT=true` when bailing under `auto_mode=true` due to low confidence. Step 16a's state machine checks this flag (not a free-form BAIL_REASON grep) to emit the ❓ emoji.
+
+### Removed
+
+- Scripts deleted as unused after the refactor: `scripts/post-pr-announce.sh`, `scripts/slack-announce.sh`, `scripts/post-merged-emoji.sh`, `scripts/add-merged-emoji.sh`, `scripts/add-slack-emoji.sh`, `scripts/parse-pr-summary.sh`, `skills/fix-issue/scripts/post-issue-slack.sh` (replaced by the repo-root version).
+- `LARCH_SLACK_USER_ID` env var and `slack_user_id` userConfig entry removed — they were only used for `@-mentioning` in the deleted PR-announce message. `scripts/session-setup.sh` stops exporting `LARCH_SLACK_USER_ID` from `CLAUDE_PLUGIN_OPTION_SLACK_USER_ID`.
+
+### Added
+
+- `scripts/test-parse-args.sh` (new harness): 19 tests pinning the `skills/create-skill/scripts/parse-args.sh` stdout grammar (new `NO_SLACK` key), flag list, and error-message format. Wired into `make lint` via `Makefile` `test-parse-args` target + `test-harnesses` aggregate. Sibling `scripts/test-parse-args.md` contract.
+
 ## [6.3.1] - 2026-04-24
 
 ### Changed

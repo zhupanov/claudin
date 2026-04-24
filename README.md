@@ -26,7 +26,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
 - **[Multi-agent design planning, reviews, and adjudication](docs/collaborative-sketches.md)** — 5 sketch agents diverge, a dialectic 3-judge binary panel resolves contested decisions, and a 3-reviewer panel validates the final plan.
 - **[Voting-based review resolution](docs/voting-process.md)** — A 3-agent YES/NO/EXONERATE panel adjudicates plan and code review findings.
 - **[Reviewer competition scoring](docs/point-competition.md)** — Reviewers earn points based on finding quality; a scoreboard tracks accepted, neutral, exonerated, and rejected findings.
-- **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation and initial CI wait in one command; `--merge` adds the CI+rebase+merge loop, local cleanup, and main verification. `--slack` announces the PR; `--draft` creates a draft PR and keeps the branch for further iteration.
+- **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation and initial CI wait in one command; `--merge` adds the CI+rebase+merge loop, local cleanup, and main verification. Each run also posts a single Slack status message about its tracking issue near the end (✅ closed / 📝 PR opened / ❌ blocked / ❓ user input needed) when Slack is configured — opt out with `--no-slack`. `--draft` creates a draft PR and keeps the branch for further iteration.
 - **[External reviewer integration](docs/external-reviewers.md)** — Codex and Cursor participate alongside Claude subagents as sketch agents, debaters, judges, reviewers, and voters.
 - **[Systematic codebase review](skills/loop-review/SKILL.md)** — `/loop-review` partitions the repo into slices, reviews each with a 3-reviewer panel, and files every actionable finding as a deduplicated GitHub issue. Security-tagged findings are held locally per `SECURITY.md`.
 - **[Tracked runs](skills/implement/SKILL.md)** — `/implement` PRs link to a tracking issue whose anchor comment is the single source of truth for full report content (voting tallies, rejected findings, version-bump reasoning, diagrams, OOS links, execution issues, run statistics).
@@ -40,19 +40,19 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
   <tbody>
     <tr>
       <td><a href="docs/skills.md#alias"><code>/alias</code></a></td>
-      <td><code>[--merge] [--slack] &lt;alias-name&gt; &lt;target-skill&gt; [preset-flags...]</code></td>
+      <td><code>[--merge] [--no-slack] &lt;alias-name&gt; &lt;target-skill&gt; [preset-flags...]</code></td>
     </tr>
     <tr><td colspan="2">Create a project-level alias for a larch skill with preset flags.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#compress-skill"><code>/compress-skill</code></a></td>
-      <td><code>[--debug] [--slack] &lt;skill-name-or-path&gt;</code></td>
+      <td><code>[--debug] [--no-slack] &lt;skill-name-or-path&gt;</code></td>
     </tr>
     <tr><td colspan="2">Compress a skill's Markdown prose via a behavior-preserving rewrite.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#create-skill"><code>/create-skill</code></a></td>
-      <td><code>[--plugin] [--multi-step] [--merge] [--debug] [--slack] &lt;skill-name&gt; &lt;description&gt;</code></td>
+      <td><code>[--plugin] [--multi-step] [--merge] [--debug] [--no-slack] &lt;skill-name&gt; &lt;description&gt;</code></td>
     </tr>
     <tr><td colspan="2">Scaffold a new larch-style skill from a name and description.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
@@ -64,13 +64,13 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#fix-issue"><code>/fix-issue</code></a></td>
-      <td><code>[--debug] [--slack] [&lt;number-or-url&gt;]</code></td>
+      <td><code>[--debug] [--no-slack] [&lt;number-or-url&gt;]</code></td>
     </tr>
     <tr><td colspan="2">Process one approved GitHub issue per invocation, classifying intent and delegating PR work to <code>/implement</code>.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#implement"><code>/implement</code></a></td>
-      <td><code>[--quick] [--auto] [--merge | --draft] [--slack] [--debug] [--issue &lt;N&gt;] &lt;feature description&gt;</code></td>
+      <td><code>[--quick] [--auto] [--merge | --draft] [--no-slack] [--debug] [--issue &lt;N&gt;] &lt;feature description&gt;</code></td>
     </tr>
     <tr><td colspan="2">Full end-to-end feature workflow — design, implement, PR. <code>--quick</code> skips <code>/design</code> and runs a simplified single-reviewer loop of up to 7 rounds with a per-round Cursor → Codex → Claude fallback chain (no voting panel).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
@@ -82,13 +82,13 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#improve-skill"><code>/improve-skill</code></a></td>
-      <td><code>[--slack] [--issue &lt;N&gt;] &lt;skill-name&gt;</code></td>
+      <td><code>[--no-slack] [--issue &lt;N&gt;] &lt;skill-name&gt;</code></td>
     </tr>
     <tr><td colspan="2">Run exactly one iteration of the judge → design → implement loop against an existing larch skill. Amended <code>/design</code> prompt carries a narrow per-finding pushback carve-out for skill-judge findings that appear erroneous (detailed per-finding justification required).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#loop-improve-skill"><code>/loop-improve-skill</code></a></td>
-      <td><code>[--slack] &lt;skill-name&gt;</code></td>
+      <td><code>[--no-slack] &lt;skill-name&gt;</code></td>
     </tr>
     <tr><td colspan="2">Iteratively improve an existing larch skill via a judge → design → implement loop (up to 10 rounds); reuses the <code>/improve-skill</code> iteration kernel.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
@@ -118,7 +118,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#simplify-skill"><code>/simplify-skill</code></a></td>
-      <td><code>[--debug] [--slack] &lt;skill-name&gt;</code></td>
+      <td><code>[--debug] [--no-slack] &lt;skill-name&gt;</code></td>
     </tr>
     <tr><td colspan="2">Refactor a skill for stronger adherence to design principles and reduced SKILL.md footprint.</td></tr>
   </tbody>

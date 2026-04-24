@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-parse-input test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-parse-input test-parse-args test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe
 
 # CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
 # (regression harnesses). `lint` remains the local-dev convenience target
@@ -11,13 +11,16 @@ lint: test-harnesses lint-only
 lint-only:
 	pre-commit run --all-files
 
-test-harnesses: test-redact test-parse-input test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor
+test-harnesses: test-redact test-parse-input test-parse-args test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor
 
 test-redact:
 	bash scripts/test-redact-secrets.sh
 
 test-parse-input:
 	bash skills/issue/scripts/test-parse-input.sh
+
+test-parse-args:
+	bash scripts/test-parse-args.sh
 
 test-parse-prose-blockers:
 	bash skills/fix-issue/scripts/test-parse-prose-blockers.sh

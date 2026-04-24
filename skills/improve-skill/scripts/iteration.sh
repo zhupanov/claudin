@@ -13,12 +13,14 @@
 # transitions in the parent shell. See SECURITY.md /improve-skill subsection.
 #
 # Usage:
-#   iteration.sh [--slack] [--issue <N>] [--breadcrumb-prefix <P>] \
+#   iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] \
 #                [--work-dir <path>] [--iter-num <N>] <skill-name>
 #
 # Flags:
-#   --slack                  Prepend '--slack ' to the /larch:im prompt so the
-#                            iteration's PR posts to Slack. Default: absent.
+#   --no-slack               Prepend '--no-slack ' to the /larch:im prompt so the
+#                            iteration's /implement run does NOT post to Slack.
+#                            Default: absent — posts per /implement's default-on
+#                            behavior (gated on Slack env vars).
 #   --issue <N>              Use existing tracking issue #N (required for loop
 #                            invocation; standalone creates its own via gh).
 #   --breadcrumb-prefix <P>  Prepend P to every breadcrumb (e.g., '4.3' for
@@ -152,14 +154,14 @@ trap cleanup_on_exit EXIT
 # Step 1 — Parse flags + positional arg
 # --------------------------------------------------------------------------
 
-SLACK_FLAG=""   # empty by default; set to "--slack " (trailing space) if --slack is present
+NO_SLACK_FLAG=""   # empty by default; set to "--no-slack " (trailing space) if --no-slack is present
 ISSUE_ARG=""
 WORK_DIR_ARG=""
 ITER_NUM="1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --slack) SLACK_FLAG="--slack "; shift ;;
+    --no-slack) NO_SLACK_FLAG="--no-slack "; shift ;;
     --issue)
       if [[ $# -lt 2 || -z "${2:-}" ]]; then
         breadcrumb_warn "1: parse args — --issue requires a value. Aborting."
@@ -204,7 +206,7 @@ while [[ $# -gt 0 ]]; do
       shift 2 ;;
     --) shift; break ;;
     --*)
-      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --slack, --issue, --breadcrumb-prefix, --work-dir, --iter-num."
+      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --no-slack, --issue, --breadcrumb-prefix, --work-dir, --iter-num."
       KV_EXIT_REASON="unknown flag '$1'"
       exit 1
       ;;
@@ -213,7 +215,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $# -lt 1 ]]; then
-  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: iteration.sh [--slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>"
+  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>"
   KV_EXIT_REASON="missing <skill-name>"
   exit 1
 fi
@@ -715,11 +717,12 @@ breadcrumb_inprogress "4.i: im"
 IM_PROMPT="$WORK_DIR/iter-${ITER_NUM}-im-prompt.txt"
 IM_OUT="$WORK_DIR/iter-${ITER_NUM}-im.txt"
 
-# SLACK_FLAG is either empty or "--slack " (trailing space) — byte-parallel
-# to the pre-#273 driver.sh pattern. Prepending here makes this iteration's
-# /larch:im opt into Slack posting when --slack was passed to iteration.sh.
+# NO_SLACK_FLAG is either empty or "--no-slack " (trailing space). Prepending
+# here makes this iteration's /larch:im suppress Slack posting when --no-slack
+# was passed to iteration.sh; default is to post per /implement's default-on
+# behavior (gated on Slack env vars).
 {
-  printf '/larch:im %s' "$SLACK_FLAG"
+  printf '/larch:im %s' "$NO_SLACK_FLAG"
   cat "$DESIGN_OUT"
 } > "$IM_PROMPT"
 

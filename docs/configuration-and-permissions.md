@@ -58,46 +58,32 @@ These checks are re-verified immediately before the `--admin` attempt — the sc
 
 Larch uses environment variables for Slack integration and external reviewer model configuration. All are optional — when not set, Slack-related features are skipped with warnings, and external reviewers use their default models.
 
-> **Important:** Slack posting in `/implement` is opt-in: pass `--slack` to request it. When `--slack` is set, both `LARCH_SLACK_BOT_TOKEN` **and** `LARCH_SLACK_CHANNEL_ID` must also be present in your shell environment — if either is missing, **all** Slack operations (PR announcements, `:merged:` emoji) are skipped with a warning at session setup time identifying which variable(s) are absent. When `--slack` is not set, no Slack calls are made regardless of environment configuration. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
+> **Important:** Slack posting in `/implement` is **on by default** when Slack env vars are configured. `/implement` posts a single status message about its tracking issue near the end of each run (✅ closed / 📝 PR opened / ❌ blocked / ❓ user input needed). Pass `--no-slack` to opt out. When both `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` are present in your shell environment, the post is made (unless `--no-slack` is set); if either is missing, the post is skipped with a warning at session setup time identifying which variable(s) are absent. When `--no-slack` is set, no Slack calls are made regardless of environment configuration. These variables must be present in the environment where `claude` is launched — they are not read from `.env` files or configuration.
 
 **Alternative: Plugin `userConfig`** — If you installed larch as a plugin, you can also configure Slack tokens via the plugin's `userConfig` (prompted at plugin enable time). The `userConfig` values are exported as `CLAUDE_PLUGIN_OPTION_*` environment variables to subprocesses. Larch checks both: environment variables take precedence if both are set.
 
 ### `LARCH_SLACK_BOT_TOKEN`
 
-A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack API calls.
+A Slack Bot User OAuth Token (starts with `xoxb-`) used to authenticate Slack API calls. The post body identifies the sender as the git user (via `git config user.name` → Slack `chat.postMessage` `username` parameter), so the message appears attributed to the human running the workflow rather than to the bot's display name.
 
-**When set (and `/implement` is invoked with `--slack`):**
-- `/implement` posts PR announcements to Slack after creating a PR
-- `/implement` adds a `:merged:` emoji reaction to the Slack announcement after the PR is merged
+**When set (and `/implement` is invoked without `--no-slack`):**
+- `/implement` posts a one-line tracking-issue status message to Slack near the end of each run (Step 16a)
 - The token's presence is checked during session setup and its availability is propagated to child skills
 
-**When not set (or `/implement` is invoked without `--slack`):**
-- All Slack operations in `/implement` are skipped. When `--slack` is set but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_BOT_TOKEN not set). Slack announcement (Step 11) and :merged: emoji (Step 13) will be skipped.`). When `--slack` is not set, no warning is printed — Slack is not in use.
-- The `:merged:` emoji step in `/implement` is skipped
+**When not set (or `/implement` is invoked with `--no-slack`):**
+- All Slack operations in `/implement` are skipped. When running without `--no-slack` but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_BOT_TOKEN not set). Issue Slack announcement (Step 16a) will be skipped.`). When `--no-slack` is set, no warning is printed — Slack is not in use.
 - All other workflow steps (design, implementation, code review, CI monitoring, merge) proceed normally
 
 ### `LARCH_SLACK_CHANNEL_ID`
 
-The Slack channel ID (e.g., `C0123456789`) where PR announcements and emoji reactions are posted.
+The Slack channel ID (e.g., `C0123456789`) where tracking-issue status messages are posted.
 
-**When set (and `/implement` is invoked with `--slack`):**
-- PR announcements are posted to this channel
-- The `:merged:` emoji reaction targets announcements in this channel
+**When set (and `/implement` is invoked without `--no-slack`):**
+- The issue status message is posted to this channel
 
-**When not set (or `/implement` is invoked without `--slack`):**
-- All Slack operations in `/implement` are skipped. When `--slack` is set but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_CHANNEL_ID not set).`). When `--slack` is not set, no warning is printed.
-- The `:merged:` emoji step in `/implement` is also skipped
+**When not set (or `/implement` is invoked with `--no-slack`):**
+- All Slack operations in `/implement` are skipped. When running without `--no-slack` but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_CHANNEL_ID not set).`). When `--no-slack` is set, no warning is printed.
 - All other workflow steps proceed normally
-
-### `LARCH_SLACK_USER_ID`
-
-A Slack user ID (e.g., `U0123456789`) used to @-mention the PR author in Slack announcements.
-
-**When set:**
-- Slack announcements include an @-mention of this user, notifying them directly in the channel
-
-**When not set:**
-- Slack announcements are still posted, but without an @-mention — the message appears without a user notification
 
 ### External Reviewer Model Configuration
 

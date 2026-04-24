@@ -13,12 +13,14 @@
 # to halt between iteration return and this driver's post-call Bash.
 #
 # Usage:
-#   driver.sh [--slack] <skill-name>
+#   driver.sh [--no-slack] <skill-name>
 #
 # Arguments:
-#   --slack       — optional flag, must precede <skill-name>. Prepended to
-#                   every iteration.sh invocation so each iteration's
-#                   /larch:im posts to Slack. Default: absent.
+#   --no-slack    — optional flag, must precede <skill-name>. Prepended to
+#                   every iteration.sh invocation so no iteration's
+#                   /larch:im posts to Slack. Default: absent — each
+#                   iteration's /implement run posts per its default-on
+#                   behavior (gated on Slack env vars).
 #   <skill-name>  — target larch skill; leading `/` stripped; must match
 #                   `^[a-z][a-z0-9-]*$`.
 #
@@ -28,7 +30,7 @@
 #   Step 3 — gh issue create (the tracking issue is created ONCE by the loop
 #             driver; iteration.sh always receives --issue "$ISSUE_NUM")
 #   Step 4 — while ITER=1..10: invoke iteration.sh with --work-dir "$LOOP_TMPDIR"
-#             --iter-num "$ITER" --issue "$ISSUE_NUM" [--slack] "$SKILL_NAME";
+#             --iter-num "$ITER" --issue "$ISSUE_NUM" [--no-slack] "$SKILL_NAME";
 #             parse the KV footer from iteration.sh's stdout (via awk on the
 #             `### iteration-result` block); break on terminal ITER_STATUS
 #             (grade_a / no_plan / design_refusal / im_verification_failed /
@@ -104,13 +106,13 @@ trap cleanup_on_exit EXIT
 # Step 1 — Parse + validate flags and <skill-name>
 # --------------------------------------------------------------------------
 
-SLACK_FLAG=""  # empty by default; set to "--slack " if --slack is present
+NO_SLACK_FLAG=""  # empty by default; set to "--no-slack " if --no-slack is present
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --slack) SLACK_FLAG="--slack "; shift ;;
+    --no-slack) NO_SLACK_FLAG="--no-slack "; shift ;;
     --) shift; break ;;
     --*)
-      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --slack."
+      breadcrumb_warn "1: parse args — unknown flag '$1'. Valid flags: --no-slack."
       exit 1
       ;;
     *) break ;;
@@ -118,7 +120,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $# -lt 1 ]]; then
-  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: driver.sh [--slack] <skill-name>"
+  breadcrumb_warn "1: parse args — missing <skill-name>. Usage: driver.sh [--no-slack] <skill-name>"
   exit 1
 fi
 
@@ -325,12 +327,12 @@ NON_A_DIMS=""
 while [[ $ITER -le 10 ]]; do
   breadcrumb_inprogress "4: loop — iteration ${ITER}"
 
-  # Invoke iteration.sh. Append a trailing blank so the SLACK_FLAG split
-  # consistently when empty.
+  # Invoke iteration.sh. Build argv as an array so flag presence is explicit;
+  # conditionally prepend --no-slack when the caller passed it to the driver.
   ITER_OUT="$LOOP_TMPDIR/iter-${ITER}-iteration-stdout.txt"
   ITER_ARGV=()
-  if [[ -n "$SLACK_FLAG" ]]; then
-    ITER_ARGV+=(--slack)
+  if [[ -n "$NO_SLACK_FLAG" ]]; then
+    ITER_ARGV+=(--no-slack)
   fi
   ITER_ARGV+=(--issue "$ISSUE_NUM")
   ITER_ARGV+=(--work-dir "$LOOP_TMPDIR")
