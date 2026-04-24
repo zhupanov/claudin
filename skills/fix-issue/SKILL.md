@@ -20,6 +20,18 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 - `--issue <number-or-url>`: **Deprecated** — recognized for backward compatibility. Prefer passing the issue number or URL as a positional argument (e.g., `/fix-issue 42`). When this flag is encountered, print: `**ℹ '--issue' is deprecated; pass the issue number or URL as a positional argument instead (e.g., /fix-issue 42).**`
 - **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping all flags defined above (`--debug`, `--slack`, `--issue`), treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 1 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 1 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
 
+## Mindset
+
+Before processing each invocation, hold these four questions.
+
+**Is the issue still real?** Codebases move. A two-week-old bug may already be fixed; a "refactor X" request may reference deleted code. Triage (Step 4) is the cheap first-line filter — closing a stale issue with a research-summary comment is always cheaper than drafting a no-op PR.
+
+**What shape of output does the issue want back?** A code change (merged PR) vs. new GitHub issues or a written summary (NON_PR). Classification (Step 5) is a low-variance binary call; most issues are unambiguous. Default to `PR` **only when the issue is genuinely ambiguous** — a mis-classified `NON_PR` may sometimes surface during `/implement`'s `/review` phase (which reviews code changes, not the shape-of-work contract), in which case the operator may need to stop the run. When the issue text explicitly forbids a PR or mandates research/issues as the deliverable, pick `NON_PR` regardless of the default — overriding the stated deliverable is not recoverable downstream. A mis-classified `PR` (picking `NON_PR` for a genuine code-change request) silently skips real work.
+
+**How fragile is the change?** Complexity (Step 5) picks `/implement --quick` (SIMPLE — single-reviewer loop) or the full `/design` + `/review` panel (HARD). Default to HARD — an extra design round on a truly simple issue costs little, while skipping `/design` on a multi-file refactor costs a broken PR.
+
+**Where does a crash leave the issue?** `IN PROGRESS` is a lock, not a status. A Step 2+ crash keeps the issue locked until a human clears the comment. Consult Known Limitations for each recovery path before deviating from the step sequence.
+
 ## Progress Reporting
 
 Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
@@ -38,6 +50,22 @@ Step Name Registry:
 | 7 | close issue |
 | 8 | slack announce |
 | 9 | cleanup |
+
+## Anti-patterns
+
+Each rule states **Why** (the specific consequence of breaking the rule) and **How to apply** (where the invariant is load-bearing). Rules marked **CI-backed: yes** are mechanically enforced by `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` via an `awk` extraction over the `### 6a` block; the remaining rules are editorial invariants that depend on the SKILL.md text being unambiguous.
+
+1. **NEVER run Step 3+ on an unlocked issue.** **Why**: the `IN PROGRESS` lock (Step 2) is how concurrent runners avoid stepping on each other — Step 1's `fetch-eligible-issue.sh` skips candidates whose last comment is `IN PROGRESS`, so posting `IN PROGRESS` claims the issue atomically at the comment-stream tail. Stepping past Step 2 unlocked races every other `/fix-issue` invocation on the same repo. **How to apply**: treat Step 2 as structural; do not re-order the step sequence or skip it under any flag. **CI-backed**: no (editorial invariant).
+
+2. **NEVER drop the `--issue $ISSUE_NUMBER` forward from either Step 6a `/implement` invocation bullet (SIMPLE or HARD).** **Why**: `--issue $ISSUE_NUMBER` causes `/implement` Step 0.5 Branch 2 to adopt the already-locked tracking issue rather than creating a duplicate via Branch 4. Dropping the forward splits tracking onto two different issues, breaks the `Closes #<N>` PR-body recovery on resumed runs, and leaves the `/fix-issue`-side issue locked under `IN PROGRESS` with no auto-close on merge. **How to apply**: keep `--issue $ISSUE_NUMBER` in both SIMPLE and HARD `/implement` invocation bullets in Step 6a. **CI-backed**: yes — assertions (a1) and (a2) in `test-fix-issue-bail-detection.sh`.
+
+3. **NEVER remove the `IMPLEMENT_BAIL_REASON=adopted-issue-closed` literal or its accompanying `/implement bailed: issue #` warning-prefix literal from Step 6a.** **Why**: when `/implement` adopts a tracking issue that was closed externally between lock and execution, it emits the bail token on stdout; Step 6a's branch scans captured output for that exact literal. Dropping either literal from SKILL.md routes Step 6a to the generic-failure branch ("remains locked with IN PROGRESS") instead of the adopted-issue-closed branch that reports the specific externally-closed condition. **How to apply**: preserve both literal strings verbatim inside the `### 6a` block. **CI-backed**: yes — assertions (b) and (c).
+
+4. **NEVER paraphrase the Step 6a adopted-issue-closed directive ``Do NOT call `issue-lifecycle.sh close` ``.** **Why**: when the adopted issue is already closed, a second `issue-lifecycle.sh close` would double-post a DONE comment on top of the externally-written closing comment and run the PR-backfill with an empty `PR_URL` (since `/implement` bailed before producing a PR) — visible doubled noise on the closed issue. The directive is phrased with the specific script name, not a bare "Do NOT call" fragment, because the harness's `awk` window also includes Step 6b (whose "Do NOT call `/implement`" sentence would otherwise mask the deletion). **How to apply**: preserve the full phrase verbatim; if `issue-lifecycle.sh` is ever renamed, update the harness in the same PR. **CI-backed**: yes — assertion (d).
+
+5. **NEVER re-route Step 6a failure branches away from `Skip to Step 9`.** **Why**: both failure branches (adopted-issue-closed and generic-failure) must drop into Step 9 cleanup, not into Step 7 (close issue) or Step 8 (Slack announce). Step 7 would either double-close an already-closed issue or DONE-comment a PR-less task; Step 8 would announce a merged PR that never existed. Step 9 cleanup is the only safe landing — the `IN PROGRESS` comment stays in place on generic failure as the manual-intervention signal. **How to apply**: keep `Skip to Step 9` in both 6a failure-branch bullets. **CI-backed**: yes — assertion (e).
+
+6. **NEVER allow the NON_PR path (Step 6b) to modify working-tree files.** **Why**: `NON_PR` tasks are defined by producing GitHub issues, research summaries, or comment output rather than code changes. Writing to the working tree on this path opens a cascade of unanswered questions: what to commit, what branch to use, whether to push, whether to create a PR — none of which the NON_PR workflow addresses. The invariant is editorial (the runtime does not block edits) and depends on the SKILL.md text making the rule unambiguous. **How to apply**: keep the "Do NOT call `/implement`. Do NOT modify files in the working tree" sentence inside Step 6b (in SKILL.md, not only in the reference). `--input-file` markdown for `/issue` batch mode lives under `$FIX_ISSUE_TMPDIR` per `skills/fix-issue/references/non-pr-execution.md`. **CI-backed**: no (editorial invariant).
 
 ## Step 0 — Setup
 
@@ -103,24 +131,18 @@ Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
 Print `> **🔶 4: triage**`
 
-Read the issue details from Step 3. Explore the codebase using Read, Grep, and Glob to determine if the issue is still actual — that is, whether it describes a real problem that still needs fixing.
+**MANDATORY — READ ENTIRE FILE** before beginning triage: `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/references/triage-classification.md`. Contains the triage check list, the not-material closure flow detail (rationale composition with research summary), and the Step 5 classification detail that shares the same file. **Do NOT load** outside Steps 4 and 5 — this file is not consumed anywhere else. **Do NOT load** when Step 1's `fetch-eligible-issue.sh` returned exit 1 (no approved issues) or exit 2+ (error) — Steps 4 and 5 do not run on those paths.
 
-Check for:
+Decide whether the issue is still material against the codebase (see the reference for the check list and the triage-targets rule for investigation/review-only issues).
 
-- Has the issue already been fixed by recent commits?
-- Is the code/feature the issue references still present?
-- Is the issue a valid bug/feature request, or was it filed in error?
-- For investigation/review-only issues (whose deliverable is research findings or new issues rather than code changes): is the **task itself** still relevant — are the targets, scope, and constraints it describes still meaningful — rather than "is the referenced bug still in code"?
+**If the issue is no longer material** (already fixed, invalid, or no longer relevant): compose a detailed explanation with a research summary per the reference, then:
 
-**If the issue is no longer material** (already fixed, invalid, or no longer relevant):
-
-1. Compose a detailed explanation of why the issue is no longer material. Include a summary of the research performed: which files were checked, what recent commits were examined, and what evidence led to the conclusion. This explanation is written into the issue body so that anyone reviewing the closed issue can understand the rationale without re-investigating.
-2. Close with comment containing the detailed explanation:
+1. Close with the explanation as the comment:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh close \
      --issue $ISSUE_NUMBER --comment "Closing: <detailed explanation with research summary>"
    ```
-3. If `slack_available=true`, post Slack notification:
+2. If `slack_available=true`, post Slack notification:
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/post-issue-slack.sh \
      --issue $ISSUE_NUMBER --title "$ISSUE_TITLE" \
@@ -128,7 +150,7 @@ Check for:
      --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
      --message "Issue #$ISSUE_NUMBER ($ISSUE_TITLE) closed — <one-sentence reason>"
    ```
-4. Print `✅ 4: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 9.
+3. Print `✅ 4: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 9.
 
 **If the issue is still actual**, print `✅ 4: triage — issue is active, proceeding (<elapsed>)` and continue.
 
@@ -136,23 +158,12 @@ Check for:
 
 Print `> **🔶 5: classify**`
 
-Based on the issue details and codebase exploration from Step 4, determine two independent dimensions:
+The reference loaded at Step 4 (`skills/fix-issue/references/triage-classification.md`) owns the decision rules for both dimensions — do not re-load it here.
 
-### Intent — does this issue prescribe work that should produce a pull request?
+- **Intent** (`PR` vs `NON_PR`): does this issue prescribe work whose natural output is a pull request, or something else (new issues, a written report)? Default to `PR` only when the issue is genuinely ambiguous; when the issue text explicitly forbids a PR or mandates research/issues as the deliverable, pick `NON_PR` regardless of the default.
+- **Complexity** (only when `INTENT=PR`): `SIMPLE` (isolated fix in ≤2 files with no architectural decisions) vs `HARD` (everything else). Default to `HARD` when uncertain. Leave `COMPLEXITY` unset when `INTENT=NON_PR`.
 
-- **PR**: The issue prescribes a code change — bug fix, refactor, new feature, documentation edit, prompt/skill edit, config change, test addition, etc. — whose natural output is a pull request against the current repository.
-- **NON_PR**: The issue prescribes an investigative or review task whose natural output is something other than a PR: new GitHub issues summarizing research findings, new GitHub issues flagging code-review problems, a written report, or similar. Typical signals: the issue body contains phrases like "research and summarize", "investigate and report", "code-review this module and file issues", "do not create a PR", or otherwise makes clear that the deliverable is issues/reports rather than code changes.
-
-**Default to `PR` when uncertain.** The `PR` path is the pre-existing behavior; misclassifying a borderline `NON_PR` as `PR` is recoverable (`/implement`'s `/review` phase surfaces the mismatch) while misclassifying a `PR` as `NON_PR` could silently skip real work.
-
-### Complexity (only evaluated when `INTENT=PR`)
-
-- **SIMPLE**: Isolated fix in 2 or fewer files. Obvious solution with no architectural decisions needed. Examples: typo fix, small bug with clear root cause, config change.
-- **HARD**: Everything else. Multi-file changes, new features, architectural decisions, unclear root cause, or any uncertainty.
-
-**Default to HARD when uncertain.** A HARD classification uses the full `/design` + `/review` pipeline, which is safer for non-trivial changes.
-
-When `INTENT=NON_PR`, complexity is not meaningful — leave `COMPLEXITY` unset and skip the SIMPLE/HARD determination.
+Set `INTENT` and (when `INTENT=PR`) `COMPLEXITY` per those rules using the issue details and Step 4's codebase exploration.
 
 Print `✅ 5: classify — INTENT=$INTENT [COMPLEXITY=$COMPLEXITY] (<elapsed>)` (omit the `COMPLEXITY=` segment when `INTENT=NON_PR`).
 
@@ -184,17 +195,13 @@ If `/implement` exits non-zero, branch on whether the captured output (stdout + 
 
 ### 6b — `INTENT=NON_PR` path (follow instructions inline)
 
+**MANDATORY — READ ENTIRE FILE** before executing the NON_PR path: `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/references/non-pr-execution.md`. Contains the common NON_PR patterns (research, code-review, other investigative/planning tasks), the `WORK_SUMMARY` running-summary discipline that becomes Step 7b's closing comment and Step 8b's Slack message, and the failure fallback. **Do NOT load** when `INTENT=PR` — Step 6a delegates to `/implement` and never consumes this file. **Do NOT load** in any step other than 6.
+
 Read the issue details from Step 3 and execute the instructions directly using Read, Grep, Glob, and Bash. Do NOT call `/implement`. Do NOT modify files in the working tree — `NON_PR` tasks deliver their output as new GitHub issues, a written summary comment, or both.
-
-Common `NON_PR` patterns:
-
-- **Research task** — investigate the requested topic in-codebase via Read/Grep/Glob; when the scope warrants a collaborative read-only research panel, invoke `/research` via the Skill tool. Create one or more summary issues via `/issue` (invoked via the Skill tool) if the issue body requests it.
-- **Code-review task** — examine the requested area and file one issue per problem found. Invoke `/issue` via the Skill tool in batch mode (`--input-file` with a markdown file listing the findings) to file all findings in a single pass with semantic duplicate detection. Write the `--input-file` markdown to a path under `$FIX_ISSUE_TMPDIR` (never inside the repository working tree) so the "no working-tree edits" rule above holds.
-- **Other investigative or planning tasks** — follow the body's instructions literally; when ambiguous, prefer the interpretation that produces actionable output (issues, documented findings) over the interpretation that produces code changes.
 
 > **Continue after child returns.** When any child Skill (`/issue`, `/research`, ...) returns, execute the NEXT step of this skill — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
-As work proceeds, maintain a running `WORK_SUMMARY` — a concise markdown summary of what was done and the output artifacts (links to any issues created, key findings, etc.). This summary becomes the closing comment in Step 7 and the Slack message in Step 8. Keep `PR_URL` and `PR_NUMBER` unset on this path.
+Maintain a running `WORK_SUMMARY` per the reference — it becomes the closing comment in Step 7 and the Slack message in Step 8. Keep `PR_URL` and `PR_NUMBER` unset on this path.
 
 If the work cannot be completed (e.g., `/issue` fails repeatedly, the issue's instructions are infeasible, or required external access is unavailable), print `**⚠ 6: execute — non-PR task failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` and skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed — same recovery semantics as the `/implement` failure path.
 

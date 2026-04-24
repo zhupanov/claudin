@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.1] - 2026-04-24
+
+### Changed
+
+- `/fix-issue` skill-judge dimensions D1/D2/D3/D5 raised to grade A via an additive/reorganizing change. Adds a `## Mindset` section (before-processing thinking framework for triage, classification, complexity, and crash-recovery questions), a `## Anti-patterns` section (6 NEVER rules with `**Why:**` + `**How to apply:**` lines distinguishing 4 CI-backed pins enforced by `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` from 2 editorial invariants), and a new `skills/fix-issue/references/` directory with two files — `triage-classification.md` (owns the Step 4 triage + Step 5 classification detail) and `non-pr-execution.md` (owns the Step 6b NON_PR path detail). Each reference carries the CI-mandated Consumer / Contract / When-to-load header triplet with explicit `Do NOT load` guards enforced by `scripts/test-references-headers.sh`. `skills/fix-issue/SKILL.md` Steps 4, 5, and 6b are slimmed to load the references via `MANDATORY — READ ENTIRE FILE` triggers. No behavior change, no script edits. The anti-halt banner, all 3 branch-specific micro-reminders, the Step 6a bail-detection awk window's 6 literals, the Step Name Registry, Known Limitations, frontmatter, and every script contract are preserved byte-for-byte. During review, the Mindset and Step 5 "default to PR" rule was softened across both SKILL.md and the reference to add an explicit carve-out: when the issue text explicitly forbids a PR or mandates research/issues as the deliverable, pick `NON_PR` regardless — `/implement`'s `/review` phase cannot reliably recover a shape-of-work mismatch. The `triage-classification.md` Not-material-closure-flow prose was also corrected from "written into the issue body" to "posted as the closing comment on the issue" to match the actual `issue-lifecycle.sh close --comment` wiring (inherited pre-existing inaccuracy from the original SKILL.md, fixed while the prose was migrating into the reference).
+
 ## [6.3.0] - 2026-04-24
 
 ### Added
