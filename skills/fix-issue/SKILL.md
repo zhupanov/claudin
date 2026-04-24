@@ -168,16 +168,19 @@ Compose the feature description from the issue content: use the issue title as t
 
 > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
-Invoke `/implement` via the Skill tool:
+Invoke `/implement` via the Skill tool. Forwarding `--issue $ISSUE_NUMBER` makes `/implement` adopt the queue issue as its tracking issue (Phase 3 Branch 2 adoption), so the two skills converge on the same tracking issue and `/fix-issue` avoids a duplicate tracking-issue on its path:
 
-- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
-- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
+- **SIMPLE**: `/implement --auto --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
+- **HARD**: `/implement --auto --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--slack if slack_enabled] [--debug if debug_mode] <feature description>`
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 
 > **Continue after child returns (success path only).** If `/implement` succeeded and `PR_URL` / `PR_NUMBER` are captured, your next user-facing output MUST be the Step 7 breadcrumb (`> **🔶 7: close issue**`) — do NOT write a summary, status recap, or "returning to caller" message first. If `/implement` failed or bailed, ignore this directive and follow the failure-path branch below. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
-If `/implement` fails or bails, print `**⚠ 6: execute — /implement failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**` Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
+If `/implement` exits non-zero, branch on whether the captured output (stdout + transcript surface) contains the literal token `IMPLEMENT_BAIL_REASON=adopted-issue-closed` (emitted by `/implement` Step 0.5 Branch 2 when the adopted tracking issue is closed):
+
+- **Bail detected** (token present): the adopted issue was closed externally after `/fix-issue` locked it. Print `**⚠ 6: execute — /implement bailed: issue #$ISSUE_NUMBER was closed externally after /fix-issue locked it. Cannot recover automatically. (<elapsed>)**`. Do NOT call `issue-lifecycle.sh close` — the issue is already closed and there is no successful run to pair with a DONE comment / PR backfill. Skip to Step 9 cleanup.
+- **Generic failure** (token absent): print `**⚠ 6: execute — /implement failed. Issue #$ISSUE_NUMBER remains locked with IN PROGRESS. (<elapsed>)**`. Skip to Step 9. The IN PROGRESS comment serves as an indicator that manual intervention is needed.
 
 ### 6b — `INTENT=NON_PR` path (follow instructions inline)
 
@@ -274,3 +277,5 @@ Print `✅ 9: cleanup — fix-issue complete! (<elapsed>)`
 - **Prose-dependency check shares the same fail-open posture**: A parser regression, body/comment fetch failure, or per-reference state lookup failure all degrade to "no prose blockers known" for that candidate. The offline harness (`test-parse-prose-blockers.sh`, run via `make lint`) is the primary guard against parser regressions.
 - **Prose-dep check uses a strict keyword grammar**: The five recognized phrases (`Depends on`, `Blocked by`, `Blocked on`, `Requires`, `Needs`) must be immediately followed by whitespace + `#<digits>`. Typos like `Depends on#150` (no space), cross-repo references (`owner/repo#150`), URL forms (`https://github.com/…/150`), and bare `#150` mentions are deliberately NOT matched. Emphasis wrappers (`**#150**`, `_#150_`) ARE matched. Link-target wrappers (`[#150](url)`) are NOT matched, so link targets can never smuggle cross-repo references through the parser.
 - **Short-circuit when native blockers exist — user-visible messages may omit prose blockers**: When an issue has BOTH native and prose open blockers, the prose path is short-circuited for rate-limit efficiency. The skip/error message will list only the native blocker numbers. Closing all listed native blockers and re-running `/fix-issue` will surface any remaining prose blockers on the next run.
+- **External close while `/fix-issue` holds IN PROGRESS**: `/implement`'s Step 0.5 detects a closed adopted issue and bails with `IMPLEMENT_BAIL_REASON=adopted-issue-closed`; `/fix-issue` Step 6a reports the condition but does not unlock, since a closed issue cannot be re-locked. Recovery: re-open the issue manually and re-trigger via a new `GO` comment.
+- **Bail-token detection depends on output preservation**: the adopted-issue-closed branch in Step 6a scans the captured `/implement` output for the exact literal `IMPLEMENT_BAIL_REASON=adopted-issue-closed`. If the runtime summarizes the child skill's output and the literal token is lost, Step 6a falls through to the generic-failure branch and prints the "remains locked with IN PROGRESS" message — misleading for an externally-closed issue, but operator recovery is identical (re-open, re-add `GO`). The harness at `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` guards against accidental removal of the token literal from this SKILL.md, but cannot guarantee runtime preservation of the token.

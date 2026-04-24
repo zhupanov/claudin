@@ -114,6 +114,19 @@ suppress = [
 # (sibling contract), matching the same Makefile-only pattern as the other
 # test-* harnesses above.
 #
+# skills/fix-issue/scripts/test-fix-issue-bail-detection.sh is the regression
+# harness pinning the five load-bearing literals in skills/fix-issue/SKILL.md
+# Step 6a bail-detection prose (Phase 4 of umbrella #348): `--issue
+# $ISSUE_NUMBER` forwarding in both SIMPLE and HARD bullets, the cross-skill
+# bail token `IMPLEMENT_BAIL_REASON=adopted-issue-closed`, the user-visible
+# warning prefix `/implement bailed: issue #`, and the `Do NOT call` +
+# `Skip to Step 9` directive fragments that guard against silent re-routing of
+# the bail path back to Step 7. The harness is referenced only from Makefile
+# (test-fix-issue-bail-detection target) and
+# skills/fix-issue/scripts/test-fix-issue-bail-detection.md (sibling
+# contract), matching the same Makefile-only pattern as the other test-*
+# harnesses above. Both the .sh and the .md are excluded below.
+#
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
 # presence in 6 orchestrator SKILL.md files (fix-issue, implement, review,
@@ -263,6 +276,7 @@ exclude = [
   "scripts/test-lint-skill-invocations.sh",
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
   "skills/fix-issue/scripts/test-issue-lifecycle.sh",
+  "skills/fix-issue/scripts/test-fix-issue-bail-detection.sh",
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
@@ -302,6 +316,7 @@ exclude = [
   "skills/issue/scripts/parse-input.md",
   "skills/fix-issue/scripts/parse-prose-blockers.md",
   "skills/fix-issue/scripts/issue-lifecycle.md",
+  "skills/fix-issue/scripts/test-fix-issue-bail-detection.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
 ]
