@@ -134,7 +134,8 @@ emit_kv_footer() {
 }
 
 # --------------------------------------------------------------------------
-# Cleanup trap (KV footer first, then work-dir cleanup when owned)
+# Cleanup trap (optional URL breadcrumb, then KV footer, then work-dir
+# cleanup when owned)
 # --------------------------------------------------------------------------
 
 WORK_DIR=""
@@ -365,6 +366,18 @@ KV_ITERATION_TMPDIR="$WORK_DIR"
 
 if [[ -n "$ISSUE_ARG" ]]; then
   ISSUE_NUM="$ISSUE_ARG"
+  # Hydrate ISSUE_URL so the EXIT-trap URL breadcrumb fires on standalone-adopt
+  # runs too. Loop mode (OWNS_WORK_DIR=false) suppresses the trap line and the
+  # driver emits its own URL at loop end, so the hydration is only load-bearing
+  # for standalone-adopt. Graceful degradation: if `gh issue view` fails (stale
+  # issue number, network blip, gh auth lapse), leave ISSUE_URL empty and log
+  # to stderr — the trap's `-n "$ISSUE_URL"` gate falls through silently.
+  if [[ "$OWNS_WORK_DIR" == "true" ]]; then
+    if ! ISSUE_URL="$(gh issue view "$ISSUE_NUM" --json url --jq .url 2>/dev/null)"; then
+      ISSUE_URL=""
+      printf 'iteration.sh: warning: gh issue view #%s failed; final URL breadcrumb suppressed.\n' "${ISSUE_NUM}" >&2
+    fi
+  fi
   breadcrumb_done "3: issue — adopted #${ISSUE_NUM} (via --issue)"
 else
   breadcrumb_inprogress "3: issue — creating tracking issue"
