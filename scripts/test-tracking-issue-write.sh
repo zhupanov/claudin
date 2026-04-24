@@ -245,9 +245,13 @@ assert_not_contains "$out_a" "$SK_TOKEN" '(a) stdout does not leak sk-ant'
 echo ""
 echo "=== (b) create-issue exit 3 with FAILED/ERROR=redaction when redactor missing ==="
 # Create a fake tree without scripts/redact-secrets.sh to trigger redaction failure.
+# Phase 5 (umbrella #348): tracking-issue-write.sh now sources
+# scripts/anchor-section-markers.sh; copy it so startup succeeds and the
+# test reaches the redaction-failure path under exercise.
 FAKE_TREE="$TMPROOT/fake-tree"
 mkdir -p "$FAKE_TREE/scripts"
 cp "$WRITE" "$FAKE_TREE/scripts/tracking-issue-write.sh"
+cp "$REPO_ROOT/scripts/anchor-section-markers.sh" "$FAKE_TREE/scripts/anchor-section-markers.sh"
 chmod +x "$FAKE_TREE/scripts/tracking-issue-write.sh"
 # Intentionally do NOT create $FAKE_TREE/scripts/redact-secrets.sh.
 BODY_B="$TMPROOT/body-b.txt"
@@ -401,6 +405,72 @@ assert_contains "$out_g" 'FAILED=true' '(g) FAILED=true on gh failure'
 err_line=$(printf '%s\n' "$out_g" | grep '^ERROR=' || true)
 assert_contains "$err_line" '<REDACTED-TOKEN>' '(g) ERROR contains <REDACTED-TOKEN>'
 assert_not_contains "$err_line" "$SK_TOKEN" '(g) ERROR does NOT leak raw sk-ant'
+
+echo ""
+echo "=== (h) tracking-issue-write.sh missing anchor-section-markers.sh helper → exit 1, FAILED=true ==="
+# Phase 5 (umbrella #348): the script sources scripts/anchor-section-markers.sh
+# at startup and fails closed if the helper is missing, so the stdout
+# FAILED=true / ERROR= contract is preserved for the hermetic-fake-tree case.
+FAKE_TREE_H="$TMPROOT/fake-tree-no-markers"
+mkdir -p "$FAKE_TREE_H/scripts"
+cp "$WRITE" "$FAKE_TREE_H/scripts/tracking-issue-write.sh"
+cp "$REPO_ROOT/scripts/redact-secrets.sh" "$FAKE_TREE_H/scripts/redact-secrets.sh"
+chmod +x "$FAKE_TREE_H/scripts/tracking-issue-write.sh" "$FAKE_TREE_H/scripts/redact-secrets.sh"
+# Intentionally do NOT copy anchor-section-markers.sh.
+BODY_H="$TMPROOT/body-h.txt"
+printf 'body content\n' > "$BODY_H"
+exit_h=0
+out_h=$(bash "$FAKE_TREE_H/scripts/tracking-issue-write.sh" create-issue --title 'plain-title' --body-file "$BODY_H" --repo owner/repo 2>&1) || exit_h=$?
+assert_equal "$exit_h" "1" '(h) exit code is 1 when anchor-section-markers.sh is missing'
+assert_contains "$out_h" 'FAILED=true' '(h) FAILED=true on stdout'
+assert_contains "$out_h" 'missing helper' '(h) ERROR mentions missing helper'
+assert_contains "$out_h" 'anchor-section-markers.sh' '(h) ERROR names the missing helper file'
+
+echo ""
+echo "=== (i) SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant (set-membership) ==="
+# Every SECTION_MARKERS slug must appear in COLLAPSE_PRIORITY so the
+# body-level truncation pass can find each section as a collapse target.
+# A future edit that adds a slug to SECTION_MARKERS without updating
+# COLLAPSE_PRIORITY would break the truncation algorithm silently.
+# Source both arrays in a subshell to probe the invariant.
+invariant_out=$(bash -c "
+    set -euo pipefail
+    source '$REPO_ROOT/scripts/anchor-section-markers.sh'
+    # COLLAPSE_PRIORITY lives inline in tracking-issue-write.sh; grep it out.
+    cp_line=\$(grep -E '^COLLAPSE_PRIORITY=\\(' '$WRITE' | head -n 1)
+    if [ -z \"\$cp_line\" ]; then
+        echo 'ERROR=COLLAPSE_PRIORITY= declaration not found in tracking-issue-write.sh'
+        exit 1
+    fi
+    # shellcheck disable=SC2294
+    eval \"\$cp_line\"
+    missing=()
+    for slug in \"\${SECTION_MARKERS[@]}\"; do
+        found=0
+        for cp in \"\${COLLAPSE_PRIORITY[@]}\"; do
+            if [ \"\$cp\" = \"\$slug\" ]; then
+                found=1
+                break
+            fi
+        done
+        if [ \"\$found\" = 0 ]; then
+            missing+=(\"\$slug\")
+        fi
+    done
+    if [ \${#missing[@]} -gt 0 ]; then
+        echo \"ERROR=SECTION_MARKERS slugs missing from COLLAPSE_PRIORITY: \${missing[*]}\"
+        exit 1
+    fi
+    echo 'OK=invariant holds'
+" 2>&1) || true
+if [[ "$invariant_out" == OK=* ]]; then
+    PASS=$((PASS + 1))
+    echo "  ok: (i) SECTION_MARKERS ⊆ COLLAPSE_PRIORITY"
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("(i) SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant")
+    echo "  FAIL: (i) $invariant_out" >&2
+fi
 
 echo ""
 echo "=== Summary ==="

@@ -87,7 +87,7 @@ The regression harness `scripts/test-tracking-issue-write.sh` is wired into `mak
 
 ## Test harness
 
-`scripts/test-tracking-issue-write.sh` covers seven assertion categories:
+`scripts/test-tracking-issue-write.sh` covers nine assertion categories:
 
 - **(a)** `create-issue` redacts title + body (`sk-ant-*` secret → `<REDACTED-TOKEN>`).
 - **(b)** `create-issue` exits 3 with `FAILED=true` / `ERROR=redaction:…` when the redactor is missing. Pins exact key literals `FAILED=true` (not `ISSUE_FAILED`).
@@ -97,15 +97,19 @@ The regression harness `scripts/test-tracking-issue-write.sh` is wired into `mak
 - **(f1) Idempotency**: `upsert-anchor` with exactly one existing anchor comment PATCHes it, emits `UPDATED=true`, creates no new comment on double-call.
 - **(f2) Multiple-anchor fail-closed**: `upsert-anchor` with 2+ marker comments exits 2 with `FAILED=true ERROR=multiple anchor comments found (ids: <list>)`.
 - **(g) gh-failure redaction**: stub-gh emits a token-bearing stderr on failure → the `FAILED=true ERROR=…` line contains `<REDACTED-TOKEN>` and not the raw token.
+- **(h) Missing `anchor-section-markers.sh` helper**: when the script's sourced helper is missing from the script's `$SCRIPT_DIR`, it fails closed with `FAILED=true` / `ERROR=missing helper: …` on stdout and exits 1 — preserving the stdout contract invariant.
+- **(i) `SECTION_MARKERS` ⊆ `COLLAPSE_PRIORITY` invariant**: every slug defined in `scripts/anchor-section-markers.sh` appears in `COLLAPSE_PRIORITY`, so the body-level truncation pass has a collapse target for every section.
 
 ## Edit-in-sync pointers
 
 | File | Relationship |
 |---|---|
+| `scripts/anchor-section-markers.sh` | Single source of truth for `SECTION_MARKERS`; sourced by this script at startup. Missing helper is fail-closed (test harness case (h)). |
 | `scripts/redact-secrets.sh` | Sole outbound scrubber — do NOT bypass or add a parallel redactor. |
 | `scripts/tracking-issue-read.sh` | Delegates `append-comment` when invoked with `--issue + --prompt`. |
 | `scripts/test-tracking-issue-write.sh` | Regression harness for this script — every behavioral change here must be mirrored in the harness. |
-| `skills/implement/references/anchor-comment-template.md` | Defines the 8 canonical section slugs + anchor first-line marker; the arrays here must match. |
+| `scripts/assemble-anchor.sh` | Companion helper that assembles anchor bodies from `$IMPLEMENT_TMPDIR/anchor-sections/`. Shares `SECTION_MARKERS` ordering via the same sourced helper. |
+| `skills/implement/references/anchor-comment-template.md` | Human-readable template describing the same 8 section slugs + anchor first-line marker; the executable source of truth is `scripts/anchor-section-markers.sh`. |
 | `SECURITY.md` | Documents the outbound-redaction invariant, gh-failure redaction, anchor-skeleton preservation. |
 
 ## Security

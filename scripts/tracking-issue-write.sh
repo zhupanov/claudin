@@ -70,8 +70,20 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 REDACT_HELPER="$REPO_ROOT/scripts/redact-secrets.sh"
 
-# 8 canonical section slugs in declaration order.
-SECTION_MARKERS=(plan-goals-test plan-review-tally code-review-tally diagrams version-bump-reasoning oos-issues execution-issues run-statistics)
+# 8 canonical section slugs in declaration order. Single source of truth
+# lives in scripts/anchor-section-markers.sh; sourced here to keep the
+# truncation pass and scripts/assemble-anchor.sh's assembly walk in
+# lockstep. Missing helper is fail-closed so the FAILED=true / ERROR= stdout
+# contract is preserved (test-tracking-issue-write.sh covers this case).
+MARKERS_HELPER="$SCRIPT_DIR/anchor-section-markers.sh"
+if [ ! -f "$MARKERS_HELPER" ]; then
+    echo "FAILED=true"
+    echo "ERROR=missing helper: $MARKERS_HELPER"
+    exit 1
+fi
+# shellcheck source=scripts/anchor-section-markers.sh
+# shellcheck disable=SC1091
+source "$MARKERS_HELPER"
 
 # Per-section 8000-char cap. Exceeded interiors are replaced in place with
 # a single inline [TRUNCATED — <id> exceeded 8000 chars] marker snapped to
