@@ -15,7 +15,7 @@
 #               Listed in agent-lint.toml exclude because agent-lint does not
 #               follow Makefile-only references.
 #
-# The harness runs two check families against a fixed set of target files:
+# The harness runs three check families:
 #
 #   1. POSITIVE ANCHORS (required markers) — each target file MUST contain
 #      all of the following strings:
@@ -39,10 +39,25 @@
 #      canonical contract itself changes, edit the marker variables below and
 #      the sibling .md FIRST, then propagate to the public docs.
 #
-# --self-test MODE: writes two fixtures (one canonical-correct, one stale),
-# runs the SAME check_file function against each, asserts the canonical
-# fixture passes and the stale fixture fails. This proves the check mechanics
-# on every invocation — a broken harness cannot silently go green in CI.
+#   3. REQUIRED CROSS-REFERENCES (two-assertion check, target-specific) —
+#      guards prose path citations in public docs. Each entry is a (doc, xref)
+#      pair where BOTH of the following must hold:
+#        (a) the literal xref path appears verbatim in the doc (grep -Fq), AND
+#        (b) the xref path resolves to an actual file on disk (relative to
+#            REPO_ROOT).
+#      Currently wired for docs/review-agents.md -> skills/shared/voting-protocol.md
+#      (Note A in the voting-panel collapse thresholds paragraph). A rename of
+#      the target file fails (b); a Note A rewording that drops the literal
+#      fails (a). Closes #377.
+#
+# --self-test MODE: writes core fixtures (canonical-correct + stale) for
+# check_file PLUS three xref fixtures (xref-good, xref-bad-existence,
+# xref-bad-grep) for check_xref, then runs the SAME functions used in
+# default mode against each. Asserts the canonical and xref-good fixtures
+# pass, the stale / xref-bad-existence / xref-bad-grep fixtures each fail
+# exactly once (respectively driven by the stale-phrase, existence, and grep
+# assertions). Proves both check mechanics on every invocation — a broken
+# harness cannot silently go green in CI.
 #
 # Edit-in-sync rule: if skills/implement/SKILL.md Step 5 quick-mode contract
 # changes, update (a) POSITIVE_MARKERS / STALE_PHRASES below FIRST, (b) the
@@ -77,6 +92,15 @@ readonly PUBLIC_DOCS=(
   "docs/workflow-lifecycle.md"
 )
 readonly SKILL_MD="skills/implement/SKILL.md"
+
+# Required cross-references (file-specific, two-assertion check).
+#   Note A in docs/review-agents.md cites skills/shared/voting-protocol.md as
+#   the authority for voting-panel collapse thresholds. The check asserts BOTH
+#   that the literal path is present in the doc AND that the target file exists
+#   on disk — a rename fails the existence assertion; a Note A rewording that
+#   drops the literal fails the grep assertion.
+readonly XREF_DOC="docs/review-agents.md"
+readonly XREF_PATH="skills/shared/voting-protocol.md"
 
 # --- Check function (shared between default mode and --self-test) -----------
 
@@ -138,6 +162,53 @@ check_file() {
   return 1
 }
 
+# check_xref DOC_PATH LABEL XREF_REL REPO_ROOT_FOR_XREF
+#   DOC_PATH            absolute path to the doc that should cite XREF_REL
+#   LABEL               human-readable label for error messages
+#   XREF_REL            repo-relative path expected to appear verbatim in DOC_PATH
+#                       AND to resolve to an extant file relative to REPO_ROOT_FOR_XREF
+#   REPO_ROOT_FOR_XREF  root directory to which XREF_REL is resolved on disk
+# Two independent assertions per call; failures increment FAIL_COUNT once each.
+# Kept separate from check_file so self-test's single-file fixture invariants
+# remain isolated.
+check_xref() {
+  local doc_path="$1"
+  local label="$2"
+  local xref_rel="$3"
+  local xref_root="$4"
+
+  if [[ ! -f "$doc_path" ]]; then
+    echo "FAIL: $label — doc file not found: $doc_path" >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    return 1
+  fi
+
+  local local_fail=0
+
+  if ! grep -Fq -- "$xref_rel" "$doc_path"; then
+    echo "FAIL: $label — missing required cross-reference literal: '$xref_rel'" >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    local_fail=1
+  fi
+
+  # Use -f (regular file) rather than -e (any existing path) so a directory
+  # at the cited path does NOT silently satisfy the check — the contract is a
+  # file, not any path. Any non-file (dir, symlink-to-missing, broken link,
+  # missing) all fail through this single branch.
+  if [[ ! -f "$xref_root/$xref_rel" ]]; then
+    echo "FAIL: $label — cross-reference target does not resolve to a regular file on disk: '$xref_rel'" >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+    local_fail=1
+  fi
+
+  if [[ $local_fail -eq 0 ]]; then
+    echo "PASS: $label — cross-reference '$xref_rel' present and resolves"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    return 0
+  fi
+  return 1
+}
+
 # --- Main: default mode -----------------------------------------------------
 
 PASS_COUNT=0
@@ -152,6 +223,9 @@ run_default() {
 
   abs="$REPO_ROOT/$SKILL_MD"
   check_file "$abs" "$SKILL_MD (canonical source)" "no" || true
+
+  # Required cross-reference: Note A in docs/review-agents.md -> voting-protocol.md
+  check_xref "$REPO_ROOT/$XREF_DOC" "$XREF_DOC (Note A xref)" "$XREF_PATH" "$REPO_ROOT" || true
 
   echo "----"
   echo "PASS_COUNT=$PASS_COUNT  FAIL_COUNT=$FAIL_COUNT"
@@ -226,7 +300,76 @@ EOF
     exit 1
   fi
 
-  echo "SELF-TEST PASS: good fixture passed ($good_fail failures); bad fixture failed exactly once ($bad_fail failure) from negative check as expected"
+  # --- xref check mechanics ---
+  # Good xref fixture: doc contains the literal path AND target file exists.
+  # Expect 0 failures from check_xref.
+  local xref_good_root="$FIXTURE_DIR/xref-good"
+  local xref_good_doc="$xref_good_root/doc.md"
+  local xref_good_target_rel="target/voting-protocol.md"
+  mkdir -p "$xref_good_root/target"
+  printf 'Cites %s in prose.\n' "$xref_good_target_rel" > "$xref_good_doc"
+  echo "placeholder" > "$xref_good_root/$xref_good_target_rel"
+
+  # Bad-existence xref fixture: doc contains the literal path BUT target file
+  # is missing on disk. Expect exactly 1 failure from check_xref, driven by
+  # the existence assertion only. Regression-tests the -f branch — if the
+  # existence block were removed, this fixture would produce 0 failures.
+  local xref_bad_exist_root="$FIXTURE_DIR/xref-bad-existence"
+  local xref_bad_exist_doc="$xref_bad_exist_root/doc.md"
+  local xref_bad_exist_target_rel="target/voting-protocol.md"
+  mkdir -p "$xref_bad_exist_root"
+  printf 'Cites %s in prose.\n' "$xref_bad_exist_target_rel" > "$xref_bad_exist_doc"
+  # Deliberately do NOT create xref_bad_exist_root/$xref_bad_exist_target_rel.
+
+  # Bad-grep xref fixture: target file exists on disk BUT doc omits the
+  # literal path. Expect exactly 1 failure from check_xref, driven by the
+  # grep assertion only. Regression-tests the grep -Fq branch — if the grep
+  # block were removed, this fixture would produce 0 failures (symmetric
+  # guard to the bad-existence fixture above).
+  local xref_bad_grep_root="$FIXTURE_DIR/xref-bad-grep"
+  local xref_bad_grep_doc="$xref_bad_grep_root/doc.md"
+  local xref_bad_grep_target_rel="target/voting-protocol.md"
+  mkdir -p "$xref_bad_grep_root/target"
+  # Deliberately write a doc body that does NOT contain the literal path.
+  printf 'Doc body without the expected xref literal.\n' > "$xref_bad_grep_doc"
+  echo "placeholder" > "$xref_bad_grep_root/$xref_bad_grep_target_rel"
+
+  PASS_COUNT=0
+  FAIL_COUNT=0
+  echo "--- self-test: check xref-good fixture (expect 0 failures) ---"
+  check_xref "$xref_good_doc" "self-test/xref-good" "$xref_good_target_rel" "$xref_good_root" || true
+  local xref_good_fail=$FAIL_COUNT
+
+  PASS_COUNT=0
+  FAIL_COUNT=0
+  echo "--- self-test: check xref-bad-existence fixture (expect exactly 1 failure from existence assertion) ---"
+  check_xref "$xref_bad_exist_doc" "self-test/xref-bad-existence" "$xref_bad_exist_target_rel" "$xref_bad_exist_root" || true
+  local xref_bad_exist_fail=$FAIL_COUNT
+
+  PASS_COUNT=0
+  FAIL_COUNT=0
+  echo "--- self-test: check xref-bad-grep fixture (expect exactly 1 failure from grep assertion) ---"
+  check_xref "$xref_bad_grep_doc" "self-test/xref-bad-grep" "$xref_bad_grep_target_rel" "$xref_bad_grep_root" || true
+  local xref_bad_grep_fail=$FAIL_COUNT
+
+  if [[ $xref_good_fail -ne 0 ]]; then
+    echo "SELF-TEST FAIL: xref-good fixture produced $xref_good_fail failures (expected 0)" >&2
+    exit 1
+  fi
+  if [[ $xref_bad_exist_fail -ne 1 ]]; then
+    echo "SELF-TEST FAIL: xref-bad-existence fixture produced $xref_bad_exist_fail failures (expected exactly 1 from existence assertion)" >&2
+    echo "  If 0: existence-assertion path is not firing (missing-target detection broken)." >&2
+    echo "  If >1: grep assertion is also failing — bad-existence fixture's doc content may no longer contain the literal." >&2
+    exit 1
+  fi
+  if [[ $xref_bad_grep_fail -ne 1 ]]; then
+    echo "SELF-TEST FAIL: xref-bad-grep fixture produced $xref_bad_grep_fail failures (expected exactly 1 from grep assertion)" >&2
+    echo "  If 0: grep-assertion path is not firing (missing-literal detection broken)." >&2
+    echo "  If >1: existence assertion is also failing — bad-grep fixture's target file may be missing." >&2
+    exit 1
+  fi
+
+  echo "SELF-TEST PASS: good fixture passed ($good_fail failures); bad fixture failed exactly once ($bad_fail failure) from negative check; xref-good passed ($xref_good_fail); xref-bad-existence failed exactly once ($xref_bad_exist_fail) from existence assertion; xref-bad-grep failed exactly once ($xref_bad_grep_fail) from grep assertion as expected"
 }
 
 main() {
@@ -240,7 +383,8 @@ main() {
 Usage: $0 [--self-test]
 
 Default mode: validate that public quick-mode docs stay in sync with
-skills/implement/SKILL.md Step 5 (positive anchors + stale-phrase negatives).
+skills/implement/SKILL.md Step 5 (positive anchors + stale-phrase negatives)
+plus required cross-references (doc literal present AND target file exists).
 
 --self-test: run the check against embedded good/bad fixtures to prove the
 check mechanics. Used in CI alongside the default check.
