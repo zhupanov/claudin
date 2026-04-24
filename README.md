@@ -26,9 +26,9 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
 - **[Multi-agent design planning, reviews, and adjudication](docs/collaborative-sketches.md)** — 5 sketch agents diverge, a dialectic 3-judge binary panel resolves contested decisions, and a 3-reviewer panel validates the final plan.
 - **[Voting-based review resolution](docs/voting-process.md)** — A 3-agent YES/NO/EXONERATE panel adjudicates plan and code review findings.
 - **[Reviewer competition scoring](docs/point-competition.md)** — Reviewers earn points based on finding quality; a scoreboard tracks accepted, neutral, exonerated, and rejected findings.
-- **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation, CI wait, and merge in a single command; Slack announcements via `--slack`; draft PRs via `--draft`.
+- **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation and initial CI wait in one command; `--merge` adds the CI+rebase+merge loop, local cleanup, and main verification. `--slack` announces the PR; `--draft` creates a draft PR and keeps the branch for further iteration.
 - **[External reviewer integration](docs/external-reviewers.md)** — Codex and Cursor participate alongside Claude subagents as sketch agents, debaters, judges, reviewers, and voters.
-- **[Systematic codebase review](skills/loop-review/SKILL.md)** — `/loop-review` partitions the repo into slices, reviews each with a 3-reviewer panel, and files every actionable finding as a deduplicated GitHub issue.
+- **[Systematic codebase review](skills/loop-review/SKILL.md)** — `/loop-review` partitions the repo into slices, reviews each with a 3-reviewer panel, and files every actionable finding as a deduplicated GitHub issue. Security-tagged findings are held locally per `SECURITY.md`.
 - **[Tracked runs](skills/implement/SKILL.md)** — `/implement` PRs link to a tracking issue whose anchor comment is the single source of truth for full report content (voting tallies, rejected findings, version-bump reasoning, diagrams, OOS links, execution issues, run statistics).
 
 ## Skills
