@@ -86,14 +86,18 @@ This helper performs pure text assembly of local files. The redaction pipeline l
 
 ## Test harness
 
-`scripts/test-assemble-anchor.sh` covers:
+`scripts/test-assemble-anchor.sh` covers 10 assertion categories:
 
-- **(a)** Empty sections directory: output has exactly 9 lines matching `<!-- larch:implement-anchor v1 issue=<N> -->` + 8 pairs of empty marker tags.
+- **(a)** Empty sections directory: output has exactly 17 lines — `<!-- larch:implement-anchor v1 issue=<N> -->` + 8 pairs of empty marker tags.
 - **(b)** Partial fragments: output contains the populated content only where fragment files exist, empty marker pairs elsewhere, in `SECTION_MARKERS` order.
+- **(b2)** Newline-terminated fragment → exactly one newline before the close marker (regression guard for the `$(tail -c 1 ...)` command-substitution newline-stripping bug that inserted an extra blank line). Full output compared against a byte-exact expected fixture.
+- **(b3)** Fragment without a trailing newline → helper inserts one so the close marker stays on its own line.
 - **(c)** Full fragments: all 8 slugs have populated content.
 - **(d)** Missing `anchor-section-markers.sh` helper: `FAILED=true` + `ERROR=missing helper: …` on stdout + exit 1.
 - **(e)** Invalid `--issue` value (non-integer): usage error with exit 1.
 - **(f)** First-line marker is always the first line of the output.
+- **(g)** Non-directory `--sections-dir` → fail-closed with `FAILED=true` + `ERROR=sections-dir exists but is not a directory: …` + exit 2.
+- **(h)** Unreadable fragment file → fail-closed with `FAILED=true` + `ERROR=failed to read fragment: …` + exit 2. Skipped when the test runs as root.
 
 ## Makefile wiring
 

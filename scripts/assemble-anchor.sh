@@ -91,9 +91,30 @@ mkdir -p "$OUTPUT_DIR" 2>/dev/null || fail_io "cannot create output directory: $
 
 # Missing sections directory is tolerated — walk emits all empty marker pairs.
 # Unreadable sections directory is an I/O failure (distinguish missing vs permission denied).
-if [ -e "$SECTIONS_DIR" ] && [ ! -r "$SECTIONS_DIR" ]; then
-    fail_io "sections directory not readable: $SECTIONS_DIR"
+# A non-directory entry (regular file, symlink to file, fifo, etc.) is fail-closed:
+# silently walking it would treat each `<slug>.md` path lookup as "file not present" and
+# emit an all-empty skeleton, which could overwrite populated remote anchor content on
+# a subsequent upsert — a documentation-correctness regression.
+if [ -e "$SECTIONS_DIR" ]; then
+    if [ ! -d "$SECTIONS_DIR" ]; then
+        fail_io "sections-dir exists but is not a directory: $SECTIONS_DIR"
+    fi
+    if [ ! -r "$SECTIONS_DIR" ]; then
+        fail_io "sections directory not readable: $SECTIONS_DIR"
+    fi
 fi
+
+# Pre-pass: verify every existing fragment file is readable BEFORE entering
+# the assembly brace-group (whose redirection `> "$TMP_OUTPUT"` would swallow
+# any FAILED=true / ERROR= output emitted from inside the loop into the tmp
+# file instead of the parent's stdout). Any unreadable fragment fails closed
+# now, with the envelope reaching the parent shell's stdout intact.
+for slug in "${SECTION_MARKERS[@]}"; do
+    fragment="$SECTIONS_DIR/$slug.md"
+    if [ -f "$fragment" ] && [ ! -r "$fragment" ]; then
+        fail_io "failed to read fragment: $fragment"
+    fi
+done
 
 # Assemble body in a tmp file first, then atomic-rename into place.
 TMP_OUTPUT="$(mktemp "${OUTPUT}.XXXXXX")" || fail_io "cannot create temp file next to $OUTPUT"
@@ -108,15 +129,19 @@ trap 'rm -f "$TMP_OUTPUT"' EXIT
         if [ -f "$fragment" ]; then
             # Fragment content emitted verbatim; caller owns compose-time sanitization.
             # cat preserves trailing-newline semantics as authored by the caller.
-            cat "$fragment"
+            # Fail closed on read error so a permission-denied fragment cannot
+            # silently produce an empty section interior (which would clobber
+            # populated remote content on upsert).
+            cat "$fragment" || fail_io "failed to read fragment: $fragment"
             # Ensure exactly one newline between fragment content and the close
-            # marker. If the fragment lacks a trailing newline, add one.
+            # marker. If the fragment already ends with a newline, do not add
+            # another — command substitution in bash strips trailing newlines,
+            # so we cannot use `$(tail -c 1 ...)` to detect it. Instead, use
+            # `od -An -to1 | tr -d ' '` which preserves byte identity of the
+            # last byte even when it is a newline. Newline = octal 012.
             if [ -s "$fragment" ]; then
-                # Read the last byte of the fragment. Requires tail -c with
-                # the numeric 1 offset. If the last byte is not a newline,
-                # emit one.
-                last_byte="$(tail -c 1 "$fragment" 2>/dev/null || printf '')"
-                if [ "$last_byte" != $'\n' ]; then
+                last_oct="$(tail -c 1 "$fragment" 2>/dev/null | od -An -to1 | tr -d ' ')"
+                if [ "$last_oct" != "012" ]; then
                     printf '\n'
                 fi
             fi
