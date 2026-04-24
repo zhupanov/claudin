@@ -184,24 +184,33 @@ Reviewer selection per round follows Cursor → Codex → Claude fallback.
 The loop has no voting panel — main agent accepts or rejects each finding.
 EOF
 
-  # Stale-phrase fixture: deliberately contains a forbidden legacy phrase.
+  # Stale-phrase fixture: contains ALL positive markers PLUS exactly one stale
+  # phrase, so the ONLY reason check_file can fail on this fixture is the
+  # negative-check path. If the negative-check block in check_file were ever
+  # removed or bypassed, this fixture would produce zero failures and the
+  # self-test below would fail — exactly the regression the self-test is
+  # designed to catch.
   cat > "$bad" <<'EOF'
-Stale fixture — intentionally broken.
-Simplified code review (1 Claude Code Reviewer subagent, 1 round).
-(This fixture is used by --self-test to prove the negative check fires.)
+Stale-phrase fixture: contains every positive marker so only the stale phrase can drive failure.
+The review loop runs up to 7 rounds.
+Reviewer selection per round follows Cursor → Codex → Claude fallback.
+The loop has no voting panel — main agent accepts or rejects each finding.
+Stale phrase intentionally embedded: simplified code review (1 Claude Code Reviewer subagent, 1 round).
 EOF
 
   # Reset counts; check the good fixture. Expect all checks pass.
   PASS_COUNT=0
   FAIL_COUNT=0
-  echo "--- self-test: check canonical-correct fixture (expect PASS) ---"
+  echo "--- self-test: check canonical-correct fixture (expect 0 failures) ---"
   check_file "$good" "self-test/good.md" "yes" || true
   local good_fail=$FAIL_COUNT
 
-  # Reset counts; check the bad fixture. Expect at least one FAIL.
+  # Reset counts; check the bad fixture. Expect EXACTLY 1 FAIL — the stale
+  # phrase. Any other count would indicate check_file drift (positive anchors
+  # mis-matching the bad fixture, or negative-check not firing).
   PASS_COUNT=0
   FAIL_COUNT=0
-  echo "--- self-test: check stale-phrase fixture (expect FAIL on stale phrase) ---"
+  echo "--- self-test: check stale-phrase fixture (expect exactly 1 failure from negative check) ---"
   check_file "$bad" "self-test/bad.md" "yes" || true
   local bad_fail=$FAIL_COUNT
 
@@ -210,12 +219,14 @@ EOF
     echo "SELF-TEST FAIL: canonical-correct fixture produced $good_fail failures (expected 0)" >&2
     exit 1
   fi
-  if [[ $bad_fail -eq 0 ]]; then
-    echo "SELF-TEST FAIL: stale-phrase fixture produced 0 failures (expected at least 1)" >&2
+  if [[ $bad_fail -ne 1 ]]; then
+    echo "SELF-TEST FAIL: stale-phrase fixture produced $bad_fail failures (expected exactly 1 from negative check)" >&2
+    echo "  If 0: negative-check path is not firing (stale-phrase detection broken)." >&2
+    echo "  If >1: positive anchors are mis-matching the bad fixture, or additional checks added without updating this assertion." >&2
     exit 1
   fi
 
-  echo "SELF-TEST PASS: good fixture passed ($good_fail failures); bad fixture failed as expected ($bad_fail failures)"
+  echo "SELF-TEST PASS: good fixture passed ($good_fail failures); bad fixture failed exactly once ($bad_fail failure) from negative check as expected"
 }
 
 main() {

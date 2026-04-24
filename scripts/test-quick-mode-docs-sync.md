@@ -49,10 +49,10 @@ If the canonical contract itself changes (e.g. the round cap goes to 10 or the f
 
 The harness ships with a `--self-test` flag that runs the check against two embedded fixtures:
 
-1. **Good fixture**: contains all three positive markers and no stale phrases.
-2. **Bad fixture**: contains a stale phrase intentionally.
+1. **Good fixture**: contains all three positive markers and no stale phrases. `--self-test` asserts the good fixture produces exactly **0** failures.
+2. **Bad fixture**: contains all three positive markers AND one stale phrase — structured so the ONLY reason `check_file` can fail on this fixture is the negative-check path firing on the stale phrase. `--self-test` asserts the bad fixture produces exactly **1** failure.
 
-The same `check_file` function used in default mode is called against each. `--self-test` asserts that the good fixture produces 0 failures and the bad fixture produces at least 1 failure. This proves the check mechanics end-to-end on every CI run — a broken harness that always exits 0 would be caught because `--self-test` expects the bad fixture to fail. The fixture temp dir is cleaned up via `trap` on EXIT.
+The same `check_file` function used in default mode is called against each. The "exactly 1 failure" assertion on the bad fixture is the load-bearing guarantee: if the negative-check block in `check_file` were deleted or bypassed, the bad fixture would produce 0 failures and the self-test would exit non-zero. If the positive-anchor block were deleted, the good fixture would still produce 0 failures (unchanged), but the bad fixture's positive markers would never be checked — the default-mode run against real repo files remains the primary guard against positive-check regressions. The fixture temp dir is cleaned up via `trap` on EXIT.
 
 ## Makefile wiring
 
@@ -61,14 +61,14 @@ Invoked via:
 ```bash
 bash scripts/test-quick-mode-docs-sync.sh             # default mode
 bash scripts/test-quick-mode-docs-sync.sh --self-test # self-test mode
-make test-quick-mode-docs-sync                        # Makefile target (default mode only)
+make test-quick-mode-docs-sync                        # Makefile target (runs both default and --self-test)
 ```
 
 Listed in `Makefile` as a prerequisite of the `test-harnesses` target, alongside `test-orchestrator-scope-sync`, `test-implement-structure`, and other regression harnesses. `make lint` runs both `test-harnesses` and `lint-only`.
 
 ## agent-lint.toml wiring
 
-Listed in `agent-lint.toml`'s `exclude` list because `agent-lint` does not follow Makefile-only references and would otherwise flag the script as orphaned. Matches the pattern used by sibling harnesses (e.g., `scripts/test-orchestrator-scope-sync.sh` at line 296). The sibling `scripts/test-quick-mode-docs-sync.md` does NOT need an explicit exclude — `scripts/test-orchestrator-scope-sync.md` is also not listed, and the same pre-existing convention is preserved here.
+Listed in `agent-lint.toml`'s `exclude` list because `agent-lint` does not follow Makefile-only references and would otherwise flag the script as orphaned. Matches the pattern used by sibling harnesses such as `scripts/test-orchestrator-scope-sync.sh` (grep the exclude list for exact position — line numbers drift as entries are added). The sibling `scripts/test-quick-mode-docs-sync.md` does NOT need an explicit exclude — `scripts/test-orchestrator-scope-sync.md` is also not listed, and the same pre-existing convention is preserved here.
 
 ## Edit-in-sync rules
 
