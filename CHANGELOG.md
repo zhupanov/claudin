@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.3] - 2026-04-24
+
+### Changed
+
+- `/design` Step 3a — Post-Review Confirmation now fires only when `auto_mode=false` AND (`qa_happened` OR `dialectic_adjudicated`), replacing the prior `plan was revised` gate. `qa_happened` is recorded by Steps 1c/1d/3.5 via a `$DESIGN_TMPDIR/user-qa-happened.md` sentinel touched whenever an `AskUserQuestion` actually asks the user at least one question; `dialectic_adjudicated` is detected by grepping `$DESIGN_TMPDIR/dialectic-resolutions.md` for `**Disposition**: voted` or `**Disposition**: fallback-to-synthesis` lines (`bucket-skipped` / `over-cap` dispositions do not count — no adjudication occurred there). Reviewer-only plan revisions without Q/A and without dialectic no longer pause for a second approval; `/implement` proceeds straight to coding when Claude saw no ambiguity and no sketch-phase debate took place.
+
 ## [7.0.2] - 2026-04-24
 
 ### Changed
