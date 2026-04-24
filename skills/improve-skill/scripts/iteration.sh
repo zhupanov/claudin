@@ -112,6 +112,11 @@ KV_TOTAL_DEN="N/A"
 KV_ITERATION_TMPDIR=""
 KV_ISSUE_NUM=""
 
+# Captured at Step 3 standalone-create; empty when the loop driver adopts via
+# --issue (driver emits the URL itself at loop end). Initialized here so the
+# EXIT trap's `set -u` safely references it on any early-exit path.
+ISSUE_URL=""
+
 # shellcheck disable=SC2317  # invoked via trap on EXIT — shellcheck cannot see the indirect call
 emit_kv_footer() {
   # Emitted on every exit path (normal + set -e abort). Uses `printf` to
@@ -138,8 +143,15 @@ OWNS_WORK_DIR="false"   # true only in standalone mode (no --work-dir passed)
 # shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
   local rc=$?
-  # Emit KV footer first so parsers see the result even when work-dir
-  # cleanup fails (FINDING_2 guarantee).
+  # Surface the tracking-issue URL in standalone mode so the user sees it at
+  # the very end via Monitor (loop mode suppresses this: driver.sh emits the
+  # URL itself at Step 5, and iteration.sh in loop mode does not hold the
+  # URL form — only the adopted number).
+  if [[ "$OWNS_WORK_DIR" == "true" && -n "$ISSUE_URL" ]]; then
+    breadcrumb_done "tracking issue URL: ${ISSUE_URL}" || true
+  fi
+  # Emit KV footer so parsers see the result even when work-dir cleanup fails
+  # (FINDING_2 guarantee).
   emit_kv_footer || true
   if [[ "$OWNS_WORK_DIR" == "true" && -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
     if [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then

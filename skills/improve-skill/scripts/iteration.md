@@ -58,9 +58,10 @@ Emitted via `trap emit_kv_footer EXIT` — guarantees the footer is present on e
 
 Stdout is reserved for:
 1. Breadcrumb lines via the four helpers — `breadcrumb_done` (`✅`), `breadcrumb_inprogress` (`> **🔶`), `breadcrumb_warn` (`**⚠`), and `breadcrumb_skip` (`⏩`). Only the first three prefixes are matched by the Monitor-tail filter regex on the consumer SKILL.md's live stream (`breadcrumb_skip` is defined for future use and for symmetry with `driver.sh`; skip lines land in the retained log but not on the live Monitor view).
-2. The `### iteration-result` header + 9 KV lines from the EXIT trap.
+2. Final tracking-issue URL breadcrumb, emitted by the EXIT trap in standalone mode only (`OWNS_WORK_DIR=true` AND `ISSUE_URL` non-empty). Precedes the KV footer block. Uses `breadcrumb_done` (`✅` prefix) so Monitor surfaces the URL as the last visible breadcrumb. Loop mode suppresses this line — `driver.sh` holds the URL form and emits it itself at its Step 5.
+3. The `### iteration-result` header + 9 KV lines from the EXIT trap.
 
-All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p`'s `> "$out_file"` and `2> "$stderr_file"` redirects). No third-party `KEY=value` text leaks onto iteration.sh's own stdout, so the loop driver's awk KV extraction is always unambiguous.
+All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p`'s `> "$out_file"` and `2> "$stderr_file"` redirects). No third-party `KEY=value` text leaks onto iteration.sh's own stdout, so the loop driver's awk KV extraction is always unambiguous (the KV parser is scoped to post-`### iteration-result` lines, so the URL breadcrumb above it is invisible to the parser).
 
 ## Security invariants
 
