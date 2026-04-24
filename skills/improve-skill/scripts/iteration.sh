@@ -404,8 +404,11 @@ invoke_claude_p() {
     cd "$REPO_ROOT"
     claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
       < "$prompt_file" > "$out_file" 2> "$stderr_file" &
-    local pid=$!
-    local elapsed=0
+    # Subshell variables are already isolated from the parent function;
+    # no `local` keyword needed (and `local` inside `( ... )` outside a
+    # function is an easy-to-misread annotation).
+    pid=$!
+    elapsed=0
     while kill -0 "$pid" 2>/dev/null; do
       if [[ "$elapsed" -ge "$timeout_s" ]]; then
         kill "$pid" 2>/dev/null || true

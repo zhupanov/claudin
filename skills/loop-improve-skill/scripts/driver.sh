@@ -280,8 +280,11 @@ invoke_claude_p() {
     cd "$REPO_ROOT"
     claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
       < "$prompt_file" > "$out_file" 2> "$stderr_file" &
-    local pid=$!
-    local elapsed=0
+    # Subshell variables are already isolated from the parent function;
+    # no `local` keyword needed (and `local` inside `( ... )` outside a
+    # function is an easy-to-misread annotation).
+    pid=$!
+    elapsed=0
     while kill -0 "$pid" 2>/dev/null; do
       if [[ "$elapsed" -ge "$timeout_s" ]]; then
         kill "$pid" 2>/dev/null || true
@@ -345,11 +348,16 @@ while [[ $ITER -le 10 ]]; do
   cat "$ITER_OUT"
 
   # Parse KV footer from the iteration.sh stdout capture. The footer is
-  # delimited by `### iteration-result` and contains 9 KV lines. Keys are
-  # extracted via prefix-anchored awk (first match wins; empty values OK).
+  # delimited by a `### iteration-result` header line and contains 9 KV
+  # lines. Scope the awk match to post-header lines so a pre-block line
+  # shaped `KEY=VAL` (e.g., a stray subprocess diagnostic) cannot spoof
+  # the parse.
   parse_kv() {
     local key="$1"
-    awk -F= -v k="${key}" '$0 ~ "^" k "=" {print substr($0, length(k)+2); exit}' "$ITER_OUT"
+    awk -F= -v k="${key}" '
+      /^### iteration-result/ { in_block=1; next }
+      in_block && $0 ~ "^" k "=" {print substr($0, length(k)+2); exit}
+    ' "$ITER_OUT"
   }
 
   ITER_STATUS="$(parse_kv ITER_STATUS)"

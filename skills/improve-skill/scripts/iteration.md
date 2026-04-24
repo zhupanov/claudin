@@ -57,7 +57,7 @@ Emitted via `trap emit_kv_footer EXIT` — guarantees the footer is present on e
 ## Stdout discipline
 
 Stdout is reserved for:
-1. Breadcrumb lines via the three helpers (`breadcrumb_done` emits `✅`, `breadcrumb_inprogress` emits `> **🔶`, `breadcrumb_warn` emits `**⚠`, `breadcrumb_skip` emits `⏩`).
+1. Breadcrumb lines via the four helpers — `breadcrumb_done` (`✅`), `breadcrumb_inprogress` (`> **🔶`), `breadcrumb_warn` (`**⚠`), and `breadcrumb_skip` (`⏩`). Only the first three prefixes are matched by the Monitor-tail filter regex on the consumer SKILL.md's live stream (`breadcrumb_skip` is defined for future use and for symmetry with `driver.sh`; skip lines land in the retained log but not on the live Monitor view).
 2. The `### iteration-result` header + 9 KV lines from the EXIT trap.
 
 All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p`'s `> "$out_file"` and `2> "$stderr_file"` redirects). No third-party `KEY=value` text leaks onto iteration.sh's own stdout, so the loop driver's awk KV extraction is always unambiguous.

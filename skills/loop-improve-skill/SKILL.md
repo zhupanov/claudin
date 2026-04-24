@@ -19,7 +19,7 @@ Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
 
 ## Driver
 
-Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh`. The driver owns loop control, tracking-issue creation, grade-history aggregation, post-iter-cap final `/skill-judge` re-evaluation, close-out composition, and cleanup. Per-iteration mechanics (judge → design → im → verify) live in the shared kernel at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh`, invoked by the driver once per round via direct bash call with `--work-dir $LOOP_TMPDIR --iter-num $ITER --issue $ISSUE_NUM`. See `driver.sh` and `scripts/iteration.md` source for the full contract.
+Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh`. The driver owns loop control, tracking-issue creation, grade-history aggregation, post-iter-cap final `/skill-judge` re-evaluation, close-out composition, and cleanup. Per-iteration mechanics (judge → design → im → verify) live in the shared kernel at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh`, invoked by the driver once per round via direct bash call with `--work-dir $LOOP_TMPDIR --iter-num $ITER --issue $ISSUE_NUM`. See `driver.sh` source and the kernel's contract sibling at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.md` for the full contract.
 
 ## Live streaming pattern (Bash background + Monitor)
 
