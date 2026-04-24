@@ -217,6 +217,29 @@ suppress = [
 # scripts/test-loop-improve-skill-skill-md.md (sibling contract), matching
 # the Makefile-only pattern as the other test-* harnesses above.
 #
+# scripts/test-improve-skill-iteration.sh is the two-tier regression harness
+# for skills/improve-skill/scripts/iteration.sh — the per-iteration kernel
+# factored out from the pre-#273 loop driver and shared by /improve-skill
+# (standalone) and /loop-improve-skill (loop body). Pins kernel contract
+# tokens (subprocess security invariants, argv flags, per-iter artifact
+# filename template, KV-footer schema, amended /design four-rule directive
+# set including the rule-4 pushback carve-out) plus four behavioral fixtures
+# (grade_a / no_plan / design_refusal / im_verification_failed). Referenced
+# only from Makefile (test-improve-skill-iteration target) and
+# scripts/test-improve-skill-iteration.md (sibling contract), matching the
+# Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/test-improve-skill-skill-md.sh is the structural regression
+# harness for skills/improve-skill/SKILL.md. Companion to
+# scripts/test-improve-skill-iteration.sh (which pins iteration.sh source
+# tokens); this harness pins the SKILL.md contract tokens (allowed-tools
+# Bash+Monitor, IMPROVE_SKILL_LOG_FILE env with /tmp/ validation, log-path
+# visibility, run_in_background/persistent Monitor directives, byte-verbatim
+# filter regex, filter-regex parity with iteration.sh breadcrumb printfs).
+# Referenced only from Makefile (test-improve-skill-skill-md target) and
+# scripts/test-improve-skill-skill-md.md (sibling contract), matching the
+# Makefile-only pattern as the other test-* harnesses above.
+#
 # scripts/test-loop-improve-skill-halt-rate.sh is the opt-in halt-rate
 # regression probe for /larch:loop-improve-skill (closes #278). Referenced
 # only from Makefile (halt-rate-probe target, NOT a lint prerequisite) and
@@ -298,6 +321,8 @@ exclude = [
   "scripts/test-subskill-anchors.sh",
   "scripts/test-loop-improve-skill-driver.sh",
   "scripts/test-loop-improve-skill-skill-md.sh",
+  "scripts/test-improve-skill-iteration.sh",
+  "scripts/test-improve-skill-skill-md.sh",
   "scripts/test-parse-skill-judge-grade.sh",
   "scripts/test-loop-improve-skill-halt-rate.sh",
   "scripts/lib-loop-improve-halt-ledger.sh",

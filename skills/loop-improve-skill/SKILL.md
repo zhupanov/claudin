@@ -1,13 +1,13 @@
 ---
 name: loop-improve-skill
-description: "Use when iteratively improving an existing skill via a judge-design-implement loop in a GitHub issue; bash driver invokes /skill-judge, /design, /im as fresh `claude -p` subprocesses; runs up to 10 rounds."
+description: "Use when iteratively improving an existing skill via a judge-design-implement loop in a GitHub issue; bash driver invokes the shared /improve-skill iteration kernel once per round; runs up to 10 rounds."
 argument-hint: "[--slack] <skill-name>"
 allowed-tools: Bash, Monitor
 ---
 
 # loop-improve-skill
 
-Iteratively improve an existing skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` — each invoked as a fresh `claude -p` subprocess by the driver. Halt class eliminated by construction: each child's report is its subprocess's output, so there is no post-child-return model turn that can halt (closes #273).
+Iteratively improve an existing skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via the shared iteration kernel at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh` (the same kernel `/improve-skill` invokes standalone). The kernel itself spawns each child skill (`/skill-judge`, `/design`, `/im`) as a fresh `claude -p` subprocess. Halt class eliminated by construction: each child's report is its subprocess's output, so there is no post-child-return model turn that can halt (closes #273).
 
 Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
 
@@ -19,11 +19,11 @@ Example: `/loop-improve-skill design` or `/loop-improve-skill /design`.
 
 ## Driver
 
-Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh`. The driver owns loop control, subprocess invocation, grade parsing, audit-trail posting, infeasibility detection, close-out composition, and cleanup. See `driver.sh` source for the loop semantics.
+Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh`. The driver owns loop control, tracking-issue creation, grade-history aggregation, post-iter-cap final `/skill-judge` re-evaluation, close-out composition, and cleanup. Per-iteration mechanics (judge → design → im → verify) live in the shared kernel at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh`, invoked by the driver once per round via direct bash call with `--work-dir $LOOP_TMPDIR --iter-num $ITER --issue $ISSUE_NUM`. See `driver.sh` source and the kernel's contract sibling at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.md` for the full contract.
 
 ## Live streaming pattern (Bash background + Monitor)
 
-The driver runs for minutes to hours (up to 10 iterations of `/skill-judge` → `/design` → `/im`). To give the user live visibility into driver progress without reintroducing the halt class eliminated by #273, this skill launches `driver.sh` as a **background Bash task** with combined stdout/stderr redirected to a stable log-file path, then **attaches Monitor** to tail that file filtered to the driver's step-marker lines. The driver itself is byte-identical to its pre-#291 version — Monitor is passive observability only.
+The driver runs for minutes to hours (up to 10 iterations of `/skill-judge` → `/design` → `/im`). To give the user live visibility into driver progress without reintroducing the halt class eliminated by #273, this skill launches `driver.sh` as a **background Bash task** with combined stdout/stderr redirected to a stable log-file path, then **attaches Monitor** to tail that file filtered to the driver's step-marker lines. The streaming contract (background Bash + filtered Monitor tail) is unchanged from #291; the refactor factored out the per-iteration body into `skills/improve-skill/scripts/iteration.sh` without altering the log-path security boundary, filter regex, or breadcrumb prefix families that Monitor relies on. Monitor is passive observability only.
 
 ### Shell-state discipline (MANDATORY)
 

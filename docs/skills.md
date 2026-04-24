@@ -8,6 +8,7 @@ Reference for every slash command shipped by the larch plugin. Each section belo
 - [`/design`](#design)
 - [`/fix-issue`](#fix-issue)
 - [`/implement`](#implement)
+- [`/improve-skill`](#improve-skill)
 - [`/issue`](#issue)
 - [`/loop-improve-skill`](#loop-improve-skill)
 - [`/loop-review`](#loop-review)
@@ -64,6 +65,14 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 
 Full end-to-end feature workflow — design, implement, PR (Slack announce is opt-in via `--slack`). `--quick` skips `/design` and uses a simplified single-reviewer loop of up to 7 rounds with a per-round `Cursor → Codex → Claude Code Reviewer subagent` fallback chain (no voting panel; main agent unilaterally accepts or rejects each finding). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. `--slack` posts a PR announcement to Slack after PR creation, and (when combined with `--merge`) adds a `:merged:` emoji after merge; both require `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Without `--slack`, no Slack calls are made regardless of environment configuration. `--issue <N>` attaches `/implement` to an existing tracking issue (Step 0.5 adoption); otherwise fresh creation is deferred to Step 9a.1. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output).
 
+## `/improve-skill`
+
+**Arguments**: `[--slack] [--issue <N>] <skill-name>`
+
+**Source**: [`skills/improve-skill/SKILL.md`](../skills/improve-skill/SKILL.md)
+
+Run exactly one iteration of the iterative skill-improvement pipeline against an existing larch skill: `/skill-judge` → grade parse → `/design` → `/larch:im`. Each child skill runs as a fresh `claude -p` subprocess invoked by the shared bash kernel at `skills/improve-skill/scripts/iteration.sh` — the same kernel `/loop-improve-skill` reuses once per round of its up-to-10 loop. The amended `/design` prompt carries a **narrow per-finding pushback carve-out**: `/design` may include a `## Pushback on judge findings` subsection in the plan to argue specific `/skill-judge` findings are erroneous, provided each pushback entry identifies the finding, explains why it is misapplied, and cites concrete codebase evidence (file:line). The carve-out is strictly per-finding — the plan must still address every undisputed non-A dimension, and the existing three directives (no-self-curtail on minor/cosmetic findings, no-self-curtail on token/budget grounds, no no-plan sentinels when findings exist) remain in force. `--issue <N>` adopts an existing tracking issue instead of creating a new one (used by `/loop-improve-skill`'s driver to accumulate all 10 iterations' comments on one issue). `--slack` is forwarded to the `/larch:im` invocation so the iteration's PR posts to Slack. On exit, the kernel emits a 9-key KV footer (`### iteration-result` block with `ITER_STATUS` / `EXIT_REASON` / `PARSE_STATUS` / `GRADE_A` / `NON_A_DIMS` / `TOTAL_NUM` / `TOTAL_DEN` / `ITERATION_TMPDIR` / `ISSUE_NUM`) — guaranteed via EXIT trap so parsers see a result even on abnormal abort. Example: `/improve-skill design` or `/improve-skill --issue 391 design`.
+
 ## `/issue`
 
 **Arguments**: `[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [<issue description>]`
@@ -78,7 +87,7 @@ Create one or more GitHub issues with LLM-based semantic duplicate detection. Tw
 
 **Source**: [`skills/loop-improve-skill/SKILL.md`](../skills/loop-improve-skill/SKILL.md)
 
-Iteratively improve an existing larch skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via a bash driver that invokes each child skill as a fresh `claude -p` subprocess (halt class eliminated by construction, closes #273). Termination contract: strives for grade A on every `/skill-judge` dimension (D1..D8); exits happy when achieved, with written infeasibility justification when `/design` produces no plan, `/design` refuses, or `/im` cannot be verified, or with auto-generated infeasibility justification (post-iter-cap final `/skill-judge` re-evaluation listing remaining non-A dimensions) when the 10-iteration cap is reached. Justification is appended to the close-out tracking-issue comment. `--slack` is propagated to every iteration's `/larch:im` invocation so each PR posts to Slack; note that up to 10 iterations can produce up to 10 Slack posts, so opt in only when desired. Example: `/loop-improve-skill design`.
+Iteratively improve an existing larch skill. Creates a tracking GitHub issue, then runs up to 10 improvement rounds of `/skill-judge` → `/design` → `/im` via the shared `/improve-skill` iteration kernel at `skills/improve-skill/scripts/iteration.sh`, invoked once per round by the driver via direct bash call (not via nested `claude -p`). Halt class eliminated by construction: the kernel spawns each child skill as a fresh `claude -p` subprocess, and the driver → kernel edge is a plain bash call. Termination contract: strives for grade A on every `/skill-judge` dimension (D1..D8); exits happy when achieved, with written infeasibility justification when `/design` produces no plan, `/design` refuses, or `/im` cannot be verified, or with auto-generated infeasibility justification (post-iter-cap final `/skill-judge` re-evaluation listing remaining non-A dimensions) when the 10-iteration cap is reached. Justification is appended to the close-out tracking-issue comment. The driver passes `--work-dir $LOOP_TMPDIR --iter-num $ITER --issue $ISSUE_NUM` to the kernel so all iteration artifacts accumulate in one work-dir and one tracking issue. `--slack` is propagated to every iteration's `/larch:im` invocation so each PR posts to Slack; note that up to 10 iterations can produce up to 10 Slack posts, so opt in only when desired. Example: `/loop-improve-skill design`.
 
 ## `/loop-review`
 

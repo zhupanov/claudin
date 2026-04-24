@@ -1,62 +1,72 @@
 #!/usr/bin/env bash
 # driver.sh — Bash driver for /loop-improve-skill (Option B topology, closes #273).
 #
-# Replaces the prior outer→inner→3-children Skill-tool chain with a single-file
-# bash driver that invokes each child skill (/skill-judge, /design, /im) as a
-# fresh `claude -p` subprocess. Halt class eliminated by construction: each
-# child's report is its subprocess's output, so there is no post-child-return
-# model turn that can halt between child-return and post-call Bash.
+# Factored refactor: the per-iteration body (judge → design → im) lives in
+# `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh` — the
+# shared kernel also invoked standalone by `/improve-skill`. This driver
+# owns only loop-specific concerns: tracking-issue creation, the up-to-10-
+# round while loop, grade-history aggregation, post-iter-cap final
+# `/skill-judge` re-evaluation, close-out composition, and cleanup.
+#
+# Halt class eliminated by construction: iteration.sh is invoked via direct
+# bash call (not `claude -p`) so there is no post-child-return model turn
+# to halt between iteration return and this driver's post-call Bash.
 #
 # Usage:
 #   driver.sh [--slack] <skill-name>
 #
 # Arguments:
-#   --slack       — optional flag, must precede <skill-name>. When set, the
-#                   driver prepends `--slack ` to every /larch:im prompt so
-#                   each iteration's PR posts to Slack. Default: absent — no
-#                   iteration posts to Slack regardless of Slack env vars.
-#   <skill-name>  — target larch skill to iteratively improve. A leading `/`
-#                   is stripped. Must match `^[a-z][a-z0-9-]*$`.
+#   --slack       — optional flag, must precede <skill-name>. Prepended to
+#                   every iteration.sh invocation so each iteration's
+#                   /larch:im posts to Slack. Default: absent.
+#   <skill-name>  — target larch skill; leading `/` stripped; must match
+#                   `^[a-z][a-z0-9-]*$`.
 #
-# Topology:
-#   For each iteration (ITER=1..10):
-#     Phase 1 — /skill-judge as claude -p subprocess → capture JUDGE_OUT
-#                  → parse-skill-judge-grade.sh → append grade-history.txt
-#                  → post gh issue comment (redacted)
-#                  → if GRADE_A=true: break with EXIT_REASON
-#     Phase 2 — /design  as claude -p subprocess → capture DESIGN_OUT
-#                  → no-plan detector + rescue re-invocation (one max per iter)
-#                  → if no_plan|design_refusal: write infeasibility.md, break
-#                  → else post plan comment (redacted)
-#     Phase 3 — /im      as claude -p subprocess → capture IM_OUT
-#                  → verify-skill-called.sh --stdout-line '^✅ 18: cleanup'
-#                  → if VERIFIED=false: write infeasibility.md, break
-#   On ITER>10: run one final /skill-judge (post-iter-cap re-evaluation); may
-#     reclassify EXIT_REASON if grade A was reached by the last /im.
-#   Close-out: compose + post close-out comment (summary + Grade History +
-#     conditional Infeasibility Justification + Final Assessment).
-#   Cleanup: cleanup-tmpdir.sh (always runs via EXIT trap).
+# Topology (post-refactor):
+#   Step 1 — argv parse, 3-probe skill lookup, gh/claude pre-flight
+#   Step 2 — session-setup.sh → LOOP_TMPDIR
+#   Step 3 — gh issue create (the tracking issue is created ONCE by the loop
+#             driver; iteration.sh always receives --issue "$ISSUE_NUM")
+#   Step 4 — while ITER=1..10: invoke iteration.sh with --work-dir "$LOOP_TMPDIR"
+#             --iter-num "$ITER" --issue "$ISSUE_NUM" [--slack] "$SKILL_NAME";
+#             parse the KV footer from iteration.sh's stdout (via awk on the
+#             `### iteration-result` block); break on terminal ITER_STATUS
+#             (grade_a / no_plan / design_refusal / im_verification_failed /
+#             judge_failed) with byte-compatible EXIT_REASON strings.
+#   Step 5a — iter-cap path only: run one final /skill-judge (via a slim
+#             local invoke_claude_p helper that preserves FINDING_9 STDIN +
+#             FINDING_10 stderr-sidecar contracts) to capture the post-cap
+#             grade. May reclassify EXIT_REASON to "grade A achieved after
+#             final post-iter-cap re-evaluation" if grade A was reached by
+#             the last /im.
+#   Step 5b — compose close-out body (summary + Grade History +
+#             conditional Infeasibility Justification + Final Assessment).
+#   Step 5c — post close-out comment (redacted via redact-secrets.sh),
+#             write closeout.sentinel.
+#   Step 6  — cleanup-tmpdir.sh via EXIT trap.
 #
-# Security posture (mirrors pre-rewrite boundaries, see SECURITY.md):
+# LARCH_ITERATION_SCRIPT_OVERRIDE is an advisory env var used ONLY by
+# `scripts/test-loop-improve-skill-driver.sh` Tier-2 fixtures to redirect
+# iteration.sh invocations at a stub shim. Never set in production.
+#
+# Security posture (mirrors pre-refactor boundaries, see SECURITY.md):
 #   - LOOP_TMPDIR MUST begin with /tmp/ or /private/tmp/ AND MUST NOT contain
-#     `..` as a path component (reject occurrences of /.. or a trailing ..).
-#   - All subprocess invocations cd to REPO_ROOT so target skill-dir resolves
-#     consistently across iterations.
-#   - Argv arrays for command construction (no eval, no source of untrusted
-#     content).
+#     `..` as a path component.
+#   - Iteration artifacts (iter-${ITER}-*.txt, iter-${ITER}-infeasibility.md,
+#     grade-history.txt) accumulate in LOOP_TMPDIR via iteration.sh's
+#     --work-dir $LOOP_TMPDIR pattern; close-out reads them at byte-identical
+#     paths from the pre-refactor driver.
 #   - All gh comment bodies piped through redact-secrets.sh before posting.
+#   - The retained slim invoke_claude_p (used only for the Step 5a post-iter-
+#     cap re-judge) preserves FINDING_9 STDIN + FINDING_10 stderr-sidecar
+#     contracts.
 #   - $LOOP_TMPDIR always cleaned via EXIT trap.
 
 set -euo pipefail
 
 # Derive CLAUDE_PLUGIN_ROOT from script location when the harness did not
-# export it. When /loop-improve-skill is invoked as a Skill, Claude Code's
-# harness expands ${CLAUDE_PLUGIN_ROOT} in SKILL.md's Bash template into a
-# literal path before subprocess launch but does NOT export the variable to
-# the Bash environment. Under `set -u`, the first unguarded reference aborts
-# the driver at Step 2 session-setup. Deriving the value from the script's
-# own location keeps driver.sh self-sufficient regardless of invocation mode.
-# Layout: ${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh
+# export it. Layout:
+#   ${CLAUDE_PLUGIN_ROOT}/skills/loop-improve-skill/scripts/driver.sh
 # so the plugin root is three directories up from the script.
 if [[ -z "${CLAUDE_PLUGIN_ROOT:-}" ]]; then
   CLAUDE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)"
@@ -78,7 +88,7 @@ breadcrumb_warn()       { printf '**⚠ %s**\n' "$*"; }
 # --------------------------------------------------------------------------
 
 LOOP_TMPDIR=""
-# shellcheck disable=SC2317  # invoked via trap on EXIT — shellcheck cannot see the indirect call
+# shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
   local rc=$?
   if [[ -n "$LOOP_TMPDIR" && -d "$LOOP_TMPDIR" ]]; then
@@ -199,8 +209,6 @@ if [[ -z "$LOOP_TMPDIR" ]]; then
 fi
 
 # Validate LOOP_TMPDIR security boundary (prefix + no `..` traversal).
-# Accept /tmp/ or /private/tmp/ prefix. Reject any occurrence of /..
-# path component (including a trailing `..`).
 if ! [[ "$LOOP_TMPDIR" == /tmp/* || "$LOOP_TMPDIR" == /private/tmp/* ]]; then
   breadcrumb_warn "2: session setup — LOOP_TMPDIR '$LOOP_TMPDIR' does not begin with /tmp/ or /private/tmp/. Aborting."
   exit 1
@@ -225,7 +233,7 @@ breadcrumb_inprogress "3: create issue"
 ISSUE_BODY_FILE="$LOOP_TMPDIR/issue-body.md"
 {
   # shellcheck disable=SC2016  # backticks inside literal prose (issue body), not command substitution
-  printf 'Iteratively improve /%s via /loop-improve-skill. Runs up to 10 rounds of /skill-judge + /design + /im, each invoked as a fresh `claude -p` subprocess by the bash driver (topology #273). Exits when every /skill-judge dimension reaches grade A, or when an infeasibility halt (no_plan / design_refusal / im_verification_failed, with written justification appended below) or the 10-iteration cap is reached.\n\n' "${SKILL_NAME}"
+  printf 'Iteratively improve /%s via /loop-improve-skill. Runs up to 10 rounds of /skill-judge + /design + /im via the shared iteration kernel at `${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh`, invoked once per iteration from this driver (topology #273; factored out as /improve-skill). Exits when every /skill-judge dimension reaches grade A, or when an infeasibility halt (no_plan / design_refusal / im_verification_failed, with written justification appended below) or the 10-iteration cap is reached.\n\n' "${SKILL_NAME}"
   printf 'Target: %s\n' "${TARGET_SKILL_PATH}"
 } > "$ISSUE_BODY_FILE"
 
@@ -246,25 +254,18 @@ fi
 breadcrumb_done "3: create issue — #${ISSUE_NUM}"
 
 # --------------------------------------------------------------------------
-# Helper: invoke claude -p with a prompt file, capture stdout to <out-file>
+# Helper: invoke_claude_p (slim — used only for Step 5a post-iter-cap re-judge)
 # --------------------------------------------------------------------------
-
+#
+# Preserved here (instead of reusing iteration.sh) so the final re-judge has
+# a minimal surface area and the driver test can pin FINDING_9/10 contracts
+# against this file directly.
+#
 # invoke_claude_p <prompt-file> <out-file> <phase-label> <timeout-seconds>
-#
-# Reads the prompt from <prompt-file> and passes it to
-# `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` via STDIN (FINDING_9: avoids
-# argv ARG_MAX exhaustion on large plans; macOS ARG_MAX default is 262144).
-#
-# Stdout is captured to <out-file>; stderr is captured to <out-file>.stderr
-# (FINDING_10: stderr MUST NOT be posted to public gh issue comments — it can
-# contain filesystem paths, hostnames, or raw API-key shapes that escape the
-# redact-secrets.sh patterns). The .stderr file stays in $LOOP_TMPDIR for
-# diagnostics and is removed with the rest of the tmpdir by the EXIT trap.
-#
-# Uses a background-poll pattern (no external `timeout`/`gtimeout` dependency)
-# so the function works on macOS defaults. cd's to REPO_ROOT first.
-#
-# Returns: the child claude's exit code (0 on success; 124 on timeout).
+#   - Prompt on STDIN (FINDING_9: avoids argv ARG_MAX on macOS default 262144)
+#   - Stderr redirected to <out-file>.stderr sidecar (FINDING_10: never posted)
+#   - --plugin-dir "$CLAUDE_PLUGIN_ROOT" (FINDING_7: plugin resolution)
+#   - Background-poll pattern (no external `timeout`/`gtimeout` dependency)
 invoke_claude_p() {
   local prompt_file="$1"
   local out_file="$2"
@@ -279,8 +280,11 @@ invoke_claude_p() {
     cd "$REPO_ROOT"
     claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
       < "$prompt_file" > "$out_file" 2> "$stderr_file" &
-    local pid=$!
-    local elapsed=0
+    # Subshell variables are already isolated from the parent function;
+    # no `local` keyword needed (and `local` inside `( ... )` outside a
+    # function is an easy-to-misread annotation).
+    pid=$!
+    elapsed=0
     while kill -0 "$pid" 2>/dev/null; do
       if [[ "$elapsed" -ge "$timeout_s" ]]; then
         kill "$pid" 2>/dev/null || true
@@ -297,148 +301,23 @@ invoke_claude_p() {
   )
 }
 
-# post_gh_comment <body-file> <iter-label>
-# Redacts via redact-secrets.sh, posts with gh issue comment. Warns on failure,
-# never fails the loop.
-post_gh_comment() {
-  local body_file="$1"
-  local iter_label="$2"
-  local redacted="${body_file}.redacted"
-
-  "${CLAUDE_PLUGIN_ROOT}/scripts/redact-secrets.sh" < "$body_file" > "$redacted"
-  if ! gh issue comment "$ISSUE_NUM" --body-file "$redacted"; then
-    breadcrumb_warn "gh issue comment failed for ${iter_label}. Continuing."
-  fi
-}
-
 # --------------------------------------------------------------------------
-# No-plan detector — transplanted from inner Step 3.d
+# Step 4 — Loop (one iteration.sh invocation per round)
 # --------------------------------------------------------------------------
-#
-# Returns via stdout one of:
-#   plan_ok | no_plan | design_refusal
-#
-# Detects:
-#   - empty output             → no_plan
-#   - first non-blank line matches no-plan sentinel AND no structural
-#     markers on any subsequent line → no_plan
-#   - explicit refusal / error pattern anywhere → design_refusal
-#   - otherwise → plan_ok (may still trigger rescue; see caller)
-detect_plan_status() {
-  local design_out="$1"
 
-  # Empty
-  if [[ ! -s "$design_out" ]]; then
-    printf 'no_plan\n'
-    return 0
-  fi
+# LARCH_ITERATION_SCRIPT_OVERRIDE: advisory env var for Tier-2 test fixtures
+# only. Redirects iteration.sh invocations at a stub shim. In production
+# environments this MUST be unset; the default resolves to the shipped kernel.
+ITERATION_SCRIPT="${LARCH_ITERATION_SCRIPT_OVERRIDE:-${CLAUDE_PLUGIN_ROOT}/skills/improve-skill/scripts/iteration.sh}"
 
-  # Explicit refusal/error patterns (conservative — require one of these exact markers)
-  if LC_ALL=C grep -qiE '^(error:|error -|refus(ed|al)|cannot (run|proceed|execute)|/design (failed|could not run|is unavailable))' "$design_out"; then
-    printf 'design_refusal\n'
-    return 0
-  fi
-
-  # First non-blank line: trim + case-fold + strip markdown emphasis wrappers
-  # (leading/trailing `*` and `_` runs) + strip trailing punctuation
-  # (., !, ?, ;, ,). Handles "No plan.", "**No plan**", "*no plan*", etc.
-  # (FINDING_2: exact-string sentinel match fails on trailing punctuation;
-  # emphasis wrappers are a common /design rendering artifact.)
-  local first_line
-  first_line="$(awk 'NF {print; exit}' "$design_out" \
-    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
-    | tr '[:upper:]' '[:lower:]')"
-  # Strip leading + trailing runs of `*` and `_` (markdown emphasis wrappers).
-  first_line="$(printf '%s' "$first_line" | sed -E 's/^[*_]+//; s/[*_]+$//')"
-  # Re-strip whitespace that may have been inside the emphasis wrappers.
-  first_line="$(printf '%s' "$first_line" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-  # Iteratively strip trailing punctuation.
-  while :; do
-    case "$first_line" in
-      *.|*!|*\?|*\;|*,)
-        first_line="${first_line%?}"
-        ;;
-      *)
-        break ;;
-    esac
-  done
-
-  # Structural markers — anchored regex on any line
-  local has_structural="no"
-  if LC_ALL=C grep -qE '^#{1,6}[[:space:]]|^[1-9][0-9]?\.[[:space:]]|^[-*+][[:space:]]' "$design_out"; then
-    has_structural="yes"
-  fi
-
-  case "$first_line" in
-    "no plan"|"no improvements"|"nothing to improve"|"already optimal"|"skill is already high quality")
-      if [[ "$has_structural" == "no" ]]; then
-        printf 'no_plan\n'
-        return 0
-      fi
-      ;;
-  esac
-
-  printf 'plan_ok\n'
-}
-
-# --------------------------------------------------------------------------
-# Infeasibility justification writer — transplanted from inner Step 3.d
-# --------------------------------------------------------------------------
-#
-# write_infeasibility <iter> <iter-status> <parse-status> <grade-a> <non-a-dims>
-write_infeasibility() {
-  local iter="$1"
-  local status="$2"
-  local parse_status="${3:-unknown}"
-  local grade_a="${4:-false}"
-  local non_a="${5:-}"
-
-  local inf_file="$LOOP_TMPDIR/iter-${iter}-infeasibility.md"
-  local tmp_file="${inf_file}.tmp"
-
-  local reason why_blocks
-
-  case "$status" in
-    no_plan)
-      reason="/design emitted no-plan sentinel despite Non-A dimensions ${non_a}"
-      why_blocks="/design could not articulate a plan for the listed Non-A dimensions despite the Step 3.d focus block — without a plan there is no implementation candidate."
-      ;;
-    design_refusal)
-      reason="/design returned structured refusal — see iter-${iter}-design.txt for the verbatim response"
-      why_blocks="/design itself failed to run, so no plan could be produced. A later iteration would need a different target-skill framing or external context."
-      ;;
-    im_verification_failed)
-      reason="/im did not reach its canonical completion line — see iter-${iter}-im.txt; the iteration produced design output (iter-${iter}-design.txt) but the implementation pipeline could not be verified as complete."
-      why_blocks="A plan was produced but could not be landed safely (CI failure, merge conflict, or pipeline halt) — the failed plan would need a different approach to make progress."
-      ;;
-    *)
-      reason="unknown status '${status}'"
-      why_blocks="Unknown halt status; see per-iteration tmp files for context."
-      ;;
-  esac
-
-  {
-    printf '## Infeasibility Justification — iteration %s\n\n' "${iter}"
-    printf '**Status**: %s\n\n' "${status}"
-    printf '**Reason**: %s\n\n' "${reason}"
-    printf '**Context**:\n'
-    printf -- '- Grade parse at start of iteration: PARSE_STATUS=%s, GRADE_A=%s, non-A dimensions: %s\n' "${parse_status}" "${grade_a}" "${non_a}"
-    printf -- '- Judge output: iter-%s-judge.txt\n' "${iter}"
-    printf -- '- Design output (if any): iter-%s-design.txt\n' "${iter}"
-    printf -- '- /im output (if any): iter-%s-im.txt\n\n' "${iter}"
-    printf '**Why this blocks reaching grade A**: %s\n' "${why_blocks}"
-  } > "$tmp_file"
-  mv "$tmp_file" "$inf_file"
-}
-
-# --------------------------------------------------------------------------
-# Step 4 — Loop
-# --------------------------------------------------------------------------
+if [[ ! -x "$ITERATION_SCRIPT" ]]; then
+  breadcrumb_warn "4: loop — iteration script not executable at '$ITERATION_SCRIPT'. Aborting."
+  exit 1
+fi
 
 ITER=1
 EXIT_REASON=""
-# PARSE_STATUS/GRADE_A/NON_A_DIMS track the most recent judge parse (used by
-# infeasibility write for context).
+# Last-seen grade-parse context (used by close-out and Step 5a reclassification).
 PARSE_STATUS="unknown"
 GRADE_A="false"
 NON_A_DIMS=""
@@ -446,216 +325,98 @@ NON_A_DIMS=""
 while [[ $ITER -le 10 ]]; do
   breadcrumb_inprogress "4: loop — iteration ${ITER}"
 
-  # ----- Phase 1: /skill-judge ------------------------------------------
+  # Invoke iteration.sh. Append a trailing blank so the SLACK_FLAG split
+  # consistently when empty.
+  ITER_OUT="$LOOP_TMPDIR/iter-${ITER}-iteration-stdout.txt"
+  ITER_ARGV=()
+  if [[ -n "$SLACK_FLAG" ]]; then
+    ITER_ARGV+=(--slack)
+  fi
+  ITER_ARGV+=(--issue "$ISSUE_NUM")
+  ITER_ARGV+=(--work-dir "$LOOP_TMPDIR")
+  ITER_ARGV+=(--iter-num "$ITER")
+  ITER_ARGV+=(--breadcrumb-prefix "4.${ITER}")
+  ITER_ARGV+=("$SKILL_NAME")
 
-  breadcrumb_inprogress "4.${ITER}.j: judge"
+  ITER_RC=0
+  "$ITERATION_SCRIPT" "${ITER_ARGV[@]}" > "$ITER_OUT" 2>&1 || ITER_RC=$?
 
-  JUDGE_PROMPT="$LOOP_TMPDIR/iter-${ITER}-judge-prompt.txt"
-  JUDGE_OUT="$LOOP_TMPDIR/iter-${ITER}-judge.txt"
+  # Tee iteration stdout to the driver log so Monitor sees the iteration's
+  # breadcrumbs + KV footer. The iteration.sh kernel writes to stdout;
+  # capture it and re-emit here so the driver's stdout (which the SKILL.md
+  # Monitor-tail filter reads) surfaces the kernel's progress.
+  cat "$ITER_OUT"
 
-  # Build prompt via printf (single call — the whole body is fixed-format).
-  # NOTE: the /skill-judge invocation prompt is transplanted verbatim from
-  # the pre-rewrite inner Step 3.j prompt text.
-  printf '/skill-judge:skill-judge %s (absolute SKILL.md path: %s) — read the SKILL.md at this exact path before evaluating; do NOT resolve by name against the plugin installation directory. Also evaluate any sibling scripts/ and references/ files under the same skill directory.\n' \
-    "${SKILL_NAME}" "${TARGET_SKILL_PATH}" > "$JUDGE_PROMPT"
-
-  invoke_claude_p "$JUDGE_PROMPT" "$JUDGE_OUT" "judge" 1200 || {
-    breadcrumb_warn "4.${ITER}.j: judge — claude -p failed. Aborting loop (proceeding to close-out)."
-    EXIT_REASON="subprocess failure at /skill-judge iteration ${ITER}"
-    break
+  # Parse KV footer from the iteration.sh stdout capture. The footer is
+  # delimited by a `### iteration-result` header line and contains 9 KV
+  # lines. Scope the awk match to post-header lines so a pre-block line
+  # shaped `KEY=VAL` (e.g., a stray subprocess diagnostic) cannot spoof
+  # the parse.
+  parse_kv() {
+    local key="$1"
+    awk -F= -v k="${key}" '
+      /^### iteration-result/ { in_block=1; next }
+      in_block && $0 ~ "^" k "=" {print substr($0, length(k)+2); exit}
+    ' "$ITER_OUT"
   }
 
-  if [[ ! -s "$JUDGE_OUT" ]]; then
-    breadcrumb_warn "4.${ITER}.j: judge — empty output from /skill-judge subprocess. Aborting loop."
-    EXIT_REASON="empty /skill-judge output at iteration ${ITER}"
+  ITER_STATUS="$(parse_kv ITER_STATUS)"
+  EXIT_REASON_ITER="$(parse_kv EXIT_REASON)"
+  # PARSE_STATUS / GRADE_A / NON_A_DIMS are extracted for diagnostic transparency
+  # (they surface in close-out prose and in the Grade History; iteration.sh already
+  # appends the grade-history.txt line itself, but extracting here keeps the driver
+  # aware of the last-iteration context for Step 5a's reclassification path and for
+  # any future close-out enrichment that inspects per-iteration parse health).
+  # shellcheck disable=SC2034  # consumed by future close-out enrichment; kept for diagnostic parity with KV footer schema
+  PARSE_STATUS="$(parse_kv PARSE_STATUS)"
+  # shellcheck disable=SC2034  # same rationale
+  GRADE_A="$(parse_kv GRADE_A)"
+  # shellcheck disable=SC2034  # same rationale
+  NON_A_DIMS="$(parse_kv NON_A_DIMS)"
+
+  if [[ -z "$ITER_STATUS" ]]; then
+    breadcrumb_warn "4: loop — iteration ${ITER} did not emit a KV footer (stdout missing '### iteration-result' block). Treating as subprocess failure."
+    EXIT_REASON="subprocess failure at iteration ${ITER}: no KV footer (rc=${ITER_RC})"
     break
   fi
 
-  # ----- Phase 1.v: grade parse -----------------------------------------
-
-  breadcrumb_inprogress "4.${ITER}.j.v: grade parse"
-
-  GRADE_OUT="$LOOP_TMPDIR/iter-${ITER}-grade.txt"
-  GRADE_TMP="${GRADE_OUT}.tmp"
-  "${CLAUDE_PLUGIN_ROOT}/scripts/parse-skill-judge-grade.sh" "$JUDGE_OUT" > "$GRADE_TMP"
-  mv "$GRADE_TMP" "$GRADE_OUT"
-
-  # Parse KV fields we need
-  PARSE_STATUS="$(awk -F= '/^PARSE_STATUS=/{print $2; exit}' "$GRADE_OUT")"
-  GRADE_A="$(awk -F= '/^GRADE_A=/{print $2; exit}' "$GRADE_OUT")"
-  NON_A_DIMS="$(awk -F= '/^NON_A_DIMS=/{print $2; exit}' "$GRADE_OUT")"
-  TOTAL_NUM="$(awk -F= '/^TOTAL_NUM=/{print $2; exit}' "$GRADE_OUT")"
-  TOTAL_DEN="$(awk -F= '/^TOTAL_DEN=/{print $2; exit}' "$GRADE_OUT")"
-
-  # Append grade-history.txt
-  if [[ "$PARSE_STATUS" == "ok" ]]; then
-    printf 'iter=%s total=%s/%s non_a=%s parse_status=ok\n' \
-      "${ITER}" "${TOTAL_NUM}" "${TOTAL_DEN}" "${NON_A_DIMS}" \
-      >> "$LOOP_TMPDIR/grade-history.txt"
-  else
-    printf 'iter=%s total=N/A non_a=N/A parse_status=%s\n' \
-      "${ITER}" "${PARSE_STATUS:-unknown}" \
-      >> "$LOOP_TMPDIR/grade-history.txt"
-  fi
-
-  # Post judge comment (redacted)
-  JUDGE_COMMENT_FILE="$LOOP_TMPDIR/iter-${ITER}-judge-comment.md"
-  {
-    printf '## Iteration %s — /skill-judge\n\n' "${ITER}"
-    cat "$JUDGE_OUT"
-  } > "$JUDGE_COMMENT_FILE"
-  post_gh_comment "$JUDGE_COMMENT_FILE" "iter ${ITER} judge"
-
-  # Grade-A short-circuit
-  if [[ "$GRADE_A" == "true" && "$PARSE_STATUS" == "ok" ]]; then
-    EXIT_REASON="grade A achieved on all dimensions at iteration ${ITER}"
-    breadcrumb_done "4.${ITER}.j.v: grade parse — grade A achieved (break loop)"
-    break
-  fi
-
-  breadcrumb_done "4.${ITER}.j.v: grade parse — non-A (${NON_A_DIMS:-?}); continuing to /design"
-
-  # ----- Phase 2: /design -----------------------------------------------
-
-  breadcrumb_inprogress "4.${ITER}.d: design"
-
-  DESIGN_PROMPT="$LOOP_TMPDIR/iter-${ITER}-design-prompt.txt"
-  DESIGN_OUT="$LOOP_TMPDIR/iter-${ITER}-design.txt"
-
-  # Build per-dimension deficit lines when PARSE_STATUS=ok AND GRADE_A=false
-  build_deficit_lines() {
-    local line=""
-    for d in D1 D2 D3 D4 D5 D6 D7 D8; do
-      local num den thr
-      num="$(awk -F= -v k="${d}_NUM" '$1==k{print $2; exit}' "$GRADE_OUT")"
-      den="$(awk -F= -v k="${d}_DEN" '$1==k{print $2; exit}' "$GRADE_OUT")"
-      [[ -z "$num" || -z "$den" ]] && continue
-      # Threshold per dim: D1>=18/20, D2-D6+D8>=14/15, D7>=9/10
-      case "$d" in
-        D1) thr=18 ;;
-        D7) thr=9 ;;
-        *)  thr=14 ;;
-      esac
-      if [[ "$num" -lt "$thr" ]]; then
-        local delta=$(( thr - num ))
-        line+="  ${d} at ${num}/${den} (needs >=${thr} for A; short by ${delta})"$'\n'
-      fi
-    done
-    printf '%s' "$line"
-  }
-
-  {
-    printf '/larch:design Improve /%s at %s' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
-    if [[ "$PARSE_STATUS" == "ok" && "$GRADE_A" == "false" ]]; then
-      printf ' focused on %s (the Non-A dimensions from this iteration'"'"'s /skill-judge).' "${NON_A_DIMS}"
-      printf '\n\nNon-A dimensions from this iteration'"'"'s /skill-judge: %s.\n' "${NON_A_DIMS}"
-      printf 'Per-dimension deficits (current/required):\n'
-      build_deficit_lines
-      printf 'Focus this iteration'"'"'s plan on raising these dimensions to grade A.\n'
-      printf 'Treat this deficit list as the canonical set of must-address findings — do NOT self-curtail on the grounds that these are "minor". The loop'"'"'s termination contract requires per-dimension A on ALL D1..D8; any non-A dimension is load-bearing for forward progress.\n\n'
-    else
-      printf '.\n\n'
-    fi
-    # Three contract clauses — transplanted VERBATIM from pre-rewrite inner Step 3.d
-    printf '/design MUST produce a concrete, implementable plan for ANY actionable /skill-judge finding — including findings classified "minor", "nit", or cosmetic. Treat "minor" as "small plan", not as "no plan".\n\n'
-    printf '/design MUST NOT self-curtail citing token/context budget. Under any perceived pressure, narrow scope to the single highest-leverage finding and emit a compressed micro-plan that still conforms to the standard /design plan schema (## Implementation Plan with Files to modify/create, Approach, Edge cases, Testing strategy, and Failure modes when the change is non-trivial per /design'"'"'s own rules) — never emit a no-plan sentinel on budget grounds.\n\n'
-    printf '/design MUST NOT emit any of the no-plan sentinel phrases (no plan, no improvements, nothing to improve, already optimal, skill is already high quality) when /skill-judge surfaced any actionable finding. Sentinels are reserved for the genuine case where no improvement is warranted.\n\n'
-    printf 'TARGET_SKILL_PATH is absolute: %s.\n' "${TARGET_SKILL_PATH}"
-  } > "$DESIGN_PROMPT"
-
-  invoke_claude_p "$DESIGN_PROMPT" "$DESIGN_OUT" "design" 1800 || {
-    breadcrumb_warn "4.${ITER}.d: design — claude -p failed."
-    EXIT_REASON="subprocess failure at /design iteration ${ITER}"
-    write_infeasibility "$ITER" "design_refusal" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
-    break
-  }
-
-  PLAN_STATUS="$(detect_plan_status "$DESIGN_OUT")"
-
-  # Rescue re-invocation (at most once per iter). Triggered when:
-  #   - output non-empty, no sentinel match, no explicit refusal,
-  #   - AND no structured plan markers anywhere.
-  if [[ "$PLAN_STATUS" == "plan_ok" ]]; then
-    if [[ -s "$DESIGN_OUT" ]] && \
-       ! LC_ALL=C grep -qE '^#{1,6}[[:space:]]|^[1-9][0-9]?\.[[:space:]]|^[-*+][[:space:]]' "$DESIGN_OUT"; then
-      breadcrumb_inprogress "4.${ITER}.d: design — rescue (no structural markers; re-invoking /design --auto)"
-      RESCUE_PROMPT="$LOOP_TMPDIR/iter-${ITER}-design-rescue-prompt.txt"
-      {
-        printf '/larch:design --auto Re-emit a concrete plan for /%s at %s.\n\n' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
-        # shellcheck disable=SC2016  # backticks inside literal prose, not command substitution
-        printf 'Your previous response had no structured-plan markers (no markdown headings, numbered list counters, or bulleted items). Focus this re-attempt exclusively on the single highest-leverage /skill-judge finding from this iteration. The re-attempt MUST use /design'"'"'s standard plan schema: a top-level `## Implementation Plan` section with `Files to modify/create`, `Approach`, `Edge cases`, `Testing strategy`, and `Failure modes` subheadings. No preamble prose. No budget excuses. No no-plan sentinels.\n\n'
-        printf 'Non-A dimensions were: %s.\n' "${NON_A_DIMS}"
-      } > "$RESCUE_PROMPT"
-      invoke_claude_p "$RESCUE_PROMPT" "$DESIGN_OUT" "design-rescue" 1800 || true
-      PLAN_STATUS="$(detect_plan_status "$DESIGN_OUT")"
-    fi
-  fi
-
-  case "$PLAN_STATUS" in
+  case "$ITER_STATUS" in
+    grade_a)
+      EXIT_REASON="${EXIT_REASON_ITER:-grade A achieved on all dimensions at iteration ${ITER}}"
+      breadcrumb_done "4: loop — grade A achieved at iteration ${ITER} (break)"
+      break
+      ;;
     no_plan)
-      EXIT_REASON="no plan at iteration ${ITER}"
-      write_infeasibility "$ITER" "no_plan" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
-      breadcrumb_done "4.${ITER}.d: design — no_plan (break)"
+      EXIT_REASON="${EXIT_REASON_ITER:-no plan at iteration ${ITER}}"
+      breadcrumb_done "4: loop — iteration ${ITER}: no_plan (break)"
       break
       ;;
     design_refusal)
-      EXIT_REASON="/design refusal or error at iteration ${ITER}"
-      write_infeasibility "$ITER" "design_refusal" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
-      breadcrumb_done "4.${ITER}.d: design — design_refusal (break)"
+      EXIT_REASON="${EXIT_REASON_ITER:-/design refusal or error at iteration ${ITER}}"
+      breadcrumb_done "4: loop — iteration ${ITER}: design_refusal (break)"
       break
       ;;
-    plan_ok)
-      # Post plan comment (redacted)
-      PLAN_COMMENT_FILE="$LOOP_TMPDIR/iter-${ITER}-plan-comment.md"
-      {
-        printf '## Iteration %s — design plan\n\n' "${ITER}"
-        cat "$DESIGN_OUT"
-      } > "$PLAN_COMMENT_FILE"
-      post_gh_comment "$PLAN_COMMENT_FILE" "iter ${ITER} plan"
-      breadcrumb_done "4.${ITER}.d: design — plan posted"
+    im_verification_failed)
+      EXIT_REASON="${EXIT_REASON_ITER:-/im did not reach canonical completion line at iteration ${ITER}}"
+      breadcrumb_done "4: loop — iteration ${ITER}: im_verification_failed (break)"
+      break
+      ;;
+    judge_failed)
+      EXIT_REASON="${EXIT_REASON_ITER:-subprocess failure at /skill-judge iteration ${ITER}}"
+      breadcrumb_done "4: loop — iteration ${ITER}: judge_failed (break)"
+      break
+      ;;
+    ok)
+      breadcrumb_done "4: loop — iteration ${ITER} completed; continuing"
+      ;;
+    *)
+      breadcrumb_warn "4: loop — iteration ${ITER} returned unknown ITER_STATUS '${ITER_STATUS}'. Breaking."
+      EXIT_REASON="unknown ITER_STATUS '${ITER_STATUS}' at iteration ${ITER}"
+      break
       ;;
   esac
 
-  # ----- Phase 3: /im ---------------------------------------------------
-
-  breadcrumb_inprogress "4.${ITER}.i: im"
-
-  IM_PROMPT="$LOOP_TMPDIR/iter-${ITER}-im-prompt.txt"
-  IM_OUT="$LOOP_TMPDIR/iter-${ITER}-im.txt"
-
-  # /larch:im takes the plan text as its argument. FINDING_9: the prompt is
-  # sent to claude -p via STDIN (see invoke_claude_p), so the full plan body
-  # does NOT have to fit into argv (macOS default ARG_MAX = 262144).
-  # SLACK_FLAG is either empty or "--slack " (trailing space) — parsed at
-  # Step 1 from the optional --slack driver flag. Prepending it here makes
-  # every iteration's /larch:im opt into Slack posting.
-  {
-    printf '/larch:im %s' "$SLACK_FLAG"
-    cat "$DESIGN_OUT"
-  } > "$IM_PROMPT"
-
-  invoke_claude_p "$IM_PROMPT" "$IM_OUT" "im" 3600 || {
-    breadcrumb_warn "4.${ITER}.i: im — claude -p failed."
-    EXIT_REASON="/im subprocess failure at iteration ${ITER}"
-    write_infeasibility "$ITER" "im_verification_failed" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
-    break
-  }
-
-  # Mechanical gate: verify-skill-called.sh --stdout-line '^✅ 18: cleanup'
-  VERIFY_OUT="$("${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh" \
-    --stdout-line '^✅ 18: cleanup' --stdout-file "$IM_OUT" 2>/dev/null || printf 'VERIFIED=false\nREASON=verify_script_error\n')"
-  VERIFIED="$(printf '%s\n' "$VERIFY_OUT" | awk -F= '/^VERIFIED=/{print $2; exit}')"
-
-  if [[ "$VERIFIED" != "true" ]]; then
-    EXIT_REASON="/im did not reach canonical completion line at iteration ${ITER}"
-    write_infeasibility "$ITER" "im_verification_failed" "$PARSE_STATUS" "$GRADE_A" "$NON_A_DIMS"
-    breadcrumb_done "4.${ITER}.i: im — verification failed (break)"
-    break
-  fi
-
-  breadcrumb_done "4.${ITER}.i: im — verified"
-
-  # ----- Advance ITER ---------------------------------------------------
+  # Advance ITER
   ITER=$(( ITER + 1 ))
 done
 
@@ -733,14 +494,14 @@ CLOSEOUT_BODY="$LOOP_TMPDIR/closeout-body.md"
       if [[ -s "$LOOP_TMPDIR/final-grade.txt" ]] && LC_ALL=C grep -q '^PARSE_STATUS=ok$' "$LOOP_TMPDIR/final-grade.txt"; then
         FINAL_NON_A="$(LC_ALL=C grep '^NON_A_DIMS=' "$LOOP_TMPDIR/final-grade.txt" | head -1 | cut -d= -f2-)"
         printf 'Non-A dimensions in the final post-iter-cap /skill-judge: %s.\n\n' "${FINAL_NON_A}"
-        # shellcheck disable=SC2016  # backticks inside literal prose (close-out body), not command substitution
+        # shellcheck disable=SC2016
         printf 'See `final-judge.txt` (captured at Step 5a) and `grade-history.txt` for the per-iteration trajectory — whether the loop plateaued, regressed, or improved monotonically without reaching A informs whether the remaining gap is likely to yield to additional iterations or requires structural redesign.\n\n'
       else
-        # shellcheck disable=SC2016  # backticks inside literal prose (close-out body), not command substitution
+        # shellcheck disable=SC2016
         printf 'Final /skill-judge assessment unavailable: see Grade History above for the last successful judge parse. Last in-loop judge: `iter-%s-judge.txt`.\n\n' "${IT}"
       fi
       printf '## Final Assessment\n\n'
-      # shellcheck disable=SC2016  # backticks inside literal prose (close-out body), not command substitution
+      # shellcheck disable=SC2016
       printf 'Captured by the post-iter-cap re-judge at Step 5a. The full /skill-judge report is in `final-judge.txt` under the loop tmpdir; the parsed KV summary is in `final-grade.txt`.\n\n'
       ;;
     *)
@@ -749,8 +510,8 @@ CLOSEOUT_BODY="$LOOP_TMPDIR/closeout-body.md"
         cat "$LOOP_TMPDIR/iter-${IT}-infeasibility.md"
         printf '\n'
       else
-        # shellcheck disable=SC2016  # backticks inside literal prose (close-out body), not command substitution
-        printf 'Iteration %s did not produce a written justification (the driver may have halted before writing `iter-%s-infeasibility.md`). See `iter-%s-design.txt` and `iter-%s-im.txt` for context.\n\n' "${IT}" "${IT}" "${IT}" "${IT}"
+        # shellcheck disable=SC2016
+        printf 'Iteration %s did not produce a written justification (the iteration may have halted before writing `iter-%s-infeasibility.md`). See `iter-%s-design.txt` and `iter-%s-im.txt` for context.\n\n' "${IT}" "${IT}" "${IT}" "${IT}"
       fi
       ;;
   esac
@@ -774,8 +535,6 @@ breadcrumb_done "5: close out — issue #${ISSUE_NUM}, exit: ${EXIT_REASON}"
 # Step 6 — Cleanup (EXIT trap also handles this; explicit call for symmetry)
 # --------------------------------------------------------------------------
 
-# Cleanup will run from EXIT trap. Print the completion breadcrumb here so it
-# appears before the trap-driven cleanup's side effects.
 breadcrumb_done "6: cleanup — loop-improve-skill complete!"
 
 exit 0
