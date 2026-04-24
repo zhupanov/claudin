@@ -101,7 +101,7 @@ smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh
 
 # Opt-in halt-rate regression probe (closes #278). NOT a lint prerequisite —
-# too slow and non-deterministic for CI. See README "Halt-rate regression harness".
+# too slow and non-deterministic for CI. See docs/linting.md "Halt-rate regression harness".
 halt-rate-probe:
 	bash scripts/test-loop-improve-skill-halt-rate.sh
 

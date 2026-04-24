@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository **is** the larch Claude Code plugin. Editing here modifies what ships to consumers. See `README.md` for installation, features, env vars, and the full skill catalog.
+This repository **is** the larch Claude Code plugin. Editing here modifies what ships to consumers. See `README.md` for features and the skill catalog. See `docs/installation-and-setup.md` for installation and prerequisites, `docs/configuration-and-permissions.md` for env vars and permissions, and `docs/linting.md` for Makefile targets and linters.
 
 ## Repository layout
 
@@ -25,7 +25,10 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 
 ## Canonical sources
 
-- `README.md` — installation, feature matrix, env vars, skill catalog, Makefile targets
+- `README.md` — feature matrix, skill catalog, Aliases
+- `docs/installation-and-setup.md` — installation, setup recipes, prerequisites
+- `docs/configuration-and-permissions.md` — strict-permissions Skill entries, `--admin` merge behavior, env vars
+- `docs/linting.md` — linters, Makefile targets, halt-rate regression harness
 - `docs/workflow-lifecycle.md` — how skills compose end-to-end
 - `docs/voting-process.md`, `docs/point-competition.md` — review mechanics
 - `docs/agents.md`, `docs/review-agents.md` — subagent orchestration
