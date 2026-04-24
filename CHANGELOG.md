@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.10] - 2026-04-23
+
+### Changed
+
+- Note the `gitleaks` full-tree scan exception in the `README.md` `/relevant-checks` row (closes #378). The row previously said the checks were "scoped to files modified on the current branch," but `gitleaks` is configured with `pass_filenames: false` in `.pre-commit-config.yaml` and always scans the full working tree regardless — the consumer-surface `.claude/skills/relevant-checks/SKILL.md` already documented this exception, so the README is now aligned with it and no longer understates the `/relevant-checks` coverage.
+
 ## [6.2.9] - 2026-04-23
 
 ### Changed
