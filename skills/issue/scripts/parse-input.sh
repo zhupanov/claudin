@@ -23,12 +23,20 @@
 #       followed by free-form body. Emits only ITEM_<i>_TITLE / ITEM_<i>_BODY.
 #
 # Usage:
-#   parse-input.sh --input-file FILE
+#   parse-input.sh --input-file FILE --output-dir DIR
+#
+# Both --input-file and --output-dir are required. DIR is created with
+# mkdir -p at startup and normalized to an absolute path.
 #
 # Output (key=value lines on stdout):
 #   ITEMS_TOTAL=<N>
 #   ITEM_<i>_TITLE=<single-line title>           (i = 1..N)
-#   ITEM_<i>_BODY=<base64-encoded body>          (base64 so it survives shell)
+#   ITEM_<i>_BODY_FILE=<absolute path>           (plain-text body file at
+#                                                 $OUTPUT_DIR/item-<i>-body.txt;
+#                                                 bytes identical to the parsed
+#                                                 body, preserving newlines.
+#                                                 Omitted when the item has no
+#                                                 body — title-only MALFORMED.)
 #   ITEM_<i>_REVIEWER=<attribution>              (OOS only)
 #   ITEM_<i>_PHASE=<design|review>               (OOS only)
 #   ITEM_<i>_VOTE_TALLY=<counts>                 (OOS only)
@@ -39,28 +47,49 @@
 #                                                 ambiguous boundary heading
 #                                                 with no structured-field
 #                                                 close — see issue #138. In
-#                                                 the latter case BODY is also
-#                                                 emitted alongside MALFORMED.)
+#                                                 the latter case BODY_FILE is
+#                                                 also emitted alongside
+#                                                 MALFORMED, pointing to the
+#                                                 parsed body text that
+#                                                 survives as a diagnostic
+#                                                 surface until the caller
+#                                                 removes $OUTPUT_DIR.)
 #
-# The BODY is base64-encoded (single line, no wrapping) so multi-line content
-# does not collide with the one-key-per-line contract.
+# The body is written to a file (instead of inline on stdout) so multi-line
+# content is preserved verbatim and no large opaque payload enters the
+# caller's post-tool-use context (issue #402).
 #
 # Exit code: 0 on success (even if some items are malformed — check
-# ITEM_<i>_MALFORMED). 1 on usage error or missing input file.
+# ITEM_<i>_MALFORMED). 1 on usage error, missing input file, missing
+# output-dir, or any file-write failure (via set -euo pipefail). Callers
+# MUST treat captured stdout as unreliable on non-zero exit.
 
 set -euo pipefail
 
 INPUT_FILE=""
+OUTPUT_DIR=""
+
+usage() {
+    echo "Usage: parse-input.sh --input-file FILE --output-dir DIR" >&2
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --input-file) INPUT_FILE="${2:?--input-file requires a value}"; shift 2 ;;
-        *) echo "Unknown option: $1" >&2; echo "Usage: parse-input.sh --input-file FILE" >&2; exit 1 ;;
+        --output-dir) OUTPUT_DIR="${2:?--output-dir requires a value}"; shift 2 ;;
+        *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
 done
 
 if [[ -z "$INPUT_FILE" ]]; then
-    echo "Usage: parse-input.sh --input-file FILE" >&2
+    echo "ERROR: --input-file is required" >&2
+    usage
+    exit 1
+fi
+
+if [[ -z "$OUTPUT_DIR" ]]; then
+    echo "ERROR: --output-dir is required" >&2
+    usage
     exit 1
 fi
 
@@ -68,6 +97,11 @@ if [[ ! -f "$INPUT_FILE" ]]; then
     echo "ERROR: input file not found: $INPUT_FILE" >&2
     exit 1
 fi
+
+mkdir -p "$OUTPUT_DIR"
+# Normalize to absolute path so ITEM_<i>_BODY_FILE lines are CWD-independent
+# for consumers.
+OUTPUT_DIR=$(cd "$OUTPUT_DIR" && pwd)
 
 # ---------------------------------------------------------------------------
 # Parser state — mirrors create-oos-issues.sh:185-222's flush_item + while loop.
@@ -110,23 +144,13 @@ CURRENT_MODE=""
 PENDING_HEADING=""
 PENDING_BODY=""
 
-b64() {
-    # Portable single-line base64 (no wrapping). macOS `base64` wraps at 76 chars
-    # by default; use `-w 0` on GNU, and strip newlines as a cross-platform fallback.
-    if base64 -w 0 </dev/null >/dev/null 2>&1; then
-        base64 -w 0
-    else
-        base64 | tr -d '\n'
-    fi
-}
-
 emit_item() {
     local title="$1"
     local body="$2"
     local reviewer="$3"
     local vote="$4"
     local phase="$5"
-    # force_malformed (6th arg): when "true", emit BODY + MALFORMED=true
+    # force_malformed (6th arg): when "true", emit BODY_FILE + MALFORMED=true
     # together (the issue #138 incomplete-OOS path). Empty / falsy keeps the
     # legacy behavior: MALFORMED only when body is empty.
     local force_malformed="${6:-}"
@@ -141,24 +165,32 @@ emit_item() {
     if [[ -z "$body" ]]; then
         # Malformed: title without body. Emit as MALFORMED so the SKILL can
         # count it under ISSUES_FAILED (matching create-oos-issues.sh flush_item
-        # behavior: "SKIPPED: '$CURRENT_TITLE' — missing description").
+        # behavior: "SKIPPED: '$CURRENT_TITLE' — missing description"). No body
+        # file is written and no BODY_FILE line is emitted — consistent with
+        # the pre-existing "no body key" invariant for the empty-body case.
         echo "ITEM_${ITEM_INDEX}_TITLE=$title"
         echo "ITEM_${ITEM_INDEX}_MALFORMED=true"
         return
     fi
 
-    local b64_body
-    b64_body=$(printf '%s' "$body" | b64)
+    local body_file="$OUTPUT_DIR/item-${ITEM_INDEX}-body.txt"
+    # Write body BEFORE emitting the BODY_FILE line so consumers never see a
+    # path to a missing file. `printf '%s'` preserves byte-equivalence with
+    # the prior base64 pipeline (no trailing newline injected). `set -euo
+    # pipefail` above aborts on any write failure.
+    printf '%s' "$body" > "$body_file"
 
     echo "ITEM_${ITEM_INDEX}_TITLE=$title"
-    echo "ITEM_${ITEM_INDEX}_BODY=$b64_body"
+    echo "ITEM_${ITEM_INDEX}_BODY_FILE=$body_file"
     if [[ "$force_malformed" == "true" ]]; then
         # Issue #138: incomplete OOS flushed mid-stream. Body is non-empty
         # (has the Description text), but the item is structurally malformed
         # because Reviewer / Vote tally / Phase never fired before the
         # ambiguous boundary heading arrived. The caller downstream counts it
         # under ISSUES_FAILED and does not create a GitHub issue for it — the
-        # description survives only in stdout / stderr diagnostics.
+        # description is written to the body file at
+        # $OUTPUT_DIR/item-<i>-body.txt and survives as a diagnostic surface
+        # until the caller removes $OUTPUT_DIR.
         echo "ITEM_${ITEM_INDEX}_MALFORMED=true"
     fi
     if [[ -n "$reviewer" ]]; then

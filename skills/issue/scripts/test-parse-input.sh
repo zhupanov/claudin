@@ -27,15 +27,6 @@ fi
 TMPDIR_TEST="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_TEST"' EXIT
 
-# Portable base64 decode. GNU uses `-d`, BSD/macOS uses `-D`.
-b64_decode() {
-    if base64 -d </dev/null >/dev/null 2>&1; then
-        base64 -d
-    else
-        base64 -D
-    fi
-}
-
 PASS_COUNT=0
 FAIL_COUNT=0
 
@@ -73,15 +64,44 @@ get_value() {
     grep "^${key}=" <<< "$output" | head -1 | sed "s/^${key}=//"
 }
 
-# Decode ITEM_N_BODY from the parser output and echo the plaintext.
-get_body() {
+# Read the plain-text body file referenced by ITEM_<n>_BODY_FILE in the
+# parser output, and echo its contents. Fails the entire test suite if the
+# file is missing. Replaces the pre-#402 get_body + b64_decode pair.
+get_body_file_contents() {
     local n="$1" output="$2"
-    get_value "ITEM_${n}_BODY" "$output" | b64_decode
+    local path
+    path=$(get_value "ITEM_${n}_BODY_FILE" "$output")
+    if [[ -z "$path" ]]; then
+        echo "FAIL: ITEM_${n}_BODY_FILE missing from parser output" >&2
+        exit 1
+    fi
+    if [[ ! -f "$path" ]]; then
+        echo "FAIL: body file not found: $path" >&2
+        exit 1
+    fi
+    cat "$path"
 }
 
+# Derive a per-case output dir under $TMPDIR_TEST from the input file's
+# basename (caseN.md → caseN-bodies). Per-case isolation means cases cannot
+# stomp each other's body files.
 run_parser() {
     local input_file="$1"
-    bash "$PARSER" --input-file "$input_file"
+    local case_name
+    case_name=$(basename "$input_file" .md)
+    local output_dir="$TMPDIR_TEST/${case_name}-bodies"
+    local output
+    output=$(bash "$PARSER" --input-file "$input_file" --output-dir "$output_dir")
+    # Regression guard for issue #402: the legacy `ITEM_<i>_BODY=<base64>`
+    # contract must never return. Use -E (ERE) for portability — BRE `+` is
+    # a literal on BSD/macOS grep. If a legacy BODY= key reappears, abort
+    # the entire test suite immediately.
+    if grep -E '^ITEM_[0-9]+_BODY=' <<< "$output" >/dev/null; then
+        echo "FAIL: legacy ITEM_<i>_BODY= key on stdout (issue #402 regression):" >&2
+        grep -E '^ITEM_[0-9]+_BODY=' <<< "$output" >&2
+        exit 1
+    fi
+    echo "$output"
 }
 
 # ---------------------------------------------------------------------------
@@ -104,7 +124,7 @@ assert_eq "case 1 reviewer" "Codex" "$(get_value ITEM_1_REVIEWER "$out1")"
 assert_eq "case 1 vote_tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out1")"
 assert_eq "case 1 phase" "review" "$(get_value ITEM_1_PHASE "$out1")"
 expected1=$'First description paragraph.\n### Notes\nSecond paragraph after the subheading.'
-assert_eq "case 1 body absorbs subheading" "$expected1" "$(get_body 1 "$out1")"
+assert_eq "case 1 body absorbs subheading" "$expected1" "$(get_body_file_contents 1 "$out1")"
 
 # ---------------------------------------------------------------------------
 # Test case 2 — Bug (b) comprehensive: generic body with ALL 4 OOS-shaped bullets
@@ -125,7 +145,7 @@ out2=$(run_parser "$TMPDIR_TEST/case2.md")
 assert_eq "case 2 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out2")"
 assert_eq "case 2 title" "Regular issue title" "$(get_value ITEM_1_TITLE "$out2")"
 expected2=$'This is preceding body text that must survive.\n- **Description**: stray description bullet that should stay in body\n- **Reviewer**: stray reviewer bullet\n- **Vote tally**: stray tally bullet\n- **Phase**: stray phase bullet\nTrailing body text after bullets.'
-assert_eq "case 2 body preserves all OOS-shaped bullets + text" "$expected2" "$(get_body 1 "$out2")"
+assert_eq "case 2 body preserves all OOS-shaped bullets + text" "$expected2" "$(get_body_file_contents 1 "$out2")"
 assert_absent "case 2 no ITEM_1_REVIEWER" "ITEM_1_REVIEWER" "$out2"
 assert_absent "case 2 no ITEM_1_VOTE_TALLY" "ITEM_1_VOTE_TALLY" "$out2"
 assert_absent "case 2 no ITEM_1_PHASE" "ITEM_1_PHASE" "$out2"
@@ -147,7 +167,7 @@ assert_eq "case 3 title" "Plain OOS item" "$(get_value ITEM_1_TITLE "$out3")"
 assert_eq "case 3 reviewer" "Code" "$(get_value ITEM_1_REVIEWER "$out3")"
 assert_eq "case 3 vote tally" "YES=2, NO=1" "$(get_value ITEM_1_VOTE_TALLY "$out3")"
 assert_eq "case 3 phase" "design" "$(get_value ITEM_1_PHASE "$out3")"
-assert_eq "case 3 body" "Simple description." "$(get_body 1 "$out3")"
+assert_eq "case 3 body" "Simple description." "$(get_body_file_contents 1 "$out3")"
 
 # ---------------------------------------------------------------------------
 # Test case 4 — Baseline: well-formed generic item
@@ -163,7 +183,7 @@ out4=$(run_parser "$TMPDIR_TEST/case4.md")
 assert_eq "case 4 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out4")"
 assert_eq "case 4 title" "Just a generic item" "$(get_value ITEM_1_TITLE "$out4")"
 expected4=$'Body paragraph one.\n\nBody paragraph two after blank line.'
-assert_eq "case 4 body preserves blank line" "$expected4" "$(get_body 1 "$out4")"
+assert_eq "case 4 body preserves blank line" "$expected4" "$(get_body_file_contents 1 "$out4")"
 assert_absent "case 4 no ITEM_1_REVIEWER" "ITEM_1_REVIEWER" "$out4"
 assert_absent "case 4 no ITEM_1_VOTE_TALLY" "ITEM_1_VOTE_TALLY" "$out4"
 assert_absent "case 4 no ITEM_1_PHASE" "ITEM_1_PHASE" "$out4"
@@ -187,9 +207,9 @@ out5=$(run_parser "$TMPDIR_TEST/case5.md")
 assert_eq "case 5 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out5")"
 assert_eq "case 5 item 1 title" "First OOS" "$(get_value ITEM_1_TITLE "$out5")"
 assert_eq "case 5 item 1 reviewer" "Cursor" "$(get_value ITEM_1_REVIEWER "$out5")"
-assert_eq "case 5 item 1 body" "OOS description." "$(get_body 1 "$out5")"
+assert_eq "case 5 item 1 body" "OOS description." "$(get_body_file_contents 1 "$out5")"
 assert_eq "case 5 item 2 title" "Second generic item" "$(get_value ITEM_2_TITLE "$out5")"
-assert_eq "case 5 item 2 body" "Generic body text." "$(get_body 2 "$out5")"
+assert_eq "case 5 item 2 body" "Generic body text." "$(get_body_file_contents 2 "$out5")"
 assert_absent "case 5 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out5"
 
 # ---------------------------------------------------------------------------
@@ -213,9 +233,9 @@ out6=$(run_parser "$TMPDIR_TEST/case6.md")
 assert_eq "case 6 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out6")"
 assert_eq "case 6 item 1 title" "Incomplete OOS" "$(get_value ITEM_1_TITLE "$out6")"
 assert_eq "case 6 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out6")"
-assert_eq "case 6 item 1 body preserves description" "Short description with no trailing fields." "$(get_body 1 "$out6")"
+assert_eq "case 6 item 1 body preserves description" "Short description with no trailing fields." "$(get_body_file_contents 1 "$out6")"
 assert_eq "case 6 item 2 title" "Would-be generic item" "$(get_value ITEM_2_TITLE "$out6")"
-assert_eq "case 6 item 2 body" "Would-be body." "$(get_body 2 "$out6")"
+assert_eq "case 6 item 2 body" "Would-be body." "$(get_body_file_contents 2 "$out6")"
 assert_absent "case 6 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out6"
 assert_absent "case 6 item 2 has no vote tally" "ITEM_2_VOTE_TALLY" "$out6"
 assert_absent "case 6 item 2 has no phase" "ITEM_2_PHASE" "$out6"
@@ -235,9 +255,9 @@ EOF
 out7=$(run_parser "$TMPDIR_TEST/case7.md")
 assert_eq "case 7 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out7")"
 assert_eq "case 7 item 1 title" "First generic" "$(get_value ITEM_1_TITLE "$out7")"
-assert_eq "case 7 item 1 body" "Body of first." "$(get_body 1 "$out7")"
+assert_eq "case 7 item 1 body" "Body of first." "$(get_body_file_contents 1 "$out7")"
 assert_eq "case 7 item 2 title" "Second generic" "$(get_value ITEM_2_TITLE "$out7")"
-assert_eq "case 7 item 2 body" "Body of second." "$(get_body 2 "$out7")"
+assert_eq "case 7 item 2 body" "Body of second." "$(get_body_file_contents 2 "$out7")"
 assert_absent "case 7 item 1 no reviewer" "ITEM_1_REVIEWER" "$out7"
 assert_absent "case 7 item 2 no reviewer" "ITEM_2_REVIEWER" "$out7"
 
@@ -262,12 +282,12 @@ EOF
 out8=$(run_parser "$TMPDIR_TEST/case8.md")
 assert_eq "case 8 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out8")"
 assert_eq "case 8 item 1 title" "First OOS item" "$(get_value ITEM_1_TITLE "$out8")"
-assert_eq "case 8 item 1 body" "Body of first OOS." "$(get_body 1 "$out8")"
+assert_eq "case 8 item 1 body" "Body of first OOS." "$(get_body_file_contents 1 "$out8")"
 assert_eq "case 8 item 1 reviewer" "Codex" "$(get_value ITEM_1_REVIEWER "$out8")"
 assert_eq "case 8 item 1 vote tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out8")"
 assert_eq "case 8 item 1 phase" "review" "$(get_value ITEM_1_PHASE "$out8")"
 assert_eq "case 8 item 2 title" "Second OOS item" "$(get_value ITEM_2_TITLE "$out8")"
-assert_eq "case 8 item 2 body" "Body of second OOS." "$(get_body 2 "$out8")"
+assert_eq "case 8 item 2 body" "Body of second OOS." "$(get_body_file_contents 2 "$out8")"
 assert_eq "case 8 item 2 reviewer" "Cursor" "$(get_value ITEM_2_REVIEWER "$out8")"
 assert_eq "case 8 item 2 vote tally" "YES=2, NO=1" "$(get_value ITEM_2_VOTE_TALLY "$out8")"
 assert_eq "case 8 item 2 phase" "design" "$(get_value ITEM_2_PHASE "$out8")"
@@ -299,7 +319,7 @@ assert_eq "case 9 reviewer" "Code" "$(get_value ITEM_1_REVIEWER "$out9")"
 assert_eq "case 9 vote tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out9")"
 assert_eq "case 9 phase" "design" "$(get_value ITEM_1_PHASE "$out9")"
 expected9=$'  First continuation line.\n\n  Third line after blank.'
-assert_eq "case 9 body captures multi-line continuation" "$expected9" "$(get_body 1 "$out9")"
+assert_eq "case 9 body captures multi-line continuation" "$expected9" "$(get_body_file_contents 1 "$out9")"
 assert_absent "case 9 not MALFORMED" "ITEM_1_MALFORMED" "$out9"
 
 # ---------------------------------------------------------------------------
@@ -319,7 +339,7 @@ out10=$(run_parser "$TMPDIR_TEST/case10.md")
 assert_eq "case 10 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out10")"
 assert_eq "case 10 title" "Regular issue with nested OOS-shaped heading" "$(get_value ITEM_1_TITLE "$out10")"
 expected10=$'Preceding body text.\n### OOS_42: nested example\nTrailing body text after the nested heading.'
-assert_eq "case 10 body absorbs nested OOS_N heading" "$expected10" "$(get_body 1 "$out10")"
+assert_eq "case 10 body absorbs nested OOS_N heading" "$expected10" "$(get_body_file_contents 1 "$out10")"
 assert_absent "case 10 no ITEM_2_TITLE" "ITEM_2_TITLE" "$out10"
 assert_absent "case 10 no ITEM_1_REVIEWER" "ITEM_1_REVIEWER" "$out10"
 assert_absent "case 10 no ITEM_1_VOTE_TALLY" "ITEM_1_VOTE_TALLY" "$out10"
@@ -350,7 +370,7 @@ assert_eq "case 11 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$ou
 assert_eq "case 11 item 1 title" "Bodyless generic title" "$(get_value ITEM_1_TITLE "$out11")"
 assert_eq "case 11 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out11")"
 assert_eq "case 11 item 2 title" "Real OOS item" "$(get_value ITEM_2_TITLE "$out11")"
-assert_eq "case 11 item 2 body" "Real OOS description." "$(get_body 2 "$out11")"
+assert_eq "case 11 item 2 body" "Real OOS description." "$(get_body_file_contents 2 "$out11")"
 assert_eq "case 11 item 2 reviewer" "Codex" "$(get_value ITEM_2_REVIEWER "$out11")"
 assert_eq "case 11 item 2 vote tally" "YES=3" "$(get_value ITEM_2_VOTE_TALLY "$out11")"
 assert_eq "case 11 item 2 phase" "review" "$(get_value ITEM_2_PHASE "$out11")"
@@ -378,9 +398,9 @@ out12=$(run_parser "$TMPDIR_TEST/case12.md")
 assert_eq "case 12 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out12")"
 assert_eq "case 12 item 1 title" "Whitespace-only body generic" "$(get_value ITEM_1_TITLE "$out12")"
 assert_absent "case 12 item 1 not malformed" "ITEM_1_MALFORMED" "$out12"
-assert_eq "case 12 item 1 body is whitespace" "   " "$(get_body 1 "$out12")"
+assert_eq "case 12 item 1 body is whitespace" "   " "$(get_body_file_contents 1 "$out12")"
 assert_eq "case 12 item 2 title" "Real OOS item" "$(get_value ITEM_2_TITLE "$out12")"
-assert_eq "case 12 item 2 body" "Real OOS description." "$(get_body 2 "$out12")"
+assert_eq "case 12 item 2 body" "Real OOS description." "$(get_body_file_contents 2 "$out12")"
 assert_eq "case 12 item 2 reviewer" "Cursor" "$(get_value ITEM_2_REVIEWER "$out12")"
 assert_eq "case 12 item 2 vote tally" "YES=2" "$(get_value ITEM_2_VOTE_TALLY "$out12")"
 assert_eq "case 12 item 2 phase" "design" "$(get_value ITEM_2_PHASE "$out12")"
@@ -413,7 +433,7 @@ out13=$(run_parser "$TMPDIR_TEST/case13.md")
 assert_eq "case 13 items total" "ITEMS_TOTAL=1" "$(grep '^ITEMS_TOTAL=' <<< "$out13")"
 assert_eq "case 13 title" "Example with multiple subheadings" "$(get_value ITEM_1_TITLE "$out13")"
 expected13=$'Para 1.\n### Subheading 1\nPara 2.\n### Subheading 2\nPara 3.'
-assert_eq "case 13 body absorbs both subheadings and all paragraphs" "$expected13" "$(get_body 1 "$out13")"
+assert_eq "case 13 body absorbs both subheadings and all paragraphs" "$expected13" "$(get_body_file_contents 1 "$out13")"
 assert_eq "case 13 reviewer" "Codex" "$(get_value ITEM_1_REVIEWER "$out13")"
 assert_eq "case 13 vote tally" "YES=3, NO=0" "$(get_value ITEM_1_VOTE_TALLY "$out13")"
 assert_eq "case 13 phase" "review" "$(get_value ITEM_1_PHASE "$out13")"
@@ -438,9 +458,9 @@ out14=$(run_parser "$TMPDIR_TEST/case14.md")
 assert_eq "case 14 items total" "ITEMS_TOTAL=2" "$(grep '^ITEMS_TOTAL=' <<< "$out14")"
 assert_eq "case 14 item 1 title" "Incomplete OOS at EOF" "$(get_value ITEM_1_TITLE "$out14")"
 assert_eq "case 14 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out14")"
-assert_eq "case 14 item 1 body" "Only a description." "$(get_body 1 "$out14")"
+assert_eq "case 14 item 1 body" "Only a description." "$(get_body_file_contents 1 "$out14")"
 assert_eq "case 14 item 2 title" "Notes with no closing fields" "$(get_value ITEM_2_TITLE "$out14")"
-assert_eq "case 14 item 2 body" "Some body text." "$(get_body 2 "$out14")"
+assert_eq "case 14 item 2 body" "Some body text." "$(get_body_file_contents 2 "$out14")"
 assert_absent "case 14 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out14"
 assert_absent "case 14 item 2 has no vote tally" "ITEM_2_VOTE_TALLY" "$out14"
 assert_absent "case 14 item 2 has no phase" "ITEM_2_PHASE" "$out14"
@@ -472,13 +492,13 @@ out15=$(run_parser "$TMPDIR_TEST/case15.md")
 assert_eq "case 15 items total" "ITEMS_TOTAL=3" "$(grep '^ITEMS_TOTAL=' <<< "$out15")"
 assert_eq "case 15 item 1 title" "Incomplete first OOS" "$(get_value ITEM_1_TITLE "$out15")"
 assert_eq "case 15 item 1 malformed" "true" "$(get_value ITEM_1_MALFORMED "$out15")"
-assert_eq "case 15 item 1 body" "Only a description." "$(get_body 1 "$out15")"
+assert_eq "case 15 item 1 body" "Only a description." "$(get_body_file_contents 1 "$out15")"
 assert_eq "case 15 item 2 title" "Notes pending" "$(get_value ITEM_2_TITLE "$out15")"
-assert_eq "case 15 item 2 body" "Some pending body." "$(get_body 2 "$out15")"
+assert_eq "case 15 item 2 body" "Some pending body." "$(get_body_file_contents 2 "$out15")"
 assert_absent "case 15 item 2 has no reviewer" "ITEM_2_REVIEWER" "$out15"
 assert_absent "case 15 item 2 not malformed" "ITEM_2_MALFORMED" "$out15"
 assert_eq "case 15 item 3 title" "Well-formed second OOS" "$(get_value ITEM_3_TITLE "$out15")"
-assert_eq "case 15 item 3 body" "Second body." "$(get_body 3 "$out15")"
+assert_eq "case 15 item 3 body" "Second body." "$(get_body_file_contents 3 "$out15")"
 assert_eq "case 15 item 3 reviewer" "Cursor" "$(get_value ITEM_3_REVIEWER "$out15")"
 assert_eq "case 15 item 3 vote tally" "YES=2" "$(get_value ITEM_3_VOTE_TALLY "$out15")"
 assert_eq "case 15 item 3 phase" "design" "$(get_value ITEM_3_PHASE "$out15")"
@@ -513,7 +533,7 @@ assert_absent "case 16 item 1 not malformed" "ITEM_1_MALFORMED" "$out16"
 assert_absent "case 16 item 1 no reviewer field" "ITEM_1_REVIEWER" "$out16"
 assert_absent "case 16 item 1 no phase field" "ITEM_1_PHASE" "$out16"
 assert_absent "case 16 item 1 no vote field" "ITEM_1_VOTE_TALLY" "$out16"
-body16=$(get_body 1 "$out16")
+body16=$(get_body_file_contents 1 "$out16")
 # Body must preserve the structured labels verbatim so /issue posts them into
 # the GitHub issue body as-is.
 [[ "$body16" == *"**Slice**: scripts"* ]] || { echo "  FAIL: case 16 body missing Slice line"; exit 1; }
@@ -524,6 +544,55 @@ body16=$(get_body 1 "$out16")
 [[ "$body16" == *"**Suggested fix**:"* ]] || { echo "  FAIL: case 16 body missing Suggested fix line"; exit 1; }
 PASS_COUNT=$((PASS_COUNT + 6))
 echo "  PASS: case 16 body preserves 6 structured labels"
+
+# ---------------------------------------------------------------------------
+# Negative test 1 — missing --output-dir flag must fail fast (issue #402)
+# ---------------------------------------------------------------------------
+echo "Negative 1: parser invocation without --output-dir must fail"
+# Use a one-liner input so the parser has legitimate content to process if it
+# reached the parse phase. The required-flag check runs before parsing, so
+# the error should come out in stderr and the exit code should be non-zero.
+cat > "$TMPDIR_TEST/neg1.md" <<'EOF'
+### OOS_1: Example
+- **Description**: anything
+- **Reviewer**: Someone
+- **Vote tally**: YES=1
+- **Phase**: review
+EOF
+set +e
+neg1_stderr=$(bash "$PARSER" --input-file "$TMPDIR_TEST/neg1.md" 2>&1 1>/dev/null)
+neg1_rc=$?
+set -e
+if [[ "$neg1_rc" -eq 0 ]]; then
+    echo "  FAIL: negative 1 — parser exited 0 without --output-dir"
+    exit 1
+fi
+if [[ "$neg1_stderr" != *"output-dir"* ]]; then
+    echo "  FAIL: negative 1 — stderr did not mention --output-dir: $neg1_stderr"
+    exit 1
+fi
+PASS_COUNT=$((PASS_COUNT + 2))
+echo "  PASS: negative 1 — missing --output-dir fails fast (exit=$neg1_rc)"
+echo "  PASS: negative 1 — stderr mentions output-dir"
+
+# ---------------------------------------------------------------------------
+# Negative test 2 — unwritable --output-dir must fail (issue #402)
+# ---------------------------------------------------------------------------
+# Pass an output-dir path whose parent is a non-directory file so that
+# mkdir -p cannot create it. /dev/null is a char device, not a directory,
+# so `mkdir -p /dev/null/foo` always fails with ENOTDIR on Linux+macOS.
+echo "Negative 2: parser invocation with unwritable --output-dir must fail"
+set +e
+neg2_out=$(bash "$PARSER" --input-file "$TMPDIR_TEST/neg1.md" --output-dir /dev/null/unwritable-dir 2>&1)
+neg2_rc=$?
+set -e
+if [[ "$neg2_rc" -eq 0 ]]; then
+    echo "  FAIL: negative 2 — parser exited 0 with unwritable --output-dir"
+    echo "  output: $neg2_out"
+    exit 1
+fi
+PASS_COUNT=$((PASS_COUNT + 1))
+echo "  PASS: negative 2 — unwritable --output-dir fails (exit=$neg2_rc)"
 
 # ---------------------------------------------------------------------------
 echo ""
