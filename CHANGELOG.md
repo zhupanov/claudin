@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.4] - 2026-04-24
+
+### Changed
+
+- `/issue` batch-mode `parse-input.sh` no longer emits long opaque base64-encoded `ITEM_<i>_BODY` lines on stdout — those strings were tripping Anthropic's Usage Policy classifier when the SKILL's Bash tool result entered the main agent's post-tool-use context. The script now requires `--output-dir DIR` and writes each item's body as plain text to `$OUTPUT_DIR/item-<i>-body.txt`; stdout carries `ITEM_<i>_BODY_FILE=<absolute-path>` in place of the former base64 line. No backwards-compatibility shim. Closes #402.
+- `skills/issue/SKILL.md`: `$ISSUE_TMPDIR` creation moves from Step 4 to the top of Step 3 so both single and batch modes share one session tmpdir for bodies + Step 5 candidates + Step 6 OOS template wrap. Step 3 batch mode passes `--output-dir "$ISSUE_TMPDIR/bodies"` and mandatorily checks parser exit status, running `rm -rf "$ISSUE_TMPDIR"` on the abort path. Step 5 Phase 2 adds an explicit `cat "$ITEM_<i>_BODY_FILE"` preamble for non-malformed items so the LLM has body content for `<new_item_<i>>` dedup corpus. Step 6 CREATE passes `--body-file "$ITEM_<i>_BODY_FILE"` directly for generic items; OOS items `cat` the raw body file and compose the template wrap into `$ISSUE_TMPDIR/oos-body-<i>.txt`.
+- `skills/issue/scripts/test-parse-input.sh`: `b64_decode` / `get_body` helpers replaced by `get_body_file_contents` (reads the file at `ITEM_<i>_BODY_FILE`); every `run_parser` call passes a per-case `--output-dir` so cases cannot stomp each other's body files. New regression guard inside `run_parser` greps stdout for `^ITEM_[0-9]+_BODY=` (extended regex) and aborts the suite on match — pins the "no base64 on stdout" invariant at the test layer. Two new negative tests: missing `--output-dir` must fail fast with usage error; unwritable `--output-dir` must fail under `set -euo pipefail`. 136/136 assertions pass.
+- `skills/issue/scripts/parse-input.md`: contract doc expanded to describe file-based body emission, the required `--output-dir` flag, the non-zero-exit "ignore partial stdout" rule, and the test-layer regression guard.
+
 ## [7.0.3] - 2026-04-24
 
 ### Changed
