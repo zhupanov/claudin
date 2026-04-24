@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.7] - 2026-04-23
+
+### Changed
+
+- Phase 6 documentation polish (umbrella #348 closes #354): align public docs with shipped Phase 3-5 tracking-issue behavior. `README.md` adds `--issue <N>` to the `/implement` argument-hint, extends the description, adds a "Tracked runs" Features bullet, and rewrites the `/fix-issue` row to acknowledge INTENT (PR/NON_PR) classification and scope `--issue` forwarding to the PR path. `SECURITY.md` appends anchor body-level truncation posture (`BODY_CAP=60000`, `PER_SECTION_CAP=8000`, marker-preserving deterministic collapse, redaction-before-truncation) to the existing `tracking-issue-write.sh` subsection and corrects a stale "seven assertion categories" claim to nine. `docs/workflow-lifecycle.md` extends both `/implement` and `/fix-issue` bullets with Step 0.5, anchor-as-single-source-of-truth, and `--issue` forwarding semantics. `docs/review-agents.md` Output Format cross-references `workflow-lifecycle.md` for the anchor-comment routing contract. `scripts/test-tracking-issue-write.sh` header comment updated to match the sibling `.md`'s nine-category count.
+
 ## [6.2.6] - 2026-04-23
 
 ### Added
