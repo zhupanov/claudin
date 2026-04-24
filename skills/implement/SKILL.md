@@ -422,7 +422,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
 
 `--skip-if-pushed` is intentionally NOT used here: `main` is always on origin so that flag would always short-circuit. `SKIPPED_ALREADY_FRESH=true` keeps this call cheap when local `main` already matches `origin/main`.
 
-On non-zero exit, print `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**` and skip to Step 18. On success: if stdout contains `SKIPPED_ALREADY_FRESH=true`, print `⏩ 1.m: design plan | update main — already at latest` only when `debug_mode=true`; otherwise print `✅ 1.m: design plan | update main — rebased onto latest origin/main (<elapsed>)`.
+On non-zero exit, print `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**`, set `STALL_TRACKING=true` (parallels Rebase Checkpoint Macro M3 and Step 12d — signals Step 18 to rename the tracking issue to `[STALLED]` when Step 0.5 Branch 4 has already created one), and skip to Step 18. On success: if stdout contains `SKIPPED_ALREADY_FRESH=true`, print `⏩ 1.m: design plan | update main — already at latest` only when `debug_mode=true`; otherwise print `✅ 1.m: design plan | update main — rebased onto latest origin/main (<elapsed>)`.
 
 ### Quick mode (`quick_mode=true`)
 

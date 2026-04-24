@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # tracking-issue-write.sh — outbound helper for the tracking-issue lifecycle.
 #
-# Phase 1 (umbrella #348) foundation layer. Ships three narrow subcommands
-# that each perform exactly one GitHub write, all sharing the same KEY=value
-# stdout envelope and fail-closed redaction posture as
-# skills/issue/scripts/create-one.sh.
+# Phase 1 (umbrella #348) foundation layer. Ships four narrow subcommands
+# (create-issue, append-comment, upsert-anchor, rename) that each perform
+# exactly one GitHub write, all sharing the same KEY=value stdout envelope
+# and fail-closed redaction posture as skills/issue/scripts/create-one.sh.
 #
 # Subcommands:
 #   create-issue   --title T --body-file F [--repo OWNER/REPO]
@@ -35,8 +35,10 @@
 #   scripts/redact-secrets.sh before the gh call, matching the security
 #   posture of create-issue. Stacked-prefix corruption (e.g., "[IN PROGRESS]
 #   [DONE] Foo") is NOT healed — only one prefix is stripped. Title length:
-#   truncated to 256 bytes if the prepended title exceeds GitHub's limit.
-#   Truncation is byte-oriented; safe for ASCII, known limitation for UTF-8.
+#   truncated to 256 chars using bash string semantics (`${#var}` + slice).
+#   GitHub's limit is 256 characters — matching bash's native length under
+#   UTF-8 locales. Managed prefixes are ASCII so truncation is stable
+#   regardless of locale.
 #
 # Failure keys:
 #   FAILED=true  ERROR=<single-line message>
@@ -147,10 +149,13 @@ strip_managed_prefix() {
     esac
 }
 
-# truncate_title_to_256 <title> — byte-oriented truncation to 256 bytes.
-# Preserves leading managed prefix by design: the caller prepends the
-# prefix, and if the result exceeds 256 bytes we slice the TAIL, leaving
-# the prefix intact.
+# truncate_title_to_256 <title> — character-oriented truncation to 256
+# chars using bash string semantics (`${#var}` + `${var:0:256}`). GitHub's
+# title limit is 256 characters, matching bash's native string semantics
+# under UTF-8 locales. Preserves leading managed prefix by design: the
+# caller prepends the prefix, and if the result exceeds 256 chars we
+# slice the TAIL, leaving the prefix intact. Managed prefixes are ASCII,
+# so the truncation is stable regardless of locale.
 truncate_title_to_256() {
     local t="$1"
     if (( ${#t} <= 256 )); then
@@ -681,7 +686,17 @@ case "$cmd" in
         # token). Length check must be on the actual outbound title.
         NEW_TITLE=$(redact "$NEW_TITLE") || emit_redaction_failure
         NEW_TITLE=$(truncate_title_to_256 "$NEW_TITLE")
-        if [[ "$NEW_TITLE" == "$CUR_TITLE" ]]; then
+        # Idempotency comparison: compare the prospective outbound title
+        # against the redacted+truncated form of the CURRENT title so a
+        # title that already carries a redactable token is not spuriously
+        # re-edited (which would both violate the no-op contract AND
+        # rewrite the on-GitHub title to the redacted form without
+        # changing the lifecycle state). CUR_TITLE is the raw GitHub
+        # title; applying the same redact+truncate pipeline yields the
+        # canonical "what would we emit if the state was already X?" form.
+        CUR_TITLE_CANONICAL=$(redact "$CUR_TITLE") || emit_redaction_failure
+        CUR_TITLE_CANONICAL=$(truncate_title_to_256 "$CUR_TITLE_CANONICAL")
+        if [[ "$NEW_TITLE" == "$CUR_TITLE_CANONICAL" ]]; then
             echo "RENAMED=false"
             echo "NEW_TITLE=$NEW_TITLE"
             exit 0

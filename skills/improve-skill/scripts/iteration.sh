@@ -419,8 +419,21 @@ KV_ITERATION_TMPDIR="$WORK_DIR"
 
 if [[ -n "$ISSUE_ARG" ]]; then
   ISSUE_NUM="$ISSUE_ARG"
-  ADOPTED="true"  # Title-prefix lifecycle: adopted issues are NOT retitled
-                  # (user may own the title). See scripts/tracking-issue-write.md.
+  # Title-prefix lifecycle: adopted issues default to ADOPTED=true
+  # (user may own the title). BUT if the current title already starts
+  # with a managed prefix ([IN PROGRESS] / [DONE] / [STALLED] — all
+  # machine-owned markers), the issue is tool-owned and we should
+  # continue to manage its lifecycle (resume from a prior stalled run,
+  # or a continuation of a previous [DONE]). Fetch the title and check
+  # — best-effort; on gh failure leave ADOPTED=true (safer default).
+  ADOPTED="true"
+  _ADOPT_TITLE="$(gh issue view "$ISSUE_NUM" --json title --jq .title 2>/dev/null || printf '')"
+  case "$_ADOPT_TITLE" in
+    '[IN PROGRESS] '*|'[DONE] '*|'[STALLED] '*)
+      ADOPTED="false"  # tool-owned title — keep managing the lifecycle
+      ;;
+  esac
+  unset _ADOPT_TITLE
   # Hydrate ISSUE_URL so the EXIT-trap URL breadcrumb fires on standalone-adopt
   # runs too. Loop mode (OWNS_WORK_DIR=false) suppresses the trap line and the
   # driver emits its own URL at loop end, so the hydration is only load-bearing

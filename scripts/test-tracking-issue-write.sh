@@ -2,11 +2,13 @@
 # test-tracking-issue-write.sh — regression harness for tracking-issue-write.sh.
 #
 # Mirrors the stub-gh + PATH-override pattern of scripts/test-redact-secrets.sh.
-# Nine assertion categories (a-i) covering redaction, exit codes, truncation,
+# Ten assertion categories (a-j) covering redaction, exit codes, truncation,
 # anchor-skeleton preservation, anchor-upsert semantics, gh-failure redaction,
-# the anchor-section-markers.sh startup-guard fail-closed, and the
-# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant. All assertions run in a
-# hermetic mktemp -d tmproot with a stub gh binary on PATH.
+# the anchor-section-markers.sh startup-guard fail-closed, the
+# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, and the rename subcommand
+# (idempotency, strip-exactly-one, redaction, invalid --state). All
+# assertions run in a hermetic mktemp -d tmproot with a stub gh binary on
+# PATH.
 #
 # Usage:
 #   bash scripts/test-tracking-issue-write.sh
@@ -576,7 +578,24 @@ fi
 # (j6) invalid --state → FAILED=true exit 1
 out_j6=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state bogus --repo owner/repo 2>&1 || true)
 assert_contains "$out_j6" 'FAILED=true' '(j6) invalid --state emits FAILED=true'
-assert_contains "$out_j6" 'ERROR=invalid --state' '(j6) invalid --state emits ERROR=invalid --state'
+assert_contains "$out_j6" 'ERROR=invalid --state: bogus' '(j6) invalid --state emits full canonical ERROR=invalid --state: bogus'
+
+# (j7) idempotency + redactable token in current title: rename to same state
+# must be a no-op even when CUR_TITLE contains a secret. Without redacting
+# both sides of the comparison, the raw CUR_TITLE (with token) would never
+# equal the redacted NEW_TITLE, spuriously firing gh issue edit.
+rm -f "$EDIT_CAPTURE" "$EDIT_CALLED_FILE"
+printf '[DONE] Fix %s handler' "$SK_TOKEN" > "$MOCK_TITLE_FILE"
+out_j7=$(PATH="$STUB_J:$PATH" bash "$WRITE" rename --issue 42 --state 'done' --repo owner/repo 2>&1)
+assert_contains "$out_j7" 'RENAMED=false' '(j7) redactable title already at target state emits RENAMED=false'
+if [[ -f "$EDIT_CALLED_FILE" ]]; then
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("(j7) gh issue edit was called despite redactable idempotent no-op")
+    echo "  FAIL: (j7) gh issue edit was called despite redactable idempotent no-op" >&2
+else
+    PASS=$((PASS + 1))
+    echo "  ok: (j7) gh issue edit was NOT called (redactable idempotent no-op)"
+fi
 
 echo ""
 echo "=== Summary ==="
