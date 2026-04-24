@@ -112,6 +112,11 @@ KV_TOTAL_DEN="N/A"
 KV_ITERATION_TMPDIR=""
 KV_ISSUE_NUM=""
 
+# Captured at Step 3 standalone-create; empty when the loop driver adopts via
+# --issue (driver emits the URL itself at loop end). Initialized here so the
+# EXIT trap's `set -u` safely references it on any early-exit path.
+ISSUE_URL=""
+
 # shellcheck disable=SC2317  # invoked via trap on EXIT — shellcheck cannot see the indirect call
 emit_kv_footer() {
   # Emitted on every exit path (normal + set -e abort). Uses `printf` to
@@ -129,7 +134,8 @@ emit_kv_footer() {
 }
 
 # --------------------------------------------------------------------------
-# Cleanup trap (KV footer first, then work-dir cleanup when owned)
+# Cleanup trap (optional URL breadcrumb, then KV footer, then work-dir
+# cleanup when owned)
 # --------------------------------------------------------------------------
 
 WORK_DIR=""
@@ -138,8 +144,15 @@ OWNS_WORK_DIR="false"   # true only in standalone mode (no --work-dir passed)
 # shellcheck disable=SC2317  # invoked via trap on EXIT
 cleanup_on_exit() {
   local rc=$?
-  # Emit KV footer first so parsers see the result even when work-dir
-  # cleanup fails (FINDING_2 guarantee).
+  # Surface the tracking-issue URL in standalone mode so the user sees it at
+  # the very end via Monitor (loop mode suppresses this: driver.sh emits the
+  # URL itself at Step 5, and iteration.sh in loop mode does not hold the
+  # URL form — only the adopted number).
+  if [[ "$OWNS_WORK_DIR" == "true" && -n "$ISSUE_URL" ]]; then
+    breadcrumb_done "tracking issue URL: ${ISSUE_URL}" || true
+  fi
+  # Emit KV footer so parsers see the result even when work-dir cleanup fails
+  # (FINDING_2 guarantee).
   emit_kv_footer || true
   if [[ "$OWNS_WORK_DIR" == "true" && -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
     if [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then
@@ -353,6 +366,18 @@ KV_ITERATION_TMPDIR="$WORK_DIR"
 
 if [[ -n "$ISSUE_ARG" ]]; then
   ISSUE_NUM="$ISSUE_ARG"
+  # Hydrate ISSUE_URL so the EXIT-trap URL breadcrumb fires on standalone-adopt
+  # runs too. Loop mode (OWNS_WORK_DIR=false) suppresses the trap line and the
+  # driver emits its own URL at loop end, so the hydration is only load-bearing
+  # for standalone-adopt. Graceful degradation: if `gh issue view` fails (stale
+  # issue number, network blip, gh auth lapse), leave ISSUE_URL empty and log
+  # to stderr — the trap's `-n "$ISSUE_URL"` gate falls through silently.
+  if [[ "$OWNS_WORK_DIR" == "true" ]]; then
+    if ! ISSUE_URL="$(gh issue view "$ISSUE_NUM" --json url --jq .url 2>/dev/null)"; then
+      ISSUE_URL=""
+      printf 'iteration.sh: warning: gh issue view #%s failed; final URL breadcrumb suppressed.\n' "${ISSUE_NUM}" >&2
+    fi
+  fi
   breadcrumb_done "3: issue — adopted #${ISSUE_NUM} (via --issue)"
 else
   breadcrumb_inprogress "3: issue — creating tracking issue"

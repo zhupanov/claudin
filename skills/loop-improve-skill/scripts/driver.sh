@@ -532,6 +532,7 @@ gh issue comment "$ISSUE_NUM" --body-file "$CLOSEOUT_REDACTED" || {
 printf 'done\n' > "$LOOP_TMPDIR/closeout.sentinel"
 
 breadcrumb_done "5: close out — issue #${ISSUE_NUM}, exit: ${EXIT_REASON}"
+breadcrumb_done "5: tracking issue URL: ${ISSUE_URL}"
 
 # --------------------------------------------------------------------------
 # Step 6 — Cleanup (EXIT trap also handles this; explicit call for symmetry)
