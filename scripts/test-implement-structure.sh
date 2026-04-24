@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 9 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 10 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -16,7 +16,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Nine assertions:
+# Ten assertions:
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -51,6 +51,13 @@
 #      extracted reference. (9c) SKILL.md must reference `pr-body-template.md` at
 #      least 1 time (the MANDATORY pointer at Step 9a) — lower floor than pre-Phase-3
 #      since rich report content moved to anchor-comment-template.md.
+# (10) Cross-skill bail-token pin (umbrella #348 Phase 4): skills/implement/SKILL.md
+#      must contain the literal `IMPLEMENT_BAIL_REASON=adopted-issue-closed`.
+#      `/fix-issue` Step 6a scans this token in captured `/implement` output to
+#      branch to a specific warning + skip-to-cleanup path; the token literal
+#      is simultaneously pinned in skills/fix-issue/SKILL.md by
+#      skills/fix-issue/scripts/test-fix-issue-bail-detection.sh. A rename of
+#      the token is therefore a dual-repo change caught by CI.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
@@ -155,7 +162,7 @@ while IFS= read -r hit; do
 done <<< "$enum_hits"
 
 # ---------------------------------------------------------------------------
-# (7) Four expected references/*.md files exist.
+# (7) Five expected references/*.md files exist.
 # ---------------------------------------------------------------------------
 for ref in "${expected_refs[@]}"; do
   [[ -f "$REFS_DIR/$ref" ]] \
@@ -170,7 +177,7 @@ done
 #     The step-number token is `[0-9][0-9a-z.]*` so bare digits (`8`), letter-suffix
 #     forms (`9a`), and dotted substep forms (`9a.1`, `3c.2`) are all caught — matching
 #     /implement's dotted substep numbering (closes #253).
-#     Scans every *.md under references/ (not just the four expected refs) so new
+#     Scans every *.md under references/ (not just the five expected refs) so new
 #     reference files added in the future are covered automatically — the contract
 #     documented in the header and scripts/test-implement-structure.md (sibling contract) covers "references/*.md" generally.
 #     Cross-skill Consumer/Contract/When-to-load header-triplet invariant lives in
@@ -241,5 +248,17 @@ if ! [[ "$pr_body_refs" =~ ^[0-9]+$ ]] || (( pr_body_refs < 1 )); then
   fail "(9c) expected at least 1 reference to 'pr-body-template.md' in SKILL.md (Step 9a MANDATORY pointer), found ${pr_body_refs:-0}"
 fi
 
-echo "PASS: test-implement-structure.sh — all 9 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (10) Cross-skill bail-token pin (umbrella #348 Phase 4): SKILL.md must
+#      contain the literal `IMPLEMENT_BAIL_REASON=adopted-issue-closed`.
+#      `/implement` Step 0.5 Branch 2 emits this token on stdout when the
+#      adopted tracking issue is CLOSED; `/fix-issue` Step 6a greps captured
+#      output for it. Paired assertion on the consumer side lives in
+#      skills/fix-issue/scripts/test-fix-issue-bail-detection.sh. Use
+#      fixed-string matching since the literal contains `=`.
+# ---------------------------------------------------------------------------
+grep -Fq 'IMPLEMENT_BAIL_REASON=adopted-issue-closed' "$SKILL_MD" \
+  || fail "(10) skills/implement/SKILL.md must contain the cross-skill bail token literal 'IMPLEMENT_BAIL_REASON=adopted-issue-closed'"
+
+echo "PASS: test-implement-structure.sh — all 10 structural invariants hold"
 exit 0
