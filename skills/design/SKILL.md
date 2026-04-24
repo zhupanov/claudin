@@ -370,9 +370,14 @@ Print: `> **🔶 3a: confirmation**`
 
 **If `auto_mode=true`**: Print `⏩ 3a: confirmation — skipped (auto mode) (<elapsed>)` and proceed to Step 3b.
 
-**If the plan was NOT revised** (voting rejected all findings or was skipped, AND Step 3.5 discussion made no changes): Print `⏩ 3a: confirmation — skipped (plan unchanged) (<elapsed>)` and proceed to Step 3b.
+**Determine design-stage interaction state** (gate inputs for the approval pause):
 
-**If `auto_mode=false` AND the plan was revised** (by reviewers or Step 3.5 discussion): Execute the Step 3a body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c or 3.5, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely. The body defines the approval-only confirmation procedure and the proceed-on-rejection rule.
+- `qa_happened=true` iff `$DESIGN_TMPDIR/user-qa-happened.md` exists. The sentinel is touched by Steps 1c/1d/3.5 whenever at least one `AskUserQuestion` actually asks the user a question; its absence means no Q/A took place at any of those steps (either each step short-circuited without asking, or all were skipped).
+- `dialectic_adjudicated=true` iff `$DESIGN_TMPDIR/dialectic-resolutions.md` exists AND `grep -qE '^\*\*Disposition\*\*: (voted|fallback-to-synthesis)$' "$DESIGN_TMPDIR/dialectic-resolutions.md"` succeeds (the canonical verbatim field-name form per `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md` "Consumer Contract"). Only `voted` (judges adjudicated a contested debate) and `fallback-to-synthesis` (dialectic attempted but couldn't produce a clear answer) count as "contested opinions subjected to dialectic adjudication". `bucket-skipped` and `over-cap` entries do NOT count — no adjudication occurred on those decisions (tool unavailable, or decision ranked outside the top-5 cap).
+
+**If neither `qa_happened` nor `dialectic_adjudicated`**: Print `⏩ 3a: confirmation — skipped (no Q/A or dialectic adjudication) (<elapsed>)` and proceed to Step 3b. This is the "no design-stage interaction, no debate" short-circuit — the plan proceeds to implementation without a second approval, since Claude neither needed to clarify ambiguity with the user nor had to adjudicate contested opinions.
+
+**If `auto_mode=false` AND (`qa_happened` OR `dialectic_adjudicated`)**: Execute the Step 3a body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c or 3.5, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely. The body defines the approval-only confirmation procedure and the proceed-on-rejection rule.
 
 ## Step 3b — Architecture Diagram
 

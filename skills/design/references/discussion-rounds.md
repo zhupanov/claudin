@@ -1,12 +1,12 @@
 # Discussion Rounds Reference
 
-**Consumer**: `/design` Steps 1c, 1d, 3.5, and the `auto_mode=false AND plan was revised` branch of Step 3a.
+**Consumer**: `/design` Steps 1c, 1d, 3.5, and the `auto_mode=false AND (qa_happened OR dialectic_adjudicated)` branch of Step 3a.
 
-**Contract**: owns the four discussion-round bodies (Step 1c clarifying questions, Step 1d round 1, Step 3.5 round 2, Step 3a post-review confirmation) with their decision-tree walks, question caps, output schemas (`$DESIGN_TMPDIR/discussion-round1.md`, `$DESIGN_TMPDIR/discussion-round2.md`), and the terse-answer rule. SKILL.md retains the `auto_mode` gate + skip breadcrumbs inline; this file owns body content only.
+**Contract**: owns the four discussion-round bodies (Step 1c clarifying questions, Step 1d round 1, Step 3.5 round 2, Step 3a post-review confirmation) with their decision-tree walks, question caps, output schemas (`$DESIGN_TMPDIR/discussion-round1.md`, `$DESIGN_TMPDIR/discussion-round2.md`), the terse-answer rule, and the `$DESIGN_TMPDIR/user-qa-happened.md` sentinel write (touched by Steps 1c/1d/3.5 whenever at least one `AskUserQuestion` actually asks the user a question; absent when a step short-circuits without asking). SKILL.md retains the `auto_mode` gate + skip breadcrumbs inline; this file owns body content only.
 
-**When to load**: once the calling step in SKILL.md has passed its `auto_mode=false` gate (and, for Step 3a, additionally confirmed `plan was revised`). Do NOT load when `auto_mode=true` at Steps 1c/1d/3.5/3a, or when Step 3a's `plan was NOT revised` short-circuit fires.
+**When to load**: once the calling step in SKILL.md has passed its `auto_mode=false` gate (and, for Step 3a, additionally confirmed `qa_happened OR dialectic_adjudicated`). Do NOT load when `auto_mode=true` at Steps 1c/1d/3.5/3a, or when Step 3a's "no Q/A and no dialectic adjudication" short-circuit fires.
 
-**Binding convention**: single normative source for discussion-round behavior (decision-tree walk, question caps, output schemas, terse-answer rule) and the Step 3a interactive-approval body. Each consumer step in SKILL.md performs its own `auto_mode=false` gate (and for Step 3a additionally the `plan was revised` gate) before dispatching here; this file assumes the caller has already passed those gates. The `auto_mode=true` skip breadcrumb and (for Step 3a) the `plan was NOT revised` skip breadcrumb remain inline in SKILL.md so they are emitted without loading this file.
+**Binding convention**: single normative source for discussion-round behavior (decision-tree walk, question caps, output schemas, terse-answer rule, sentinel file) and the Step 3a interactive-approval body. Each consumer step in SKILL.md performs its own `auto_mode=false` gate (and for Step 3a additionally the `qa_happened OR dialectic_adjudicated` gate) before dispatching here; this file assumes the caller has already passed those gates. The `auto_mode=true` skip breadcrumb and (for Step 3a) the "no Q/A and no dialectic adjudication" skip breadcrumb remain inline in SKILL.md so they are emitted without loading this file.
 
 ---
 
@@ -22,9 +22,19 @@ Consider asking about:
 **Guidelines**:
 - Only ask questions when there is genuine ambiguity — do NOT ask trivially answerable questions or re-confirm what is already clear.
 - Batch questions into a single `AskUserQuestion` call with 1-4 questions rather than multiple sequential calls.
-- If the feature description is clear and unambiguous, print `✅ 1c: questions — no clarifying questions needed (<elapsed>)` and proceed to Step 1d.
+- If the feature description is clear and unambiguous, print `✅ 1c: questions — no clarifying questions needed (<elapsed>)` and proceed to Step 1d. Do NOT write the sentinel on this path — no Q/A occurred.
 
 After the user responds, incorporate their answers into your understanding of the feature for all subsequent steps.
+
+### Sentinel — record that Q/A occurred
+
+If at least one question was actually asked via `AskUserQuestion` in this step, write the Q/A sentinel (used by Step 3a's gate to decide whether a post-review confirmation is warranted):
+
+```bash
+touch "$DESIGN_TMPDIR/user-qa-happened.md"
+```
+
+Skip the `touch` on the short-circuit path above (feature clear, no questions asked).
 
 ---
 
@@ -68,6 +78,16 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 ### Terse answers
 
 If the user gives a terse or non-responsive answer (e.g., "I don't know", "your recommendation is fine", "sure"), accept the recommended answer and move on without re-asking.
+
+### Sentinel — record that Q/A occurred
+
+If at least one question was actually asked via `AskUserQuestion` in this step (i.e., the user was prompted at least once — terse answers still count as Q/A because the user was asked), write the Q/A sentinel (used by Step 3a's gate to decide whether a post-review confirmation is warranted):
+
+```bash
+touch "$DESIGN_TMPDIR/user-qa-happened.md"
+```
+
+Skip the `touch` on the short-circuit path (fewer than 2 scope decision branches — no questions asked).
 
 Print: `✅ 1d: discussion r1 — <N> decisions resolved (<elapsed>)`
 
@@ -127,12 +147,27 @@ At most **7 `AskUserQuestion` calls** in this step. If more than 7 decision bran
 
 If the user gives a terse or non-responsive answer, accept the recommended answer and move on without re-asking.
 
+### Sentinel — record that Q/A occurred
+
+If at least one question was actually asked via `AskUserQuestion` in this step (terse answers still count as Q/A), write the Q/A sentinel (used by Step 3a's gate to decide whether a post-review confirmation is warranted):
+
+```bash
+touch "$DESIGN_TMPDIR/user-qa-happened.md"
+```
+
+Skip the `touch` on the short-circuit path (all decisions already covered — no questions asked).
+
 Print: `✅ 3.5: discussion r2 — <N> decisions resolved (<elapsed>)`
 
 ---
 
-## Step 3a — Post-Review Confirmation (auto_mode=false AND plan-was-revised body)
+## Step 3a — Post-Review Confirmation (auto_mode=false AND (qa_happened OR dialectic_adjudicated) body)
 
-Use `AskUserQuestion` to confirm the revised plan addresses the user's original intent. Present a brief summary of what changed and ask the user to approve or reject.
+Use `AskUserQuestion` to confirm the plan addresses the user's original intent, now that the design stage has engaged the user or resolved contested opinions. Present a brief summary tailored to what triggered this step, then ask the user to approve or reject:
 
-**This step is strictly approval-only** — the user confirms the revised plan is acceptable to proceed with implementation. No substantive plan changes are accepted at this point — the reviewed/voted plan is the canonical artifact. If the user rejects the plan, print a warning and proceed anyway (the plan has already been reviewed and voted on; the user can adjust during implementation or in a follow-up PR).
+- **If `qa_happened`**: one-line summary of the user decisions captured in `$DESIGN_TMPDIR/discussion-round1.md` and/or `$DESIGN_TMPDIR/discussion-round2.md` (whichever exist and are non-empty), plus the clarifying answers from Step 1c if the feature was shaped by those.
+- **If `dialectic_adjudicated`**: one-line summary of the adjudicated decisions in `$DESIGN_TMPDIR/dialectic-resolutions.md` (only entries with `Disposition: voted` or `Disposition: fallback-to-synthesis`).
+- **If both**: cover both.
+- **If the plan was also revised by reviewers**: additionally note what reviewers changed.
+
+**This step is strictly approval-only** — the user confirms the plan is acceptable to proceed with implementation. No substantive plan changes are accepted at this point — the reviewed/voted plan is the canonical artifact. If the user rejects the plan, print a warning and proceed anyway (the plan has already been reviewed and voted on; the user can adjust during implementation or in a follow-up PR).
