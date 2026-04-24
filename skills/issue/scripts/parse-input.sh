@@ -98,10 +98,11 @@ if [[ ! -f "$INPUT_FILE" ]]; then
     exit 1
 fi
 
-mkdir -p "$OUTPUT_DIR"
+mkdir -p -- "$OUTPUT_DIR"
 # Normalize to absolute path so ITEM_<i>_BODY_FILE lines are CWD-independent
-# for consumers.
-OUTPUT_DIR=$(cd "$OUTPUT_DIR" && pwd)
+# for consumers. `cd --` guards against paths beginning with `-` (e.g., a
+# literal `-` or `-foo`) being reinterpreted as an option or as `$OLDPWD`.
+OUTPUT_DIR=$(cd -- "$OUTPUT_DIR" && pwd)
 
 # ---------------------------------------------------------------------------
 # Parser state — mirrors create-oos-issues.sh:185-222's flush_item + while loop.
