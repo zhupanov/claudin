@@ -60,6 +60,20 @@ Output always begins with `<!-- larch:implement-anchor v1 issue=<N> -->\n`. `tra
 
 Missing fragment files emit only the open/close marker pair with no content between. This preserves the skeleton required by `tracking-issue-write.sh`'s per-section truncation algorithm (which locates interiors by marker-pair boundaries).
 
+### Seed-only visible placeholder
+
+When every fragment is **absent, zero-byte, or whitespace-only** (the lenient "all empty" predicate), the assembled body carries one extra italic-markdown line between the first-line HTML marker and the first `<!-- section:plan-goals-test -->` open marker:
+
+```
+_/implement run in progress — sections below populate as the run proceeds._
+```
+
+Why: an anchor body composed entirely of HTML comment markers renders invisible in GitHub's UI — the freshly planted seed comment looks blank to humans (issue #431). The placeholder is emitted on its own line, *outside* every section interior, so it never collides with `tracking-issue-write.sh`'s per-section truncation (which locates interiors by whole-line marker-pair boundaries).
+
+Populated runs — any fragment with at least one **non-whitespace byte** — suppress the placeholder. The output for partially or fully populated anchors is byte-for-byte unchanged from the pre-fix shape, so progressive upserts at Steps 1/2/5/7a/8/9a.1/11 only ever see the populated body shape and downstream parsers (truncation, hydration awk) are not affected.
+
+The "all empty" detection runs as a separate pre-pass over `SECTION_MARKERS` after the readability pre-pass and before the assembly brace group. The predicate is `grep -q '[^[:space:]]'` against each candidate fragment file; the first non-whitespace byte hit short-circuits the walk to `ALL_EMPTY=false`. This predicate choice (lenient — whitespace-only fragments still trigger the placeholder) was resolved via dialectic adjudication and confirmed by the user during plan design.
+
 ### Atomic output rename
 
 The assembled body is first written to a `mktemp` sibling of `--output` and only atomically `mv`ed into place on success. A partial write never leaves a malformed anchor body on disk. The EXIT trap cleans up the tmp file on error paths.
@@ -86,9 +100,13 @@ This helper performs pure text assembly of local files. The redaction pipeline l
 
 ## Test harness
 
-`scripts/test-assemble-anchor.sh` covers 10 assertion categories:
+`scripts/test-assemble-anchor.sh` covers 14 assertion categories:
 
-- **(a)** Empty sections directory: output has exactly 17 lines — `<!-- larch:implement-anchor v1 issue=<N> -->` + 8 pairs of empty marker tags.
+- **(a)** Empty sections directory: output has exactly 18 lines — `<!-- larch:implement-anchor v1 issue=<N> -->` on line 1, the seed-only visible placeholder line on line 2, and 8 pairs of empty marker tags on lines 3-18.
+- **(a2)** Empty sections directory: the seed-only placeholder literal is present on line 2 (regression guard for issue #431).
+- **(a3)** Partial fragments (one slug populated): the placeholder is suppressed — only the all-empty seed case fires it.
+- **(a4)** All fragments contain only whitespace bytes (lenient predicate validation): the placeholder still fires.
+- **(a5)** Nonexistent `--sections-dir`: `ASSEMBLED=true` and the placeholder fires (the all-empty pre-pass treats a missing directory as all-empty).
 - **(b)** Partial fragments: output contains the populated content only where fragment files exist, empty marker pairs elsewhere, in `SECTION_MARKERS` order.
 - **(b2)** Newline-terminated fragment → exactly one newline before the close marker (regression guard for the `$(tail -c 1 ...)` command-substitution newline-stripping bug that inserted an extra blank line). Full output compared against a byte-exact expected fixture.
 - **(b3)** Fragment without a trailing newline → helper inserts one so the close marker stays on its own line.

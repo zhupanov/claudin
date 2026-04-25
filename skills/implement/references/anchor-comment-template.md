@@ -20,6 +20,16 @@ Rationale: the HTML-comment prefix renders invisibly in GitHub's comment UI but 
 
 Mixed-version state on a single issue (a legacy `<!-- larch:implement-anchor v1` comment alongside a hypothetical future `<!-- larch:implement-anchor v2`) fails closed: Phase 1's `upsert-anchor` exits 2 with `FAILED=true ERROR=multiple anchor comments found (ids: <list>)` any time it finds more than one v1-prefixed comment.
 
+### Seed-only visible placeholder line
+
+When `scripts/assemble-anchor.sh` walks `SECTION_MARKERS` and finds **every** fragment absent, zero-byte, or whitespace-only (the seed case at Step 0.5 Branch 2/3/4 plant), the assembled body carries one extra italic-markdown line between the first-line HTML marker and the first `<!-- section:plan-goals-test -->` open marker:
+
+```
+_/implement run in progress — sections below populate as the run proceeds._
+```
+
+This line is suppressed as soon as any fragment contains a non-whitespace byte — i.e., from the first progressive upsert at Step 1 onward, the populated-anchor body shape returns to the canonical template above. The placeholder exists solely so the freshly planted seed comment renders as visibly non-empty in GitHub's UI (issue #431); without it the seed body is 100% HTML comment markers and looks blank to humans. Because the line lives **outside** every section interior (between line 1 and the first `<!-- section:... -->`), it does not interact with `tracking-issue-write.sh`'s per-section truncation algorithm or with any consumer that parses sections by marker-pair boundaries. See `scripts/assemble-anchor.md` "Seed-only visible placeholder" for the predicate definition and the underlying contract.
+
 ## Canonical template
 
 ```markdown

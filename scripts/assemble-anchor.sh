@@ -6,6 +6,14 @@
 # marker pairs (empty content when a fragment file is absent), prepends the
 # first-line HTML anchor marker, and writes the assembled body to --output.
 #
+# Seed-only visible-placeholder behavior: when every fragment is absent,
+# zero-byte, or whitespace-only (lenient predicate), the assembled body
+# carries one extra italic-markdown line between the first-line HTML marker
+# and the first <!-- section:... --> open marker so the comment renders
+# non-empty in GitHub's UI. Populated runs (any fragment with at least one
+# non-whitespace byte) suppress the placeholder and are byte-for-byte
+# unchanged. See scripts/assemble-anchor.md "Seed-only visible placeholder".
+#
 # Consumers:
 #   - skills/implement/SKILL.md Step 0.5 (Branch 2/3 adoption seed body, Branch 4
 #     first-remote-write seed body), Steps 1/2/5/7a/8/9a.1/11 (progressive upserts —
@@ -118,6 +126,24 @@ for slug in "${SECTION_MARKERS[@]}"; do
     fi
 done
 
+# Seed-only visible-placeholder pre-pass: detect whether every fragment is
+# absent, zero-byte, or whitespace-only (lenient predicate per dialectic
+# DECISION_1 and Round 2 user confirmation in /design — see the
+# "Seed-only visible placeholder" subsection of scripts/assemble-anchor.md).
+# An anchor body composed entirely of HTML comment markers renders invisible
+# in GitHub's UI; emit one visible markdown line in that case so the seed
+# anchor is not blank between Step 0.5 plant and the first progressive
+# upsert. Populated runs (any fragment with at least one non-whitespace
+# byte) are byte-for-byte unchanged.
+ALL_EMPTY=true
+for slug in "${SECTION_MARKERS[@]}"; do
+    fragment="$SECTIONS_DIR/$slug.md"
+    if [ -f "$fragment" ] && grep -q '[^[:space:]]' "$fragment" 2>/dev/null; then
+        ALL_EMPTY=false
+        break
+    fi
+done
+
 # Assemble body in a tmp file first, then atomic-rename into place.
 TMP_OUTPUT="$(mktemp "${OUTPUT}.XXXXXX")" || fail_io "cannot create temp file next to $OUTPUT"
 # Clean up tmp on any exit path (success atomic-renames; failure removes stale tmp).
@@ -125,6 +151,9 @@ trap 'rm -f "$TMP_OUTPUT"' EXIT
 
 {
     printf '<!-- larch:implement-anchor v1 issue=%s -->\n' "$ISSUE"
+    if "$ALL_EMPTY"; then
+        printf '%s\n' '_/implement run in progress — sections below populate as the run proceeds._'
+    fi
     for slug in "${SECTION_MARKERS[@]}"; do
         fragment="$SECTIONS_DIR/$slug.md"
         printf '<!-- section:%s -->\n' "$slug"

@@ -2,11 +2,12 @@
 # test-tracking-issue-write.sh — regression harness for tracking-issue-write.sh.
 #
 # Mirrors the stub-gh + PATH-override pattern of scripts/test-redact-secrets.sh.
-# Ten assertion categories (a-j) covering redaction, exit codes, truncation,
+# Eleven assertion categories (a-k) covering redaction, exit codes, truncation,
 # anchor-skeleton preservation, anchor-upsert semantics, gh-failure redaction,
 # the anchor-section-markers.sh startup-guard fail-closed, the
-# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, and the rename subcommand
-# (idempotency, strip-exactly-one, redaction, invalid --state). All
+# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, the rename subcommand
+# (idempotency, strip-exactly-one, redaction, invalid --state), and the
+# seed-only visible placeholder upsert survival (issue #431). All
 # assertions run in a hermetic mktemp -d tmproot with a stub gh binary on
 # PATH.
 #
@@ -595,6 +596,49 @@ if [[ -f "$EDIT_CALLED_FILE" ]]; then
 else
     PASS=$((PASS + 1))
     echo "  ok: (j7) gh issue edit was NOT called (redactable idempotent no-op)"
+fi
+
+echo ""
+echo "=== (k) upsert-anchor preserves the seed-only visible placeholder line ==="
+# Regression guard for issue #431 + plan-review FINDING_7: a non-section
+# content line inserted between the first-line anchor marker and the first
+# <!-- section:... --> open marker (the seed-only visible placeholder
+# emitted by scripts/assemble-anchor.sh when every fragment is empty) must
+# survive the redact + truncate publish path. Earlier coverage in (c) only
+# pinned the first-line marker and the eight section markers, leaving the
+# preamble line slot uncovered.
+STUB_K="$TMPROOT/stub-k"
+BODY_CAPTURE="$TMPROOT/capture-k.txt"
+build_stub_one_anchor "$STUB_K"
+export BODY_CAPTURE
+BODY_K="$TMPROOT/body-k.txt"
+PLACEHOLDER='_/implement run in progress — sections below populate as the run proceeds._'
+{
+    echo '<!-- larch:implement-anchor v1 issue=42 -->'
+    echo "$PLACEHOLDER"
+    for slug in plan-goals-test plan-review-tally code-review-tally diagrams version-bump-reasoning oos-issues execution-issues run-statistics; do
+        printf '<!-- section:%s -->\n' "$slug"
+        printf '<!-- section-end:%s -->\n' "$slug"
+    done
+} > "$BODY_K"
+out_k=$(PATH="$STUB_K:$PATH" bash "$WRITE" upsert-anchor --issue 42 --body-file "$BODY_K" --repo owner/repo 2>&1)
+assert_contains "$out_k" 'ANCHOR_COMMENT_ID=5001' '(k) PATCH hit existing anchor (id=5001)'
+assert_contains "$out_k" 'UPDATED=true' '(k) UPDATED=true'
+if [[ -f "$BODY_CAPTURE" ]]; then
+    captured_k=$(cat "$BODY_CAPTURE")
+    assert_contains "$captured_k" '<!-- larch:implement-anchor v1 issue=42 -->' '(k) HTML anchor marker preserved'
+    assert_contains "$captured_k" "$PLACEHOLDER" '(k) seed-only placeholder line survived publish'
+    # Also assert the placeholder is on its own line, immediately after the
+    # first-line marker, so position invariants are pinned (line 1 = anchor
+    # marker, line 2 = placeholder, line 3 = first section open marker).
+    second_line=$(sed -n '2p' "$BODY_CAPTURE")
+    assert_equal "$second_line" "$PLACEHOLDER" '(k) placeholder occupies line 2 of captured body'
+    third_line=$(sed -n '3p' "$BODY_CAPTURE")
+    assert_equal "$third_line" '<!-- section:plan-goals-test -->' '(k) first section open marker on line 3 (placeholder is outside every section interior)'
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("(k) body capture missing")
+    echo "  FAIL: (k) body capture file missing" >&2
 fi
 
 echo ""
