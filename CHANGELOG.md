@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.7] - 2026-04-25
+
+### Fixed
+
+- `scripts/validate-research-output.sh` provenance probe 1 (line 182) now broadens the recognized extension list from 13 to 51 entries (adding `tsx`, `jsx`, `vue`, `html`, `css`, `scss`, `rb`, `java`, `c`, `cpp`, `h`, `kt`, `swift`, `php`, `cs`, `lua`, `r`, `m`, `scala`, `dart`, `gradle`, `mk`, `cfg`, `ini`, `env`, `lock`, `proto`, plus a few other common forms) and requires a trailing-token boundary so the extension cannot bleed into adjacent path-token characters. Boundary class `[^A-Za-z0-9_:/-]` excludes alnum, `_`, `-`, `:`, and `/`; `.` IS a valid boundary so sentence-ending periods (`See foo.sh.`) and compound-extension forms (`Cargo.lock.bak`, `bundle.js.map`) match by substring evidence, while bypass forms (`file.mdjunk:42`, `file.md:garbage`, `file.md/child`) are rejected. Alternation is ordered longest-first within each prefix-conflict family (`cc|cfg|cjs|cpp|css|csv|cs|c`, `html|htm|hpp|h`, `json|jsx|js`, `mjs|mk|mm|md|m`, `rb|rs|r`, `tsx|tsv|ts`) so `grep -E` on BSD/macOS does not depend on backtracking-through-alternation to satisfy the trailing-boundary constraint. Updates lock down behavior across `scripts/validate-research-output.sh` (probe 1 regex + the script-header extension list which feeds `--help`), the sibling contract `scripts/validate-research-output.md` (extension list, boundary semantics, documented limitations: bare hidden-file forms `.env:7` / `.gitignore:5` not matched; underscore-glued prose like `file.md_for` not matched; short / generic-English extensions like `lock`/`env`/`txt`/`r`/`m` may false-positive on prose tokens), the regression test `scripts/test-validate-research-output.sh` (38 cases — added 25-30 for broadened extensions, 31-32 for fake-citation bypass rejection, 33-34 for happy-path / prose-glued comma, 35 for compound-extension acceptance, 36 for sentence-ending period acceptance, 37-38 for `:garbage` / `/child` bypass rejection; harness header listing extended to 1-38), and `docs/linting.md` (case count 24 → 38). Closes #447.
+
 ## [7.4.6] - 2026-04-25
 
 ### Changed

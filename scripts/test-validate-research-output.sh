@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-validate-research-output.sh — Regression test for scripts/validate-research-output.sh.
 #
-# Cases (per the acceptance criteria in issue #416):
+# Cases (per the acceptance criteria in issue #416, extended for #447):
 #   1. Happy path: substantive prose with one file:line citation → exit 0
 #   2. Empty file → exit 2 (body thin)
 #   3. Short-but-cited (50 words + citation) → exit 2 (body thin)
@@ -17,6 +17,30 @@
 #   13. Empty fenced block (no content) does NOT count as a marker → exit 3
 #   14. Fence interior excluded from word count (300 words inside ``` only) → exit 2
 #   15. Missing file → exit 4
+#   16. No file argument → exit 1 (usage error)
+#   17. Unknown flag → exit 1 (usage error)
+#   18. --validation-mode literal NO_ISSUES_FOUND passes → exit 0
+#   19. --validation-mode NO_ISSUES_FOUND padded with blank lines passes → exit 0
+#   20. --validation-mode short cited finding (40 words + file:line) passes (30-word floor) → exit 0
+#   21. --validation-mode 10-word too-short → exit 2
+#   22. --validation-mode 40-word uncited → exit 3
+#   23. --validation-mode prose mentioning NO_ISSUES_FOUND inline + citation passes (full path, not short-circuit) → exit 0
+#   24. --validation-mode --min-words 50 (override beats preset's 30) → exit 2
+# Cases added by #447 (broadened extension list + trailing-boundary rule):
+#   25. Broadened extension .tsx:42 passes → exit 0
+#   26. Broadened extension .vue:1 passes → exit 0
+#   27. Broadened extension .rb:7 passes → exit 0 (covers r/rb/rs prefix family)
+#   28. Broadened extension .java:5 passes → exit 0
+#   29. Broadened extension .css:10 passes → exit 0 (covers c/cs/css/csv prefix family)
+#   30. Existing .json:1 still passes → exit 0 (covers js/json/jsx prefix family regression)
+#   31. Fake-citation bypass file.mdjunk:42 → exit 3 (#447 defect (2) primary fix)
+#   32. Bypass regression file.tsxfoo:1 → exit 3 (covers new-extension boundary)
+#   33. Happy-path .md:42 still passes → exit 0 (no regression of existing case 1)
+#   34. Prose-glued comma file.md, → exit 0 (boundary char is a real comma)
+#   35. Compound-extension file.md.bak → exit 0 (substring match on .md; #447 boundary class allows `.` as boundary)
+#   36. Sentence-ending period See file.go. → exit 0 (#447 boundary class allows `.` as boundary)
+#   37. Bare-`:`-then-non-digits bypass file.md:garbage → exit 3 (#447 boundary class excludes `:`)
+#   38. Slash-suffix bypass file.md/child → exit 3 (#447 boundary class excludes `/`)
 #
 # Usage:
 #   bash scripts/test-validate-research-output.sh
@@ -212,6 +236,92 @@ F24="$TMPROOT/case24-validation-override.txt"
 make_words 25 "$F24"
 echo 'See pkg/server/main.go:7 for the off-by-one.' >> "$F24"
 run_case "case 24: --validation-mode --min-words 50 (override beats preset's 30)" 2 --validation-mode --min-words 50 "$F24"
+
+# === #447 cases — broadened extension list + trailing-boundary rule ===
+
+# --- Case 25: broadened extension .tsx:42 passes ---
+F25="$TMPROOT/case25-tsx.txt"
+make_words 250 "$F25"
+echo 'See app/components/Button.tsx:42 for the click handler.' >> "$F25"
+run_case "case 25: .tsx:42 (broadened extension) passes" 0 "$F25"
+
+# --- Case 26: broadened extension .vue:1 passes ---
+F26="$TMPROOT/case26-vue.txt"
+make_words 250 "$F26"
+echo 'See src/App.vue:1 for the root component.' >> "$F26"
+run_case "case 26: .vue:1 (broadened extension) passes" 0 "$F26"
+
+# --- Case 27: broadened extension .rb:7 passes (covers r/rb/rs prefix family) ---
+F27="$TMPROOT/case27-rb.txt"
+make_words 250 "$F27"
+echo 'See lib/parser.rb:7 for the tokenizer.' >> "$F27"
+run_case "case 27: .rb:7 (covers r/rb/rs prefix family longest-first ordering)" 0 "$F27"
+
+# --- Case 28: broadened extension .java:5 passes ---
+F28="$TMPROOT/case28-java.txt"
+make_words 250 "$F28"
+echo 'See src/main/java/Foo.java:5 for the constructor.' >> "$F28"
+run_case "case 28: .java:5 (broadened extension) passes" 0 "$F28"
+
+# --- Case 29: broadened extension .css:10 passes (covers c/cs/css/csv prefix family) ---
+F29="$TMPROOT/case29-css.txt"
+make_words 250 "$F29"
+echo 'See styles/main.css:10 for the layout rule.' >> "$F29"
+run_case "case 29: .css:10 (covers c/cs/css/csv prefix family longest-first ordering)" 0 "$F29"
+
+# --- Case 30: existing .json:1 still passes (covers js/json/jsx prefix family regression) ---
+F30="$TMPROOT/case30-json.txt"
+make_words 250 "$F30"
+echo 'See package.json:1 for the manifest.' >> "$F30"
+run_case "case 30: .json:1 still passes (js/json/jsx prefix family regression)" 0 "$F30"
+
+# --- Case 31: fake-citation bypass file.mdjunk:42 → exit 3 (#447 defect (2) primary fix) ---
+F31="$TMPROOT/case31-bypass-mdjunk.txt"
+make_words 250 "$F31"
+echo 'Reference: file.mdjunk:42 — fake-citation bypass attempt.' >> "$F31"
+run_case "case 31: file.mdjunk:42 (fake-citation bypass) rejected" 3 "$F31"
+
+# --- Case 32: bypass regression file.tsxfoo:1 → exit 3 (covers new-extension boundary) ---
+F32="$TMPROOT/case32-bypass-tsxfoo.txt"
+make_words 250 "$F32"
+echo 'Reference: file.tsxfoo:1 — bypass regression on broadened extension.' >> "$F32"
+run_case "case 32: file.tsxfoo:1 (broadened-extension bypass) rejected" 3 "$F32"
+
+# --- Case 33: happy-path .md:42 still passes (no regression of existing case 1) ---
+F33="$TMPROOT/case33-md-passes.txt"
+make_words 250 "$F33"
+echo 'See docs/notes.md:42 for the explanation.' >> "$F33"
+run_case "case 33: .md:42 still passes (existing case 1 regression guard)" 0 "$F33"
+
+# --- Case 34: prose-glued comma file.md, → exit 0 (boundary char is a real comma) ---
+F34="$TMPROOT/case34-comma-glue.txt"
+make_words 250 "$F34"
+echo 'See docs/notes.md, then continue with the discussion below.' >> "$F34"
+run_case "case 34: prose-glued comma file.md, passes (real-char boundary)" 0 "$F34"
+
+# --- Case 35: compound-extension file.md.bak → exit 0 (substring match on .md; #447 boundary class allows `.`) ---
+F35="$TMPROOT/case35-compound.txt"
+make_words 250 "$F35"
+echo 'Reference: see file.md.bak in the backup directory.' >> "$F35"
+run_case "case 35: file.md.bak compound-extension accepted via .md substring (#447 boundary allows period)" 0 "$F35"
+
+# --- Case 36: sentence-ending period See file.go. → exit 0 (#447 boundary class allows `.`) ---
+F36="$TMPROOT/case36-sentence-period.txt"
+make_words 250 "$F36"
+echo 'Refer to scripts/foo.go.' >> "$F36"
+run_case "case 36: sentence-ending period scripts/foo.go. accepted (#447 boundary allows period)" 0 "$F36"
+
+# --- Case 37: bare-`:`-then-non-digits bypass file.md:garbage → exit 3 (#447 boundary excludes `:`) ---
+F37="$TMPROOT/case37-bypass-colon-garbage.txt"
+make_words 250 "$F37"
+echo 'Reference: file.md:garbage — bare colon followed by non-digits, fake-citation bypass attempt.' >> "$F37"
+run_case "case 37: file.md:garbage rejected (#447 boundary excludes colon so optional :line group must match digits)" 3 "$F37"
+
+# --- Case 38: slash-suffix bypass file.md/child → exit 3 (#447 boundary excludes `/`) ---
+F38="$TMPROOT/case38-bypass-slash.txt"
+make_words 250 "$F38"
+echo 'Reference: file.md/child — slash-suffix bypass attempt.' >> "$F38"
+run_case "case 38: file.md/child rejected (#447 boundary excludes slash)" 3 "$F38"
 
 echo ""
 echo "=== Summary ==="
