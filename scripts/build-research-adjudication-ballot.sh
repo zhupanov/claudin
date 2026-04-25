@@ -43,11 +43,14 @@
 #   regardless of which letter was on top.
 #
 # Attribution-stripping rule (anchored regex, applied to first/last lines of each defense
-# body only — NOT mid-content search-and-replace; see sibling .md for fixture cases):
+# body only — NOT mid-content search-and-replace; see sibling .md for fixture cases).
+# `Code-Sec` and `Code-Arch` precede `Code` in the alternation so the longer deep-mode
+# names match before the shorter `Code` prefix (POSIX ERE leftmost-longest within an
+# alternation is unreliable across awk implementations; explicit ordering is portable):
 #   Leading attribution prefix on the first non-empty line:
-#     ^[[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[:\]\)][[:space:]]*
+#     ^[[:space:]]*(Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer)[:\]\)][[:space:]]*
 #   Trailing attribution suffix on the last non-empty line:
-#     [[:space:]]*[\(—-][[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*\)?[[:space:]]*$
+#     [[:space:]]*[\(—-][[:space:]]*(Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer)[[:space:]]*\)?[[:space:]]*$
 
 set -euo pipefail
 
@@ -246,8 +249,8 @@ function trim_right(s) { sub(/[[:space:]]+$/, "", s); return s; }
 }
 END {
   if (NR == 0) exit 0;
-  prefix_re_short = "^[[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*[:\\]\\)][[:space:]]*";
-  suffix_re = "[[:space:]]*[\\(—-][[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*\\)?[[:space:]]*$";
+  prefix_re_short = "^[[:space:]]*(Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer)[[:space:]]*[:\\]\\)][[:space:]]*";
+  suffix_re = "[[:space:]]*[\\(—-][[:space:]]*(Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer)[[:space:]]*\\)?[[:space:]]*$";
   if (first_nb > 0) {
     s = lines[first_nb];
     if (match(s, prefix_re_short)) {
