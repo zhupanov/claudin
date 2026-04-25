@@ -26,7 +26,13 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 **Zero accepted in-scope findings**: If voting rejects all in-scope findings, print `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` (OOS items accepted for issue filing are processed separately by `/implement`.) and skip to **Step 4**.
 
-**OOS items accepted by vote** (2+ YES in round 1): These are accepted for GitHub issue filing, NOT for code implementation. **Only when `SESSION_ENV_PATH` is non-empty**: write accepted OOS items to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` using the format:
+**OOS items accepted by vote** (2+ YES in round 1): These are accepted for GitHub issue filing, NOT for code implementation.
+
+- **Diff mode** (no `--slice` / `--slice-file` flag): **Only when `SESSION_ENV_PATH` is non-empty**, write accepted OOS items to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` using the format below. When `SESSION_ENV_PATH` is empty (standalone invocation), skip the OOS artifact write — `/implement` is the only consumer.
+- **Slice mode** (`--slice` or `--slice-file` set, plus `--create-issues`): **Bypass** the `oos-accepted-review.md` staging artifact entirely. `/review` Step 4b composes a findings batch (in-scope-accepted + OOS-accepted, excluding security-tagged) and invokes `/issue --input-file` inline. The `oos-accepted-review.md` artifact is `/implement`-specific (consumed by Step 9a.1's sentinel-driven OOS pipeline); slice mode runs from `/loop-review`'s driver, which has no equivalent consumer and instead relies on `/review`'s inline /issue call. **OOS classification anchor in slice mode**: a finding is OOS iff it concerns a file NOT in `$REVIEW_TMPDIR/slice-files.txt` (the canonical file list resolved by /review Step 1 from the verbal slice description). Reviewers may explore via Glob/Grep/Read for context but must anchor in/OOS classification to that list. Both in-scope-accepted AND OOS-accepted findings (2+ YES) are filed via /issue when `--create-issues` is set; security-tagged findings (focus-area=security) are routed to `--security-output` instead and NEVER fed to /issue (per SECURITY.md hold-local policy).
+
+In both modes, accepted OOS items use this format:
+
 ```markdown
 ### OOS_N: <short title>
 - **Description**: <full description of the observation>
@@ -34,6 +40,5 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 - **Vote tally**: <YES/NO/EXONERATE counts>
 - **Phase**: review
 ```
-When `SESSION_ENV_PATH` is empty (standalone invocation), skip the OOS artifact write.
 
 **Save not-accepted finding IDs**: Record the IDs of findings not accepted by vote in round 1 (whether rejected or exonerated). In rounds 2+, if a Claude-only reviewer re-raises a finding that was not accepted by the round-1 voting panel (same file, same issue), suppress it — do not re-accept a finding the panel already voted down or exonerated. The rounds-2+ skip-voting rule itself lives in `SKILL.md` at the Step 3c.1 branch selector (the file you are reading is loaded only on the round-1 branch, so duplicating that rule here would be dead content and a split-source maintenance risk).
