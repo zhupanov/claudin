@@ -139,4 +139,4 @@ When editing this script:
 
 ## Test harness
 
-`scripts/test-research-adjudication.sh` is the offline regression test for this helper. It is wired into `make test-harnesses` (NOT `make lint` and NOT `make smoke-dialectic`); a failure surfaces during local pre-merge validation and CI's `test-harnesses` job. Fixture inputs live under `tests/fixtures/research-adjudication/` (created in the same PR as this helper).
+`scripts/test-research-adjudication.sh` is the offline regression test for this helper. It is wired into the Makefile via the `test-harnesses` target. It runs under `make lint` locally (since `Makefile:9` defines `lint: test-harnesses lint-only`) and under CI's `test-harnesses` job (which is split from `lint-only` in CI per `docs/linting.md`). It is NOT part of `make smoke-dialectic` (that target validates `/design`'s `dialectic-execution.md` fixtures, which have a different schema). Fixture inputs live under `tests/fixtures/research-adjudication/` (created in the same PR as this helper).
