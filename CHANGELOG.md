@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.12] - 2026-04-24
+
+### Changed
+
+- `/implement` Step 0.5 Branch 2 (`--issue` adoption, used by `/fix-issue` forwarding `--issue $ISSUE_NUMBER`), Branch 3 (PR-body recovery), and Branch 1 (sentinel-reuse resume safety net) now rename the adopted tracking issue's title to `[IN PROGRESS]` so the title-prefix lifecycle applies uniformly across fresh-created and adopted runs. Step 12a/12b (terminal `[DONE]`) and Step 18 (terminal `[STALLED]`) drop the `ADOPTED=false` guard so adopted issues also flip on completion / failure. The `ADOPTED=` sentinel field retains its created-vs-adopted metadata semantic but no longer gates the title prefix. `scripts/tracking-issue-write.md` updated to clarify the cross-skill policy (`/improve-skill` / `/loop-improve-skill` use a narrower lifecycle than `/implement`) and to extend the Step 18 summary to include Branch B (`[DONE]` on non-merge / draft completion). `skills/fix-issue/SKILL.md` Step 6a generic-failure message and a new "Title-prefix interaction on adopted-issue retry" Known Limitations entry document the manual-recovery flow — operators must clear the `[STALLED]` prefix before re-running `/fix-issue` against the same adopted issue. Closes #430.
+
 ## [7.0.11] - 2026-04-24
 
 ### Changed
