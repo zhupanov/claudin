@@ -170,6 +170,37 @@ else
 fi
 
 # -----------------------------------------------------------------------
+# Sub-4: trailing --baseline with no value → exit 2; clear error on stderr.
+# Pre-fix behavior: `shift 2` failed under `set -e` because only one
+# positional remained, exiting with code 1 — which collides with the
+# documented schema-validation exit code, making a malformed flag
+# indistinguishable from a real schema failure to wrappers checking $?
+# (issue #477). The fix adds a `require_value` arity check before each
+# `shift 2` in the parser loop so missing values yield exit 2 with a
+# recognizable stderr message. The helper is applied uniformly to all
+# seven value-taking flags in eval-research.sh; this Sub-4 spot-checks
+# `--baseline` since that is the case the issue reported.
+# -----------------------------------------------------------------------
+
+echo "--- Sub-4: trailing --baseline with no value ---"
+sub4_stdout="$fixture_tmp/sub4.stdout"
+sub4_stderr="$fixture_tmp/sub4.stderr"
+sub4_rc=0
+PATH="$stub_dir:$PATH" bash "$SCRIPT" --id nonexistent-id-zzz --baseline \
+  >"$sub4_stdout" 2>"$sub4_stderr" || sub4_rc=$?
+
+if [[ "$sub4_rc" == "2" ]]; then
+  pass "Sub-4: exit 2 on trailing --baseline with no value"
+else
+  fail "Sub-4: expected exit 2, got $sub4_rc (stderr: $(tail -n 5 "$sub4_stderr"))"
+fi
+if grep -q -- '--baseline requires a value' "$sub4_stderr"; then
+  pass "Sub-4: stderr names --baseline as the flag missing a value"
+else
+  fail "Sub-4: stderr does not name --baseline (full stderr: $(cat "$sub4_stderr"))"
+fi
+
+# -----------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------
 
