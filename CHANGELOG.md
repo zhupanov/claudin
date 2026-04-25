@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.9] - 2026-04-24
+
+### Changed
+
+- Tighten `/research` safety claims to accurately partition mechanically-enforced (PreToolUse hook on `Edit|Write|NotebookEdit`, `/tmp`-only) vs prompt-enforced (Cursor/Codex external reviewers with `--workspace "$PWD"` / `-C "$PWD"`, Claude's own `Bash`, and Agent-tool fallbacks) perimeter. Replaces the dense "Read-only-repo contract" paragraph in `skills/research/SKILL.md` with a structured two-tier statement; promotes the externals + Bash write-surface content out of the long "External tool delegation" paragraph in `SECURITY.md` into a dedicated subsection ("External reviewer write surface in /research and /loop-review") with sub-bullets distinguishing `/research`'s hook-bounded orchestrator from `/loop-review`'s unconstrained write-capable surface; cross-links from `README.md`, `docs/review-agents.md`, `docs/external-reviewers.md`, `docs/skills.md`, and `docs/workflow-lifecycle.md` so the partition vocabulary stays consistent. Documentation-and-claims accuracy fix; no script or hook changes. Closes #422.
+
 ## [7.0.8] - 2026-04-24
 
 ### Changed

@@ -13,6 +13,10 @@ Skills gracefully degrade when external tools are unavailable. When Codex or Cur
 
 **Exception: dialectic debate buckets (`/design` Step 2a.5) do NOT use replacement-first.** When the assigned external tool (Cursor for odd-indexed decisions, Codex for even) is unavailable, the bucket is **skipped entirely** and a `Disposition: bucket-skipped` resolution is written — Claude subagents are never substituted into the debate path. This carve-out applies only to the **debate execution phase** of dialectic; the post-debate **judge panel** uses replacement-first normally. See [Dialectic-specific behavior](#dialectic-specific-behavior) below and `skills/shared/dialectic-protocol.md` for the full rationale.
 
+## Trust boundary (filesystem access)
+
+External reviewers in `/research` and `/loop-review` launch directly against the working tree (`cursor agent ... --workspace "$PWD"`, `codex exec --full-auto -C "$PWD"`) and inherit the user's filesystem privileges. The reviewer prompt asks them not to modify files, but this is a behavioral constraint, not a sandbox. The `/research` skill carries a skill-scoped `PreToolUse` hook (`scripts/deny-edit-write.sh`) that mechanically guards Claude's own `Edit | Write | NotebookEdit` tool surface to canonical `/tmp` only; the hook does **not** cover Bash or subprocess-spawned external reviewers. `/loop-review` has no skill-scoped hook — its orchestrator is expected to write the repo (filing issues via `/issue`, writing session artifacts). See [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review) for the full trust-model framing and [`docs/review-agents.md` § External reviewer trust boundary](review-agents.md#external-reviewer-trust-boundary-skills-using-cursor--codex-against-pwd) for the skill-author-facing summary.
+
 ## Launching External Reviewers
 
 External reviewers are launched via the `run-external-reviewer.sh` wrapper script, which provides:

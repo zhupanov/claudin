@@ -108,7 +108,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><a href="docs/skills.md#research"><code>/research</code></a></td>
       <td><code>[--debug] &lt;research question or topic&gt;</code></td>
     </tr>
-    <tr><td colspan="2">Collaborative read-only research with 3 research agents and a 3-reviewer validation panel.</td></tr>
+    <tr><td colspan="2">Collaborative <strong>best-effort</strong> read-only research with 3 research agents and a 3-reviewer validation panel — mechanically guarded only on the Claude <code>Edit</code>/<code>Write</code>/<code>NotebookEdit</code> surface; Bash and external reviewers are prompt-enforced (see <a href="skills/research/SKILL.md">SKILL.md</a> &amp; <a href="SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review">SECURITY.md</a>).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#review"><code>/review</code></a></td>
