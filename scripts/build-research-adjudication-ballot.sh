@@ -13,12 +13,15 @@
 #   - skills/research/references/adjudication-phase.md Step 2.5.1 (via the pre-launch
 #     coordinator scripts/run-research-adjudication.sh).
 #
-# Output contract (KEY=value on stdout):
-#   Success:  BUILT=true
-#             BALLOT=<path>
-#             DECISION_COUNT=<N>
-#   Failure:  FAILED=true
-#             ERROR=<single-line message>
+# Output contract (KEY=value):
+#   Success (on stdout): BUILT=true
+#                        BALLOT=<path>
+#                        DECISION_COUNT=<N>
+#   Failure (on stderr): FAILED=true
+#                        ERROR=<single-line message>
+# Failure output is on fd 2 so the Phase 3 `{ ... } > "$OUTPUT"` brace-group
+# stdout redirection cannot capture it into the ballot file. Callers that need
+# to read the ERROR= line must merge stderr into stdout, e.g. `2>&1`.
 #
 # Exit codes:
 #   0 — success (DECISION_COUNT may be 0 if input file was empty after parsing)
@@ -61,14 +64,22 @@ Both flags are required.
                    Rejection rationale fields.
   --output <path>  Destination ballot file. Parent directory must exist.
 
-Stdout (KEY=value):
-  Success: BUILT=true / BALLOT=<path> / DECISION_COUNT=<N>
-  Failure: FAILED=true / ERROR=<message>
+Output (KEY=value):
+  Success (stdout, fd 1): BUILT=true / BALLOT=<path> / DECISION_COUNT=<N>
+  Failure (stderr, fd 2): FAILED=true / ERROR=<message>
+  Failure lines are routed to stderr so the Phase 3 `{ ... } > "$OUTPUT"`
+  brace-group stdout redirect cannot capture them into the ballot file;
+  callers needing the ERROR= line should merge streams via `2>&1`.
 USAGE
 }
 
 emit_failure() {
-  printf 'FAILED=true\nERROR=%s\n' "$1"
+  # Writes to stderr (fd 2), not stdout, so failure messages survive the
+  # `{ ... } > "$OUTPUT"` brace-group redirection in Phase 3 and reach the
+  # caller. run-research-adjudication.sh captures the builder's combined
+  # streams via `2>&1` and extracts ERROR= via grep, so stderr-routed errors
+  # remain capturable on every call site.
+  printf 'FAILED=true\nERROR=%s\n' "$1" >&2
   exit "${2:-2}"
 }
 

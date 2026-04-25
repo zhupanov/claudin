@@ -2,7 +2,7 @@
 
 `scripts/test-research-adjudication.sh` is the offline regression guard for `/research --adjudicate`'s ballot-builder helper. The harness is self-contained — it generates fixture inputs inline via heredocs (under a temp directory cleaned up on exit), invokes `scripts/build-research-adjudication-ballot.sh` against them, and asserts byte-level invariants on the generated ballot.
 
-## Scope (nine assertions)
+## Scope (ten assertions)
 
 1. **Empty input**: an empty rejected-findings file produces `BUILT=true` / `DECISION_COUNT=0` / an empty ballot file (the file is created so callers can `[[ -f ... ]]`-test, but its size is 0).
 2. **Deterministic ordering — append order independence**: the same three findings appended to two input files in different orders produce byte-identical ballots. This is the core guarantee that allows append-time concurrency at validation-phase.md Sites A and B without producing run-to-run nondeterminism in adjudication outcomes.
@@ -13,6 +13,7 @@
 7. **Ballot header text**: the header declares research-specific THESIS/ANTI_THESIS semantics (`THESIS = "rejection stands" wins`; `ANTI_THESIS = "reinstate the finding" wins`). This is byte-pinned so any future edit that drifts the semantics is caught.
 8. **Multi-line Finding / Rejection rationale round-trip**: a single `### REJECTED_FINDING_1` block whose Finding and Rejection rationale each span multiple lines produces `DECISION_COUNT=1` (not multiple) with both continuation lines preserved verbatim in the ballot. This is the regression guard for the FINDING_1 multi-line TSV corruption bug — without the FS sentinel substitution that encodes intra-record newlines before the TSV serialization phase and decodes them on the way out, a multi-line block would split into multiple decisions with garbled defenses.
 9. **Literal-tab round-trip**: a Finding text containing an embedded TAB byte produces `DECISION_COUNT=1` with the tab preserved in the ballot. The GS sentinel substitution in Phase 1 swaps each literal tab for the GS byte before the `IFS=$'\t'` record-splitting in Phase 2, then `tr`-decodes the GS bytes back to tabs at emission time — so tabs in finding text never collide with the TSV column separator.
+10. **`emit_failure` writes to stderr**: invoking the builder with a missing required `--input` flag triggers `emit_failure`; the harness asserts `FAILED=true` / `ERROR=...` lines land on stderr (fd 2), do NOT appear on stdout (fd 1), and that a caller-style `2>&1` merge still surfaces the `ERROR=` line for `run-research-adjudication.sh`'s `grep -E '^ERROR='` extraction. Regression guard for issue #463: the two `emit_failure` calls in the Phase 3 `base64 -d` failure paths inside the `{ ... } > "$OUTPUT"` brace group had their `printf` going to stdout, which the brace group redirected into the ballot file — discarding the specific TSV-corruption diagnostic. Routing `emit_failure`'s `printf` to fd 2 keeps every call site (in-brace and out-of-brace) reachable to the caller. The in-brace sites are not externally inducible from input alone (Phase 2 always produces valid base64), so the harness exercises the same fd-2 contract via an out-of-brace path.
 
 ## Wiring
 
@@ -33,6 +34,7 @@ When editing `scripts/build-research-adjudication-ballot.sh`:
 - **Ballot header text changes** MUST update Test 7's header grep patterns.
 - **FS sentinel substitution changes** (the encoder that protects intra-record newlines across the TSV serialization phase) MUST update Test 8's multi-line round-trip fixture and the `DECISION_COUNT=1` + per-line `grep -qF` assertions.
 - **GS sentinel substitution changes** (the encoder that protects literal tabs against the `IFS=$'\t'` record splitter) MUST update Test 9's tab-containing fixture and the `DECISION_COUNT=1` + tab-preservation assertion.
+- **`emit_failure` output-stream changes** (the function that emits `FAILED=true` / `ERROR=...` on a failure path) MUST keep the `printf ... >&2` redirect that routes failure lines to stderr — Test 10 asserts the fd-2 contract directly. Removing the `>&2` reintroduces the in-brace stdout-leak that issue #463 fixed.
 
 When editing this harness:
 
