@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.12] - 2026-04-25
+
+### Fixed
+
+- `scripts/validate-research-output.sh` exit-4 diagnostic now reads `file missing or not readable: <path>` instead of `file not found: <path>`. The predicate gating exit 4 is `[[ ! -r "$INPUT" ]]`, which is true for both a nonexistent file and an existing-but-permission-denied file, so the original "file not found" wording silently mis-described the second case. The combined wording matches the existing repo convention used in `scripts/render-reviewer-prompt.sh:86`. Header-comment contract lines documenting exit 4 and the sibling `scripts/validate-research-output.md` updated in lockstep; the regression test `scripts/test-validate-research-output.sh` case 15 only asserts exit code 4, not the diagnostic text, so no test edits were required (38/38 cases still pass). Closes #459.
+
 ## [7.4.11] - 2026-04-25
 
 ### Fixed
