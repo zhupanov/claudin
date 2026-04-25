@@ -236,6 +236,14 @@ Parse stdout for `ISSUE_NUMBER`, `ANCHOR_COMMENT_ID`, `ADOPTED`.
 
   Run an inline awk loop over `anchor-body.md` matching `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Hydration is best-effort: any failure (fetch error, anchor missing, parse error, empty `ANCHOR_COMMENT_ID`) logs to `Warnings` ("Step 0.5 — anchor hydration skipped: <reason>") and proceeds. On failure, the next step's fragment write will be the first fresh write — acceptable if no prior anchor content existed.
 
+- **Resume rename safety net**: if `ISSUE_NUMBER` is set, run a best-effort idempotent rename to `[IN PROGRESS]`. This recovers from the case where a prior session wrote the sentinel but its Branch 2 / Branch 3 / Branch 4 rename failed (best-effort, logged but non-blocking) — without this, a resumed run could complete with merge/Step 18 renames while the GitHub title never received `[IN PROGRESS]`:
+
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state in-progress
+  ```
+
+  Best-effort: on `FAILED=true` or non-zero exit, log `Step 0.5 — Branch 1 resume rename to in-progress failed: $ERROR` to `Tool Failures` and continue. The rename is idempotent (`RENAMED=false` no-op when the title already starts with `[IN PROGRESS]` followed by a space), so the common resume case is a single cheap `gh issue view` round-trip with no edit.
+
 Proceed to Step 1.
 
 **Branch 2 — `--issue <N>` provided** (`ISSUE_ARG` non-empty, no usable sentinel after Branch 1 mismatch-clear):
@@ -1015,14 +1023,14 @@ If `quick_mode=false`: print a summary noting plan review findings were reported
 
 ### Title-prefix lifecycle terminal transition
 
-Before `cleanup-tmpdir.sh` runs (so `$IMPLEMENT_TMPDIR/parent-issue.md` is still available if needed), flip the tracking issue's title prefix to its terminal state. All three branches share the same pre-conditions:
+Before `cleanup-tmpdir.sh` runs (so `$IMPLEMENT_TMPDIR/parent-issue.md` is still available if needed), flip the tracking issue's title prefix to its terminal state. Branches A, B, and C below all gate on the same two preconditions:
 
 - `$ISSUE_NUMBER` is set (Branch 4 succeeded, or Branch 1/2/3 adopted).
 - `$repo_unavailable=false`.
 
-The title-prefix lifecycle now applies uniformly to fresh-created (Branch 4) and adopted (Branch 2/3) tracking issues — `/implement` owns the title prefix during the run, while the rest of the title remains user-authored. The `rename` subcommand strips exactly one leading managed prefix before prepending the new one (see `scripts/tracking-issue-write.md` "Title-prefix lifecycle"), so user-owned title text is preserved across transitions.
+If either precondition is missing, skip the rename block entirely (no Branch A/B/C executes).
 
-If any precondition is missing, skip the rename block entirely.
+The title-prefix lifecycle applies uniformly to fresh-created (Branch 4) and adopted (Branch 2/3) tracking issues — `/implement` owns the title prefix during the run, while the rest of the title remains user-authored. The `rename` subcommand strips exactly one leading managed prefix before prepending the new one (see `scripts/tracking-issue-write.md` "Title-prefix lifecycle"), so user-owned title text is preserved across transitions.
 
 **Branch A — STALLED (failure path)**: if `$STALL_TRACKING=true`, check that the issue is still OPEN before renaming (renaming a closed issue to `[STALLED]` is semantically wrong — closed means merged means done):
 
