@@ -159,8 +159,14 @@ Print all resolutions under a `## Adjudication Resolutions` header in conversati
 
 For each resolution with `Resolution: reinstate`:
 
-1. Locate the original reviewer finding in `$RESEARCH_TMPDIR/rejected-findings.md` (the `### REJECTED_FINDING_<N>` block whose deterministic-sort-position matches this `DECISION_N`).
-2. Fold the finding's content back into the validated research synthesis. The synthesis was last printed under `## Revised Research Findings` (or, if no findings were accepted at validation, the original synthesis under Step 1.4's `## Research Synthesis` header). Integrate the reinstated finding into the appropriate subsection (Findings Summary, Risk Assessment, Difficulty Estimate, etc.) based on its content.
+1. Locate the original reviewer finding in `$RESEARCH_TMPDIR/rejected-findings.md`. **`DECISION_N` is NOT the same as the literal `<N>` suffix from `### REJECTED_FINDING_<N>`** — the former is the post-sort index produced by the ballot builder; the latter is the append-order session counter from validation-phase.md Sites A and B. They only coincide when the rejection capture order happens to match `(reviewer_attribution, sha256(finding_text))` lex order. To find the correct block, apply the algorithm:
+   - Parse all `### REJECTED_FINDING_<N>` blocks from `rejected-findings.md`.
+   - For each block, compute the same `(reviewer_attribution_lex_asc, sha256(finding_text)_lex_asc)` sort key as `scripts/build-research-adjudication-ballot.sh` (see `scripts/build-research-adjudication-ballot.md` "Deterministic ordering rule" for the canonical specification).
+   - Sort the blocks by that key.
+   - The kth block in sort order corresponds to `DECISION_k`.
+
+   Do NOT use the literal `<N>` suffix from `REJECTED_FINDING_<N>` as the `DECISION` index — that mapping holds only when capture-time append order equals sort order, which is not guaranteed.
+2. Fold the located finding's content back into the validated research synthesis. The synthesis was last printed under `## Revised Research Findings` (or, if no findings were accepted at validation, the original synthesis under Step 1.4's `## Research Synthesis` header). Integrate the reinstated finding into the appropriate subsection (Findings Summary, Risk Assessment, Difficulty Estimate, etc.) based on its content.
 3. Once all reinstatements are folded, re-print the full synthesis under the existing `## Revised Research Findings` header. Inside that synthesis, add a `## Reinstated Findings (post-adjudication)` SUB-SECTION listing each reinstated finding by its `DECISION_N` ID, the reviewer attribution, and a 1-2 sentence summary. This sub-section is for audit clarity — it does NOT replace the integration into the main synthesis subsections; it lists what was added.
 
 **One revision pass only** — even if multiple `reinstate` resolutions exist, the synthesis revision happens once after all votes are tallied. Do not re-print the synthesis between individual reinstatements.

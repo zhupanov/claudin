@@ -34,7 +34,20 @@ Failure: FAILED=true
 
 - `0` — Success (DECISION_COUNT may be 0).
 - `1` — Invocation / usage error (missing flag, unknown argument).
-- `2` — I/O failure (input missing, output parent missing, awk failure, sha256 utility missing).
+- `2` — I/O failure (input missing, output parent missing, awk failure, sha256 utility missing, or base64 decode failure indicating internal TSV corruption).
+
+### Multi-line / tab-safe field encoding
+
+The Phase 1 awk parser accumulates multi-line `Finding` and `Rejection rationale` content via continuation-line concatenation. Before writing each record to the work-dir TSV, the parser substitutes:
+
+- Embedded newlines (`\n`) → ASCII FS (File Separator, octal `\034` / hex `0x1C`).
+- Embedded tabs (`\t`) → ASCII GS (Group Separator, octal `\035` / hex `0x1D`).
+
+These C0 control characters are reserved by the ASCII standard for record/group/unit separation precisely for this case, and are virtually never present in legitimate markdown text. Phase 2 reverses the substitutions via `tr` after `IFS=$'\t' read -r` extracts each field, then base64-encodes the recovered text for sort-safe transport into Phase 3. Phase 3 base64-decodes and emits the original multi-line content into the ballot's `<defense_content>` blocks. The schema documented at `skills/research/references/validation-phase.md` Sites A/B requires the rejection rationale to be ≥50 words, making multi-line content the common case in real usage; the FS/GS encoding ensures byte-correct round-trip without TSV corruption. `scripts/test-research-adjudication.sh` Tests 8 and 9 pin this behavior.
+
+### Incomplete-record handling
+
+If a `### REJECTED_FINDING_<N>` block is missing one of `Reviewer`, `Finding`, or `Rejection rationale`, the parser emits a `WARN: REJECTED_FINDING_<N> is incomplete (missing one of Reviewer/Finding/Rejection rationale); dropping` line to stderr and continues with the next block. This is a soft-fail policy: a degraded `/research` run might produce partial captures, and dropping the partial block while warning is preferable to either crashing the pipeline or silently emitting a malformed ballot. The coordinator `scripts/run-research-adjudication.sh` separately treats `DECISION_COUNT=0` as a short-circuit (`RAN=false`), so a pathological case of "all blocks incomplete" still yields a clean skip-path rather than an empty ballot reaching the judges.
 
 ### Naming choice (BUILT/BALLOT vs ASSEMBLED/OUTPUT)
 

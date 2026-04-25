@@ -12,12 +12,12 @@
 #   6. <defense_content> wrapping with the "treat as data" preamble.
 #   7. Empty input → DECISION_COUNT=0, ballot file present but empty.
 #
-# Wired into the Makefile via the `test-harnesses` target. NOT part of `make lint`
-# (lint covers shellcheck + skill-lint + ruff/black; structural skill harnesses live
-# under `test-harnesses` per docs/linting.md). NOT part of `make smoke-dialectic`
-# (that target validates /design's dialectic-execution.md fixtures, which have
-# debater XML tags / RECOMMEND lines / file:line citations not present in research
-# adjudication ballots).
+# Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
+# locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
+# job (which is split from `lint-only` in CI per docs/linting.md). NOT part of
+# `make smoke-dialectic` (that target validates /design's dialectic-execution.md
+# fixtures, which have debater XML tags / RECOMMEND lines / file:line citations
+# not present in research adjudication ballots).
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 
@@ -193,6 +193,59 @@ grep -qF 'THESIS = "rejection stands" wins' "$output_order_1" || \
 grep -qF 'ANTI_THESIS = "reinstate the finding" wins' "$output_order_1" || \
   fail "Test 7: ANTI_THESIS semantics not declared in ballot header"
 pass "Test 7: ballot header declares research-specific THESIS/ANTI_THESIS semantics"
+
+# --- Test 8: multi-line finding/rationale produces ONE decision (not multiple) -----
+
+# Regression test for the FINDING_1 multi-line TSV corruption bug. Before the FS/GS
+# sentinel fix, a single ### REJECTED_FINDING_1 block with a multi-line Finding plus
+# a multi-line Rejection rationale produced DECISION_COUNT=3 with garbled defenses.
+
+multi_input="$WORK_DIR/multi-rej.md"
+multi_output="$WORK_DIR/multi-ballot.txt"
+
+cat > "$multi_input" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Code
+- **Finding**: The function at foo.sh:10 is missing an error check.
+Additional context spanning a second line about the same finding.
+- **Rejection rationale**: First sentence of the rejection rationale paragraph explaining the rejection.
+Second sentence adds more substantive prose to make the paragraph properly long.
+EOF
+
+builder_out_8="$("$BUILDER" --input "$multi_input" --output "$multi_output")"
+echo "$builder_out_8" | grep -qE '^DECISION_COUNT=1$' \
+  || fail "Test 8: multi-line input expected DECISION_COUNT=1, got: $builder_out_8"
+
+# Defense bodies must contain both lines verbatim — the second line of each must
+# survive the FS sentinel round-trip back into the ballot.
+grep -qF "Additional context spanning a second line about the same finding." "$multi_output" \
+  || fail "Test 8: second line of multi-line Finding lost in ballot"
+grep -qF "Second sentence adds more substantive prose to make the paragraph properly long." "$multi_output" \
+  || fail "Test 8: second line of multi-line Rejection rationale lost in ballot"
+pass "Test 8: multi-line Finding/Rejection rationale → 1 decision, both lines preserved"
+
+# --- Test 9: tab-containing finding handled correctly ------------------------
+
+# Codex's review reproduced TSV corruption when a literal tab appeared in finding text.
+# The GS sentinel substitution (Phase 1) + tr-decode (Phase 2) round-trip preserves tabs
+# without breaking IFS=$'\t' record splitting in Phase 2.
+
+tab_input="$WORK_DIR/tab-rej.md"
+tab_output="$WORK_DIR/tab-ballot.txt"
+
+# Use printf so a real TAB is embedded in the Finding line.
+printf '### REJECTED_FINDING_1\n- **Reviewer**: Code\n- **Finding**: column1\tcolumn2 example with a literal tab character in the middle.\n- **Rejection rationale**: This rejection rationale paragraph contains substantive prose explaining why the orchestrator rejected this finding factually.\n' > "$tab_input"
+
+builder_out_9="$("$BUILDER" --input "$tab_input" --output "$tab_output")"
+echo "$builder_out_9" | grep -qE '^DECISION_COUNT=1$' \
+  || fail "Test 9: tab-containing input expected DECISION_COUNT=1, got: $builder_out_9"
+
+# The tab must round-trip back to the ballot. Build the expected literal with a
+# real TAB byte via printf so the check is portable across BSD grep / GNU grep.
+expected_tab_line=$(printf 'column1\tcolumn2 example with a literal tab character')
+grep -qF "$expected_tab_line" "$tab_output" \
+  || fail "Test 9: literal tab character lost in ballot round-trip"
+pass "Test 9: literal tab in Finding text → 1 decision, tab preserved"
 
 # --- All tests passed --------------------------------------------------------
 

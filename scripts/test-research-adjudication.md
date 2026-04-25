@@ -14,11 +14,11 @@
 
 ## Wiring
 
-Wired into the `Makefile` `test-harnesses` target alongside `test-research-structure.sh` and other structural skill harnesses. NOT part of:
+Wired into the `Makefile` `test-harnesses` target alongside `test-research-structure.sh` and other structural skill harnesses.
 
-- `make lint` — covers shellcheck, skill-lint, ruff/black; structural skill harnesses are explicitly separated per `docs/linting.md`.
-- `make smoke-dialectic` — validates `/design`'s `dialectic-execution.md` against fixtures in `tests/fixtures/dialectic/`. Those fixtures contain `debate-*-thesis.txt` / `debate-*-antithesis.txt` files with structured XML tags, RECOMMEND lines, and file:line citations — none of which exist in research adjudication ballots (research has no debater fanout phase).
-- CI runs `make test-harnesses` as part of the `test-harnesses` job; failure surfaces during PR checks.
+- `make lint` — runs the harness locally because the `Makefile` defines `lint: test-harnesses lint-only` (the local-dev convenience target depends on `test-harnesses`). Per `docs/linting.md`, CI splits the two phases: the `lint` CI job runs `lint-only` (pre-commit) and a separate `test-harnesses` CI job runs the structural harness suite, so a harness regression surfaces in the `test-harnesses` job rather than the `lint` job.
+- `make smoke-dialectic` — does NOT include this harness. That target validates `/design`'s `dialectic-execution.md` against fixtures in `tests/fixtures/dialectic/`. Those fixtures contain `debate-*-thesis.txt` / `debate-*-antithesis.txt` files with structured XML tags, RECOMMEND lines, and file:line citations — none of which exist in research adjudication ballots (research has no debater fanout phase).
+- CI: failure surfaces during PR checks via the dedicated `test-harnesses` job.
 
 ## Edit-in-sync invariants
 

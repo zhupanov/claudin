@@ -117,24 +117,33 @@ WORK_DIR="$(mktemp -d "${OUTPUT}.work.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 # Phase 1 — parse rejected-findings.md into one record per ### REJECTED_FINDING_<N> block.
-# Each record is written as a single line: <reviewer>\t<sha256_of_finding>\t<finding_b64>\t<rationale_b64>
-# We use base64 to flatten multi-line content safely through sort and read.
+# Each record is written as a single line: <reviewer>\t<finding-encoded>\t<rationale-encoded>
+# Embedded newlines in finding/rationale are replaced with ASCII FS (0x1C, octal \034) and
+# embedded tabs with ASCII GS (0x1D, octal \035) so each record is a single line in the TSV
+# and IFS=$'\t' splitting in Phase 2 is unambiguous. Phase 2 reverses both substitutions
+# before hashing and base64-encoding for sort/transport. ASCII FS and GS are control chars
+# whose 7-bit code points are reserved as record/group separators precisely for this use
+# case and are virtually never present in legitimate markdown text.
 
 PARSED="$WORK_DIR/parsed.tsv"
 
-awk -v finding_path="$WORK_DIR/finding.txt" \
-    -v rationale_path="$WORK_DIR/rationale.txt" \
-    -v reviewer_path="$WORK_DIR/reviewer.txt" \
-    -v parsed_out="$PARSED" '
+awk -v parsed_out="$PARSED" '
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s; }
 function flush_record() {
   if (current_n == "") return;
   if (reviewer == "" || finding == "" || rationale == "") {
-    # Skip incomplete records silently — partial captures are tolerable as long as
-    # we do not crash the whole pipeline. The .md sibling documents this behavior.
+    # Surface incomplete records on stderr so degraded runs are visible without
+    # crashing the whole pipeline. Continue to the next record.
+    print "WARN: REJECTED_FINDING_" current_n " is incomplete (missing one of Reviewer/Finding/Rejection rationale); dropping" > "/dev/stderr";
     current_n = ""; reviewer = ""; finding = ""; rationale = ""; mode = "";
     return;
   }
+  # Encode embedded newlines/tabs to ASCII FS/GS so the TSV record is single-line
+  # and tab-safe. Phase 2 reverses these substitutions.
+  gsub(/\t/, "\035", finding);
+  gsub(/\n/, "\034", finding);
+  gsub(/\t/, "\035", rationale);
+  gsub(/\n/, "\034", rationale);
   print reviewer "\t" finding "\t" rationale > parsed_out;
   current_n = ""; reviewer = ""; finding = ""; rationale = ""; mode = "";
 }
@@ -182,11 +191,20 @@ if [[ ! -s "$PARSED" ]]; then
   exit 0
 fi
 
-# Phase 2 — for each parsed record, compute (reviewer, sha256(finding)) sort key.
-# Use base64 for the embedded multi-line finding/rationale fields.
+# Phase 2 — decode the FS/GS sentinels from Phase 1 (recovering original newlines and tabs),
+# then for each parsed record compute the (reviewer, sha256(finding)) sort key and base64-encode
+# the field bodies for transport through sort and into Phase 3. base64 is used for sort safety
+# (no embedded whitespace) and for unambiguous round-trip through `read`. ASCII FS/GS are 0x1C/0x1D.
 SORTED="$WORK_DIR/sorted.tsv"
 
-while IFS=$'\t' read -r reviewer finding_text rationale_text; do
+# Single-character literals for FS (0x1C) and GS (0x1D) — built once outside the loop.
+FS_CHAR=$'\x1c'
+GS_CHAR=$'\x1d'
+
+while IFS=$'\t' read -r reviewer finding_encoded rationale_encoded; do
+  # Reverse the Phase 1 sentinel substitutions: FS → newline, GS → tab.
+  finding_text=$(printf '%s' "$finding_encoded"   | tr "$FS_CHAR$GS_CHAR" '\n\t')
+  rationale_text=$(printf '%s' "$rationale_encoded" | tr "$FS_CHAR$GS_CHAR" '\n\t')
   finding_hash=$(printf '%s' "$finding_text" | "${SHA256_CMD[@]}" | awk '{print $1}')
   finding_b64=$(printf '%s' "$finding_text"   | base64 | tr -d '\n')
   rationale_b64=$(printf '%s' "$rationale_text" | base64 | tr -d '\n')
@@ -261,8 +279,15 @@ BALLOT_HEADER
   while IFS=$'\t' read -r reviewer finding_hash finding_b64 rationale_b64; do
     n=$((n + 1))
 
-    finding_text=$(printf '%s' "$finding_b64"   | base64 -d 2>/dev/null || true)
-    rationale_text=$(printf '%s' "$rationale_b64" | base64 -d 2>/dev/null || true)
+    # Fail closed if base64 decode fails — Phase 2 produced these encodings, so a
+    # decode failure indicates TSV corruption that must surface to the operator
+    # rather than emit an empty defense.
+    if ! finding_text=$(printf '%s' "$finding_b64" | base64 -d 2>/dev/null); then
+      emit_failure "base64 decode failed for finding body of DECISION_${n} (TSV corruption)" 2
+    fi
+    if ! rationale_text=$(printf '%s' "$rationale_b64" | base64 -d 2>/dev/null); then
+      emit_failure "base64 decode failed for rationale body of DECISION_${n} (TSV corruption)" 2
+    fi
 
     finding_stripped=$(strip_attribution "$finding_text")
     rationale_stripped=$(strip_attribution "$rationale_text")
