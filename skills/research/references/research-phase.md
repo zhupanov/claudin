@@ -24,9 +24,35 @@ The 3 research agents:
 
 **Spawn order**: Cursor first (slowest), then Codex, then any Claude subagent fallbacks, then your own inline research (fastest). Issue all Bash and Agent tool calls in a single message.
 
-**Shared prompt** (used verbatim by all 3 lanes — Cursor, Codex, inline Claude, and any Claude fallbacks):
+**External-evidence trigger detection** (mental — performed before constructing `RESEARCH_PROMPT`): set the flag `external_evidence_mode` to `true` if `RESEARCH_QUESTION` contains any of the following case-insensitive substrings; otherwise leave it `false`. The list is intentionally narrow and biased toward obvious external-research signals — misrouting compounds errors, so prefer false negatives (an operator who wants external evidence can always restate the question). Extend the list when a clear pattern emerges:
+
+- `external`
+- `other repos`
+- `github`
+- `compare with`
+- `contrast`
+- `reputable sources`
+- `karpathy`
+- `anthropic`
+- `open source`
+- `oss`
+- `large amount of stars`
+- `high stars`
+- `star count`
+
+**Shared prompt** (used verbatim by all 3 lanes — Cursor, Codex, inline Claude, and any Claude fallbacks; identical across lanes — do NOT branch per-lane):
+
+When `external_evidence_mode=false`:
 
 `RESEARCH_PROMPT` = ``"You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Consider alternative perspectives to the obvious interpretation. Actively scrutinize for edge cases, gaps, missing pieces, and assumption failures. Explore the codebase to ground your findings with verifiable provenance (see (4)). Write 2-3 paragraphs covering: (1) key findings and observations, including any that challenge the obvious reading, (2) relevant files/modules/areas and architectural patterns, (3) risks, constraints, feasibility concerns, edge cases, and gaps, (4) Every concrete claim must carry provenance: a `file:line` (or `file:line-range`) reference for repo-internal claims, a fenced command + 1–3 lines of its output for behavior claims, or a URL for external claims. Pure prose summaries without provenance are acceptable only for synthesis sentences that aggregate already-cited claims. Do NOT modify files."``
+
+When `external_evidence_mode=true`, prepend the external-evidence stanza to `RESEARCH_PROMPT` so it appears immediately after the question line and before "Consider alternative perspectives…":
+
+`RESEARCH_PROMPT` = ``"You are researching a codebase to answer this question: <RESEARCH_QUESTION>. This question demands external evidence (other repos, blog posts, official docs). Use WebSearch and WebFetch to gather sources from reputable origins (vendor docs like anthropic.com / openai.com, well-known engineer blogs, GitHub repos with notable star counts). Each external claim must cite a URL. The codebase remains the source of truth for any internal claim about this repo. Consider alternative perspectives to the obvious interpretation. Actively scrutinize for edge cases, gaps, missing pieces, and assumption failures. Explore the codebase to ground your findings with verifiable provenance (see (4)). Write 2-3 paragraphs covering: (1) key findings and observations, including any that challenge the obvious reading, (2) relevant files/modules/areas and architectural patterns, (3) risks, constraints, feasibility concerns, edge cases, and gaps, (4) Every concrete claim must carry provenance: a `file:line` (or `file:line-range`) reference for repo-internal claims, a fenced command + 1–3 lines of its output for behavior claims, or a URL for external claims. Pure prose summaries without provenance are acceptable only for synthesis sentences that aggregate already-cited claims. Do NOT modify files."``
+
+The Phase 1 provenance clause (item 4 — URL for external claims) already accommodates URL citations; this branch widens only the *invitation* to use them.
+
+**Cursor web-tool asymmetry**: Cursor's `cursor agent` runtime does not expose `WebSearch` / `WebFetch` as named tools the way Claude does. When `external_evidence_mode=true`, the prompt invitation is honored directly by the Codex and Claude lanes (which carry web tools); the Cursor lane falls back to whatever web access its underlying model provides via the prompt — typically none in `--full-auto` mode. The 3-lane invariant holds at the prompt-text level (all three lanes receive the identical stanza), but external-evidence yield is realized primarily through Codex + Claude-inline.
 
 **Cursor research** (if `cursor_available`):
 
