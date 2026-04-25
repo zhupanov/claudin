@@ -36,6 +36,11 @@
 #      pattern-matches the builder's sentinel and prepends `incomplete-input: `
 #      so operators can distinguish malformed input from generic builder
 #      failure (issue #462 dialectic resolution DECISION_2).
+#  16. Leading/trailing whitespace in Finding text preserved verbatim in ballot
+#      (issue #462 FINDING_1 from code review). Asserts the shadow-trim
+#      completeness check does NOT mutate finding/rationale payload — required
+#      so the Phase 2 sha256 sort key and Phase 3 ballot bytes match
+#      adjudication-phase.md Step 2.5.5's raw-block reverse mapping.
 #
 # Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
 # locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
@@ -422,11 +427,10 @@ grep -qE '^FAILED=true$' "$mixed_stderr" \
 grep -qE '^ERROR=REJECTED_FINDING_2 is incomplete' "$mixed_stderr" \
   || fail "Test 12: expected ERROR=REJECTED_FINDING_2 is incomplete... in stderr (got: $(cat "$mixed_stderr"))"
 
-# A partial ballot must NOT have been produced. The trap-on-EXIT cleans
-# WORK_DIR but the builder may have written to $mixed_output before failing —
-# regardless, a successful BUILT=true line must NOT appear on stdout.
-# (We captured stdout to /dev/null above by not redirecting it; rerun with
-# stdout capture to verify.)
+# A partial ballot must NOT have been produced. The first builder run above
+# redirected only stderr (`2> "$mixed_stderr"`), leaving stdout inherited by
+# this test process — so we cannot observe whether BUILT=true leaked. Rerun
+# the builder with stdout captured to a file and assert no BUILT=true line.
 mixed_stdout="$WORK_DIR/mixed-stdout.txt"
 set +e
 "$BUILDER" --input "$mixed_input" --output "$mixed_output" \
@@ -539,6 +543,51 @@ if grep -qE '^RAN=true$' "$coord_stdout"; then
 fi
 
 pass "Test 15: coordinator surfaces 'incomplete-input:' ERROR prefix on malformed REJECTED_FINDING block"
+
+# --- Test 16: leading/trailing whitespace in Finding preserved verbatim -----
+
+# Regression guard for issue #462 FINDING_1 (Codex review). The completeness
+# check trims via shadow variables only; the original finding/rationale text
+# MUST flow into the Phase 2 sha256 sort key and the Phase 3 ballot payload
+# unchanged. Verbatim preservation is required by the validation-phase capture
+# contract and by adjudication-phase.md Step 2.5.5's reverse mapping (which
+# hashes raw blocks from rejected-findings.md against DECISION_k order).
+
+ws_pres_input="$WORK_DIR/ws-preserved-rej.md"
+ws_pres_output="$WORK_DIR/ws-preserved-ballot.txt"
+
+# The Finding bullet has actual content followed by trailing-space-padded
+# continuation, then trailing whitespace on the last continuation line.
+# After awk's substr(), the captured finding starts at the first non-whitespace
+# character (regex consumes leading whitespace after the colon), so this
+# fixture exercises trailing whitespace preservation specifically.
+# Use printf to embed exact byte sequences without heredoc whitespace
+# stripping.
+printf '### REJECTED_FINDING_1\n- **Reviewer**: Code\n- **Finding**: alpha finding text body that ends with a trailing space   \n  with second line ending in space   \n- **Rejection rationale**: First substantive paragraph that explains the rejection in enough detail to serve as a defense in adjudication.\n' > "$ws_pres_input"
+
+set +e
+ws_pres_out="$("$BUILDER" --input "$ws_pres_input" --output "$ws_pres_output" 2>&1)"
+ws_pres_rc=$?
+set -e
+
+[[ "$ws_pres_rc" -eq 0 ]] \
+  || fail "Test 16: builder failed on whitespace-padded Finding (expected success, got rc=$ws_pres_rc; out: $ws_pres_out)"
+
+echo "$ws_pres_out" | grep -qE '^DECISION_COUNT=1$' \
+  || fail "Test 16: expected DECISION_COUNT=1, got: $ws_pres_out"
+
+# The trailing spaces in the Finding body MUST appear in the ballot — they
+# would be stripped if the trim mutated the finding payload. We use grep -F
+# with an explicitly constructed line including the trailing spaces.
+expected_trailing_line=$(printf 'alpha finding text body that ends with a trailing space   ')
+grep -qF "$expected_trailing_line" "$ws_pres_output" \
+  || fail "Test 16: trailing whitespace on Finding's first line was stripped from ballot (regression — trim must NOT mutate finding payload)"
+
+expected_continuation=$(printf '  with second line ending in space   ')
+grep -qF "$expected_continuation" "$ws_pres_output" \
+  || fail "Test 16: trailing whitespace on Finding's continuation line was stripped from ballot"
+
+pass "Test 16: leading/trailing whitespace in Finding text preserved verbatim in ballot (FINDING_1 shadow-trim verified)"
 
 # --- All tests passed --------------------------------------------------------
 

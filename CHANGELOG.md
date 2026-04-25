@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.23] - 2026-04-25
+
+### Fixed
+
+- `scripts/build-research-adjudication-ballot.sh` now fails closed (exit 2 with `FAILED=true` / `ERROR=REJECTED_FINDING_<N> is incomplete...`) on any incomplete `### REJECTED_FINDING_<N>` block (missing one of `Reviewer`, `Finding`, or `Rejection rationale`; whitespace-only field bodies treated as missing). The prior soft-drop policy created a `DECISION_k → REJECTED_FINDING_<N>` mapping inconsistency between this builder and `skills/research/references/adjudication-phase.md` Step 2.5.5: the builder dropped incomplete records before numbering, but Step 2.5.5's reverse-mapping algorithm parsed all blocks (no completeness filter) and could reinstate the wrong rejected finding into the validated synthesis when one or more captures were degraded. The completeness check uses shadow `finding_check` / `rationale_check` variables so the original payload bytes flow unchanged into Phase 2's `sha256(finding_text)` sort key and Phase 3's ballot body — required so Step 2.5.5's raw-block hashes match the builder's verbatim hashes. Per dialectic resolution DECISION_2, `scripts/run-research-adjudication.sh` gains a narrow string guard that prepends an `incomplete-input:` tag to the coordinator's `ERROR=` line when the builder's failure matches the anchored sentinel `^REJECTED_FINDING_[0-9]+ is incomplete`, so operators distinguish malformed input from generic builder breakage at the coordinator seam. The previously soft `DECISION_COUNT=0` short-circuit on header-positive input is converted to a defensive parser-regression hard fail. Sibling contracts (`build-research-adjudication-ballot.md`, `run-research-adjudication.md`, `adjudication-phase.md` Step 2.5.5, `test-research-adjudication.md`) updated in lockstep. Five new harness assertions (Tests 12-16) pin the fail-closed contract: mixed complete+incomplete, lone incomplete, whitespace-only field, coordinator `incomplete-input:` prefix, and verbatim leading/trailing whitespace preservation in ballot. Pre-existing OOS surfaced during PR #420 review. Closes #462.
+
 ## [7.4.22] - 2026-04-25
 
 ### Fixed

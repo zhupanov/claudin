@@ -44,6 +44,8 @@ On failure:
   ERROR=<single-line message>
 ```
 
+**Consumers MUST gate ballot reads on `RAN=true` (and `DECISION_COUNT > 0`), not on file presence.** A prior successful run may leave `<tmpdir>/research-adjudication-ballot.txt` on disk; a subsequent run that fails before Phase 3's `{ ... } > "$OUTPUT"` truncates the file (e.g., the awk fail-closed path on incomplete input — see issue #462) does NOT unlink the stale ballot. Treating "file exists" as "ballot is fresh" would silently feed stale content to the judge panel. The structured contract above (`RAN=true` + matching `DECISION_COUNT`) is the only authoritative freshness signal.
+
 `RAN=false` short-circuit reasons (informational; not failures):
 
 - `rejected-findings file does not exist` — Site A and Site B never captured anything (no orchestrator rejections occurred this session).

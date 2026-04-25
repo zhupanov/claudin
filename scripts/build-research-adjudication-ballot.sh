@@ -156,23 +156,28 @@ awk -v parsed_out="$PARSED" -v sentinel_path="$SENTINEL" '
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s; }
 function flush_record() {
   if (current_n == "") return;
-  # Trim Finding and Rationale before the completeness check. Reviewer is
+  # Apply trim ONLY to shadow copies for the completeness check. Reviewer is
   # already trimmed at the bullet-line parse site; Finding and Rationale arrive
-  # via raw substr() and may carry leading/trailing whitespace from the bullet
-  # delimiter, so a body that is only whitespace would otherwise survive the
-  # `== ""` check below. Trimming aligns the completeness predicate with the
-  # operator-visible meaning of "missing field" — see issue #462 FINDING_7.
-  finding = trim(finding);
-  rationale = trim(rationale);
-  if (reviewer == "" || finding == "" || rationale == "") {
+  # via raw substr() (and continuation-line concatenation) and may carry
+  # leading/trailing whitespace that is meaningful (preserved verbatim by the
+  # validation-phase capture contract). Mutating finding/rationale in place
+  # would change the Phase 2 sha256(finding_text) sort key and the Phase 3
+  # ballot payload, breaking adjudication-phase.md Step 2.5.5 reverse
+  # mapping (which hashes raw blocks from rejected-findings.md). Shadow
+  # variables defend the empty predicate against any future parser change
+  # that might let whitespace-only content survive substr alone, without
+  # mutating the verbatim payload (see issue #462 FINDING_1 from code review).
+  finding_check = trim(finding);
+  rationale_check = trim(rationale);
+  if (reviewer == "" || finding_check == "" || rationale_check == "") {
     # Fail closed on any incomplete REJECTED_FINDING_<N> block. Write a
     # single-line sentinel to the workspace error file and exit with reserved
     # code 3. The shell wrapper around this awk invocation reads the sentinel
     # and routes through emit_failure (exit 2) so callers see a stable
     # FAILED=true / ERROR=REJECTED_FINDING_<N> is incomplete... contract.
-    # Soft-dropping is retired because it created a DECISION_k → REJECTED_FINDING_<N>
+    # Soft-dropping is retired because it created a DECISION_k to REJECTED_FINDING
     # mapping inconsistency between this builder and adjudication-phase.md
-    # Step 2.5.5 — see issue #462.
+    # Step 2.5.5 (see issue #462).
     print "REJECTED_FINDING_" current_n " is incomplete (missing one of Reviewer/Finding/Rejection rationale)" > sentinel_path;
     exit 3;
   }
