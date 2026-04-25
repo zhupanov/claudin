@@ -64,9 +64,12 @@ Both flags are required.
                    Rejection rationale fields.
   --output <path>  Destination ballot file. Parent directory must exist.
 
-Stdout (KEY=value):
-  Success: BUILT=true / BALLOT=<path> / DECISION_COUNT=<N>
-  Failure: FAILED=true / ERROR=<message>
+Output (KEY=value):
+  Success (stdout, fd 1): BUILT=true / BALLOT=<path> / DECISION_COUNT=<N>
+  Failure (stderr, fd 2): FAILED=true / ERROR=<message>
+  Failure lines are routed to stderr so the Phase 3 `{ ... } > "$OUTPUT"`
+  brace-group stdout redirect cannot capture them into the ballot file;
+  callers needing the ERROR= line should merge streams via `2>&1`.
 USAGE
 }
 

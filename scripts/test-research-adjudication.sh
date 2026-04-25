@@ -265,9 +265,9 @@ pass "Test 9: literal tab in Finding text → 1 decision, tab preserved"
 # emit_failure's printf to fd 2 so it bypasses the brace-group stdout
 # redirect on every call site. We exercise an out-of-brace emit_failure path
 # (missing required --input flag, exit 1) under separated stdout/stderr
-# capture; the same fd-2 contract protects the in-brace sites at lines
-# ~285/288, which are not externally inducible (Phase 2 always produces
-# valid base64).
+# capture; the same fd-2 contract protects the in-brace `base64 -d` failure
+# sites, which are not externally inducible (Phase 2 always produces valid
+# base64).
 err10_stdout="$WORK_DIR/test10-stdout.txt"
 err10_stderr="$WORK_DIR/test10-stderr.txt"
 
