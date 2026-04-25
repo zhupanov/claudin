@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.19] - 2026-04-25
+
+### Fixed
+
+- `scripts/build-research-adjudication-ballot.md` "Test harness" paragraph now correctly describes the Makefile wiring: the harness runs under `make lint` locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses` job (split from `lint-only` in CI per `docs/linting.md`), and is NOT part of `make smoke-dialectic`. The previous text incorrectly claimed the harness was wired into `make test-harnesses` "(NOT `make lint` and NOT `make smoke-dialectic`)", contradicting the actual `Makefile:9` definition (`lint: test-harnesses lint-only`) and the sibling test script's own header comment at `scripts/test-research-adjudication.sh:28-33`. The replacement matches the sibling-script header phrasing for cross-file consistency. Closes #486.
+
 ## [7.4.18] - 2026-04-25
 
 ### Fixed
