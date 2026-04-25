@@ -5,7 +5,7 @@
 # exits 0 if substantive or non-zero with a one-line diagnostic on stdout. The
 # intended consumer is `scripts/collect-reviewer-results.sh --substantive-validation`,
 # which translates a non-zero exit into a `STATUS=NOT_SUBSTANTIVE` entry with
-# `HEALTHY=false`. Phase 3 of umbrella issue #413 (closes #416, #447).
+# `HEALTHY=false`. Phase 3 of umbrella issue #413 (closes #416, #447, #473).
 #
 # Substantive = ALL of:
 #   1. Body word count >= --min-words (default 200), excluding fenced-code-block
