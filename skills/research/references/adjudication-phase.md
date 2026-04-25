@@ -8,9 +8,19 @@
 
 ---
 
+**Caller binding for shared dialectic protocol**: This file is the `/research --adjudicate` caller of `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md`. The shared protocol writes its path placeholders in terms of `$DIALECTIC_TMPDIR`; before quoting any of its choreography, `/research --adjudicate` binds **`DIALECTIC_TMPDIR=$RESEARCH_TMPDIR`**. The body of this file uses `$RESEARCH_TMPDIR` directly (not `$DIALECTIC_TMPDIR`) because `/research --adjudicate`'s on-disk artifacts use research-context basenames (`research-adjudication-ballot.txt`, `adjudication-resolutions.md` — see the implementer checklist below); the binding documents the relationship to the shared protocol so a future reader can map this file's bash blocks back to the shared protocol's `$DIALECTIC_TMPDIR`-keyed templates.
+
 **IMPORTANT: This step adjudicates reviewer findings the orchestrator REJECTED during validation merge/dedup. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding". A 3-judge binary panel (Cursor + Codex + 1 fresh Claude code-reviewer subagent, with Claude replacements when externals are unhealthy at fresh probe time) votes on each rejection; majority binds. The 3-judge panel's Claude slot MUST be a fresh `Agent` invocation with no carried context — `Agent` tool launches are independent contexts, so this isolation is structural.**
 
-This step duplicates the judge-launch / collect / tally choreography from `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md` with `$RESEARCH_TMPDIR` substituted for `$DESIGN_TMPDIR` and the ballot filename `research-adjudication-ballot.txt` substituted for `dialectic-ballot.txt`. Per Karpathy's rule of three, judge-launch choreography is NOT yet extracted to a shared `skills/shared/dialectic-judge-panel.md` — that extraction waits for a third caller. Implementer checklist: when adapting judge prompts and bash blocks below from the design-context originals, grep this file's output for `$DESIGN_TMPDIR` and `dialectic-ballot.txt` literals — if either appears, the substitution is incomplete and judges will read non-existent paths, silently making this step a no-op.
+This step duplicates the judge-launch / collect / tally choreography from `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md` (specifically the parts that quote the shared `dialectic-protocol.md`), with the research-context bindings declared above and the ballot filename `research-adjudication-ballot.txt` substituted for the design-context default `dialectic-ballot.txt`. Per Karpathy's rule of three, judge-launch choreography is NOT yet extracted to a shared `skills/shared/dialectic-judge-panel.md` — that extraction waits for a third caller.
+
+Implementer checklist (post-edit verification — each item describes the failure mode it catches):
+
+1. **Stray design-context tmpdir variable**: scan this file for the design-session tmpdir variable (the one removed from the shared protocol by issue #440). The expected result is zero matches in any executable bash block. A hit indicates wrong file or an incomplete copy from the design context. (This checklist line deliberately does not spell the literal token so the grep stays mechanically reliable.)
+2. **Wrong ballot filename**: grep this file for `dialectic-ballot.txt`. The expected result is zero matches. A hit indicates the ballot path is pointing at the design-context ballot rather than the research-specific `research-adjudication-ballot.txt` — judges would read a non-existent path.
+3. **Wrong output filename**: grep this file for `dialectic-resolutions.md`. The expected result is zero matches. A hit indicates the output path is pointing at the design artifact rather than the research-specific `adjudication-resolutions.md` — this is a wrong-output-path failure (the entire artifact would be misnamed), distinct from a basename-substitution slip.
+
+Any of the three failure modes silently makes this step a no-op or corrupts the audit trail.
 
 ## 2.5.1 — Pre-launch coordinator: empty-check + ballot-build + judge re-probe
 
