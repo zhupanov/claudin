@@ -1,6 +1,10 @@
 # skills/fix-issue/scripts/issue-lifecycle.md — contract
 
-`skills/fix-issue/scripts/issue-lifecycle.sh` is the subcommand-based GitHub-issue lifecycle script invoked by `/fix-issue` Steps 1 (`comment --lock`), 4 (`close` for not-material issues), and 7 (`close` for DONE). Three subcommands: `comment`, `close`, `update-body`.
+`skills/fix-issue/scripts/issue-lifecycle.sh` is the subcommand-based GitHub-issue lifecycle script. Three subcommands: `comment`, `close`, `update-body`. Callers:
+
+- **`comment --lock`** — invoked by `skills/fix-issue/scripts/find-lock-issue.sh` at `/fix-issue` Step 0 (combined Find + Lock + Rename).
+- **`close`** — invoked by `/fix-issue` Step 3 (close for not-material issues) and Step 6 (close for DONE).
+- **`update-body`** — called internally by `cmd_close` when `--pr-url` is provided.
 
 ## Subcommands
 
@@ -19,7 +23,7 @@
 - `comment` success: `COMMENTED=true` (plus `LOCK_ACQUIRED=true` with `--lock`).
 - `update-body` success: `UPDATED=true` (plus `SKIPPED=already_present` when the PR URL is already in the body).
 
-`/fix-issue` Step 7 reads stdout loosely (substring match), so additional `INFO:` lines on stderr do not affect callers. The stdout contract is byte-stable across the OPEN and CLOSED idempotency branches.
+`/fix-issue` Step 6 (and Step 3 on the not-material path) reads stdout loosely (substring match), so additional `INFO:` lines on stderr do not affect callers. The stdout contract is byte-stable across the OPEN and CLOSED idempotency branches.
 
 ## Exit codes
 

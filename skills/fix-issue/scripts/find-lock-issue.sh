@@ -1,44 +1,73 @@
 #!/usr/bin/env bash
-# fetch-eligible-issue.sh — Find an eligible issue approved for automated work.
+# find-lock-issue.sh — Find an eligible issue, lock it, and rename it to [IN PROGRESS].
+#
+# Combined Find + Lock + Rename pipeline invoked by /fix-issue Step 0. Runs
+# three operations in sequence:
+#   1. Find candidate (eligibility scan or explicit-issue verification).
+#   2. Acquire the comment-based concurrency lock by delegating to
+#      issue-lifecycle.sh comment --lock (verifies tail GO, deletes GO,
+#      posts "IN PROGRESS", post-checks for duplicate IN PROGRESS races).
+#      The comment lock is the correctness invariant.
+#   3. Rename the issue title to "[IN PROGRESS] <title>" by delegating to
+#      tracking-issue-write.sh rename --state in-progress. Best-effort: a
+#      rename failure does NOT undo the lock — the script still exits 0
+#      with LOCK_ACQUIRED=true RENAMED=false. /implement Step 0.5 Branch 2
+#      is the safety net (idempotent re-attempt on the next run-segment).
 #
 # Without --issue: lists open issues, checks each for the "GO" sentinel as
 # the last comment, excludes issues locked with "IN PROGRESS", excludes
-# issues blocked by other open issues (via GitHub's native issue dependencies),
-# excludes issues whose titles start with a managed lifecycle prefix
-# ([IN PROGRESS], [DONE], [STALLED] — see below), and emits the first match
-# (oldest first).
+# issues blocked by other open issues (via GitHub's native issue dependencies
+# and prose blockers), excludes issues whose titles start with a managed
+# lifecycle prefix ([IN PROGRESS], [DONE], [STALLED]), and emits the first
+# match (oldest first).
 #
 # With --issue: targets a specific issue (by number or GitHub URL), verifies
 # it is open, does not carry a managed lifecycle title prefix, has "GO" as
 # the last comment, and has no currently-open blocking dependencies.
 #
-# Two orthogonal mechanisms coexist in this script:
+# Two orthogonal mechanisms coexist:
 #   1) Comment-based "IN PROGRESS" lock — concurrency control on the
-#      fix-issue subject issue. Set at /fix-issue step 1 (last comment =
-#      exactly "IN PROGRESS"); cleared when work completes. Prevents two
-#      concurrent /fix-issue runners from picking the same subject.
+#      fix-issue subject issue. Acquired here at /fix-issue Step 0 (last
+#      comment = exactly "IN PROGRESS"); cleared when work completes.
+#      Prevents two concurrent /fix-issue runners from picking the same
+#      subject.
 #   2) Title-based "[IN PROGRESS]" / "[DONE]" / "[STALLED]" lifecycle —
-#      machine-owned tracking-issue state on /implement-created issues
-#      (and /improve-skill / /loop-improve-skill standalone issues). Set
-#      at creation, flipped to [DONE] on confirmed merge, or [STALLED] on
-#      failure paths. Excluded by this script so tracking issues never
-#      appear as fix-issue candidates. See scripts/tracking-issue-write.md
-#      "Title-prefix lifecycle" for the full state machine.
+#      machine-owned tracking-issue state. Applied here at lock time so
+#      the title reflects active work immediately, instead of the
+#      multi-minute delay incurred when only /implement Step 0.5 Branch 2
+#      did the rename. /implement still re-attempts the rename idempotently
+#      so /implement remains standalone-correct when invoked with --issue
+#      against a non-pre-marked issue.
 #
 # Usage:
-#   fetch-eligible-issue.sh [<number-or-url>]
-#   fetch-eligible-issue.sh [--issue <number-or-url>]  (deprecated)
+#   find-lock-issue.sh [<number-or-url>]
+#   find-lock-issue.sh [--issue <number-or-url>]  (deprecated)
 #
 # Output (KEY=value lines on stdout):
 #   ELIGIBLE=true|false
-#   ISSUE_NUMBER=<N>        (when ELIGIBLE=true)
-#   ISSUE_TITLE=<title>     (when ELIGIBLE=true)
-#   ERROR=<message>         (when ELIGIBLE=false and exit 2)
+#   ISSUE_NUMBER=<N>          (when ELIGIBLE=true)
+#   ISSUE_TITLE=<title>       (when ELIGIBLE=true)
+#   LOCK_ACQUIRED=true|false  (true on exit 0; false on exit 3 — lock-fail)
+#   RENAMED=true|false        (when LOCK_ACQUIRED=true; false = idempotent
+#                              no-op OR rename API failure; rename errors
+#                              additionally surfaced on stderr)
+#   ERROR=<message>           (when ELIGIBLE=false and exit 2, or when exit 3)
 #
 # Exit codes:
-#   0 — eligible issue found
+#   0 — eligible issue found, comment lock acquired (rename may have failed
+#       best-effort — RENAMED=false signals this on stdout)
 #   1 — no eligible issues (auto-pick mode only)
 #   2 — error: gh CLI failure, or explicit issue not eligible
+#   3 — eligible issue found but comment lock could not be acquired
+#       (concurrent runner won the race, or GO sentinel changed between
+#       eligibility scan and lock attempt)
+#
+# Stdout contract policy: delegate stdout (issue-lifecycle.sh, tracking-
+# issue-write.sh) is captured into local shell variables and parsed
+# key-by-key; never streamed. find-lock-issue.sh emits ONLY the keys
+# declared above. Auxiliary delegate keys (COMMENTED, FAILED, NEW_TITLE,
+# etc.) are filtered out so the SKILL.md parser sees a clean unified
+# contract.
 
 set -euo pipefail
 
@@ -247,6 +276,101 @@ all_open_blockers() {
 }
 
 # ---------------------------------------------------------------------------
+# lock_and_rename_then_emit <issue-num> <issue-title>
+#
+# Acquires the comment lock by delegating to issue-lifecycle.sh comment --lock,
+# then attempts a best-effort title rename via tracking-issue-write.sh rename
+# --state in-progress. Emits the unified stdout contract and exits.
+#
+# Stdout filtering: delegate stdout is captured into local variables and parsed
+# key-by-key. Only the unified contract keys (ELIGIBLE, ISSUE_NUMBER,
+# ISSUE_TITLE, LOCK_ACQUIRED, RENAMED, ERROR) are echoed. Auxiliary delegate
+# keys (COMMENTED, FAILED, NEW_TITLE, etc.) are filtered out so the SKILL.md
+# parser sees a clean contract.
+#
+# set -e guards: the lock and rename calls are wrapped with `|| <var>=$?` so
+# a non-zero exit from the delegate does not prematurely abort find-lock-
+# issue.sh under `set -euo pipefail` — the script must still emit its own
+# unified contract before exiting.
+#
+# Exit codes (terminal — does not return):
+#   0  — lock acquired (rename may have succeeded or failed best-effort)
+#   3  — eligibility passed but lock acquisition failed
+# ---------------------------------------------------------------------------
+lock_and_rename_then_emit() {
+    local issue_num="$1"
+    local issue_title="$2"
+    local script_dir lock_script rename_script
+    script_dir="$(dirname "${BASH_SOURCE[0]}")"
+    lock_script="${script_dir}/issue-lifecycle.sh"
+    rename_script="${script_dir}/../../../scripts/tracking-issue-write.sh"
+
+    # ---- Step 2: acquire comment lock (correctness invariant) ----
+    local lock_out lock_exit=0
+    lock_out=$("$lock_script" comment --issue "$issue_num" --body "IN PROGRESS" --lock 2>&1) || lock_exit=$?
+
+    # Parse LOCK_ACQUIRED and ERROR from delegate stdout. Use awk's last-line-
+    # wins for each key so the same key appearing multiple times resolves to
+    # the final value. Auxiliary keys (COMMENTED, etc.) are not extracted.
+    local lock_acquired lock_error
+    lock_acquired=$(echo "$lock_out" | awk -F= '/^LOCK_ACQUIRED=/ { v=$2 } END { print v }')
+    lock_error=$(echo "$lock_out" | awk -F= '/^ERROR=/ { sub(/^ERROR=/, "", $0); v=$0 } END { print v }')
+
+    if [ "$lock_acquired" != "true" ] || [ "$lock_exit" -ne 0 ]; then
+        # Lock failed. Surface the unified contract; preserve eligibility
+        # signal so callers can distinguish "no candidate" from "candidate
+        # found but lost the race".
+        echo "ELIGIBLE=true"
+        echo "ISSUE_NUMBER=$issue_num"
+        echo "ISSUE_TITLE=$issue_title"
+        echo "LOCK_ACQUIRED=false"
+        if [ -n "$lock_error" ]; then
+            echo "ERROR=$lock_error"
+        else
+            echo "ERROR=Lock acquisition failed (issue-lifecycle.sh exit $lock_exit)"
+        fi
+        exit 3
+    fi
+
+    # ---- Step 3: rename title (best-effort) ----
+    local rename_out rename_exit=0 renamed=false rename_error=""
+    rename_out=$("$rename_script" rename --issue "$issue_num" --state in-progress 2>&1) || rename_exit=$?
+
+    # Parse RENAMED (true/false). RENAMED=false is BOTH the idempotent no-op
+    # path AND the failure path; distinguish via FAILED= or non-zero exit.
+    local rename_failed
+    renamed=$(echo "$rename_out" | awk -F= '/^RENAMED=/ { v=$2 } END { print v }')
+    rename_failed=$(echo "$rename_out" | awk -F= '/^FAILED=/ { v=$2 } END { print v }')
+    rename_error=$(echo "$rename_out" | awk -F= '/^ERROR=/ { sub(/^ERROR=/, "", $0); v=$0 } END { print v }')
+
+    if [ "$rename_exit" -ne 0 ] || [ "$rename_failed" = "true" ]; then
+        # Rename failed. Best-effort: lock is the correctness boundary; do
+        # not undo it. Surface the failure on stderr; emit RENAMED=false on
+        # stdout. /implement Step 0.5 Branch 2's idempotent rename is the
+        # safety net.
+        if [ -n "$rename_error" ]; then
+            echo "WARNING: title rename failed for issue #$issue_num: $rename_error" >&2
+        else
+            echo "WARNING: title rename failed for issue #$issue_num (tracking-issue-write.sh exit $rename_exit)" >&2
+        fi
+        renamed="false"
+    fi
+
+    # Normalize: empty (older script versions or unexpected output) → false.
+    if [ -z "$renamed" ]; then
+        renamed="false"
+    fi
+
+    # ---- Emit unified contract ----
+    echo "ELIGIBLE=true"
+    echo "ISSUE_NUMBER=$issue_num"
+    echo "ISSUE_TITLE=$issue_title"
+    echo "LOCK_ACQUIRED=true"
+    echo "RENAMED=$renamed"
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
 # Explicit issue mode (--issue provided)
 # ---------------------------------------------------------------------------
 if [[ -n "$ISSUE_ARG" ]]; then
@@ -342,10 +466,9 @@ if [[ -n "$ISSUE_ARG" ]]; then
         exit 2
     fi
 
-    echo "ELIGIBLE=true"
-    echo "ISSUE_NUMBER=$ISSUE_NUM"
-    echo "ISSUE_TITLE=$ISSUE_TITLE"
-    exit 0
+    # Eligibility confirmed — acquire lock + best-effort title rename, emit
+    # unified contract, exit (terminal).
+    lock_and_rename_then_emit "$ISSUE_NUM" "$ISSUE_TITLE"
 fi
 
 # ---------------------------------------------------------------------------
@@ -412,10 +535,9 @@ while IFS= read -r issue_row; do
             echo "Skipping issue #$ISSUE_NUM: blocked by open dependencies ($FORMATTED)" >&2
             continue
         fi
-        echo "ELIGIBLE=true"
-        echo "ISSUE_NUMBER=$ISSUE_NUM"
-        echo "ISSUE_TITLE=$ISSUE_TITLE"
-        exit 0
+        # Eligibility confirmed — acquire lock + best-effort title rename, emit
+        # unified contract, exit (terminal).
+        lock_and_rename_then_emit "$ISSUE_NUM" "$ISSUE_TITLE"
     fi
 done <<< "$SORTED"
 

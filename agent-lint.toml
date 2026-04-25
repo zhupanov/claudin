@@ -97,9 +97,9 @@ suppress = [
 #
 # skills/fix-issue/scripts/test-parse-prose-blockers.sh is the regression
 # harness for skills/fix-issue/scripts/parse-prose-blockers.sh (the prose-
-# dependency parser invoked by skills/fix-issue/scripts/fetch-eligible-issue.sh).
+# dependency parser invoked by skills/fix-issue/scripts/find-lock-issue.sh).
 # The parser itself IS structurally referenced from skills/fix-issue/SKILL.md's
-# Step 0 (fetch / eligibility / dependencies) description and from fetch-eligible-issue.sh's
+# Step 0 (find / eligibility / dependencies / lock / rename) description and from find-lock-issue.sh's
 # prose_open_blockers function, and is therefore not excluded; the test
 # harness is referenced only from Makefile (test-parse-prose-blockers target)
 # and skills/fix-issue/scripts/parse-prose-blockers.md (sibling contract),
@@ -108,7 +108,8 @@ suppress = [
 # skills/fix-issue/scripts/test-issue-lifecycle.sh is the regression harness
 # for skills/fix-issue/scripts/issue-lifecycle.sh close idempotency (Phase 2
 # of umbrella #348). The target script IS structurally referenced from
-# skills/fix-issue/SKILL.md's Steps 1, 4, and 7, and is therefore not
+# skills/fix-issue/SKILL.md's Step 0 (via find-lock-issue.sh delegation), Step 3
+# (close for not-material), and Step 6 (close for DONE), and is therefore not
 # excluded; the test harness is referenced only from Makefile
 # (test-issue-lifecycle target) and skills/fix-issue/scripts/issue-lifecycle.md
 # (sibling contract), matching the same Makefile-only pattern as the other
@@ -117,29 +118,45 @@ suppress = [
 # skills/fix-issue/scripts/test-fix-issue-bail-detection.sh is the regression
 # harness pinning six load-bearing literals (five conceptual checks;
 # `--issue $ISSUE_NUMBER` counted once per SIMPLE and HARD bullet) in
-# skills/fix-issue/SKILL.md Step 6a bail-detection prose (Phase 4 of umbrella
-# #348): `--issue $ISSUE_NUMBER` forwarding in both SIMPLE and HARD bullets,
+# skills/fix-issue/SKILL.md Step 5a bail-detection prose (Phase 4 of umbrella
+# #348; renumbered from Step 6a by the fold-find-and-lock refactor closes
+# #496): `--issue $ISSUE_NUMBER` forwarding in both SIMPLE and HARD bullets,
 # the cross-skill bail token `IMPLEMENT_BAIL_REASON=adopted-issue-closed`,
 # the user-visible warning prefix `/implement bailed: issue #`, the specific
 # `Do NOT call `issue-lifecycle.sh close`` directive (full phrase, not a
 # bare `Do NOT call` substring — the bare form would false-pass on section
-# 6b's unrelated `Do NOT call `/implement`` line), and the `Skip to Step 9`
+# 5b's unrelated `Do NOT call `/implement`` line), and the `Skip to Step 8`
 # cleanup redirect — both directive pins guard against silent re-routing of
-# the bail path back to Step 7. The harness is referenced only from Makefile
+# the bail path back to Step 6. The harness is referenced only from Makefile
 # (test-fix-issue-bail-detection target) and
 # skills/fix-issue/scripts/test-fix-issue-bail-detection.md (sibling
 # contract), matching the same Makefile-only pattern as the other test-*
 # harnesses above. Both the .sh and the .md are excluded below.
 #
 # skills/fix-issue/scripts/test-fix-issue-step-order.sh is the regression
-# harness pinning the Step 1 = lock, Step 2 = setup ordering established by
-# closes #445 (fetch → lock → setup reorder, shipped in PR #468). Nine
-# assertions over skills/fix-issue/SKILL.md cover Step Name Registry rows,
-# section headings, anti-pattern #1 wording, and lock-section breadcrumb
-# literals (positive matches on `1: lock`, negative matches on stale
-# `2: lock`). The harness is referenced only from Makefile
-# (test-fix-issue-step-order target) and
+# harness pinning the Step 0 = find & lock, Step 1 = setup ordering
+# established by the fold-find-and-lock refactor (closes #496; previously
+# pinned the pre-fold Step 1 = lock + Step 2 = setup ordering from PR #468
+# closing #445). Twelve assertions over skills/fix-issue/SKILL.md cover Step
+# Name Registry rows, section headings, anti-pattern #1 wording, and find &
+# lock breadcrumb literals (positive matches on `0: find & lock`, negative
+# matches on stale `1: lock` / `2: lock`). The harness is referenced only
+# from Makefile (test-fix-issue-step-order target) and
 # skills/fix-issue/scripts/test-fix-issue-step-order.md (sibling contract),
+# matching the same Makefile-only pattern as the other test-* harnesses
+# above. Both the .sh and the .md are excluded below.
+#
+# skills/fix-issue/scripts/test-find-lock-issue.sh is the offline regression
+# harness for skills/fix-issue/scripts/find-lock-issue.sh (the combined Find
+# + Lock + Rename pipeline introduced by the fold-find-and-lock refactor
+# closes #496). It uses a PATH-prepended `gh` stub under a per-fixture tmpdir
+# to validate the script's exit-code matrix (0/1/2/3) and unified stdout
+# contract (ELIGIBLE / ISSUE_NUMBER / ISSUE_TITLE / LOCK_ACQUIRED / RENAMED /
+# ERROR) without any network or git-state mutation. Six fixtures cover ok,
+# lock-fail, rename-fail-best-effort, idempotent (deferred to
+# test-tracking-issue-write.sh), ineligible, and no-eligible-candidates.
+# The harness is referenced only from Makefile (test-find-lock-issue target)
+# and skills/fix-issue/scripts/test-find-lock-issue.md (sibling contract),
 # matching the same Makefile-only pattern as the other test-* harnesses
 # above. Both the .sh and the .md are excluded below.
 #
@@ -349,6 +366,7 @@ exclude = [
   "skills/fix-issue/scripts/test-issue-lifecycle.sh",
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.sh",
   "skills/fix-issue/scripts/test-fix-issue-step-order.sh",
+  "skills/fix-issue/scripts/test-find-lock-issue.sh",
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
@@ -464,6 +482,7 @@ exclude = [
   "skills/fix-issue/scripts/issue-lifecycle.md",
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.md",
   "skills/fix-issue/scripts/test-fix-issue-step-order.md",
+  "skills/fix-issue/scripts/test-find-lock-issue.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
 ]

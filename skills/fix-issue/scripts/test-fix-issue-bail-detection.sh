@@ -1,27 +1,28 @@
 #!/usr/bin/env bash
-# test-fix-issue-bail-detection.sh — Regression harness for /fix-issue Step 6a
-# bail-detection prose (Phase 4 of umbrella #348).
+# test-fix-issue-bail-detection.sh — Regression harness for /fix-issue Step 5a
+# bail-detection prose (Phase 4 of umbrella #348; renumbered to Step 5a from
+# Step 6a by the fold-find-and-lock refactor closes #496).
 #
-# Asserts that skills/fix-issue/SKILL.md Step 6a block contains the load-bearing
+# Asserts that skills/fix-issue/SKILL.md Step 5a block contains the load-bearing
 # literals the runtime behavior depends on. The skill is prose; this harness is
 # a CI guard against accidental removal of pinned strings, not a runtime
 # conformance test. Runtime enforcement is the LLM-level orchestration of
-# Step 6a per the prose contract.
+# Step 5a per the prose contract.
 #
-# Six assertions against the extracted Step 6a block:
+# Six assertions against the extracted Step 5a block:
 #   (a1) SIMPLE bullet forwards "--issue $ISSUE_NUMBER".
 #   (a2) HARD bullet forwards "--issue $ISSUE_NUMBER".
 #   (b)  Literal token "IMPLEMENT_BAIL_REASON=adopted-issue-closed" present.
 #   (c)  Warning prefix "/implement bailed: issue #" present.
 #   (d)  Specific directive "Do NOT call `issue-lifecycle.sh close`" present
-#        (skip-Step-7 contract guard). The full phrase — not a bare
+#        (skip-Step-6 contract guard). The full phrase — not a bare
 #        "Do NOT call" substring — is required because the awk extraction
-#        window also includes section 6b, which contains the unrelated
+#        window also includes section 5b, which contains the unrelated
 #        sentence "Do NOT call `/implement`"; a bare match would false-pass.
-#   (e)  Literal "Skip to Step 9" present (cleanup redirect guard).
+#   (e)  Literal "Skip to Step 8" present (cleanup redirect guard).
 #
-# Block extraction boundary: "### 6a " (start) through "## Step 7" prefix match
-# (end — the real heading is "## Step 7 — Close Issue"; prefix pattern handles it).
+# Block extraction boundary: "### 5a " (start) through "## Step 6" prefix match
+# (end — the real heading is "## Step 6 — Close Issue"; prefix pattern handles it).
 #
 # Wired into `make lint` via the `test-fix-issue-bail-detection` target.
 # Referenced in agent-lint.toml's exclude list (Makefile-only harness pattern).
@@ -42,17 +43,17 @@ if [[ ! -f "$SKILL_MD" ]]; then
     exit 1
 fi
 
-# Extract the Step 6a block: from "### 6a " up to (but not including) the
-# next "## Step 7" heading. awk range using two regexes.
-STEP6A_BLOCK=$(awk '
-    /^### 6a / { in_block=1 }
-    /^## Step 7/ { in_block=0 }
+# Extract the Step 5a block: from "### 5a " up to (but not including) the
+# next "## Step 6" heading. awk range using two regexes.
+STEP5A_BLOCK=$(awk '
+    /^### 5a / { in_block=1 }
+    /^## Step 6/ { in_block=0 }
     in_block { print }
 ' "$SKILL_MD")
 
-if [[ -z "$STEP6A_BLOCK" ]]; then
-    echo "FAIL: Step 6a block extraction produced empty output." >&2
-    echo "  Boundary regexes: '^### 6a ' (start) and '^## Step 7' (end)." >&2
+if [[ -z "$STEP5A_BLOCK" ]]; then
+    echo "FAIL: Step 5a block extraction produced empty output." >&2
+    echo "  Boundary regexes: '^### 5a ' (start) and '^## Step 6' (end)." >&2
     exit 1
 fi
 
@@ -62,7 +63,7 @@ PASS_COUNT=0
 # Usage: assert_contains <label> <literal>
 assert_contains() {
     local label="$1" literal="$2"
-    if grep -qF -- "$literal" <<<"$STEP6A_BLOCK"; then
+    if grep -qF -- "$literal" <<<"$STEP5A_BLOCK"; then
         PASS_COUNT=$((PASS_COUNT + 1))
         echo "  PASS: $label"
     else
@@ -78,7 +79,7 @@ assert_contains() {
 assert_bullet_contains() {
     local label="$1" marker="$2" literal="$3"
     local line
-    line=$(grep -F -- "$marker" <<<"$STEP6A_BLOCK" | head -1 || true)
+    line=$(grep -F -- "$marker" <<<"$STEP5A_BLOCK" | head -1 || true)
     if [[ -n "$line" && "$line" == *"$literal"* ]]; then
         PASS_COUNT=$((PASS_COUNT + 1))
         echo "  PASS: $label"
@@ -106,14 +107,14 @@ assert_contains "b: IMPLEMENT_BAIL_REASON=adopted-issue-closed literal" 'IMPLEME
 # (c) User-visible warning prefix present.
 assert_contains "c: warning prefix '/implement bailed: issue #'" '/implement bailed: issue #'
 
-# (d) Skip-Step-7 directive present — guard against silent re-route back to Step 7.
+# (d) Skip-Step-6 directive present — guard against silent re-route back to Step 6.
 # The specific phrase "Do NOT call `issue-lifecycle.sh close`" is required; a
-# bare "Do NOT call" substring would false-pass on section 6b's unrelated
-# "Do NOT call `/implement`" line (the awk window includes 6b up to ## Step 7).
-assert_contains "d: 'Do NOT call \`issue-lifecycle.sh close\`' directive (Step-7-skip guard)" 'Do NOT call `issue-lifecycle.sh close`'
+# bare "Do NOT call" substring would false-pass on section 5b's unrelated
+# "Do NOT call `/implement`" line (the awk window includes 5b up to ## Step 6).
+assert_contains "d: 'Do NOT call \`issue-lifecycle.sh close\`' directive (Step-6-skip guard)" 'Do NOT call `issue-lifecycle.sh close`'
 
 # (e) Cleanup redirect present.
-assert_contains "e: 'Skip to Step 9' cleanup redirect" 'Skip to Step 9'
+assert_contains "e: 'Skip to Step 8' cleanup redirect" 'Skip to Step 8'
 
 echo
 echo "All $PASS_COUNT assertions passed."
