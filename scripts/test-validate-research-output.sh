@@ -41,6 +41,20 @@
 #   36. Sentence-ending period See file.go. → exit 0 (#447 boundary class allows `.` as boundary)
 #   37. Bare-`:`-then-non-digits bypass file.md:garbage → exit 3 (#447 boundary class excludes `:`)
 #   38. Slash-suffix bypass file.md/child → exit 3 (#447 boundary class excludes `/`)
+# Cases added by #473 (short-extension strict-mode rule):
+#   39. Verified repro: 250-word prose containing `the spin.lock primitive` → exit 3 (short-ext, no path-likeness signal)
+#   40. 250-word prose containing `the my.env switch` → exit 3
+#   41. 250-word prose containing `the big.m optimization` → exit 3
+#   42. 250-word prose containing `the foo.r constant` → exit 3
+#   43. 250-word prose containing `the raw.txt format` → exit 3
+#   44. Bare `Cargo.lock` in prose (no line-ref, no path) → exit 3 (forward-compat behavioral change)
+#   45. Compound `Cargo.lock.bak` in prose (no signal on inner .lock) → exit 3 (regression of pre-#473 case 35-style behavior — now rejects)
+#   46. `Cargo.lock:7` (line-ref qualifier) → exit 0 (short-tier strict rule, :line-ref signal)
+#   47. `app.env:5` (line-ref qualifier) → exit 0 (short-tier strict rule, :line-ref signal)
+#   48. `foo.m:42` (line-ref qualifier) → exit 0 (short-tier strict rule, :line-ref signal)
+#   49. `kernel/spin.lock` (slash qualifier, no line-ref) → exit 0 (short-tier strict rule, / signal)
+#   50. `parser_state.h` (underscore qualifier, no line-ref) → exit 0 (short-tier strict rule, _ signal — snake_case)
+#   51. `kernel-mod.h` (dash qualifier, no line-ref) → exit 0 (short-tier strict rule, - signal — kebab-case)
 #
 # Usage:
 #   bash scripts/test-validate-research-output.sh
@@ -322,6 +336,86 @@ F38="$TMPROOT/case38-bypass-slash.txt"
 make_words 250 "$F38"
 echo 'Reference: file.md/child — slash-suffix bypass attempt.' >> "$F38"
 run_case "case 38: file.md/child rejected (#447 boundary excludes slash)" 3 "$F38"
+
+# === #473 cases — short-extension strict-mode rule ===
+
+# --- Case 39: verified repro: prose with `the spin.lock primitive` → exit 3 ---
+F39="$TMPROOT/case39-spin-lock.txt"
+make_words 250 "$F39"
+echo 'In concurrency theory the spin.lock primitive is the simplest of all locking abstractions.' >> "$F39"
+run_case "case 39: 'the spin.lock primitive' rejected (#473 verified repro)" 3 "$F39"
+
+# --- Case 40: prose with `the my.env switch` → exit 3 ---
+F40="$TMPROOT/case40-my-env.txt"
+make_words 250 "$F40"
+echo 'When deployed to production the my.env switch toggles between modes.' >> "$F40"
+run_case "case 40: 'the my.env switch' rejected (#473 short-ext FP)" 3 "$F40"
+
+# --- Case 41: prose with `the big.m optimization` → exit 3 ---
+F41="$TMPROOT/case41-big-m.txt"
+make_words 250 "$F41"
+echo 'In linear programming the big.m optimization scales linearly with constraint count.' >> "$F41"
+run_case "case 41: 'the big.m optimization' rejected (#473 short-ext FP)" 3 "$F41"
+
+# --- Case 42: prose with `the foo.r constant` → exit 3 ---
+F42="$TMPROOT/case42-foo-r.txt"
+make_words 250 "$F42"
+echo 'Throughout the derivation the foo.r constant remains positive.' >> "$F42"
+run_case "case 42: 'the foo.r constant' rejected (#473 short-ext FP)" 3 "$F42"
+
+# --- Case 43: prose with `the raw.txt format` → exit 3 ---
+F43="$TMPROOT/case43-raw-txt.txt"
+make_words 250 "$F43"
+echo 'Conversion pipelines often store the raw.txt format unchanged through transit.' >> "$F43"
+run_case "case 43: 'the raw.txt format' rejected (#473 short-ext FP)" 3 "$F43"
+
+# --- Case 44: bare `Cargo.lock` in prose (no line-ref, no path) → exit 3 ---
+F44="$TMPROOT/case44-bare-cargo-lock.txt"
+make_words 250 "$F44"
+echo 'Rust projects ship a Cargo.lock that pins dependency versions.' >> "$F44"
+run_case "case 44: bare Cargo.lock in prose rejected (#473 forward-compat change)" 3 "$F44"
+
+# --- Case 45: compound `Cargo.lock.bak` in prose → exit 3 (regression of pre-#473 behavior) ---
+F45="$TMPROOT/case45-cargo-lock-bak.txt"
+make_words 250 "$F45"
+echo 'Some setups keep a backup file Cargo.lock.bak in the workspace root.' >> "$F45"
+run_case "case 45: Cargo.lock.bak rejected (#473 short-ext compound, no path-likeness signal)" 3 "$F45"
+
+# --- Case 46: `Cargo.lock:7` (line-ref qualifier) → exit 0 ---
+F46="$TMPROOT/case46-cargo-lock-line.txt"
+make_words 250 "$F46"
+echo 'See Cargo.lock:7 for the locked openssl version.' >> "$F46"
+run_case "case 46: Cargo.lock:7 accepted (#473 short-tier :line-ref signal)" 0 "$F46"
+
+# --- Case 47: `app.env:5` (line-ref qualifier) → exit 0 ---
+F47="$TMPROOT/case47-app-env-line.txt"
+make_words 250 "$F47"
+echo 'Reference: app.env:5 for the DATABASE_URL setting.' >> "$F47"
+run_case "case 47: app.env:5 accepted (#473 short-tier :line-ref signal)" 0 "$F47"
+
+# --- Case 48: `foo.m:42` (line-ref qualifier) → exit 0 ---
+F48="$TMPROOT/case48-foo-m-line.txt"
+make_words 250 "$F48"
+echo 'In Objective-C see Classes/Foo.m:42 for the dealloc handler.' >> "$F48"
+run_case "case 48: Foo.m:42 accepted (#473 short-tier :line-ref signal)" 0 "$F48"
+
+# --- Case 49: `kernel/spin.lock` (slash qualifier, no line-ref) → exit 0 ---
+F49="$TMPROOT/case49-kernel-spin-lock.txt"
+make_words 250 "$F49"
+echo 'The path kernel/spin.lock holds the in-tree lockfile.' >> "$F49"
+run_case "case 49: kernel/spin.lock accepted (#473 short-tier / signal in stem)" 0 "$F49"
+
+# --- Case 50: `parser_state.h` (underscore qualifier, no line-ref) → exit 0 ---
+F50="$TMPROOT/case50-parser-state-h.txt"
+make_words 250 "$F50"
+echo 'Header parser_state.h declares the lexer state machine.' >> "$F50"
+run_case "case 50: parser_state.h accepted (#473 short-tier _ signal in stem — snake_case)" 0 "$F50"
+
+# --- Case 51: `kernel-mod.h` (dash qualifier, no line-ref) → exit 0 ---
+F51="$TMPROOT/case51-kernel-mod-h.txt"
+make_words 250 "$F51"
+echo 'Header kernel-mod.h declares the loadable-module ABI.' >> "$F51"
+run_case "case 51: kernel-mod.h accepted (#473 short-tier - signal in stem — kebab-case)" 0 "$F51"
 
 echo ""
 echo "=== Summary ==="
