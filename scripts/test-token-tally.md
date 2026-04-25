@@ -21,9 +21,14 @@
 | 9 | write | malformed `--total-tokens=foo` | exit 1 |
 | 10 | write | `--total-tokens=unknown` | exit 0; sidecar contains `TOTAL_TOKENS=unknown` |
 | 11 | (all) | `--dir /home/nonsense` (non-/tmp path) | exit 1 across `write` / `report` / `check-budget` |
-| 12 | report | dir removed before invocation | exit 0; stdout contains "token telemetry unavailable" |
+| 12 | report | dir removed before invocation | exit 0; stdout contains "token telemetry unavailable" AND subtitle "Claude tokens only" (consistency with populated path — review FINDING_4) |
+| 6b | report | `LARCH_TOKEN_RATE_PER_M=0` and `0.0` | `$` column omitted in both cases (review FINDING_1 — zero is treated as unset per docs) |
+| 13 | report | standard scale with no research sidecars | Research row still renders with "all unmeasurable" framing (review FINDING_9 — phase rows render from phase state, not sidecar presence) |
+| 14 | report | `--budget-aborted true` + `--adjudicate true` + no adjudication sidecars | Adjudication row reads "skipped … aborted before Step 2.5" (review FINDING_10) |
+| 15 | (all) | `--dir /tmp/../etc` (path-escape attempt) | exit 1 (review FINDING_2 — `..` segments rejected) |
+| 16 | check-budget | `--dir` points at non-existent directory | success line includes `BUDGET=<N>` (review FINDING_3 — uniform success-line shape across missing-dir and present-dir paths) |
 
-Total: 23 individual assertions across 12 test cases.
+Total: 34 individual assertions across 17 test cases (12 original + 5 new from review-round-1 fixes; Test 6 split into 6 and 6b; T15 covers all 3 subcommands per round-2 review nit).
 
 ## Invariants
 

@@ -49,11 +49,17 @@ Sums `TOTAL_TOKENS` across all sidecars in `<d>` (skipping `unknown` values) and
 - `2`: over budget. Stdout: `BUDGET_EXCEEDED=true MEASURED=<N> UNKNOWN_LANES=<count> BUDGET=<N>`.
 - `1`: validation failure (malformed `--budget`, non-`/tmp` `--dir`, etc.). Stderr carries diagnostic.
 
-`<N>` MUST be a positive integer; `<= 0` exits 1. `--dir` MUST be under `/tmp/`.
+`<N>` MUST be a positive integer; `<= 0` exits 1. `--dir` MUST be under `/tmp/` or `/private/tmp/` (matching `cleanup-tmpdir.sh:36-40` and the script's own `validate_dir`). The success-line shape is uniform across the missing-dir and present-dir paths — both include `BUDGET=<N>`.
 
 **Caller integration**: SKILL.md captures the exit code via `... ; rc=$?` or `... || rc=$?` to avoid `set -e` propagation aborting on exit 2 (which is the budget-overage signal, not an error). On `rc=2`, SKILL.md sets `BUDGET_ABORTED=true`, skips remaining phases, jumps to Step 4. See `skills/research/SKILL.md` budget-gate sites for the exact pattern.
 
-**Unknown-lane semantics**: `TOTAL_TOKENS=unknown` is treated as 0-contribution to the sum. This is the documented design trade-off (per /design Step 3 FINDING_5): a parser-broken `<usage>` block does NOT silently fail the gate — the unknown count is surfaced explicitly in the start-of-run notice (`budget enforced over N measured lanes; M unmeasurable lanes excluded`) AND in the budget-overage message. Operators can audit the unmeasurable lanes via the sidecar files directly when in doubt.
+**Unknown-lane semantics**: `TOTAL_TOKENS=unknown` is treated as 0-contribution to the sum. This is the documented design trade-off (per /design Step 3 FINDING_5): a parser-broken `<usage>` block does NOT silently fail the gate. The unknown count is surfaced via:
+
+1. The start-of-run notice in `skills/research/SKILL.md` Step 0, which states the budget governs measurable Claude subagent tokens only and excludes Claude inline + external lanes (so operators know the cap is incomplete by construction).
+2. The `UNKNOWN_LANES=<count>` field in `check-budget`'s success and failure stdout lines.
+3. The `(N lanes, M measured, K unmeasurable)` coverage parenthetical in each phase row of the `report` output.
+
+Operators can audit the unmeasurable lanes via the sidecar files directly when in doubt.
 
 ## Sidecar file naming
 

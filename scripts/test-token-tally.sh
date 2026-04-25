@@ -207,6 +207,55 @@ T="$(make_dir)"
 rm -rf "$T"
 out=$("$SCRIPT" report --dir "$T" --scale standard --adjudicate false 2>&1) || true
 assert_stdout_contains "T12: missing dir → placeholder" "token telemetry unavailable" "$out"
+# T12 also pins the FINDING_4 fix: the missing-dir header carries the same
+# subtitle as the populated path so the section is consistent.
+assert_stdout_contains "T12: subtitle on missing-dir" "Claude tokens only" "$out"
+
+# ─── Test 6b (FINDING_1): LARCH_TOKEN_RATE_PER_M=0 → no $ column ───
+T="$(make_dir)"
+write_sidecar "$T" "research" "code" "1000000"
+out=$(LARCH_TOKEN_RATE_PER_M=0 "$SCRIPT" report --dir "$T" --scale standard --adjudicate false 2>&1)
+assert_stdout_not_contains "T6b: no \$ column when rate=0" "\$" "$out"
+# Same with 0.0
+out=$(LARCH_TOKEN_RATE_PER_M=0.0 "$SCRIPT" report --dir "$T" --scale standard --adjudicate false 2>&1)
+assert_stdout_not_contains "T6b: no \$ column when rate=0.0" "\$" "$out"
+rm -rf "$T"
+
+# ─── Test 13 (FINDING_9): Research row always renders in standard/deep ───
+# Healthy standard run produces zero research sidecars (Claude inline +
+# externals all unmeasurable). The report MUST still render an explicit
+# Research row so the operator sees the phase ran.
+T="$(make_dir)"
+write_sidecar "$T" "validation" "code" "1500"
+out=$("$SCRIPT" report --dir "$T" --scale standard --adjudicate false 2>&1)
+assert_stdout_contains "T13: Research row in standard with no research sidecars" "Research phase" "$out"
+assert_stdout_contains "T13: explicit unmeasurable framing" "all unmeasurable" "$out"
+rm -rf "$T"
+
+# ─── Test 14 (FINDING_10): Adjudication renders 'skipped: budget aborted' ───
+T="$(make_dir)"
+write_sidecar "$T" "research" "code" "500"
+out=$("$SCRIPT" report --dir "$T" --scale standard --adjudicate true --budget-aborted true 2>&1)
+assert_stdout_contains "T14: Adjudication skipped on budget abort" "aborted before Step 2.5" "$out"
+rm -rf "$T"
+
+# ─── Test 15 (FINDING_2): validate_dir rejects '..' segments ───
+rc=0
+"$SCRIPT" report --dir "/tmp/../etc" --scale standard --adjudicate false >/dev/null 2>&1 || rc=$?
+assert_exit_code "T15: /tmp/../etc → exit 1" 1 "$rc"
+rc=0
+"$SCRIPT" write --phase research --lane code --tool claude --total-tokens 100 --dir "/tmp/../home" >/dev/null 2>&1 || rc=$?
+assert_exit_code "T15: write /tmp/../home → exit 1" 1 "$rc"
+rc=0
+"$SCRIPT" check-budget --budget 100 --dir "/tmp/../etc" >/dev/null 2>&1 || rc=$?
+assert_exit_code "T15: check-budget /tmp/../etc → exit 1" 1 "$rc"
+
+# ─── Test 16 (FINDING_3): check-budget on missing dir includes BUDGET= ───
+T="$(make_dir)"
+rm -rf "$T"  # remove so dir is missing
+out=$("$SCRIPT" check-budget --budget 1000 --dir "$T" 2>&1)
+assert_stdout_contains "T16: BUDGET= on missing-dir success" "BUDGET=1000" "$out"
+assert_stdout_contains "T16: success on missing-dir" "BUDGET_EXCEEDED=false" "$out"
 
 # ─── Summary ───
 echo

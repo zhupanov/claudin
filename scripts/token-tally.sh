@@ -42,9 +42,37 @@ validate_dir() {
         echo "ERROR: --dir is required and must be non-empty" >&2
         return 1
     fi
+    # Reject `..` segments outright — they can let a /tmp-prefixed path
+    # escape the /tmp tree (e.g. /tmp/../etc passes a naive prefix check
+    # but resolves outside /tmp). Defense in depth: the canonicalization
+    # below also catches this, but rejecting `..` early gives a clearer
+    # error message and prevents the resolved-path branch from doing
+    # filesystem work on a hostile input.
+    case "/$d/" in
+        */../*|*/..*|*../*) echo "ERROR: --dir must not contain '..' segments (got: $d)" >&2; return 1 ;;
+    esac
+    # String-prefix guard (cheap, catches the obvious cases).
     if [[ "$d" != /tmp/* && "$d" != /private/tmp/* ]]; then
-        echo "ERROR: --dir must be under /tmp/ (got: $d)" >&2
+        echo "ERROR: --dir must be under /tmp/ or /private/tmp/ (got: $d)" >&2
         return 1
+    fi
+    # Canonical-path guard (defense in depth — resolves symlinks, ., ..).
+    # Skip when the directory does not yet exist (the `report` and
+    # `check-budget` paths handle the missing-dir case explicitly via their
+    # own `[[ ! -d $dir ]]` branches; `write` calls `mkdir -p` after this
+    # function returns). Use `cd ... && pwd -P` rather than `realpath` for
+    # portability — `realpath` is not POSIX and missing on some macOS
+    # installs without coreutils.
+    if [[ -d "$d" ]]; then
+        local resolved
+        resolved=$(cd "$d" 2>/dev/null && pwd -P) || {
+            echo "ERROR: cannot resolve --dir: $d" >&2
+            return 1
+        }
+        if [[ "$resolved" != /tmp/* && "$resolved" != /private/tmp/* ]]; then
+            echo "ERROR: --dir resolves outside /tmp/ (resolved: $resolved)" >&2
+            return 1
+        fi
     fi
     return 0
 }
@@ -119,7 +147,7 @@ cmd_report() {
     validate_dir "$dir" || return 1
 
     if [[ ! -d "$dir" ]]; then
-        echo "## Token Spend"
+        echo "## Token Spend (Claude tokens only; external lanes excluded)"
         echo
         echo "_(token telemetry unavailable: \$RESEARCH_TMPDIR was already removed)_"
         if [[ "$aborted" == "true" ]]; then
@@ -139,7 +167,11 @@ cmd_report() {
     local f
     for f in "$dir"/lane-tokens-*.txt; do
         local p="" l="" t=""
-        while IFS='=' read -r k v; do
+        local line
+        while IFS= read -r line; do
+            # Split on first '=' only — values may contain '=' defensively.
+            local k="${line%%=*}"
+            local v="${line#*=}"
             case "$k" in
                 PHASE) p="$v" ;;
                 LANE) l="$v" ;;
@@ -185,8 +217,13 @@ cmd_report() {
     local total_lane_count=$(( ${#research_lanes[@]} + ${#validation_lanes[@]} + ${#adjudication_lanes[@]} ))
 
     # Optional cost column when LARCH_TOKEN_RATE_PER_M is a positive number.
+    # Zero is treated as unset (per scripts/token-tally.md and
+    # docs/configuration-and-permissions.md — "When unset, malformed, or
+    # zero, the $ column is omitted entirely").
     local rate="" cost_supported=false
-    if [[ -n "${LARCH_TOKEN_RATE_PER_M:-}" ]] && [[ "${LARCH_TOKEN_RATE_PER_M}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    if [[ -n "${LARCH_TOKEN_RATE_PER_M:-}" ]] \
+       && [[ "${LARCH_TOKEN_RATE_PER_M}" =~ ^[0-9]+([.][0-9]+)?$ ]] \
+       && awk -v r="${LARCH_TOKEN_RATE_PER_M}" 'BEGIN { exit (r > 0) ? 0 : 1 }'; then
         rate="${LARCH_TOKEN_RATE_PER_M}"
         cost_supported=true
     fi
@@ -212,7 +249,8 @@ cmd_report() {
         local lane_count=$(( measured + unknown ))
         local cost_str=""
         if [[ "$cost_supported" == "true" ]] && [[ "$total" -gt 0 ]]; then
-            # Cost in cents using awk for floating-point: (total * rate) / 1_000_000
+            # Cost in dollars using awk for floating-point: (total * rate) / 1_000_000.
+            # Rate is USD per million tokens (LARCH_TOKEN_RATE_PER_M).
             cost_str=$(awk -v tot="$total" -v rt="$rate" 'BEGIN { printf "  $%.4f", (tot * rt) / 1000000 }')
         fi
         local coverage=""
@@ -224,6 +262,11 @@ cmd_report() {
         printf '  %-22s%s: total=%s%s\n' "$label" "$coverage" "$total" "$cost_str"
     }
 
+    # Research phase row — always render in standard/deep so the operator
+    # sees the phase ran even when no measurable subagents were invoked
+    # (the healthy happy path: Claude inline + 2 unmeasurable externals
+    # in standard, or 1 + 4 in deep). Sidecar-presence alone is not a
+    # reliable signal for "phase ran" (#518 review FINDING_9).
     if [[ ${#research_lanes[@]} -gt 0 ]]; then
         fmt_phase_row "Research phase" "$research_total" "$research_measured" "$research_unknown"
         # When --planner=true was set but no planner sidecar exists, surface this so
@@ -242,17 +285,46 @@ cmd_report() {
                 echo "    _(--plan was set but no planner sidecar found; planner spend was not measured)_"
             fi
         fi
-    elif [[ "$scale" == "quick" ]]; then
-        echo "  Research phase         (1 lane — Claude inline only): not measured"
+    else
+        case "$scale" in
+            quick)
+                echo "  Research phase         (1 lane — Claude inline only): not measured"
+                ;;
+            standard)
+                echo "  Research phase         (3 lanes — Claude inline + 2 externals, all unmeasurable): not measured"
+                ;;
+            deep)
+                echo "  Research phase         (5 lanes — Claude inline + 4 externals, all unmeasurable): not measured"
+                ;;
+            *)
+                echo "  Research phase         (no measurable lanes): not measured"
+                ;;
+        esac
     fi
+    # Validation phase row — quick mode skips Step 2 entirely; standard/deep
+    # always have at least one Claude subagent (the always-on Code lane), so
+    # absence of validation sidecars on standard/deep means the phase did not
+    # run (e.g., budget aborted before Step 2).
     if [[ ${#validation_lanes[@]} -gt 0 ]]; then
         fmt_phase_row "Validation phase" "$validation_total" "$validation_measured" "$validation_unknown"
     elif [[ "$scale" == "quick" ]]; then
         echo "  Validation phase       (skipped in --scale=quick): -"
+    elif [[ "$aborted" == "true" ]]; then
+        echo "  Validation phase       (skipped: --token-budget aborted before Step 2): -"
+    else
+        # Defensive: standard/deep with no validation sidecars and no abort
+        # implies the phase did not run for some other reason (orchestrator
+        # bug, missing token-tally write hook in validation-phase.md).
+        echo "  Validation phase       (no validation sidecars found — phase may not have run): -"
     fi
+    # Adjudication row — distinguish adjudicate=false (not requested) from
+    # adjudicate=true + no rejections (Step 2.5 short-circuited) from
+    # adjudicate=true + budget abort (phase never ran).
     if [[ "$adjudicate" == "true" ]]; then
         if [[ ${#adjudication_lanes[@]} -gt 0 ]]; then
             fmt_phase_row "Adjudication" "$adjudication_total" "$adjudication_measured" "$adjudication_unknown"
+        elif [[ "$aborted" == "true" ]]; then
+            echo "  Adjudication           (skipped: --token-budget aborted before Step 2.5): -"
         else
             echo "  Adjudication           (no rejections to adjudicate): -"
         fi
@@ -307,7 +379,9 @@ cmd_check_budget() {
 
     if [[ ! -d "$dir" ]]; then
         # No tmpdir → no measurements → cannot have exceeded budget.
-        echo "BUDGET_EXCEEDED=false MEASURED=0 UNKNOWN_LANES=0"
+        # Always include BUDGET=$budget so the success-line shape is uniform
+        # across the missing-dir and present-dir paths (per token-tally.md).
+        echo "BUDGET_EXCEEDED=false MEASURED=0 UNKNOWN_LANES=0 BUDGET=$budget"
         return 0
     fi
 
@@ -316,7 +390,12 @@ cmd_check_budget() {
     local f
     for f in "$dir"/lane-tokens-*.txt; do
         local t=""
-        while IFS='=' read -r k v; do
+        local line k v
+        while IFS= read -r line; do
+            # Split on first '=' only — values may contain '=' in defensive
+            # cases. Use parameter expansion: k = up-to-first '=', v = rest.
+            k="${line%%=*}"
+            v="${line#*=}"
             case "$k" in
                 TOTAL_TOKENS) t="$v" ;;
             esac
