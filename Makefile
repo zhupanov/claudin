@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-validate-research-output test-parse-input test-parse-args test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-loop-review-driver test-loop-review-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe eval-research test-eval-set-structure
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-validate-research-output test-parse-input test-parse-args test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-loop-review-driver test-loop-review-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe eval-research test-eval-set-structure test-eval-research-baseline-flag
 
 # CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
 # (regression harnesses). `lint` remains the local-dev convenience target
@@ -164,6 +164,16 @@ eval-research:
 # standalone for symmetry. See scripts/test-eval-set-structure.md.
 test-eval-set-structure:
 	bash scripts/test-eval-set-structure.sh
+
+# Standalone offline regression harness for the `--baseline` flag handling
+# in scripts/eval-research.sh (closes #441). NOT a `test-harnesses`
+# prerequisite — the eval-research surface is opt-in operator
+# instrumentation explicitly carved out from CI by repo contract
+# (see Makefile:148, docs/linting.md, scripts/eval-research.md). Runs
+# offline by PATH-stubbing claude + jq so it works on machines without
+# the real binaries. See scripts/test-eval-research-baseline-flag.md.
+test-eval-research-baseline-flag:
+	bash scripts/test-eval-research-baseline-flag.sh
 
 shellcheck:
 	pre-commit run shellcheck --all-files

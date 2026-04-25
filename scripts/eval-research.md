@@ -28,7 +28,7 @@ make eval-research ARGS="--id eval-1 --timeout 4200"
 |------|---------|--------|
 | `--id <id>` | empty | Run only the entry with this `id` from `eval-set.md` (debugging single-question iterations). |
 | `--scale <s>` | `standard` | Forward-compat metadata recorded in `eval-baseline.json`. `/research` does NOT yet accept `--scale` (issue #418 is open). When #418 lands, edit the `build_research_prompt` function so the literal CLAUDE_SCALE_PASSTHROUGH branch is used. |
-| `--baseline <ref>` | empty | Compare against the baseline JSON at the given git ref (sha, tag, or branch). The ref is regex-validated against `^[0-9A-Za-z._/-]+$` before any shell interpolation. |
+| `--baseline <ref>` | empty | Pre-fetches the baseline JSON at the given git ref (sha, tag, or branch) into `$WORK_DIR/baseline-rows.json` for manual diffing. **Inline delta columns are NOT yet wired** in this PR — a stdout `PREVIEW MODE` banner makes the partial implementation visible alongside the summary table. The ref is regex-validated against `^[0-9A-Za-z._/-]+$` before any shell interpolation. **Exits 2 if the ref cannot be resolved** (the bad-ref branch used to silently disable with a stderr-only warning; that produced misleading green-looking runs and is fixed in issue #441). |
 | `--work-dir <dir>` | `$(mktemp -d)` | Per-run scratch base. Each entry runs in a unique subdirectory underneath. Override only when resuming a prior run for forensics. |
 | `--write-baseline <file>` | unset | Write run results in `eval-baseline.json` shape to this file path. Used to populate the committed baseline after a clean end-to-end run. |
 | `--timeout <sec>` | `4200` | Per-question timeout for the `/research` subprocess. Default is above `/research`'s composite budget (Step 1 1860s + Step 2 1860s = 3720s) so healthy runs never misclassify as harness timeouts. |
@@ -124,8 +124,10 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 | `skills/research/references/eval-baseline.json` | Schema-only stub today (`entries: []`). Operator runs `bash scripts/eval-research.sh --write-baseline <file>` to populate. |
 | `scripts/test-eval-set-structure.sh` | Offline structural regression. Asserts entry count, category coverage, schema validity, and invokes `--smoke-test` for round-trip verification. |
 | `scripts/test-eval-set-structure.md` | Sibling contract for the test harness. |
-| `Makefile` | Adds `eval-research` and `test-eval-set-structure` standalone targets. NEITHER is a `test-harnesses` prerequisite. |
-| `agent-lint.toml` | Excludes both `scripts/eval-research.sh` and `scripts/test-eval-set-structure.sh` from dead-script checks (Makefile-only references). |
+| `scripts/test-eval-research-baseline-flag.sh` | Standalone offline regression harness for the `--baseline` flag handling (closes #441). PATH-stubs `claude` and `jq` so it runs without the real binaries. Exercises the three flag-state paths (no-flag / valid-ref / bad-ref). |
+| `scripts/test-eval-research-baseline-flag.md` | Sibling contract for the `--baseline` flag test harness. |
+| `Makefile` | Adds `eval-research`, `test-eval-set-structure`, and `test-eval-research-baseline-flag` standalone targets. NONE is a `test-harnesses` prerequisite. |
+| `agent-lint.toml` | Excludes `scripts/eval-research.sh`, `scripts/test-eval-set-structure.sh`, and `scripts/test-eval-research-baseline-flag.sh` from dead-script checks (all are Makefile-only references). |
 | `docs/linting.md` | Documents `eval-research` as opt-in operator-run instrumentation. |
 | `skills/improve-skill/scripts/iteration.sh` | Source of the `claude -p` subprocess pattern (stdin file + stderr sidecar + poll loop). The harness reuses the pattern but decouples numeric timeouts. |
 | `scripts/parse-skill-judge-grade.sh` | Source of the fail-closed structured-output parsing discipline. The harness's judge-output parser mirrors the exit-zero-with-status-on-stdout shape. |
@@ -135,7 +137,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 
 - `0` — harness ran. Per-entry timeouts and parse failures are reported in the `status` column / `research_status` JSON field, not the exit code.
 - `1` — schema validation of `eval-set.md` or `eval-baseline.json` failed.
-- `2` — argument parse error.
+- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, or baseline ref that cannot be resolved via `git show`).
 - `3` — required tooling missing (`claude`, `jq`, or `awk`).
 
 ## Security
