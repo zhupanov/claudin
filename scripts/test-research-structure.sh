@@ -174,17 +174,47 @@ grep -Fq "cursor-validation-output.txt" "$VALIDATION_MD" \
 grep -Fq "codex-validation-output.txt" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must contain the standard-mode 'codex-validation-output.txt' filename literal (#418 byte-drift guard)"
 
-# Check 16 (#416): Both phase references must invoke collect-reviewer-results.sh
+# Check 16 (#416 + #446): Both phase references must invoke collect-reviewer-results.sh
 # with --substantive-validation (Phase 3 of umbrella #413). Without these pins,
 # a future edit could silently drop the flag and revert /research to the
 # pre-Phase-3 "non-empty is enough" check, allowing thin/uncited lane outputs
-# to slip through to synthesis. Match a line that contains both the invocation
-# basename and the flag, so reordering or whitespace changes do not bypass the
-# pin while a paragraph elsewhere on the page that mentions both tokens
-# separately would.
-grep -Eq 'collect-reviewer-results\.sh.*--substantive-validation' "$RESEARCH_MD" \
-  || fail "references/research-phase.md must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
-grep -Eq 'collect-reviewer-results\.sh.*--substantive-validation' "$VALIDATION_MD" \
+# to slip through to synthesis.
+#
+# research-phase.md has TWO scale-specific COLLECTION blocks (### Standard and
+# ### Deep) inside the `## 1.4 — Wait and Validate Research Outputs` section.
+# The flag must be present in BOTH — #446 documented a regression where the
+# Deep block dropped the flag while the Standard block retained it, and a
+# single whole-file grep silently passed because Standard satisfied it.
+#
+# To prevent that class of cross-section leakage, pin the flag per-section
+# in two stages: (a) narrow extraction to the Step 1.4 window so the
+# per-scale `### Standard` / `### Deep` subsection headers under Step 1.3
+# (Launch Research Perspectives) cannot smuggle a satisfying invocation
+# into the wrong block; (b) within Step 1.4, scope to the per-scale
+# subsection by stopping at the next `###` heading so the Standard and
+# Deep blocks cannot substitute for each other either.
+#
+# The grep pattern anchors on the literal bash-invocation prefix
+# `${CLAUDE_PLUGIN_ROOT}/scripts/` so prose paragraphs that happen to
+# mention both `collect-reviewer-results.sh` and `--substantive-validation`
+# on the same line do NOT satisfy the pin — only the actual command line
+# in the bash code fence can.
+INVOCATION_PIN='\$\{CLAUDE_PLUGIN_ROOT\}/scripts/collect-reviewer-results\.sh.*--substantive-validation'
+SECTION_1_4=$(awk '/^## 1\.4 /{f=1; next} f && /^## /{f=0} f' "$RESEARCH_MD")
+[[ -n "$SECTION_1_4" ]] \
+  || fail "references/research-phase.md must contain a '## 1.4 ' section (Wait and Validate Research Outputs) — Check 16 cannot anchor without it"
+echo "$SECTION_1_4" \
+  | awk '/^### Standard \(RESEARCH_SCALE=standard,? ?(default)?\)/{f=1; next} f && /^###/{f=0} f' \
+  | grep -Eq "$INVOCATION_PIN" \
+  || fail "references/research-phase.md Step 1.4 ### Standard collection block must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
+echo "$SECTION_1_4" \
+  | awk '/^### Deep \(RESEARCH_SCALE=deep\)/{f=1; next} f && /^###/{f=0} f' \
+  | grep -Eq "$INVOCATION_PIN" \
+  || fail "references/research-phase.md Step 1.4 ### Deep collection block must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3 + #446)"
+# validation-phase.md has a single (scale-agnostic) collection block, so the
+# whole-file pin remains correct here. Reuse the invocation-anchored pattern
+# for the same anti-prose hardening.
+grep -Eq "$INVOCATION_PIN" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
 
 # Check 17 (#416): Both phase references must map STATUS=NOT_SUBSTANTIVE in the

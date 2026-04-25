@@ -298,13 +298,13 @@ COLLECT_ARGS=()
 
 Same zero-externals behavior as standard: if both `cursor_available` and `codex_available` are false (`COLLECT_ARGS` is empty), skip `collect-reviewer-results.sh` entirely and proceed to Step 1.5 with the 5 Claude outputs (inline + 4 fallback subagents).
 
-Otherwise, invoke `collect-reviewer-results.sh` with the launched paths:
+Otherwise, invoke `collect-reviewer-results.sh` with the launched paths. As in Standard mode, pass `--substantive-validation` so the collector emits `STATUS=NOT_SUBSTANTIVE` for outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416). Without this flag, Deep mode's external lanes silently slip thin/uncited research outputs through to synthesis with `STATUS=OK`:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLLECT_ARGS[@]}"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
 ```
 
-`collect-reviewer-results.sh` derives the tool from each output filename's basename (`*cursor*` / `*codex*`); the chosen filenames satisfy that heuristic unambiguously. **Runtime-timeout replacement** is per-tool, not per-slot — if any one Cursor or Codex lane reports `STATUS != OK`, flip the corresponding session-wide flag (per `external-reviewers.md`) and launch matching Claude subagent fallback(s) for ALL of that tool's slots that did not already produce `OK` output. The 5-lane invariant holds at synthesis time.
+`collect-reviewer-results.sh` derives the tool from each output filename's basename (`*cursor*` / `*codex*`); the chosen filenames satisfy that heuristic unambiguously. **Runtime-timeout replacement** is per-tool, not per-slot — if any one Cursor or Codex lane reports `STATUS != OK` (including `NOT_SUBSTANTIVE`), flip the corresponding session-wide flag (per `external-reviewers.md`) and launch matching Claude subagent fallback(s) for ALL of that tool's slots that did not already produce `OK` output. The 5-lane invariant holds at synthesis time.
 
 ### Update lane-status.txt (RESEARCH_* slice only)
 

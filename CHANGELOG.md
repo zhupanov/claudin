@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.1] - 2026-04-25
+
+### Fixed
+
+- `/research` Deep mode's Step 1.4 collection block now passes `--substantive-validation` to `collect-reviewer-results.sh`, matching Standard mode (closes #446). Previously the `### Deep (RESEARCH_SCALE=deep)` block at `skills/research/references/research-phase.md` invoked the collector without the flag while the `### Standard` block had it, so external lanes that returned thin or uncited prose received `STATUS=OK` (instead of `STATUS=NOT_SUBSTANTIVE`) and slipped silently into synthesis. The runtime-fallback prose in the same Deep block now lists `NOT_SUBSTANTIVE` alongside `STATUS != OK` as a trigger for tool-flag flipping, mirroring Standard. `scripts/test-research-structure.sh` Check 16 was tightened in the same PR: a single whole-file grep had been masking the omission because Standard's flag presence satisfied it. The check now narrows extraction to the `## 1.4 — Wait and Validate Research Outputs` window first, then runs separate awk-scoped greps for the per-scale `### Standard` and `### Deep` collection subsections (terminating at the next `^###`) so neither the Step 1.3 launch sections nor a Standard ↔ Deep substitution can satisfy the pin. Both per-section greps anchor on the literal bash-invocation prefix `${CLAUDE_PLUGIN_ROOT}/scripts/` so prose paragraphs that mention both `collect-reviewer-results.sh` and `--substantive-validation` on the same line cannot satisfy the assertion. The sibling contract at `scripts/test-research-structure.md` was updated in lockstep to describe the new shape of Check 16. Validation-phase.md's single (scale-agnostic) collection block keeps the whole-file pin, reusing the same invocation-anchored pattern. Closes #446.
+
 ## [7.4.0] - 2026-04-25
 
 ### Added
