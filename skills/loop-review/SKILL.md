@@ -1,328 +1,104 @@
 ---
 name: loop-review
-description: "Use when a comprehensive quality sweep or systematic code review is needed. Partitions the repo into slices, reviews each with a 3-reviewer panel, and files deduplicated GitHub issues via /issue for every actionable finding."
+description: "Use when a comprehensive quality sweep or systematic code review is needed. Bash driver partitions the repo into verbal slices via one claude -p call, then loops invoking /review --slice-file --create-issues per slice."
 argument-hint: "[--debug] [partition criteria]"
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
+allowed-tools: Bash, Monitor
 ---
 
-# Loop Review
+# loop-review
 
-Systematically review the entire codebase by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor), and filing every actionable finding as a deduplicated GitHub issue via `/issue`. Security-tagged findings are held locally (per SECURITY.md) instead of auto-filed.
+Systematically review the entire codebase by partitioning into verbal slices via a single LLM partition call, reviewing each slice with `/review --slice-file --create-issues --label loop-review`, and filing every voted-in finding (in-scope-accepted AND OOS-accepted) as a deduplicated GitHub issue. Security-tagged findings are held locally per SECURITY.md and never auto-filed.
 
-**Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as partition criteria. Flags may appear in any order; stop at the first non-flag token. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
+Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/driver.sh`. The driver owns loop control, repo partitioning, per-slice `claude -p /review` invocations, KV-footer counter aggregation, and security-finding aggregation. Halt class eliminated by construction: each per-slice `/review` runs as its own `claude -p` subprocess, so there is no post-child-return model turn that can halt.
 
-- `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`. `--debug` controls only loop-review's own verbosity; it is NOT propagated downstream. `/issue` does not expose a `--debug` flag, and `/implement` is no longer invoked by loop-review.
+## Flags
 
-**This skill runs fully autonomously** — never ask for user confirmation. Make all FILE/drop decisions based on the classification criteria in Step 3d. The only sub-skill invoked via the Skill tool is `/issue` (in batch mode, `--input-file` with `--label loop-review`) so findings are discoverable via label filter in the issue tracker; the reviewer lanes run as Cursor/Codex CLI processes or Claude Code Reviewer subagents directly, not through `/review`, `/design`, or `/relevant-checks`. **The `loop-review` label must be pre-created in the target repository** — Step 0 preflight-checks its existence; if missing, the skill appends a warning to `$LR_TMPDIR/warnings.md` and continues (issues will be filed unlabeled and excluded from the `label:loop-review` discovery filter).
+- `--debug`: When present, forwarded to the driver to enable verbose output.
 
-**Anti-halt continuation reminder.** The only child `Skill` tool call this skill makes is `/issue` (at Step 3f's batch flush). After `/issue` returns, IMMEDIATELY continue with this skill's NEXT step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule. **Loop-internal note**: `/issue` in Step 3f is invoked inside the slice loop. After `/issue` returns, continue the slice loop per Step 3g's explicit loop-back directive — do NOT exit the loop unless the exit condition fires.
+Any non-flag tokens after argument parsing are concatenated as freeform partition criteria appended to the partition prompt (e.g., `/loop-review focus on the design skill and its references`).
 
-## Progress Reporting
+## Driver
 
-**Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
+See `driver.sh` source and the contract sibling at `${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/driver.md` for the full contract: argv parsing, security boundaries on `LOOP_TMPDIR`, partition prompt schema, per-slice `### slice-result` KV footer parse, security-findings handoff via `--security-output`, and EXIT-trap retention rules.
 
-- Print a **start line** when entering a step: e.g., `> **🔶 3: review + file issues — slice: scripts/...**`
-- Print a **completion line** when done: e.g., `✅ 3: review + file issues — 4 findings accumulated, 2 issues filed (3m12s)`
+## Live streaming pattern (Bash background + Monitor)
 
-Step Name Registry:
-| Step | Short Name |
-|------|------------|
-| 0 | setup |
-| 1 | partition |
-| 3 | review + file issues |
-| 4 | summary |
-| 5 | cleanup |
+The driver runs for many minutes (one `claude -p /review` per slice; typical sweep covers 5–20 slices). To give the user live visibility into driver progress without reintroducing the halt class, this skill launches `driver.sh` as a **background Bash task** with combined stdout/stderr redirected to a stable log-file path, then **attaches Monitor** to tail that file filtered to the driver's step-marker lines. Monitor is passive observability only.
 
-### Verbosity Control
+### Shell-state discipline (MANDATORY)
 
-**When `debug_mode=false` (default):**
+Every Bash tool call is a fresh shell — environment variables set in one Bash call do **not** survive into the next. The steps below therefore **resolve the log path once** (Step 1) and then embed the **literal resolved absolute path** into every downstream command (Steps 2–5). Do NOT use `$LOG_FILE` as an unresolved variable in Steps 2, 3, 4, or 5 — substitute the literal path returned by Step 1.
 
-- Use empty string for the `description` parameter on all Bash tool calls.
-- Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (slice results, per-batch `/issue` counters, held security notes, dropped nits, final report).
+### Step 1 — Resolve and validate log path (synchronous Bash)
 
-**Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls.
-
-**When `debug_mode=true`:** use descriptive text for `description` on all Bash and Agent tool calls; print full explanatory text (current verbose behavior).
-
-**Limitation**: Verbosity suppression is prompt-enforced and best-effort.
-
-## Step 0 — Session Setup
-
-### 0a — Session Setup, Preflight, and Reviewer Check
-
-Run the shared session setup script. This handles preflight (must be on clean `main`), temp directory creation, and reviewer health probe in a single call:
+Run this command synchronously (NOT `run_in_background`) and capture the `RESOLVED_LOG_FILE=` line from its stdout. The `LOOP_DRIVER_LOG_FILE` env-overridable default is validated to begin with `/tmp/` or `/private/tmp/` (preventing the env var from being used as an arbitrary write/truncate primitive) and to contain no `..` path components (mirroring `driver.sh`'s own `LOOP_TMPDIR` prefix + `..` guard).
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-loop-review --skip-slack-check --skip-repo-check --check-reviewers
+LOG_FILE="${LOOP_DRIVER_LOG_FILE:-/tmp/loop-review-driver-$(date +%s)-$$.log}"
+case "$LOG_FILE" in
+  /tmp/*|/private/tmp/*) ;;
+  *) echo "LOOP_DRIVER_LOG_FILE must start with /tmp/ or /private/tmp/ (got: $LOG_FILE)" >&2; exit 1 ;;
+esac
+case "$LOG_FILE" in
+  */..|*/../*) echo "LOOP_DRIVER_LOG_FILE must not contain '..' path components (got: $LOG_FILE)" >&2; exit 1 ;;
+esac
+: > "$LOG_FILE"
+echo "RESOLVED_LOG_FILE=$LOG_FILE"
 ```
 
-Note: Neither `--skip-preflight` nor `--skip-branch-check` is passed — this ensures full preflight with branch check, which enforces the on-main requirement.
+Parse the `RESOLVED_LOG_FILE=<absolute-path>` line from stdout. Save the path as `LOG_PATH` — this is the literal value substituted into Steps 2–5 below. Abort the skill if the command exits non-zero.
 
-If the script exits non-zero, print the `PREFLIGHT_ERROR` from its output and abort.
+The log file lives **outside** `LOOP_TMPDIR` on purpose: `driver.sh`'s EXIT trap wipes `LOOP_TMPDIR` on completion (or retains it on failure), which would destroy the log mid-tail. Placing the log directly under `/tmp` keeps it available for post-run inspection.
 
-Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set `LR_TMPDIR` = `SESSION_TMPDIR`.
+### Step 2 — Surface the log path to the user (visible line)
 
-Set `codex_available` and `cursor_available` flags for the entire session:
-- If `CODEX_AVAILABLE=false`: `codex_available=false`. Append `**⚠ Codex not available (binary not found).**` to `$LR_TMPDIR/warnings.md`.
-- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Append `**⚠ Codex installed but not responding. Using Claude replacement.**` to `$LR_TMPDIR/warnings.md`.
-- Else: `codex_available=true`
-- Same logic for Cursor.
+Emit a prominent line (outside any suppressed-verbosity section) BEFORE launching Monitor, so the user always knows where the unfiltered output lives. Substitute the literal `LOG_PATH` from Step 1:
 
-### 0b — Initialize Tracking Files
+```
+📄 Full driver log: <LOG_PATH>
+```
 
-Initialize tracking files for the slice review loop:
+### Step 3 — Launch driver in background
+
+Substitute the literal `LOG_PATH` from Step 1 (do NOT reference `$LOG_FILE` here — the prior shell is gone). Quote the path to tolerate any path containing spaces:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/init-session-files.sh --dir "$LR_TMPDIR"
+"${CLAUDE_PLUGIN_ROOT}/skills/loop-review/scripts/driver.sh" $ARGUMENTS > "<LOG_PATH>" 2>&1
 ```
 
-### 0c — Preflight Label Check
+Launch this Bash command with `run_in_background: true`. When the background task completes, Claude Code emits an automatic task-completion notification — no additional end-of-run wiring is needed.
 
-Verify the `loop-review` GitHub label exists in the current repository. `/issue`'s create-one.sh drops unknown labels with a stderr-only warning, and loop-review's flush path only parses `/issue`'s stdout machine lines — so a missing label would silently produce unlabeled issues that escape the final summary's label filter. Preflight-check once here, not per-flush:
+### Step 4 — Attach Monitor to the filtered live stream
 
-```bash
-gh label list --limit 200 --json name --jq '.[].name' | grep -Fxq loop-review
-```
-
-If the command exits non-zero (label missing OR `gh` unreachable), append `**⚠ 'loop-review' label not found in current repo — /issue will create issues unlabeled. Create it once with: gh label create loop-review --description "Surfaced by /loop-review" --color 5319E7**` to `$LR_TMPDIR/warnings.md`. Do NOT abort — the skill still files issues, they will just not carry the label. The Step 4 summary surfaces the warning.
-
-## Step 1 — Partition the Repository
-
-After flag stripping in the Flags section above, save the remainder of `$ARGUMENTS` as `PARTITION_CRITERIA`. Use `PARTITION_CRITERIA` (not raw `$ARGUMENTS`) for all partition logic below.
-
-### Custom criteria (if `PARTITION_CRITERIA` is non-empty)
-
-Parse `PARTITION_CRITERIA` as the partition strategy:
-
-- `by directory` — same as default below
-- `by module` — one slice per logical module: group related source files, handlers, and tests together based on the project's module/package structure (e.g., one slice per package in Go, one per module directory in Python, one per feature directory in TypeScript)
-- Explicit paths (space-separated) — use those directories as slices
-- Any other text — interpret as a natural-language description of how to partition and apply it
-
-### Default: From partition config or auto-discovery
-
-If `PARTITION_CRITERIA` is empty:
-
-1. **Check for `.claude/loop-review-partitions.json`**: If this file exists, read it. It contains an array of `{"name": "<slice name>", "paths": ["<path>", ...]}` objects. Use these as the slices.
-
-2. **Auto-discovery fallback**: If no partition config exists, auto-discover slices by finding directories at depth 1–2 from the repo root that contain source files (common extensions: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.rs`, `.java`, `.rb`, `.sh`, `.c`, `.cpp`, `.cs`). Group them into slices, one per top-level directory. Add a final "Skills & documentation" slice for `.claude/skills/` and top-level `.md` files. Cap at 10 slices; merge smaller directories into an "other" bucket.
-
-Print the partition plan with file counts per slice.
-
-## Step 3 — Slice Review Loop
-
-Process slices with **batched issue filing**. Review slices sequentially, but accumulate actionable findings across up to 3 slices before invoking `/issue --input-file` so `/issue`'s 2-phase LLM dedup runs once per batch instead of once per finding (bounds the Phase-2 30-candidate cap and minimizes network round-trips).
-
-**Legacy `LOOP_REVIEW_DEFERRED.md`**: this skill no longer creates, updates, or commits `LOOP_REVIEW_DEFERRED.md`. If a file by that name exists in a consumer repo, it is historical and this skill leaves it untouched.
-
-For each slice (using `N` as the 1-based slice index):
-
-### 3a — Announce
+Invoke the Monitor tool with `persistent: true` and the following command (substitute the literal `LOG_PATH` from Step 1; filter regex pinned byte-verbatim; MUST remain in parity with `driver.sh`'s three breadcrumb prefixes):
 
 ```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔍 Reviewing Slice N/M: <name>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+tail -F "$LOG_FILE" | grep --line-buffered -E '^(✅|> \*\*🔶|\*\*⚠)'
 ```
 
-### 3b — Gather file list
+where `"$LOG_FILE"` is the literal Step-1 path, double-quoted to tolerate whitespace in the path. The `$LOG_FILE` notation is preserved byte-verbatim as the canonical filter literal asserted by `scripts/test-loop-review-skill-md.sh`; at Monitor-invocation time, substitute the resolved absolute path into that literal.
 
-Use Glob to collect relevant source files in the slice (common extensions: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.go`, `.rs`, `.java`, `.rb`, `.sh`, `.c`, `.cpp`, `.cs`, `.md`, `.yaml`, `.yml`, `.json`). Exclude test files (e.g., `*_test.go`, `*_test.py`, `*.test.ts`, `*.spec.js`) from review targets (but tests serve as context for reviewers).
+- `tail -F` (capital F) tolerates the log file not yet existing at Monitor-attach time and handles rotation.
+- `grep --line-buffered` keeps the pipe unbuffered so Monitor sees each line as the driver emits it.
+- `persistent: true` is load-bearing for multi-slice sweeps.
 
-Write the full file list to `$LR_TMPDIR/slice-N-files.txt` (one path per line) for external reviewers to read.
+### Step 5 — Completion
 
-**Sub-slicing (>50 files):** If the slice has more than 50 files, split the file list into sub-slices of ≤50 files each. For each sub-slice, launch 1 Claude Code Reviewer subagent lane with only that sub-slice's files as `{FILE_LIST}`. External reviewers always receive the full slice file list (one invocation per slice regardless of sub-slicing). After all sub-slices and external reviewers complete, merge all Claude findings from all sub-slices with external reviewer findings before proceeding to Step 3d.
-
-### 3c — Launch 3 review subagents in parallel
-
-Launch **all 3 reviewer lanes** in a **single message**. When external tools are unavailable, launch Claude Code Reviewer subagent fallbacks instead so the total reviewer count always remains 3. **Spawn order matters for parallelism** — launch the slowest reviewer first: Cursor (slowest), then Codex, then the Claude Code Reviewer subagent (fastest). External reviewers are launched once per slice even when sub-slicing. The Claude subagent lane uses the current sub-slice's `{FILE_LIST}` if sub-slicing, or the full file list otherwise. Each must **only report findings — never edit files**.
-
-**Cursor Reviewer (if `cursor_available`):**
-
-Run Cursor **first** in the parallel message (it takes the longest):
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$LR_TMPDIR/cursor-output-slice-N.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Walk five focus areas: (1) code-quality: bugs, logic errors, dead code, duplication, missing error handling. (2) correctness: off-by-one, nil handling, type mismatches, races, error paths. (3) risk-integration: broken contracts, thread safety, deployment risks, CI gaps. (4) architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area using EXACTLY one of these labels: code-quality / correctness / risk-integration / architecture / security. Return numbered findings with focus-area tag, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files.")"
-```
-
-Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
-
-**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent (subagent_type: `code-reviewer`) via the Agent tool instead. Use the unified Code Reviewer checklist. Bind `{FILE_LIST}` to the **current sub-slice** file list when sub-slicing; otherwise use the full slice file list. Drop the `"Work at your maximum reasoning effort"` suffix (Claude uses session-default effort).
-
-**Codex Reviewer (if `codex_available`):**
-
-Run Codex **second** in the parallel message (after Cursor):
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$LR_TMPDIR/codex-output-slice-N.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
-    --output-last-message "$LR_TMPDIR/codex-output-slice-N.txt" \
-    "Review EXISTING code (not a diff — do NOT run git diff) in this project. The file list is in $LR_TMPDIR/slice-N-files.txt — read it, then read and review each listed file. Also inspect corresponding tests and callers for context. Walk five focus areas: (1) code-quality: bugs, logic, reuse, tests, backward compat, style. (2) risk-integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area using EXACTLY one of these labels: code-quality / correctness / risk-integration / architecture / security. Return numbered findings with focus-area tag, file:line, issue, and specific fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files."
-```
-
-Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
-
-**Codex fallback** (if `codex_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) with the same slice-review context. Bind `{FILE_LIST}` to the **current sub-slice** file list when sub-slicing (>50 files per slice), matching the always-on Claude lane's sub-slicing rule; otherwise use the full slice file list. Reserve `slice-N-files.txt` (the full slice) for actual external reviewers. Attribute as `Code`.
-
-**Claude Code Reviewer subagent (1 reviewer, always-on — launched last in the same parallel message, finishes fastest):**
-
-Invoke `subagent_type: code-reviewer` using the unified checklist from `skills/shared/reviewer-templates.md`. The `code-reviewer` archetype walks five focus areas: code quality, risk/integration, correctness, architecture, and security. Prompt body:
-
-> Review EXISTING code for this project. Files: {FILE_LIST}. Read each file. Walk the unified 5-focus-area checklist (code quality, risk/integration, correctness, architecture, security). Tag each finding with its focus area. Quality gate: for each finding, verify the proposed fix is justified by a concrete need and proportionate to the issue. Return numbered findings: file:line, issue, specific fix. If none: "No issues found." Do NOT edit files.
-
-**Collecting External Reviewer Results:**
-
-Build the argument list from only the externals that were actually launched:
+When the background Bash task completes, re-emit the log path so the user can easily retrieve the unfiltered output without scrolling. Substitute the literal `LOG_PATH` from Step 1:
 
 ```
-COLLECT_ARGS=()
-[[ "$cursor_available" == true ]] && COLLECT_ARGS+=("$LR_TMPDIR/cursor-output-slice-N.txt")
-[[ "$codex_available" == true ]] && COLLECT_ARGS+=("$LR_TMPDIR/codex-output-slice-N.txt")
+📄 Full driver log (retained): <LOG_PATH>
 ```
 
-**Zero-externals branch**: If BOTH Cursor and Codex are unavailable for this slice (`COLLECT_ARGS` is empty — the 3 lanes are the always-on Claude lane plus 2 Claude fallback lanes), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. Merge the 3 Claude findings and proceed to Step 3d.
+### What the Monitor stream shows vs. what the log file holds
 
-Otherwise, invoke the collection script with only the launched paths:
+- The **Monitor stream** (live in conversation) shows ONLY lines matching `^(✅|> \*\*🔶|\*\*⚠)` — the driver's three breadcrumb prefix families.
+- The **log file** at `LOG_PATH` holds the FULL unfiltered output — every breadcrumb, all `/review` subprocess stdout, all stderr, and any other diagnostic lines. The file is retained on /tmp for post-run inspection.
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLLECT_ARGS[@]}"
-```
+### If Monitor is unavailable (older runtime)
 
-Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`: **immediately launch the matching single Claude Code Reviewer subagent fallback** for the current slice before proceeding to Step 3d (so this slice still has 3 lanes), then **flip that reviewer's availability flag to false** for all remaining slices (prevents repeated failures). Also append a detailed warning to `$LR_TMPDIR/warnings.md`.
+If the Claude runtime does not expose the Monitor tool, the background Bash launch still runs and the task-completion notification still fires. Only the live stream is lost. To inspect driver progress in that case, run `tail -f <LOG_PATH>` in a separate shell using the path printed in Step 2.
 
-### 3d — Collect, negotiate, deduplicate, and classify findings
+## Verification
 
-**After ALL reviewers return** (the always-on Claude Code Reviewer subagent lane AND any launched external reviewers or their runtime-fallback Claude replacements), proceed:
-
-**1. Collect** all findings from the Claude Code Reviewer subagent lane and validated external reviewer output (and any runtime-fallback Claude findings).
-
-**2. Negotiate** with external reviewers (if they produced findings):
-
-Follow the **Negotiation Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, using `$LR_TMPDIR` as the tmpdir, with `max_rounds=1`. Use `codex-negotiation-prompt.txt` / `codex-negotiation-output.txt` for the single Codex negotiation track and `cursor-negotiation-prompt.txt` / `cursor-negotiation-output.txt` for the Cursor negotiation track. Run both negotiations in parallel when both externals produced findings. Accept findings unless factually incorrect or contradicting CLAUDE.md.
-
-Note: "accepted" in the negotiation sense means the finding is valid — it may still be dropped at Step 3d's FILE gate below.
-
-**3. Deduplicate** — merge findings from all reviewers (if two reviewers flag the same issue, keep the more specific suggestion).
-
-**4. Classify each finding** (FILE gate with security-focus exception):
-
-**→ FILE** (append to `$LR_TMPDIR/findings-accumulated.md` for batched `/issue` filing) if ALL of:
-- Has a specific, actionable concern (not vague).
-- Cites a concrete location (file, or file:line, or module).
-- Focus area is NOT `security`.
-
-**→ HOLD LOCAL** (append to `$LR_TMPDIR/security-findings.md`, do NOT auto-file) if:
-- Focus area is `security`. Per SECURITY.md, security vulnerabilities must not be opened as public GitHub issues — operator handles disclosure.
-
-**→ DROP** (append one line to `$LR_TMPDIR/warnings.md` for visibility; do NOT file) if ANY of:
-- Purely cosmetic nit (formatting, subjective naming) with no concrete fix impact.
-- Vague concern without a specific location or repro signal.
-- Requires coordination with external systems or teams (not actionable as a code-level issue).
-
-Print the classification: `📋 Slice N: X findings (Y to file, Z held local, W dropped)`
-
-### 3e — Zero findings
-
-If all reviewers found nothing: `✅ Slice N: <name> — Clean (<elapsed>)`. Continue to next slice.
-
-### 3f — Accumulate findings and flush batch
-
-For each classified finding in this slice:
-- **FILE**: append one entry to `$LR_TMPDIR/findings-accumulated.md` in this generic format (consumed by `/issue`'s `parse-input.sh` generic-format fallback):
-
-  ```markdown
-  ### <terse title, ≤ 80 chars, no leading `#` characters>
-
-  **Slice**: <slice name>
-  **File**: <path:line or path>
-  **Reviewer**: <Code | Cursor | Codex>
-  **Focus area**: <code-quality | correctness | risk-integration | architecture>
-
-  **Problem**: <what's wrong, concrete>
-
-  **Suggested fix**: <actionable fix>
-  ```
-
-  Body must be non-empty. If the reviewer's problem or fix text contains a `###`-prefixed line at line-start (i.e., three hashes plus a space), normalize it (replace with `####` or prepend two spaces) so `parse-input.sh` does not split the finding into multiple items.
-
-- **HOLD LOCAL**: append to `$LR_TMPDIR/security-findings.md` using the same structured body but omit the `###`-prefixed heading (or use `####`) so the file is never fed to `/issue`.
-- **DROP**: append one line to `$LR_TMPDIR/warnings.md`: `- Slice <name>: dropped nit — <title> (<reviewer>)`.
-
-**Flush condition**: invoke `/issue --input-file` when **any** of these are true:
-- 3 slices worth of FILE findings have accumulated.
-- This is the last slice.
-- Accumulated FILE findings reference more than 10 distinct files (keeps each batch's Phase 2 dedup window under `/issue`'s 30-candidate cap).
-
-**When flushing — invoke `/issue` via the Skill tool:**
-
-If `$LR_TMPDIR/findings-accumulated.md` contains zero `###`-prefixed headings (all slices were clean or all findings were held/dropped), skip the `/issue` invocation entirely.
-
-Otherwise, invoke `/issue` via the Skill tool with:
-
-```
---input-file $LR_TMPDIR/findings-accumulated.md --label loop-review
-```
-
-Do NOT pass `--debug`, `--auto`, or `--merge` — `/issue` is a non-interactive skill and none of those flags apply. Do NOT forward `--title-prefix` — the `loop-review` label is the discovery mechanism and preserves the 80-char title budget.
-
-> **Continue after child returns (loop-internal).** When `/issue` returns, continue the slice loop — parse `/issue`'s stdout for per-item `ITEM_<i>_*` lines, rebuild the accumulator per the per-item retention rule below, then proceed to Step 3g's "Move to next slice." Do NOT exit the slice loop to Step 4 unless Step 3g's exit condition fires, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
-
-**Per-item retention on partial failure.** After `/issue` returns, parse its stdout for any line matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$`. The input-file order is 1-indexed and stable: finding i in `findings-accumulated.md` (the i-th `###`-prefixed heading) corresponds to `ITEM_<i>_*` on `/issue`'s stdout. Rebuild the accumulator per-item:
-
-- **Resolved** (remove from accumulator): any ITEM_<i>_* output with `ISSUE_<i>_NUMBER=<N>`, `ISSUE_<i>_DRY_RUN=true`, or `ISSUE_<i>_DUPLICATE=true`.
-- **Retain in accumulator** (so the next flush retries it): `ISSUE_<i>_FAILED=true`, or no ITEM_<i>_* line present at all.
-- **Whole-batch failure** (no machine lines on stdout, or `/issue` exited non-zero without emitting them): retain the entire accumulator unchanged, log a warning to `$LR_TMPDIR/warnings.md`, and proceed to the next slice.
-
-Update counters using `/issue`'s aggregate machine lines: bump `issue-count.txt` by `ISSUES_CREATED`, `issue-dedup-count.txt` by `ISSUES_DEDUPLICATED`, `issue-failed-count.txt` by `ISSUES_FAILED`.
-
-**When NOT flushing**: Print `📦 Slice N findings accumulated (batch X/3). Continuing to next slice.` and proceed.
-
-### 3g — Continue
-
-Move to next slice. Go back to 3a.
-
-## Step 4 — Final Summary
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Loop Review Complete
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Slices reviewed: M/M
-Issues filed: X   (deduplicated: Y, failed: Z)
-Security-tagged findings held locally: W   (see $LR_TMPDIR/security-findings.md)
-Findings dropped: V   (see warnings.md)
-
-Per-slice breakdown:
-  <slice name>: N findings (A filed, B held, C dropped)
-  ...
-
-Filter in GitHub: `is:issue is:open label:loop-review`
-```
-
-Counter sources: `X`/`Y`/`Z` from the `$LR_TMPDIR/issue-count.txt` / `issue-dedup-count.txt` / `issue-failed-count.txt` files updated after each flush (Step 3f's "Update counters" instruction). `W` is derived at summary time by counting `####` HOLD-LOCAL headings in `$LR_TMPDIR/security-findings.md`, and `V` by counting lines in `$LR_TMPDIR/warnings.md` that start with the per-drop format `- Slice <name>:` (the format written by Step 3f for DROPPED nits). Per-slice totals are accumulated as the slice loop runs.
-
-If `$LR_TMPDIR/security-findings.md` is non-empty (use `[ -s "$LR_TMPDIR/security-findings.md" ]` via a Bash tool call to decide — do NOT gate on the mental counter `W` above, which is only a display value), print the **full verbatim contents** of the file inline in the summary output (the session tmpdir is removed by Step 5, so this is the only durable copy surfaced to the operator). Wrap it under a clearly-labeled block:
-
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔒 Security-tagged findings (held locally per SECURITY.md)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<full contents of $LR_TMPDIR/security-findings.md>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-Then print: `**⚠ Handle these findings per SECURITY.md's vulnerability-disclosure procedure. They are NOT filed as public GitHub issues. Session tmpdir is removed by Step 5 — preserve the block above if further triage is needed.**`
-
-**Repeat any external reviewer warnings** accumulated in `$LR_TMPDIR/warnings.md` so they are visible at the end. For example:
-- `**⚠ Codex not available: <reason>**`
-- `**⚠ Cursor review timed out on slice 3**`
-- `**⚠ /issue: label 'loop-review' not found, dropping**` — indicates the label must be pre-created in the target repo.
-
-## Step 5 — Cleanup
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$LR_TMPDIR"
-```
+The driver's structural and behavioral contracts are regression-guarded by `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-review-driver.sh`. The SKILL.md contract (frontmatter `allowed-tools`, log-path visibility, filter-regex parity with `driver.sh` breadcrumb helpers) is regression-guarded by `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-review-skill-md.sh`. Both are wired into `make lint`.

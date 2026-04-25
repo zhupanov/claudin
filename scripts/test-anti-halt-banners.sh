@@ -33,7 +33,6 @@ ORCHESTRATORS=(
   "skills/fix-issue/SKILL.md"
   "skills/implement/SKILL.md"
   "skills/review/SKILL.md"
-  "skills/loop-review/SKILL.md"
   "skills/alias/SKILL.md"  # has Step 4 post-delegation verification
   "skills/research/SKILL.md"  # may invoke /issue via the Skill tool and continue to report/cleanup
 )
@@ -43,6 +42,7 @@ DELEGATORS=(
   "skills/imaq/SKILL.md"
   "skills/create-skill/SKILL.md"
   "skills/loop-improve-skill/SKILL.md"  # thin bash-driver wrapper post-#273; forwards to driver.sh via Bash; no Skill tool calls
+  "skills/loop-review/SKILL.md"  # thin bash-driver wrapper post-overhaul; forwards to driver.sh via Bash+Monitor; no Skill tool calls
   "skills/improve-skill/SKILL.md"  # thin bash-driver wrapper; forwards to iteration.sh via Bash+Monitor; no Skill tool calls
   "skills/simplify-skill/SKILL.md"  # pure delegator: validate target + build feature description + forward to /im; no post-delegation logic
   "skills/compress-skill/SKILL.md"  # pure delegator: validate target + build feature description + forward to /imaq; no post-delegation logic
