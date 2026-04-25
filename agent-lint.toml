@@ -417,6 +417,20 @@ exclude = [
   # SKILL.md Step 3, but the harness is not — same Makefile-only shape as
   # the other test-* harnesses above.
   "scripts/test-render-lane-status.sh",
+  # scripts/render-lane-status-lib.sh is a sourced-only helper (no shebang,
+  # not executable, defines render_lane() and sanitize_reason() consumed by
+  # render-lane-status.sh AND render-deep-lane-status.sh via `source`).
+  # Closes #451. Same "sourced library" shape as
+  # scripts/anchor-section-markers.sh above.
+  "scripts/render-lane-status-lib.sh",
+  # scripts/test-render-deep-lane-status.sh is the regression harness for
+  # scripts/render-deep-lane-status.sh (the /research deep-mode lane-
+  # attribution formatter added by #451). Wired only via Makefile
+  # test-render-deep-lane-status target; the deep formatter itself IS
+  # structurally referenced from skills/research/SKILL.md Step 3 ### Deep
+  # branch, but the harness is not — same Makefile-only shape as the other
+  # test-* harnesses above.
+  "scripts/test-render-deep-lane-status.sh",
   # /research evaluation harness + structural test (closes #419). Both
   # scripts are referenced only from Makefile (eval-research target,
   # test-eval-set-structure standalone target — neither is a lint

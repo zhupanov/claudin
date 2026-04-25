@@ -235,5 +235,46 @@ grep -Fq "build-research-adjudication-ballot.sh" "$ADJUDICATION_MD" \
 grep -Fq "run-research-adjudication.sh" "$ADJUDICATION_MD" \
   || fail "references/adjudication-phase.md must reference scripts/run-research-adjudication.sh (#424)"
 
-echo "PASS: test-research-structure.sh — all 18 structural invariants hold"
+# Section-scoped extractor for the Step 3 ### Deep subsection (used by both
+# Check 19 and Check 20). The extractor toggles a code-fence state on bare
+# ``` lines so that headings (`^### ...`, `^## ...`) inside fenced markdown
+# template blocks do NOT terminate the section prematurely (#451 review
+# FINDING_7). The section ends on the next H2 heading outside a fence — the
+# Deep subsection is the last H3 under Step 3, so the next H2 (or EOF)
+# bounds it cleanly.
+extract_deep_section() {
+  awk '
+    /^```/ { in_fence = !in_fence; next }
+    in_deep && !in_fence && /^## / { in_deep = 0 }
+    in_deep && !in_fence { print }
+    /^### Deep \(RESEARCH_SCALE=deep\)/ { in_deep = 1 }
+  ' "$SKILL_MD"
+}
+
+DEEP_SECTION=$(extract_deep_section)
+[[ -n "$DEEP_SECTION" ]] \
+  || fail "SKILL.md must contain a '### Deep (RESEARCH_SCALE=deep)' subsection — Checks 19/20 cannot anchor without it (#451)"
+
+# Check 19 (#451 + review FINDING_6): SKILL.md Step 3 ### Deep subsection
+# (NOT just any prose elsewhere in SKILL.md) must invoke the deep-mode
+# renderer so the per-phase attribution slices in `lane-status.txt` are the
+# source of truth for deep headers (the bug #451 fixed: previously the deep
+# branch derived headers from session-wide cursor_available/codex_available
+# flags). Step 0b prose now ALSO mentions the deep helper, so a whole-file
+# grep would falsely pass even if the actual Step 3 Deep invocation
+# regressed — section-scoping closes that hole.
+echo "$DEEP_SECTION" | grep -Fq "render-deep-lane-status.sh" \
+  || fail "SKILL.md Step 3 ### Deep subsection must invoke render-deep-lane-status.sh (#451 deep-mode lane attribution; #451 review FINDING_6 closed Step 0b loophole)"
+
+# Check 20 (#451 + review FINDING_7): SKILL.md Step 3 ### Deep subsection
+# must NOT derive headers from session-wide cursor_available / codex_available
+# flags — that pattern is the pre-fix bug. The check is section-scoped via
+# the awk extractor above (which handles fenced code blocks). The negative
+# regex covers BOTH cursor_available and codex_available so a Codex-only
+# reintroduction of the same bug class also fails.
+if echo "$DEEP_SECTION" | grep -qE 'session-wide.*cursor_available|cursor_available.*throughout the run|orchestrator tracks the session-wide.*cursor_available|session-wide.*codex_available|codex_available.*throughout the run|orchestrator tracks the session-wide.*codex_available|tracks the session-wide.*cursor_available.*codex_available|tracks the session-wide.*codex_available.*cursor_available'; then
+  fail "SKILL.md Step 3 ### Deep subsection must not derive headers from session-wide cursor_available/codex_available flags (#451 — use render-deep-lane-status.sh + lane-status.txt slices instead)"
+fi
+
+echo "PASS: test-research-structure.sh — all 20 structural invariants hold"
 exit 0

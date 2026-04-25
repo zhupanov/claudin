@@ -125,60 +125,15 @@ while IFS= read -r line || [ -n "$line" ]; do
     esac
 done < "$INPUT"
 
-# sanitize_reason — collapse whitespace, strip = and |, trim, truncate to 80.
-# Defense-in-depth: the writer is supposed to sanitize before heredoc-write,
-# but we apply the same rules here so a misformed file never breaks markdown.
-sanitize_reason() {
-    local s="$1"
-    # Strip embedded = and | characters first (stripping can create new
-    # whitespace gaps; the subsequent collapse pass merges them).
-    s="${s//=/}"
-    s="${s//|/}"
-    # Collapse all whitespace runs (incl. tabs, newlines, CRs) to single space.
-    s="$(printf '%s' "$s" | tr -s '[:space:]' ' ')"
-    # Trim leading/trailing whitespace.
-    s="${s#"${s%%[![:space:]]*}"}"
-    s="${s%"${s##*[![:space:]]}"}"
-    # Truncate to 80 characters.
-    if [ "${#s}" -gt 80 ]; then
-        s="${s:0:80}"
-    fi
-    printf '%s' "$s"
-}
-
-# render_lane — given a status token and a (possibly empty) reason, emit the
-# human-readable string. Emits a stderr warning for unknown tokens.
-render_lane() {
-    local status="$1"
-    local reason="$2"
-    local clean
-    clean="$(sanitize_reason "$reason")"
-    case "$status" in
-        ok)
-            printf '✅' ;;
-        fallback_binary_missing)
-            printf 'Claude-fallback (binary missing)' ;;
-        fallback_probe_failed)
-            if [ -n "$clean" ]; then
-                printf 'Claude-fallback (probe failed: %s)' "$clean"
-            else
-                printf 'Claude-fallback (probe failed)'
-            fi ;;
-        fallback_runtime_timeout)
-            printf 'Claude-fallback (runtime timeout)' ;;
-        fallback_runtime_failed)
-            if [ -n "$clean" ]; then
-                printf 'Claude-fallback (runtime failed: %s)' "$clean"
-            else
-                printf 'Claude-fallback (runtime failed)'
-            fi ;;
-        '')
-            printf '(unknown)' ;;
-        *)
-            echo "**⚠ render-lane-status: unknown status token $status**" >&2
-            printf '(unknown)' ;;
-    esac
-}
+# Source the shared rendering library (sanitize_reason + render_lane). The
+# library is sourced by both render-lane-status.sh (standard) and
+# render-deep-lane-status.sh (deep) so the token vocabulary, sanitization
+# rules, and stderr-warning shape stay in lockstep across both renderers.
+# RENDER_LANE_CALLER is set per consumer so unknown-token warnings attribute
+# to the correct script basename (#451 FINDING_2).
+RENDER_LANE_CALLER="render-lane-status"
+# shellcheck source=scripts/render-lane-status-lib.sh
+source "$(dirname "$0")/render-lane-status-lib.sh"
 
 RESEARCH_CURSOR_RENDERED="$(render_lane "$RESEARCH_CURSOR_STATUS" "$RESEARCH_CURSOR_REASON")"
 RESEARCH_CODEX_RENDERED="$(render_lane "$RESEARCH_CODEX_STATUS" "$RESEARCH_CODEX_REASON")"
@@ -187,7 +142,9 @@ VALIDATION_CODEX_RENDERED="$(render_lane "$VALIDATION_CODEX_STATUS" "$VALIDATION
 
 # Standard-mode 3-lane shape pinned in research-phase.md and validation-phase.md
 # `### Standard` subsections (this script is used only by SKILL.md Step 3's
-# Standard branch; quick / deep emit literal headers without it — see #418).
+# Standard branch; quick emits literal headers without a helper; deep uses the
+# sibling render-deep-lane-status.sh — see #418, #451; both renderers share
+# render-lane-status-lib.sh for render_lane() and sanitize_reason()).
 printf 'RESEARCH_HEADER=3 agents (Cursor: %s, Codex: %s)\n' \
     "$RESEARCH_CURSOR_RENDERED" "$RESEARCH_CODEX_RENDERED"
 printf 'VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: %s, Codex: %s)\n' \

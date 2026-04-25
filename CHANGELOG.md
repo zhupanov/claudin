@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.18] - 2026-04-25
+
+### Fixed
+
+- `/research` deep-mode Step 3 lane-attribution headers now derive from the per-phase `RESEARCH_*` / `VALIDATION_*` slices in `$RESEARCH_TMPDIR/lane-status.txt` instead of mutable session-wide `cursor_available` / `codex_available` flags. A new sibling renderer `scripts/render-deep-lane-status.sh` emits the deep-mode 5+5 header shape (5 research agents + 5 validation reviewers) reading the same 8-key schema as standard mode. A new shared library `scripts/render-lane-status-lib.sh` factors out `render_lane()` and `sanitize_reason()` so both renderers share one canonical token vocabulary; `RENDER_LANE_CALLER` parameterizes the unknown-token stderr warning so each consumer attributes correctly. Standard mode rendering remains byte-stable (`scripts/render-lane-status.sh` `printf` block unchanged; existing 10-fixture harness passes). Eliminates cross-phase contamination: a validation-only fallback (e.g., a Cursor render failure during validation flipping `cursor_available=false`) no longer retroactively taints research-phase attribution. Granular fallback reasons (binary missing / probe failed / runtime timeout / runtime failed) now surface in deep-mode headers with the same vocabulary as standard. New harness `scripts/test-render-deep-lane-status.sh` (9 fixtures, 19 assertions) includes phase-segregation guards F2 and F3 as direct bug-fix witnesses. `scripts/test-research-structure.sh` extends from 18 to 20 assertions: Check 19 section-scopes the `render-deep-lane-status.sh` invocation pin to the `### Deep (RESEARCH_SCALE=deep)` subsection; Check 20 (fence-aware extractor + symmetric `cursor_available` / `codex_available` regex) anti-regression-pins that the deep branch never re-derives headers from session-wide flags. `agent-lint.toml` exclusions added for the sourced-only library and Makefile-only test harness. Closes #451.
+
 ## [7.4.17] - 2026-04-25
 
 ### Fixed
