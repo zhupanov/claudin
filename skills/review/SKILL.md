@@ -373,7 +373,7 @@ SECURITY_FINDINGS_HELD=<n>
 PARSE_STATUS=ok
 ```
 
-Substitute the counters captured at Step 4b (or zero each if Step 4b was skipped). `PARSE_STATUS=ok` always (any error path emits a different `PARSE_STATUS` value or aborts before reaching here).
+Substitute `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED` from Step 4b (or zero each if Step 4b was skipped — i.e., the findings batch was empty). Substitute `SECURITY_FINDINGS_HELD` from Step 4c independently (zero only if Step 4c found no security findings — Step 4c always runs in slice mode regardless of whether Step 4b ran). `PARSE_STATUS=ok` always (any error path emits a different `PARSE_STATUS` value or aborts before reaching here).
 
 ## Step 5 — Cleanup
 

@@ -136,10 +136,19 @@ if grep -qF -- '--slice-file' "$DRIVER_SH"; then
 else
   fail "I: driver.sh missing --slice-file usage"
 fi
-# Confirm driver does NOT use --slice <argv> for per-slice invocations
-# (it MAY mention --slice in docs comments, but the actual claude -p
-# invocation must use --slice-file). We accept the presence of --slice in
-# comments/docs but not as the primary invocation flag.
+# Negative assertion: the actual /review invocation line in the per-slice loop
+# MUST use --slice-file, not bare --slice <argv>. The bare---slice form would
+# reintroduce the F2 argv shell-quoting hazard (verbal descriptions containing
+# quotes/parens/&/$ would misparse). Match the printf line that builds the
+# slash-command prompt and require it carries --slice-file, not --slice.
+# Note: docs comments may mention "--slice" alone — only the printf line that
+# actually constructs the /review invocation is checked here.
+# shellcheck disable=SC2016  # single-quoted regex literals are intentional contract tokens.
+if grep -qE "printf '/review --slice-file " "$DRIVER_SH"; then
+  pass "I(neg): driver.sh /review invocation uses --slice-file (not bare --slice)"
+else
+  fail "I(neg): driver.sh /review invocation does not match 'printf /review --slice-file ...' — argv injection regression risk"
+fi
 
 # --- Assertion J: LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE referenced ---
 if grep -qF 'LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE' "$DRIVER_SH"; then
