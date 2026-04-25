@@ -12,9 +12,21 @@
 #      interiors. The opening and closing fence lines are also excluded.
 #   2. (when --require-citations is on, the default) at least one provenance
 #      marker, where a marker is any of:
-#        - file or file:line: regex match for an extension in
-#          {md, sh, py, ts, js, json, yaml, yml, toml, txt, sql, go, rs} —
-#          permits leading dot (e.g. `.pre-commit-config.yaml`),
+#        - file or file:line: regex match for an extension in the recognized
+#          set (#447 broadened from the #416 set):
+#          {c, cc, cfg, cjs, cpp, cs, css, csv, dart, env, go, gradle,
+#           groovy, h, hpp, htm, html, java, js, json, jsx, kt, lock, lua,
+#           m, md, mjs, mk, mm, php, pl, proto, py, r, rb, rs, sass, scala,
+#           scss, sh, sql, swift, toml, ts, tsv, tsx, txt, vue, xml, yaml,
+#           yml} — permits leading dot for hidden files with a basename
+#          (e.g. `.pre-commit-config.yaml`); requires a trailing-token
+#          boundary so the extension cannot bleed into adjacent path-token
+#          characters (rejects fake citations like `file.mdjunk:42`). Bare
+#          hidden-file forms without a basename (e.g. `.env:7`,
+#          `.gitignore:5`) are NOT matched and rely on probes 2-4 / contract.
+#          Edit-in-sync: this list is duplicated in `validate-research-output.md`
+#          intentionally so `--help` (sed-extracted from this header) stays
+#          self-contained; both must be updated together.
 #        - extensionless filename: Makefile / Dockerfile / GNUmakefile,
 #        - a fenced code block (``` ... ```) with at least one non-blank
 #          content line,
@@ -156,11 +168,18 @@ fi
 
 # --- 2. Provenance markers (when --require-citations) ---
 if [[ "$REQUIRE_CITATIONS" == "true" ]]; then
-    # Probe 1: file path with a known extension (issue #416 regex, widened to
-    # allow a leading dot for hidden files like `.pre-commit-config.yaml`).
-    # Boundary `(^|[^A-Za-z0-9])` ensures the match starts at a non-alnum
-    # boundary so partial matches mid-word are rejected.
-    if grep -Eq '(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.(md|sh|py|ts|js|json|yaml|yml|toml|txt|sql|go|rs)(:[0-9]+(-[0-9]+)?)?' "$INPUT"; then
+    # Probe 1: file path with a known extension (#416 origin, #447 broadened
+    # extension set + trailing-boundary rule, longest-first ordering inside
+    # prefix-conflict families to avoid backtracking-through-alternation
+    # dependence on BSD/macOS grep -E). Boundary `(^|[^A-Za-z0-9])` ensures
+    # the match starts at a non-alnum boundary so partial matches mid-word
+    # are rejected; trailing `($|[^A-Za-z0-9._-])` requires the extension
+    # token to end at end-of-line OR at a character outside the path-token
+    # alphabet (alnum/dot/dash/underscore) so a fake citation glued to
+    # alphanumeric junk like `file.mdjunk:42` is rejected. Compound-
+    # extension forms (`file.md.bak`) are intentionally rejected per the
+    # #447 boundary class — see `validate-research-output.md`.
+    if grep -Eq '(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.(cc|cfg|cjs|cpp|css|csv|cs|c|dart|env|gradle|groovy|go|html|htm|hpp|h|java|json|jsx|js|kt|lock|lua|mjs|mk|mm|md|m|php|pl|proto|py|rb|rs|r|sass|scala|scss|sh|sql|swift|toml|tsx|tsv|ts|txt|vue|xml|yaml|yml)(:[0-9]+(-[0-9]+)?)?($|[^A-Za-z0-9._-])' "$INPUT"; then
         exit 0
     fi
 
