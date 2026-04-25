@@ -14,7 +14,7 @@ Launch **all configured lanes in parallel** in a single message (3 in standard, 
 
 ## Step 2 entry — Propagate research-phase fallbacks to VALIDATION_* keys
 
-Before any external launch in Step 2, copy each currently-unavailable external lane's research-phase status into the corresponding `VALIDATION_*` keys in `$RESEARCH_TMPDIR/lane-status.txt`. Without this propagation, a runtime fallback that flipped `cursor_available`/`codex_available` to `false` during research-phase Step 1.3 would leave the Step 0b-initialized `VALIDATION_<TOOL>_STATUS=ok` in place — `collect-reviewer-results.sh` is never called for a lane whose `*_available` flag is false at validation entry, so Step 2.4 below cannot downgrade it. The result would be a header showing `Cursor: ✅` for a validation lane that actually ran as a Claude fallback.
+Before any external launch in Step 2, copy each currently-unavailable external lane's research-phase status into the corresponding `VALIDATION_*` keys in `$RESEARCH_TMPDIR/lane-status.txt`. Without this propagation, a runtime fallback that flipped `cursor_available`/`codex_available` to `false` during research-phase Step 1.4 would leave the Step 0b-initialized `VALIDATION_<TOOL>_STATUS=ok` in place — `collect-reviewer-results.sh` is never called for a lane whose `*_available` flag is false at validation entry, so Step 2.4 below cannot downgrade it. The result would be a header showing `Cursor: ✅` for a validation lane that actually ran as a Claude fallback.
 
 For each external tool, if `cursor_available` (resp. `codex_available`) is currently `false`, copy `RESEARCH_<TOOL>_STATUS` and `RESEARCH_<TOOL>_REASON` into `VALIDATION_<TOOL>_STATUS` and `VALIDATION_<TOOL>_REASON`. Lanes whose `*_available` flag is currently `true` are left alone — Step 2.4 will update them after `collect-reviewer-results.sh` returns.
 
@@ -43,7 +43,7 @@ Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-sta
 
 ## External Reviewer Setup (if `codex_available` or `cursor_available`)
 
-The research report is already written to `$RESEARCH_TMPDIR/research-report.txt` from Step 1.4, so both Codex and Cursor can read it.
+The research report is already written to `$RESEARCH_TMPDIR/research-report.txt` from Step 1.5, so both Codex and Cursor can read it.
 
 External reviewer prompts are rendered from the unified Code Reviewer archetype in `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` via `${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh`, so Cursor and Codex inherit the same five focus areas (code-quality / risk-integration / correctness / architecture / security) and XML-wrapped untrusted-context as the always-on Claude lane below. Before launching either external lane, write the shared prompt inputs to `$RESEARCH_TMPDIR` via heredocs with unique delimiters (avoids collisions with payload content):
 
