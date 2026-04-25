@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.11] - 2026-04-24
+
+### Changed
+
+- `skills/research/SKILL.md` Step 3 final-report header now distinguishes WHY each external lane fell back to a Claude subagent instead of collapsing to ✅/❌. Five canonical states render: `✅` (ran natively), `Claude-fallback (binary missing)`, `Claude-fallback (probe failed: <reason>)`, `Claude-fallback (runtime timeout)`, and `Claude-fallback (runtime failed: <reason>)`. Pre-launch state from `session-setup.sh --check-reviewers` (`*_AVAILABLE`/`*_HEALTHY`/`*_PROBE_ERROR`) and runtime state from `collect-reviewer-results.sh` (`STATUS`/`FAILURE_REASON`) accumulate into `$RESEARCH_TMPDIR/lane-status.txt` via surgical phase-local rewrites at Step 0b (init), Step 1.3 (research runtime), Step 2 entry (propagate research-phase fallbacks to validation lanes), and Step 2.4 (validation runtime). New `scripts/render-lane-status.sh` (with sibling `.md` contract and 10-fixture regression harness wired into `make lint`) parses the KV file at Step 3 and emits the rendered header lines; the Code (Claude code-reviewer subagent) lane is hard-coded `✅` (no fallback path). KV writes use quoted heredocs (`<<'EOF'`) to neutralize shell-injection vectors in untrusted probe-error text. `scripts/test-research-structure.sh` extended with two new structural pins (Step 3 references `render-lane-status.sh`; both phase references mention `lane-status.txt`). Closes #421.
+
 ## [7.0.10] - 2026-04-24
 
 ### Changed
