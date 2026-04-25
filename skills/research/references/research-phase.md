@@ -308,7 +308,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --subst
 
 ### Update lane-status.txt (RESEARCH_* slice only)
 
-`RESEARCH_SCALE=quick` skips this update entirely — quick mode has no external lanes to attribute. SKILL.md Step 0b initialized `lane-status.txt` only when `RESEARCH_SCALE != quick`; if quick mode entered, the file does not exist and Step 3 emits a literal "1 agent (Claude inline only — single-lane confidence)" header without consulting it.
+`RESEARCH_SCALE=quick` skips this update entirely — quick mode has no external lanes to attribute. SKILL.md Step 0b initialized `lane-status.txt` only when `RESEARCH_SCALE != quick`; if quick mode entered, the file does not exist and Step 3 emits a literal "1 agent (Claude inline only — single-lane confidence)" header without consulting it. Step 3 also emits a literal "0 reviewers (validation phase skipped — see synthesis disclaimer)" validation-phase header so the report shape stays uniform across scales — see SKILL.md § Quick (RESEARCH_SCALE=quick).
 
 For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`: after Runtime Timeout Fallback determinations are made, surgically update only the `RESEARCH_*` slice of `$RESEARCH_TMPDIR/lane-status.txt`. The `VALIDATION_*` keys must be preserved verbatim — Step 0b initialized them and Step 2 (validation-phase.md) owns subsequent updates. Do NOT rewrite the full file. In deep mode, `RESEARCH_CURSOR_*` reflects the per-tool aggregate across both Cursor slots (any one Cursor slot with `STATUS != OK` flips the session-wide flag and is reflected here as `fallback_runtime_*`); same for `RESEARCH_CODEX_*` across both Codex slots.
 
