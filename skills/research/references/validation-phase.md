@@ -74,7 +74,24 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh \
   > "$RESEARCH_TMPDIR/cursor-prompt.txt"
 ```
 
-**On non-zero exit**: follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the research-validation archetype bindings below. This preserves the configured lane count for the active `RESEARCH_SCALE` (3 lanes in standard mode, 5 lanes in deep mode).
+**On non-zero exit**: capture the failed render's stderr (visible in the Bash tool result) and sanitize it (collapse whitespace, strip `=` and `|`, trim, truncate to 80 chars; if no useful stderr was captured, leave the reason empty — `render-lane-status.sh` omits the parenthetical when the reason is empty). **Surgically rewrite the `VALIDATION_*` slice of `$RESEARCH_TMPDIR/lane-status.txt` BEFORE launching the fallback** so an abort after spawn still leaves Step 3 attribution honest. The orchestrator reads the current `VALIDATION_CODEX_*` values from the file and substitutes them (preserving the unaffected lane's state) into the placeholders below; the Cursor lane downgrades to `fallback_runtime_failed`. The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 2 entry and Step 2.4.
+
+```bash
+LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
+LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
+# Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
+# Codex lane keeps its current VALIDATION_* values (read from file); Cursor lane downgrades.
+grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
+cat >> "$LANE_STATUS_TMP" <<'EOF'
+VALIDATION_CURSOR_STATUS=fallback_runtime_failed
+VALIDATION_CURSOR_REASON=<sanitized stderr or empty>
+VALIDATION_CODEX_STATUS=<current codex token>
+VALIDATION_CODEX_REASON=<current codex reason>
+EOF
+mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
+```
+
+Then follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the research-validation archetype bindings below. This preserves the configured lane count for the active `RESEARCH_SCALE` (3 lanes in standard mode, 5 lanes in deep mode). Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
 
 **On success**, launch in background:
 
@@ -101,7 +118,24 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh \
   > "$RESEARCH_TMPDIR/codex-prompt.txt"
 ```
 
-**On non-zero exit**: same fallback escalation as Cursor — set `codex_available=false`, omit the path from `COLLECT_ARGS`, launch a Claude Code Reviewer subagent fallback.
+**On non-zero exit**: capture the failed render's stderr (visible in the Bash tool result) and sanitize it (collapse whitespace, strip `=` and `|`, trim, truncate to 80 chars; if no useful stderr was captured, leave the reason empty). **Surgically rewrite the `VALIDATION_*` slice of `$RESEARCH_TMPDIR/lane-status.txt` BEFORE launching the fallback** so an abort after spawn still leaves Step 3 attribution honest. The orchestrator reads the current `VALIDATION_CURSOR_*` values from the file and substitutes them (preserving the unaffected lane's state) into the placeholders below; the Codex lane downgrades to `fallback_runtime_failed`. The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 2 entry and Step 2.4.
+
+```bash
+LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
+LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
+# Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
+# Cursor lane keeps its current VALIDATION_* values (read from file); Codex lane downgrades.
+grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
+cat >> "$LANE_STATUS_TMP" <<'EOF'
+VALIDATION_CURSOR_STATUS=<current cursor token>
+VALIDATION_CURSOR_REASON=<current cursor reason>
+VALIDATION_CODEX_STATUS=fallback_runtime_failed
+VALIDATION_CODEX_REASON=<sanitized stderr or empty>
+EOF
+mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
+```
+
+Then follow the same fallback escalation as Cursor — set `codex_available=false`, omit the path from `COLLECT_ARGS`, launch a Claude Code Reviewer subagent fallback. Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
 
 **On success**, launch in background:
 
@@ -195,7 +229,7 @@ Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background:
    - `STATUS=TIMED_OUT` or `SENTINEL_TIMEOUT` → token `fallback_runtime_timeout`, reason empty
    - `STATUS=FAILED` or `EMPTY_OUTPUT` or `NOT_SUBSTANTIVE` → token `fallback_runtime_failed`, reason = sanitized `FAILURE_REASON` (strip `=` and `|`, collapse whitespace, trim, truncate to 80 chars)
 
-   If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched in this phase because pre-launch fallback or research-phase propagation already applied), no update is needed — the `VALIDATION_*` keys remain correct.
+   If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched in this phase because pre-launch fallback, research-phase propagation, or the render-failure-path rewrite above already applied — that lane is absent from `COLLECT_ARGS` and produces no `STATUS` block here), no update is needed — the `VALIDATION_*` keys remain correct.
 
    Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `VALIDATION_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep their current value).
 

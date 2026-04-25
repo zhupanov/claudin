@@ -60,6 +60,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh \
   > "$RESEARCH_TMPDIR/cursor-prompt.txt"
 
 # On non-zero exit: follow Runtime Timeout Fallback in skills/shared/external-reviewers.md —
-# set cursor_available=false, omit the path from COLLECT_ARGS, launch a Claude
-# Code Reviewer subagent fallback to preserve the 3-lane invariant.
+# (1) surgically rewrite VALIDATION_<TOOL>_STATUS=fallback_runtime_failed in lane-status.txt
+# (with a sanitized REASON) so Step 3's final report cannot show the failed lane as
+# native success; (2) set cursor_available=false, omit the path from COLLECT_ARGS,
+# launch a Claude Code Reviewer subagent fallback to preserve the 3-lane invariant.
 ```
