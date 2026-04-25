@@ -17,16 +17,18 @@ Both flags are required.
 - `--input <path>` — Source file. Must contain zero or more `### REJECTED_FINDING_<N>` blocks each with `Reviewer`, `Finding`, and `Rejection rationale` fields per the schema documented at `skills/research/references/validation-phase.md` Sites A and B.
 - `--output <path>` — Destination ballot file. Parent directory must exist (the helper does not `mkdir -p`). Atomic-rename is not used — the helper writes directly via stdout redirection because the ballot is consumed by the same session and partial-output recovery is not a concern (Step 4 cleanup wipes the entire tmpdir on every run).
 
-### Stdout contract
+### Output contract
 
 ```
-Success: BUILT=true
-         BALLOT=<absolute or caller-provided path>
-         DECISION_COUNT=<N>
+Success (stdout, fd 1): BUILT=true
+                        BALLOT=<absolute or caller-provided path>
+                        DECISION_COUNT=<N>
 
-Failure: FAILED=true
-         ERROR=<single-line message>
+Failure (stderr, fd 2): FAILED=true
+                        ERROR=<single-line message>
 ```
+
+Failure output is written to stderr (fd 2). The Phase 3 ballot-emit step uses a brace group `{ ... } > "$OUTPUT"` that redirects only fd 1 to the ballot file; routing failures to fd 2 keeps the `FAILED=true` / `ERROR=` lines out of the ballot file and reachable by the caller. Callers that need to read `ERROR=` must merge stderr into stdout (`2>&1`), as `run-research-adjudication.sh` already does. The exit code (1 for invocation/usage errors, 2 for I/O failures) remains the primary failure signal; stderr carries the diagnostic detail.
 
 `DECISION_COUNT=0` on success indicates the input file existed but contained no parseable `### REJECTED_FINDING_<N>` blocks (or all blocks were incomplete and silently skipped). The output ballot file is created empty in that case; callers should check `DECISION_COUNT > 0` before attempting to launch judges.
 

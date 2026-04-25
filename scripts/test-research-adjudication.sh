@@ -15,6 +15,11 @@
 #      preserved verbatim through the FS sentinel round-trip.
 #   9. Literal-tab in Finding text → DECISION_COUNT=1 with the embedded TAB byte preserved through
 #      the GS sentinel substitution + tr-decode round-trip.
+#  10. emit_failure routes FAILED=/ERROR= to stderr (not stdout), so the Phase 3
+#      `{ ... } > "$OUTPUT"` brace-group redirect cannot capture the failure
+#      lines into the ballot file; caller-style `2>&1` merge still surfaces
+#      ERROR= for the existing run-research-adjudication.sh extraction
+#      (regression guard for issue #463).
 #
 # Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
 # locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
@@ -250,6 +255,52 @@ expected_tab_line=$(printf 'column1\tcolumn2 example with a literal tab characte
 grep -qF "$expected_tab_line" "$tab_output" \
   || fail "Test 9: literal tab character lost in ballot round-trip"
 pass "Test 9: literal tab in Finding text → 1 decision, tab preserved"
+
+# --- Test 10: emit_failure writes ERROR= to stderr, not stdout ---------------
+
+# Regression test for issue #463. The two emit_failure calls inside the
+# Phase 3 brace group `{ ... } > "$OUTPUT"` would write FAILED=true / ERROR=
+# into the ballot file when emit_failure printf'd to stdout, hiding the
+# specific TSV-corruption diagnostic from the caller. The fix routes
+# emit_failure's printf to fd 2 so it bypasses the brace-group stdout
+# redirect on every call site. We exercise an out-of-brace emit_failure path
+# (missing required --input flag, exit 1) under separated stdout/stderr
+# capture; the same fd-2 contract protects the in-brace sites at lines
+# ~285/288, which are not externally inducible (Phase 2 always produces
+# valid base64).
+err10_stdout="$WORK_DIR/test10-stdout.txt"
+err10_stderr="$WORK_DIR/test10-stderr.txt"
+
+set +e
+"$BUILDER" --output "$WORK_DIR/test10-ballot.txt" \
+  > "$err10_stdout" 2> "$err10_stderr"
+err10_rc=$?
+set -e
+
+[[ "$err10_rc" -ne 0 ]] || fail "Test 10: builder exited 0 on missing --input (expected non-zero)"
+
+# ERROR= MUST land on stderr.
+grep -qE '^ERROR=' "$err10_stderr" \
+  || fail "Test 10: ERROR= line missing from stderr (got: $(cat "$err10_stderr"))"
+grep -qE '^FAILED=true$' "$err10_stderr" \
+  || fail "Test 10: FAILED=true line missing from stderr"
+
+# ERROR= MUST NOT appear on stdout — that's the regression we're guarding.
+if grep -qE '^ERROR=' "$err10_stdout"; then
+  fail "Test 10: ERROR= line leaked to stdout (regression — the fix routes emit_failure to fd 2)"
+fi
+
+# Caller-style 2>&1 merge MUST still surface ERROR= (the caller in
+# run-research-adjudication.sh:129 captures with `2>&1` and greps for ERROR=).
+set +e
+merged_out="$("$BUILDER" --output "$WORK_DIR/test10-ballot2.txt" 2>&1)"
+merged_rc=$?
+set -e
+[[ "$merged_rc" -ne 0 ]] || fail "Test 10: builder exited 0 on missing --input under 2>&1 capture"
+echo "$merged_out" | grep -qE '^ERROR=' \
+  || fail "Test 10: caller-style 2>&1 capture lost ERROR= line (got: $merged_out)"
+
+pass "Test 10: emit_failure routes FAILED=/ERROR= to stderr; caller 2>&1 merge still captures it"
 
 # --- All tests passed --------------------------------------------------------
 
