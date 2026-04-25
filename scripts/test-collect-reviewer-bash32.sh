@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-collect-reviewer-bash32.sh — Regression test for the bash 3.2
-# portability hazard in scripts/collect-reviewer-results.sh:402 (issue #511).
+# portability hazard in scripts/collect-reviewer-results.sh:405 (issue #511).
 #
 # The collector runs `set -uo pipefail` (line 57). Before #511, the validator
 # call expanded `"${VAL_ARGS[@]}"` directly; on bash 3.2 (macOS default
@@ -65,21 +65,35 @@ else
     fail "case 1: safe-expansion idiom missing in $COLLECTOR — issue #511 may have regressed"
 fi
 
-# --- Cases 2/3: dynamic checks under /bin/bash 3.x --------------------------
+# --- Cases 2/3: dynamic checks under vulnerable bash (< 4.4) ----------------
 #
-# Bash 4.4+ fixed the empty-array nounset hazard, so the dynamic checks only
-# trigger the original bug under bash 3.x. On Linux CI (bash 5.x) we skip with
-# a loud message; Case 1 is the regression backstop there.
+# Bash 4.4 fixed the empty-array nounset hazard, so the dynamic checks only
+# trigger the original bug under bash 3.x AND bash 4.0-4.3 (both vulnerable).
+# Run dynamic cases on any /bin/bash whose version is < 4.4; skip-with-loud-
+# message only on bash 4.4+. Case 1 (static grep) is the always-on regression
+# backstop regardless of bash version (Linux CI bash 5.x runs Case 1 only).
 SYSTEM_BASH="/bin/bash"
 BASH_MAJOR=""
+BASH_MINOR=""
 if [[ -x "$SYSTEM_BASH" ]]; then
-    # shellcheck disable=SC2016 # `${BASH_VERSINFO[0]}` is expanded by the inner /bin/bash, not by the outer shell.
+    # shellcheck disable=SC2016 # `${BASH_VERSINFO[0]}` / `[1]` are expanded by the inner /bin/bash, not by the outer shell.
     BASH_MAJOR="$("$SYSTEM_BASH" -c 'echo "${BASH_VERSINFO[0]}"' 2>/dev/null || echo "")"
+    # shellcheck disable=SC2016
+    BASH_MINOR="$("$SYSTEM_BASH" -c 'echo "${BASH_VERSINFO[1]}"' 2>/dev/null || echo "")"
 fi
 
-if [[ "$BASH_MAJOR" != "3" ]]; then
-    skipm "case 2: bash $BASH_MAJOR at $SYSTEM_BASH (need 3.x for dynamic empty-VAL_ARGS check)"
-    skipm "case 3: bash $BASH_MAJOR at $SYSTEM_BASH (need 3.x for --validation-mode forwarding pin)"
+# Dynamic gate: vulnerable iff (major == 3) OR (major == 4 AND minor < 4).
+DYNAMIC_VULNERABLE="false"
+if [[ "$BASH_MAJOR" == "3" ]]; then
+    DYNAMIC_VULNERABLE="true"
+elif [[ "$BASH_MAJOR" == "4" ]] && [[ -n "$BASH_MINOR" ]] && (( BASH_MINOR < 4 )); then
+    DYNAMIC_VULNERABLE="true"
+fi
+
+if [[ "$DYNAMIC_VULNERABLE" != "true" ]]; then
+    BASH_VER_DISPLAY="${BASH_MAJOR:-unknown}.${BASH_MINOR:-?}"
+    skipm "case 2: bash $BASH_VER_DISPLAY at $SYSTEM_BASH (need < 4.4 for dynamic empty-VAL_ARGS check; bash 4.4+ fixed the hazard)"
+    skipm "case 3: bash $BASH_VER_DISPLAY at $SYSTEM_BASH (need < 4.4 for --validation-mode forwarding pin)"
 else
     TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/test-collect-reviewer-bash32-XXXXXX")"
     trap 'rm -rf "$TMPROOT"' EXIT
