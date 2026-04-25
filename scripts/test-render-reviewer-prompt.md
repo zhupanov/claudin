@@ -18,7 +18,7 @@ This file is itself the test harness. Add new assertions in-place; do NOT split 
 
 - **`scripts/render-reviewer-prompt.sh`**: any new flag or output behavior should be reflected in a new harness assertion before merge.
 - **`skills/research/references/validation-phase.md`**: the static integration check enforces that both Cursor and Codex lanes invoke the renderer. If a third caller is added, raise the threshold or split into per-lane assertions.
-- **`Makefile`**: harness is wired into `.PHONY`, `test-harnesses`, and a per-target recipe at lines 4 / 14 / 117 (or current equivalent positions). The Makefile recipe runs `bash scripts/test-render-reviewer-prompt.sh`.
+- **`Makefile`**: harness is wired in three places — the top-of-file `.PHONY` declaration, the `test-harnesses` aggregate target's dependency list, and a `test-render-reviewer-prompt:` recipe whose body is `bash scripts/test-render-reviewer-prompt.sh`. Use the target name to locate the recipe, not line numbers.
 
 ## Exit codes
 

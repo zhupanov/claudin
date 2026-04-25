@@ -222,6 +222,9 @@ note_pass
 MOCK_REPO_UP="$TMPDIR_TEST/mock-unresolved"
 mkdir -p "$MOCK_REPO_UP/scripts" "$MOCK_REPO_UP/skills/shared"
 cp "$HELPER" "$MOCK_REPO_UP/scripts/render-reviewer-prompt.sh"
+# Trigger the unresolved-placeholder gate by leaving a stray {OUTPUT_INSTRUCTION}
+# OUTSIDE either the In-Scope or OOS section, where the section-keyed awk pass
+# (anchored on `^- ` line) cannot match it. The validation gate catches the leftover.
 cat >"$MOCK_REPO_UP/skills/shared/reviewer-templates.md" <<'EOF_MOCK'
 # Reviewer Templates
 
@@ -231,37 +234,7 @@ You are a senior code reviewer for this project. Review {REVIEW_TARGET} across f
 
 {CONTEXT_BLOCK}
 
-This template intentionally introduces an extra placeholder: {REVIEW_TARGET}{CONTEXT_BLOCK} in a single line that the substitutions handle, and a stray copy of the literal `{REVIEW_TARGET}` here too — wait, gsub replaces all of them.
-
-Actually for this negative case, embed an unsubstituted variant manually:
-LITERAL_PLACEHOLDER_HERE_{CONTEXT_BLOCK}
-
-### In-Scope Findings
-- {OUTPUT_INSTRUCTION}
-
-### Out-of-Scope Observations
-- {OUTPUT_INSTRUCTION}
-
-If no in-scope issues found, say "No in-scope issues found."
-```
-<!-- END GENERATED_BODY -->
-EOF_MOCK
-# This case is tricky: the {CONTEXT_BLOCK} line gets substituted (since gsub matches it on a stand-alone line),
-# but the LITERAL_PLACEHOLDER_HERE_{CONTEXT_BLOCK} embedded in another line also matches gsub for {CONTEXT_BLOCK}!
-# So the test would actually pass cleanly. To trigger the unresolved-placeholder gate, we need a placeholder
-# the helper does NOT substitute — the helper only handles the three known names. Use a fourth name.
-cat >"$MOCK_REPO_UP/skills/shared/reviewer-templates.md" <<'EOF_MOCK'
-# Reviewer Templates
-
-<!-- BEGIN GENERATED_BODY -->
-```
-You are a senior code reviewer for this project. Review {REVIEW_TARGET} across five focus areas: code quality, risk/integration, correctness, architecture, and security.
-
-{CONTEXT_BLOCK}
-
-This template line embeds a stray substring that resembles {REVIEW_TARGET} but is actually inside the {OUTPUT_INSTRUCTION} marker territory — except the helper's gsub for {REVIEW_TARGET} would consume any inline copy. So instead we keep a stray {OUTPUT_INSTRUCTION} OUTSIDE either the In-Scope or OOS section, where the awk pass cannot match its `^- ` line anchor. The validation gate should then catch the leftover.
-
-A stray {OUTPUT_INSTRUCTION} mid-paragraph (not on its own bullet line) — the section-keyed awk leaves this alone.
+A stray {OUTPUT_INSTRUCTION} mid-paragraph (not on its own bullet line) — the section-keyed awk leaves this alone, so Stage 6 catches it.
 
 ### In-Scope Findings
 - {OUTPUT_INSTRUCTION}
@@ -286,12 +259,83 @@ grep -Fq 'unresolved placeholder' "$TMPDIR_TEST/unresolved.err" \
 note_pass
 
 # ------------------------------------------------------------------------
-# Static integration check: validation-phase.md invokes the renderer
-# for both Cursor and Codex lanes.
+# Regression: --target value containing & (awk gsub replacement-string special).
+# Pre-fix, gsub would expand `&` to the matched text, leaving a stray
+# {REVIEW_TARGET} that the validation gate catches. Post-fix, index/substr
+# substitution handles `&` literally.
 # ------------------------------------------------------------------------
-# Skip this check if validation-phase.md does not yet exist (during initial
-# bootstrap / partial check); fail otherwise if hits < 2.
+TARGET_AMP_OUT="$TMPDIR_TEST/target-amp.txt"
+"$HELPER" \
+  --target 'R&D findings' \
+  --research-question-file "$QUESTION_FILE" \
+  --context-file "$CONTEXT_FILE" \
+  --in-scope-instruction-file "$INSCOPE_FILE" \
+  >"$TARGET_AMP_OUT" 2>"$TMPDIR_TEST/target-amp.err" \
+  || fail "regression (--target with &): exit non-zero: $(cat "$TMPDIR_TEST/target-amp.err")"
+grep -Fq 'Review R&D findings' "$TARGET_AMP_OUT" \
+  || fail "regression (--target with &): expected 'Review R&D findings' literal in rendered output (would be 'R{REVIEW_TARGET}D findings' under the awk gsub bug)"
+if grep -Fq '{REVIEW_TARGET}' "$TARGET_AMP_OUT"; then
+  fail "regression (--target with &): unresolved {REVIEW_TARGET} placeholder remains"
+fi
+note_pass
+
+# ------------------------------------------------------------------------
+# Regression: validation gate must NOT false-positive when the embedded
+# research findings legitimately contain literal placeholder tokens.
+# ------------------------------------------------------------------------
+META_CONTEXT_FILE="$TMPDIR_TEST/meta-context.txt"
+cat >"$META_CONTEXT_FILE" <<'EOF_META'
+This research report itself discusses the reviewer-templates archetype
+and refers to the literal placeholder tokens {REVIEW_TARGET}, {CONTEXT_BLOCK},
+and {OUTPUT_INSTRUCTION} as part of the documented contract. Pre-fix, the
+post-substitution validation gate would scan these tokens inside
+<reviewer_research_findings> and fail the render with "unresolved placeholder".
+EOF_META
+META_OUT="$TMPDIR_TEST/meta.txt"
+"$HELPER" \
+  --target 'research findings' \
+  --research-question-file "$QUESTION_FILE" \
+  --context-file "$META_CONTEXT_FILE" \
+  --in-scope-instruction-file "$INSCOPE_FILE" \
+  >"$META_OUT" 2>"$TMPDIR_TEST/meta.err" \
+  || fail "regression (meta-research content): exit non-zero (false-positive on legitimate placeholder tokens in user content): $(cat "$TMPDIR_TEST/meta.err")"
+# All three placeholder tokens should appear in the output exactly because they're embedded in the research findings.
+grep -Fq '{REVIEW_TARGET}' "$META_OUT"   || fail "regression (meta-research content): expected literal {REVIEW_TARGET} from embedded findings to be present"
+grep -Fq '{CONTEXT_BLOCK}' "$META_OUT"   || fail "regression (meta-research content): expected literal {CONTEXT_BLOCK} from embedded findings to be present"
+grep -Fq '{OUTPUT_INSTRUCTION}' "$META_OUT" || fail "regression (meta-research content): expected literal {OUTPUT_INSTRUCTION} from embedded findings to be present"
+note_pass
+
+# ------------------------------------------------------------------------
+# Negative: flag value validation — `--target --context-file ...` must reject.
+# ------------------------------------------------------------------------
+if "$HELPER" \
+    --target --context-file "$CONTEXT_FILE" \
+    --research-question-file "$QUESTION_FILE" \
+    --in-scope-instruction-file "$INSCOPE_FILE" \
+    >/dev/null 2>"$TMPDIR_TEST/value-as-flag.err"; then
+  fail "negative (--flag --next-flag): expected non-zero exit"
+fi
+grep -Fq -- 'requires a non-flag value' "$TMPDIR_TEST/value-as-flag.err" \
+  || fail "negative (--flag --next-flag): expected stderr 'requires a non-flag value'; got: $(cat "$TMPDIR_TEST/value-as-flag.err")"
+note_pass
+
+# ------------------------------------------------------------------------
+# Static integration check: validation-phase.md invokes the renderer
+# for BOTH lanes (lane-specific assertions, not just substring count).
+# ------------------------------------------------------------------------
 if [[ -f "$VALIDATION_PHASE" ]]; then
+  # Cursor lane: must contain both the helper invocation and the per-lane prompt file.
+  if ! grep -Fq 'render-reviewer-prompt.sh' "$VALIDATION_PHASE"; then
+    fail "static integration: skills/research/references/validation-phase.md must reference render-reviewer-prompt.sh"
+  fi
+  if ! grep -Fq 'cursor-prompt.txt' "$VALIDATION_PHASE"; then
+    fail "static integration: skills/research/references/validation-phase.md must reference cursor-prompt.txt for the Cursor lane"
+  fi
+  # Codex lane: must contain its per-lane prompt file too.
+  if ! grep -Fq 'codex-prompt.txt' "$VALIDATION_PHASE"; then
+    fail "static integration: skills/research/references/validation-phase.md must reference codex-prompt.txt for the Codex lane"
+  fi
+  # Sanity: total references to the helper script should be at least 2 (one per lane).
   hits="$(grep -Fc 'render-reviewer-prompt.sh' "$VALIDATION_PHASE" || true)"
   if [[ "$hits" -lt 2 ]]; then
     fail "static integration: skills/research/references/validation-phase.md must invoke render-reviewer-prompt.sh for both Cursor and Codex lanes (got $hits hit(s))"
