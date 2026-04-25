@@ -402,5 +402,57 @@ grep -Fq "Reduced lane diversity" "$SKILL_MD" \
 grep -Fq "model-family heterogeneity claim does not hold" "$SKILL_MD" \
   || fail "SKILL.md Step 3 must contain the 'model-family heterogeneity claim does not hold' banner phrase — keep in sync with research-phase.md §1.5 banner preamble (#506 Check 22)"
 
-echo "PASS: test-research-structure.sh — all 26 structural invariants hold"
+# Section-scoped extractor for the new ## Filing findings as issues numbered
+# procedure (added by issue #509 — pins the post-/issue mechanical-check
+# control-flow site at a concrete numbered procedure rather than generic prose;
+# FINDING_11 from the plan-review panel). The section spans from the H2
+# heading until the next H2 — fence-aware to mirror extract_deep_section's
+# semantics: bare ``` toggles a fence state so headings inside fenced markdown
+# template blocks do not terminate extraction.
+extract_filing_section() {
+  awk '
+    /^```/ { in_fence = !in_fence; next }
+    in_filing && !in_fence && /^## / { in_filing = 0 }
+    in_filing && !in_fence { print }
+    /^## Filing findings as issues/ { in_filing = 1 }
+  ' "$SKILL_MD"
+}
+
+FILING_SECTION=$(extract_filing_section)
+[[ -n "$FILING_SECTION" ]] \
+  || fail "SKILL.md must contain a '## Filing findings as issues' H2 section — Checks 23-26 cannot anchor without it (#509)"
+
+# Check 23 (#509 FINDING_11): the Filing-findings-as-issues procedure must
+# include the defensive `rm -f` of the sentinel path. Without this pin,
+# stale-sentinel false-positive recovery from a reused tmpdir is silently
+# regressed. Single-quoted intentionally — pinning the literal `$RESEARCH_TMPDIR`
+# token in SKILL.md prose (intentional — shellcheck SC2016 disabled).
+# shellcheck disable=SC2016
+echo "$FILING_SECTION" | grep -Fq 'rm -f "$RESEARCH_TMPDIR/issue-completed.sentinel"' \
+  || fail "SKILL.md '## Filing findings as issues' must contain defensive 'rm -f \"\$RESEARCH_TMPDIR/issue-completed.sentinel\"' (#509 FINDING_4 + path-skew prevention)"
+
+# Check 24 (#509 FINDING_11): the procedure must invoke /issue with the narrow
+# --sentinel-file flag (not --session-env, per FINDING_10) carrying the
+# specific sentinel path. The flag is the parent→child path single-source.
+# Single-quoted intentionally — pinning the literal `$RESEARCH_TMPDIR` token.
+# shellcheck disable=SC2016
+echo "$FILING_SECTION" | grep -Fq -- '--sentinel-file $RESEARCH_TMPDIR/issue-completed.sentinel' \
+  || fail "SKILL.md '## Filing findings as issues' must reference '--sentinel-file \$RESEARCH_TMPDIR/issue-completed.sentinel' (#509 FINDING_10 narrow flag)"
+
+# Check 25 (#509 FINDING_11): the procedure must invoke verify-skill-called.sh
+# with --sentinel-file post-/issue-return. This is the mechanical sentinel
+# gate — without it, /research has only stdout parsing as defense.
+echo "$FILING_SECTION" | grep -Fq -e "verify-skill-called.sh --sentinel-file" \
+  || fail "SKILL.md '## Filing findings as issues' must invoke verify-skill-called.sh --sentinel-file (#509 dialectic DECISION_1 + FINDING_11)"
+
+# Check 26 (#509 FINDING_8): the procedure must explicitly document the
+# fail-closed-on-any-failure intent so future contributors do not silently
+# soften the gate. Pin the literal "fail-closed" + "research-result-filing"
+# phrase pair on the same section to detect drift.
+echo "$FILING_SECTION" | grep -Fq "fail-closed" \
+  || fail "SKILL.md '## Filing findings as issues' must use the literal 'fail-closed' (#509 FINDING_8 intent doc)"
+echo "$FILING_SECTION" | grep -Fq "research-result-filing" \
+  || fail "SKILL.md '## Filing findings as issues' must mention 'research-result-filing' semantics (#509 FINDING_8 intent doc)"
+
+echo "PASS: test-research-structure.sh — all 30 structural invariants hold"
 exit 0

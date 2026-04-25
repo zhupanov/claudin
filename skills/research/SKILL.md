@@ -67,9 +67,49 @@ The research question is described by `RESEARCH_QUESTION` (not raw `$ARGUMENTS`)
 
 ## Sub-skill invocation
 
-Invoke `/issue` via the Skill tool when the research brief calls for filing the findings as GitHub issues. Follow the Pattern B conventions in `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` — pass `--session-env`, parse `/issue`'s stdout machine lines, and continue with the parent's next step after the child returns.
+Invoke `/issue` via the Skill tool when the research brief calls for filing the findings as GitHub issues. Follow the Pattern B conventions in `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` — parse `/issue`'s stdout machine lines (`ISSUES_CREATED`, `ISSUES_FAILED`, `ISSUES_DEDUPLICATED`) and continue with the parent's next step after the child returns. The numbered procedure below specifies the call site and the mechanical post-invocation gate that supplements stdout parsing as defense in depth.
 
 > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
+## Filing findings as issues
+
+A 5-step numbered procedure invoked when the research brief calls for filing findings as GitHub issues. Anchors the `/issue` invocation and its post-return verification at a concrete control-flow site (issue #509 plan review FINDING_11) so harnesses pin the procedure structure, not just generic prose.
+
+Defense in depth: stdout parsing of `ISSUES_*` is the primary post-`/issue` mechanical check; the sentinel-file gate below is a supplemental layer that catches the case where a child silently bailed without emitting counters. Both apply.
+
+1. **Defensive sentinel clear** — before invoking `/issue`, remove any stale sentinel from a prior run that may have reused the same tmpdir:
+
+   ```bash
+   rm -f "$RESEARCH_TMPDIR/issue-completed.sentinel"
+   ```
+
+2. **Invoke `/issue`** via the Skill tool with `--sentinel-file` pointing to the path above:
+
+   ```
+   --sentinel-file $RESEARCH_TMPDIR/issue-completed.sentinel <other-/issue-args>
+   ```
+
+   `--sentinel-file` is the narrow per-call flag (NOT a `--session-env` reader; FINDING_10). It accepts a single absolute path. `/issue` writes the sentinel at the end of its Step 7 only when `ISSUES_FAILED=0 AND not dry-run`; the all-dedup case (`ISSUES_CREATED=0`, `ISSUES_FAILED=0`, `ISSUES_DEDUPLICATED>=1`) DOES write the sentinel because it proves execution, not creation count.
+
+3. **Parse `/issue` stdout** for the canonical machine lines:
+   - `ISSUES_CREATED=<N>`, `ISSUES_DEDUPLICATED=<N>`, `ISSUES_FAILED=<N>`.
+   - Per-item `ISSUE_<i>_NUMBER`/`ISSUE_<i>_URL` for created issues.
+
+   Stdout parsing is the **primary** mechanical check (canonical post-`/issue` pattern per `subskill-invocation.md` "Parsed stdout machine value after /issue").
+
+4. **Mechanical sentinel verification** (defense in depth):
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file "$RESEARCH_TMPDIR/issue-completed.sentinel"
+   ```
+
+   Parse `VERIFIED=true|false` and `REASON=<token>` from stdout. On `VERIFIED=true`, continue. On `VERIFIED=false`, print the fail-closed warning citing `REASON` and abort:
+
+   ```
+   **⚠ /research: /issue did not complete cleanly (VERIFIED=false REASON=<token>) — aborting.**
+   ```
+
+5. **Fail-closed-on-any-failure intent** (FINDING_8): when `/issue` reports `ISSUES_FAILED>=1`, the sentinel is suppressed by design and `/research` aborts at step 4. This is intentional — research-result-filing semantics require all items to succeed; partial failure is operator-investigation territory and the operator must inspect per-item `ISSUE_<i>_FAILED=true` lines on stdout to recover. Do NOT add a conditional verify or partial-success branch.
 
 ## Progress Reporting
 
