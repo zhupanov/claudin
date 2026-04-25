@@ -30,9 +30,9 @@ Every decision selected by Step 2a.5 gets exactly one resolution entry with one 
 | `voted` | Both debater sides passed the eligibility gate; a judge panel voted; a majority (per threshold rules) resolved the decision. |
 | `fallback-to-synthesis` | Debater output failed the eligibility gate, or the judge panel could not reach a majority (2-judge 1-1 tie, or <2 eligible judges). Synthesis decision stands. |
 | `bucket-skipped` | Step 2a.5 step 4 skipped the debater bucket because the assigned external tool was unavailable. No debate occurred. Synthesis decision stands. |
-| `over-cap` | The decision was listed in `contested-decisions.md` but ranked outside Step 2a.5's top-`min(5, N)` cap. No debate occurred. Synthesis decision stands; Step 3.5 treats as still-contested. |
+| `over-cap` | The decision was listed in `contested-decisions.md` but ranked outside Step 2a.5's top-`min(5, N)` cap. No debate occurred. Synthesis decision stands. For /design: Step 3.5 treats as still-contested. (For /research --adjudicate: no Step 3.5 — the "no debate occurred" semantics suffice.) |
 
-`voted` is the only binding disposition. All other dispositions mean the Step 2a.4 synthesis decision stands for that point (Step 2b must not fabricate antithesis engagement prose for non-`voted` entries).
+`voted` is the only binding disposition. All other dispositions mean the synthesis decision stands for that point. For /design: the Step 2a.4 synthesis decision stands and Step 2b must not fabricate antithesis engagement prose for non-`voted` entries. For /research --adjudicate: the validation-merge synthesis stands and Step 2.5 must not reinstate a finding for non-`voted` entries (no reinstatement-into-validated-synthesis sub-step where the dialectic layer did not produce a heard counter-position).
 
 ## Ballot Format
 
