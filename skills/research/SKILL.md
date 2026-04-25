@@ -1,7 +1,7 @@
 ---
 name: research
-description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep selects 1/3+3/5+5 lanes (default standard); --adjudicate adds 3-judge dialectic over rejected findings. Mechanical guard: Edit/Write only. May invoke /issue."
-argument-hint: "[--debug] [--scale=quick|standard|deep] [--adjudicate] <research question or topic>"
+description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass (standard only); --adjudicate adds 3-judge dialectic. Guard: Edit/Write only."
+argument-hint: "[--debug] [--plan] [--scale=quick|standard|deep] [--adjudicate] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
   PreToolUse:
@@ -26,6 +26,7 @@ Collaborative best-effort read-only-repo research task with a scale-aware lane s
 Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, and `--adjudicate` are independent and may appear in any order at the start of `$ARGUMENTS`.
 
 - `--debug` (boolean): Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
+- `--plan` (boolean): Set a mental flag `RESEARCH_PLAN=true`. Enables an optional planner pre-pass before the lane fan-out: a single Claude Agent subagent decomposes `RESEARCH_QUESTION` into 2–4 focused subquestions, each lane researches its assigned subquestion(s), and synthesis is organized by subquestion. Default: `RESEARCH_PLAN=false` (byte-equivalent to pre-#420 behavior). See "Planner pre-pass — scale interaction" below for the `--scale` cross-effect; the planner is bounded (2–4 subquestions, no recursion) and falls back cleanly to single-question mode on any planner failure.
 - `--scale=quick|standard|deep` (value): Set a mental flag `RESEARCH_SCALE` to the explicitly-provided value. Default: `RESEARCH_SCALE=standard`. Selects the lane shape (1 / 3+3 / 5+5) for the research and validation phases — see "Scale matrix" below. Reject malformed forms with explicit error and abort: `--scale=foo` (unknown value) → print `**⚠ /research: --scale must be one of quick|standard|deep (got: foo). Aborting.**` and exit; `--scale` without `=value` → print `**⚠ /research: --scale requires a value (quick|standard|deep). Aborting.**` and exit; `--scale=` (empty value) → same error as missing value.
 - `--adjudicate` (boolean): Set a mental flag `RESEARCH_ADJUDICATE=true`. When set, runs a 3-judge dialectic adjudication after Step 2's Finalize Validation over every reviewer finding the orchestrator rejected during validation merge/dedup — see Step 2.5 below. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding"; majority binds. Default: `RESEARCH_ADJUDICATE=false` (Step 2.5 short-circuits with `⏩` and behavior is unchanged from prior versions). The `(finding, rejection_rationale)` capture in Step 2 runs unconditionally (regardless of this flag), but writes only to tmpdir scratch — when the flag is off, no extra LLM work, no external-tool launches, and no additional user-visible output is produced. Composes cleanly with `--scale=quick` (which skips Step 2 entirely): when both are set, Step 2.5 short-circuits with `⏩ no rejections to adjudicate (--scale=quick skipped Step 2)` since `rejected-findings.md` is never written.
 
@@ -38,6 +39,15 @@ Flags are independent — the presence of one flag must not influence the defaul
 | `deep` | 5 (Claude inline + Cursor-Arch + Cursor-Edge + Codex-Ext + Codex-Sec, with named angle prompts) | 5 (Code + Code-Sec + Code-Arch + Cursor + Codex) |
 
 Default behavior (no `--scale` token) is byte-equivalent to pre-#418 behavior: standard mode runs the same 3+3 lane shape with the same prompts, the same launch order, and the same lane-status rendering as before.
+
+## Planner pre-pass — scale interaction
+
+`--plan` is supported only with `--scale=standard` (the default 3-lane shape) for v1. With other scales, downgrade `--plan` to `false` with a visible warning at the start of Step 1 — do NOT silently ignore the flag, and do NOT reject the run. Resolution rule (applied before Step 1 begins):
+
+- `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=quick`: print `**⚠ /research: --plan is not applicable to --scale=quick (single lane → no decomposition benefit). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
+- `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=deep`: print `**⚠ /research: --plan + --scale=deep is not yet supported (deep mode's 4 named angle prompts already differentiate per-lane focus; combining with subquestion focus is documented as future work). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
+- `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=standard`: full functionality — Step 1.1 (planner pre-pass) and Step 1.2 (lane assignment) execute, the 3 lanes run with per-lane subquestion suffixes, Step 1.5 organizes the synthesis by subquestion. See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` for the procedure. Step 1.1 invokes `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/run-research-planner.sh` (contract in sibling `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/run-research-planner.md`); the script's offline regression harness is `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-run-research-planner.sh` (contract in sibling `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-run-research-planner.md`), wired into `make lint`.
+- `RESEARCH_PLAN=false` (any scale): default path — no planner, no per-lane suffix, no per-subquestion synthesis. Byte-equivalent to pre-#420 behavior.
 
 The research question is described by `RESEARCH_QUESTION` (not raw `$ARGUMENTS`). Use `RESEARCH_QUESTION` wherever human-readable topic text is needed (e.g., agent prompts, report headers, temp file content).
 
@@ -73,10 +83,14 @@ Step Name Registry:
 |------|------------|
 | 0 | setup |
 | 1 | research |
+| 1.1 | planner |
+| 1.2 | lane-assign |
 | 2 | validation |
 | 2.5 | adjudication |
 | 3 | report |
 | 4 | cleanup |
+
+(Step 1.1 and 1.2 are sub-steps of Step 1 that execute only when `RESEARCH_SCALE=standard` AND `RESEARCH_PLAN=true`. They are skipped on every other path.)
 
 ### Verbosity Control
 
@@ -124,7 +138,7 @@ Set mental flags `codex_available` and `cursor_available` based on the output, a
 
 **Skip this entire sub-step when `RESEARCH_SCALE=quick`.** Quick mode has no external lanes to attribute; Step 3 emits a literal "1 agent (Claude inline only — single-lane confidence)" research-phase header and omits the validation-phase line entirely, without consulting `lane-status.txt`.
 
-For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`, write `$RESEARCH_TMPDIR/lane-status.txt` with the per-tool aggregate pre-launch attribution. The same 8-key schema below covers both standard (1 Cursor + 1 Codex per phase) and deep (per-tool aggregate across 2 Cursor + 2 Codex in research, 1 Cursor + 1 Codex in validation): `RESEARCH_CURSOR_*` reflects the per-tool aggregate over both Cursor research slots in deep mode; same for `RESEARCH_CODEX_*`. Step 1.3 (research-phase) and Step 2 entry / validation-phase render-failure handlers (Cursor / Codex `On non-zero exit` paths) / Step 2.4 (validation-phase) update this file later via surgical phase-local rewrites; Step 3 reads it via `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh` to render the final-report header for standard mode (deep mode emits its own scale-aware header in Step 3 — see Step 3 below).
+For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`, write `$RESEARCH_TMPDIR/lane-status.txt` with the per-tool aggregate pre-launch attribution. The same 8-key schema below covers both standard (1 Cursor + 1 Codex per phase) and deep (per-tool aggregate across 2 Cursor + 2 Codex in research, 1 Cursor + 1 Codex in validation): `RESEARCH_CURSOR_*` reflects the per-tool aggregate over both Cursor research slots in deep mode; same for `RESEARCH_CODEX_*`. Step 1.4 (research-phase) and Step 2 entry / validation-phase render-failure handlers (Cursor / Codex `On non-zero exit` paths) / Step 2.4 (validation-phase) update this file later via surgical phase-local rewrites; Step 3 reads it via `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh` to render the final-report header for standard mode (deep mode emits its own scale-aware header in Step 3 — see Step 3 below).
 
 Sanitize each `*_PROBE_ERROR` value before writing: strip embedded `=` and `|` characters, collapse whitespace runs to single space, trim, truncate to 80 chars. The render script applies the same rules as defense-in-depth, but writer-side sanitization keeps the KV file well-formed.
 
@@ -161,15 +175,15 @@ Print: `✅ 0: setup — researching on branch <CURRENT_BRANCH> at <HEAD_SHA> (<
 
 Print: `> **🔶 1: research**`
 
-**MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the scale-aware research-lane invariant banner, the four named angle-prompt literals (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) used in deep mode, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT` literals (one per `external_evidence_mode` value), the per-scale launch subsections (### Standard / ### Quick / ### Deep) with the Cursor and Codex launch bash blocks and their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.3 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer, and Step 1.4 synthesis requirements (per-scale: standard byte-identical; quick single-lane with explicit confidence disclaimer; deep names the four diversified angles by name in synthesis). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md` at Step 1** — that reference is Step 2.5's body and loading it now would pollute context with the wrong phase's prompts.
+**MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the scale-aware research-lane invariant banner, the four named angle-prompt literals (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) used in deep mode, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT` literals (one per `external_evidence_mode` value), the optional Step 1.1 (Planner Pre-Pass) and Step 1.2 (Lane Assignment) gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=standard`, the per-scale launch subsections (### Standard / ### Quick / ### Deep) with the Cursor and Codex launch bash blocks and their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.4 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer (including the per-lane suffix rehydration from `lane-assignments.txt` when planner ran), and Step 1.5 synthesis requirements (per-scale: standard byte-identical when `RESEARCH_PLAN=false`, sub-sectioned by subquestion when `RESEARCH_PLAN=true`; quick single-lane with explicit confidence disclaimer; deep names the four diversified angles by name in synthesis). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md` at Step 1** — that reference is Step 2.5's body and loading it now would pollute context with the wrong phase's prompts.
 
-Execute Step 1 per the reference file above (phases 1.2, 1.3, 1.4), branching by `RESEARCH_SCALE`. SKILL.md is the sole owner of Step 1 entry and completion breadcrumbs; the reference file emits none. On completion, set `LANE_COUNT` from `RESEARCH_SCALE` (`quick` → 1, `standard` → 3, `deep` → 5) and print: `✅ 1: research — synthesis complete, $LANE_COUNT agents (<elapsed>)` (e.g. "1 agent" for quick, "3 agents" for standard, "5 agents" for deep — the count must reflect the actual lane count of the configured scale).
+Execute Step 1 per the reference file above (phases 1.1 through 1.5; phases 1.1 and 1.2 are gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=standard`), branching by `RESEARCH_SCALE`. SKILL.md is the sole owner of Step 1 entry and completion breadcrumbs; the reference file emits none. On completion, set `LANE_COUNT` from `RESEARCH_SCALE` (`quick` → 1, `standard` → 3, `deep` → 5) and print: `✅ 1: research — synthesis complete, $LANE_COUNT agents (<elapsed>)` (e.g. "1 agent" for quick, "3 agents" for standard, "5 agents" for deep — the count must reflect the actual lane count of the configured scale).
 
 ## Step 2 — Findings Validation
 
 Print: `> **🔶 2: validation**`
 
-**Quick-mode skip gate (emitted FIRST, before any reference load — Check 3 of `scripts/test-research-structure.sh` requires the MANDATORY directive line below to remain on a single line carrying both the directive and the reciprocal `Do NOT load` guards, so the skip gate is structured to short-circuit BEFORE that line)**: if `RESEARCH_SCALE=quick`, print `⏩ 2: validation — skipped (--scale=quick) (<elapsed>)` and proceed directly to Step 3 without loading `validation-phase.md`. The single-lane research-report.txt produced at Step 1.4 is the canonical input to Step 3.
+**Quick-mode skip gate (emitted FIRST, before any reference load — Check 3 of `scripts/test-research-structure.sh` requires the MANDATORY directive line below to remain on a single line carrying both the directive and the reciprocal `Do NOT load` guards, so the skip gate is structured to short-circuit BEFORE that line)**: if `RESEARCH_SCALE=quick`, print `⏩ 2: validation — skipped (--scale=quick) (<elapsed>)` and proceed directly to Step 3 without loading `validation-phase.md`. The single-lane research-report.txt produced at Step 1.5 is the canonical input to Step 3.
 
 **MANDATORY — READ ENTIRE FILE** before executing Step 2: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md`. It carries the scale-aware validation invariant banner, the Cursor and Codex validation-reviewer launch bash blocks with their long prompts and per-slot Claude Code Reviewer subagent fallbacks, the always-on Claude Code Reviewer subagent lane with the research-validation variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) and research-specific acceptance criteria, the deep-mode 2 extra Claude lanes (`Code-Sec` / `Code-Arch` lane-local emphasis on the unified Code Reviewer archetype, reusing the same `{CONTEXT_BLOCK}` XML wrapper), the process-Claude-findings-immediately rule, Step 2.4 `COLLECT_ARGS` + zero-externals branch + runtime-timeout replacement, the Codex/Cursor negotiation delegation to `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, the Finalize Validation procedure, and the **rejection-rationale capture sites A and B** that persist `(finding, rejection_rationale)` records to `$RESEARCH_TMPDIR/rejected-findings.md` for downstream consumption by Step 2.5 (the captures themselves run unconditionally regardless of `RESEARCH_ADJUDICATE`). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` at Step 2** — that reference is Step 1's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md` at Step 2** — that reference is Step 2.5's body and loading it now would pollute context with the wrong phase's prompts.
 
@@ -216,7 +230,7 @@ Skip `render-lane-status.sh` (Step 0b did not write `lane-status.txt` for quick 
 - `RESEARCH_HEADER="1 agent (Claude inline only — single-lane confidence)"`
 - `VALIDATION_HEADER="0 reviewers (validation phase skipped — see synthesis disclaimer)"`
 
-The validation-phase line is still rendered (with the 0-reviewers literal) so the report template's structure is preserved. The synthesis itself must already carry the explicit "single-lane confidence" disclaimer per `research-phase.md` Step 1.4 Quick branch.
+The validation-phase line is still rendered (with the 0-reviewers literal) so the report template's structure is preserved. The synthesis itself must already carry the explicit "single-lane confidence" disclaimer per `research-phase.md` Step 1.5 Quick branch.
 
 ### Deep (RESEARCH_SCALE=deep)
 
