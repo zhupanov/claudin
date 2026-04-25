@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 # test-assemble-anchor.sh — regression harness for scripts/assemble-anchor.sh.
 #
-# Covers 10 assertion categories:
-#   (a) Empty sections directory → 8 empty marker pairs + first-line marker.
+# Covers 14 assertion categories:
+#   (a) Empty sections directory → 8 empty marker pairs + first-line marker
+#       + seed-only visible placeholder line on line 2 (18 lines total).
+#   (a2) Empty sections directory → placeholder literal present (regression
+#       guard for the seed-only visibility fix).
+#   (a3) Partial fragments (one slug populated) → placeholder is suppressed
+#       (only the all-empty seed case fires it).
+#   (a4) All fragments whitespace-only → placeholder still fires (lenient
+#       predicate per dialectic DECISION_1).
+#   (a5) Nonexistent --sections-dir → ASSEMBLED=true and placeholder still
+#       fires (the all-empty pre-pass treats missing directory as all-empty).
 #   (b) Partial fragments → populated where present, empty pairs elsewhere,
 #       in SECTION_MARKERS order.
 #   (b2) Newline-terminated fragment → exactly one newline before the close
@@ -71,7 +80,9 @@ grep -qxF "OUTPUT=$output_a" <<<"$stdout_a" \
 
 [ -f "$output_a" ] || fail "(a) output file not created"
 
-expected_lines_a=1  # first-line marker
+# Expected: first-line anchor marker + seed-only placeholder line + N marker pairs.
+PLACEHOLDER_LINE='_/implement run in progress — sections below populate as the run proceeds._'
+expected_lines_a=2  # first-line marker + placeholder line
 for _ in "${SECTION_MARKERS[@]}"; do
     expected_lines_a=$((expected_lines_a + 2))  # open + close marker pair
 done
@@ -82,8 +93,13 @@ actual_lines_a=$(wc -l < "$output_a" | tr -d ' ')
 head -n 1 "$output_a" | grep -qxF '<!-- larch:implement-anchor v1 issue=42 -->' \
     || fail "(a) first line is not the anchor marker: $(head -n 1 "$output_a")"
 
-# Verify marker pairs in SECTION_MARKERS order, all empty.
-line_num=2
+line2=$(sed -n '2p' "$output_a")
+[ "$line2" = "$PLACEHOLDER_LINE" ] \
+    || fail "(a) line 2 expected the seed-only visible placeholder, got '$line2'"
+
+# Verify marker pairs in SECTION_MARKERS order, all empty. Walk starts at
+# line 3 (line 1 = anchor marker, line 2 = placeholder).
+line_num=3
 for slug in "${SECTION_MARKERS[@]}"; do
     open_line=$(sed -n "${line_num}p" "$output_a")
     close_line=$(sed -n "$((line_num + 1))p" "$output_a")
@@ -93,7 +109,68 @@ for slug in "${SECTION_MARKERS[@]}"; do
         || fail "(a) line $((line_num + 1)): expected '<!-- section-end:$slug -->', got '$close_line'"
     line_num=$((line_num + 2))
 done
-pass "(a) empty sections directory → 1 anchor marker + 8 empty marker pairs in SECTION_MARKERS order"
+pass "(a) empty sections directory → anchor marker + placeholder + 8 empty marker pairs in SECTION_MARKERS order"
+
+# --------------------------------------------------------------------------
+# (a2) Empty sections directory → placeholder literal present (regression
+#      guard for the seed-only visibility fix that resolved issue #431).
+# --------------------------------------------------------------------------
+grep -Fxq "$PLACEHOLDER_LINE" "$output_a" \
+    || fail "(a2) seed-only placeholder literal absent from empty-sections output"
+pass "(a2) empty sections directory → seed-only visible placeholder literal present"
+
+# --------------------------------------------------------------------------
+# (a3) Partial fragments (one slug populated) → placeholder is suppressed.
+#      Only the all-empty seed case fires it.
+# --------------------------------------------------------------------------
+sections_a3="$tmpdir/sections-a3"
+mkdir -p "$sections_a3"
+printf 'one populated section\n' > "$sections_a3/plan-goals-test.md"
+
+output_a3="$tmpdir/out-a3.md"
+"$ASSEMBLE_ANCHOR" --sections-dir "$sections_a3" --issue 43 --output "$output_a3" > /dev/null
+
+if grep -Fxq "$PLACEHOLDER_LINE" "$output_a3"; then
+    fail "(a3) placeholder must be suppressed when at least one fragment has content"
+fi
+pass "(a3) partial fragments → placeholder suppressed (gate fires only on all-empty seed)"
+
+# --------------------------------------------------------------------------
+# (a4) All fragments contain only whitespace bytes → placeholder still
+#      fires (lenient predicate per dialectic DECISION_1: a fragment is
+#      "empty" iff absent OR zero-byte OR whitespace-only).
+# --------------------------------------------------------------------------
+sections_a4="$tmpdir/sections-a4"
+mkdir -p "$sections_a4"
+for slug in "${SECTION_MARKERS[@]}"; do
+    # Mix of newline, space, and tab bytes — all classified as [:space:].
+    printf '\n  \t\n' > "$sections_a4/$slug.md"
+done
+
+output_a4="$tmpdir/out-a4.md"
+"$ASSEMBLE_ANCHOR" --sections-dir "$sections_a4" --issue 44 --output "$output_a4" > /dev/null
+
+grep -Fxq "$PLACEHOLDER_LINE" "$output_a4" \
+    || fail "(a4) lenient predicate: placeholder should fire when all fragments are whitespace-only"
+pass "(a4) all whitespace-only fragments → placeholder fires (lenient predicate honored)"
+
+# --------------------------------------------------------------------------
+# (a5) Nonexistent --sections-dir → ASSEMBLED=true and placeholder still
+#      fires. The all-empty pre-pass treats missing directory as all-empty
+#      because every $SECTIONS_DIR/$slug.md path fails the `[ -f ]` test.
+# --------------------------------------------------------------------------
+sections_a5="$tmpdir/sections-a5-DOES-NOT-EXIST"
+output_a5="$tmpdir/out-a5.md"
+stdout_a5="$("$ASSEMBLE_ANCHOR" --sections-dir "$sections_a5" --issue 45 --output "$output_a5")"
+
+grep -qxF 'ASSEMBLED=true' <<<"$stdout_a5" \
+    || fail "(a5) nonexistent --sections-dir should still ASSEMBLED=true, got: $stdout_a5"
+grep -Fxq "$PLACEHOLDER_LINE" "$output_a5" \
+    || fail "(a5) nonexistent --sections-dir should fire the placeholder"
+actual_lines_a5=$(wc -l < "$output_a5" | tr -d ' ')
+[ "$actual_lines_a5" = "$expected_lines_a" ] \
+    || fail "(a5) nonexistent --sections-dir expected $expected_lines_a lines, got $actual_lines_a5"
+pass "(a5) nonexistent --sections-dir → assembled with placeholder, $expected_lines_a lines"
 
 # --------------------------------------------------------------------------
 # (b) Partial fragments — populate only version-bump-reasoning and diagrams
