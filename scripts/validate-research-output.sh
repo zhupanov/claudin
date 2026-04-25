@@ -5,7 +5,7 @@
 # exits 0 if substantive or non-zero with a one-line diagnostic on stdout. The
 # intended consumer is `scripts/collect-reviewer-results.sh --substantive-validation`,
 # which translates a non-zero exit into a `STATUS=NOT_SUBSTANTIVE` entry with
-# `HEALTHY=false`. Phase 3 of umbrella issue #413 (closes #416, #447).
+# `HEALTHY=false`. Phase 3 of umbrella issue #413 (closes #416, #447, #473).
 #
 # Substantive = ALL of:
 #   1. Body word count >= --min-words (default 200), excluding fenced-code-block
@@ -13,22 +13,41 @@
 #   2. (when --require-citations is on, the default) at least one provenance
 #      marker, where a marker is any of:
 #        - file or file:line: regex match for an extension in the recognized
-#          set (#447 broadened from the #416 set):
-#          {c, cc, cfg, cjs, cpp, cs, css, csv, dart, env, go, gradle,
-#           groovy, h, hpp, htm, html, java, js, json, jsx, kt, lock, lua,
-#           m, md, mjs, mk, mm, php, pl, proto, py, r, rb, rs, sass, scala,
-#           scss, sh, sql, swift, toml, ts, tsv, tsx, txt, vue, xml, yaml,
-#           yml} — permits leading dot for hidden files with a basename
-#          (e.g. `.pre-commit-config.yaml`); requires a trailing-token
+#          set, split into two tiers per #473:
+#            LONG tier (relaxed rule, current behavior unchanged):
+#              {cc, cfg, cjs, cpp, cs, css, csv, dart, go, gradle, groovy,
+#               hpp, htm, html, java, js, json, jsx, kt, lua, md, mjs, mk,
+#               mm, php, pl, proto, py, rb, rs, sass, scala, scss, sh, sql,
+#               swift, toml, ts, tsv, tsx, vue, xml, yaml, yml}
+#            SHORT tier (strict rule, #473): {c, env, h, lock, m, r, txt}.
+#              Short-tier extensions overlap with English words / short
+#              identifiers (e.g., the verified `spin.lock` repro from
+#              issue #473), so the path-stem MUST contain at least one
+#              path-likeness signal: `/`, `_`, `-` somewhere in the stem,
+#              OR a trailing `:line-ref` (`:[0-9]+(-[0-9]+)?`).
+#          Forward-compat behavioral change (#473): bare short-extension
+#          citations like `Cargo.lock`, `main.c`, `app.env`, `foo.h`,
+#          `notes.txt` standing alone in prose (no `/`, `_`, `-` in the
+#          basename, no `:line-ref`) are NO LONGER markers. Operators
+#          citing short-extension files in research outputs MUST add a
+#          line ref (e.g., `Cargo.lock:7`) or path segment (e.g.,
+#          `kernel/spin.lock`, `parser_state.h`, `kernel-mod.h`). Long
+#          extensions (`.go`, `.py`, `.md`, `.json`, etc.) are unaffected
+#          and continue to match under the relaxed rule.
+#          Both tiers permit leading dot for hidden files with a basename
+#          (e.g., `.pre-commit-config.yaml`); both require a trailing-token
 #          boundary so the extension cannot bleed into adjacent path-token
 #          characters (rejects fake citations like `file.mdjunk:42`,
 #          `file.md:garbage`, `file.md/child`). Bare hidden-file forms
 #          without a basename (e.g. `.env:7`, `.gitignore:5`) are NOT
 #          matched and rely on probes 2-4 / contract. Boundary class
 #          excludes alnum, `_`, `-`, `:`, `/`; `.` IS a valid boundary so
-#          sentence-ending periods (`See foo.sh.`) and compound extensions
-#          (`Cargo.lock.bak`) match.  Edit-in-sync: this list is duplicated
-#          in `validate-research-output.md` intentionally so `--help`
+#          sentence-ending periods (`See foo.sh.`) match. Compound
+#          extensions: `bundle.js.map` still matches (inner `.js` is long-
+#          tier); `Cargo.lock.bak` no longer matches (inner `.lock` is
+#          short-tier and `Cargo` lacks any path-likeness signal).
+#          Edit-in-sync: this tiered list is duplicated in
+#          `validate-research-output.md` intentionally so `--help`
 #          (sed-extracted from this header) stays self-contained; both
 #          must be updated together.
 #        - extensionless filename: Makefile / Dockerfile / GNUmakefile,
@@ -100,7 +119,7 @@ while [[ $# -gt 0 ]]; do
         --validation-mode)
             VALIDATION_MODE=true; shift ;;
         --help)
-            sed -n '/^# /,/^[^#]/p' "$0" | head -n 60
+            sed -n '/^# /,/^[^#]/p' "$0" | head -n 95
             exit 0 ;;
         -*)
             echo "validate-research-output.sh: unknown option: $1" >&2
@@ -173,20 +192,31 @@ fi
 # --- 2. Provenance markers (when --require-citations) ---
 if [[ "$REQUIRE_CITATIONS" == "true" ]]; then
     # Probe 1: file path with a known extension (#416 origin, #447 broadened
-    # extension set + trailing-boundary rule, longest-first ordering inside
-    # prefix-conflict families to avoid backtracking-through-alternation
-    # dependence on BSD/macOS grep -E). Boundary `(^|[^A-Za-z0-9])` ensures
-    # the match starts at a non-alnum boundary so partial matches mid-word
-    # are rejected. Trailing `($|[^A-Za-z0-9_:/-])` requires the extension
-    # token to end at end-of-line OR at a character outside the path-token
-    # alphabet — alnum/underscore/dash plus `:` and `/`. Excluded `:`
-    # forces the `:line[-end]` form to use the explicit `(:[0-9]+(-[0-9]+)?)?`
-    # group (which requires digits after `:`) — bare `:garbage` does NOT
-    # qualify as a boundary. Excluded `/` rejects `file.md/child`-style
-    # bypass attempts. `.` IS a valid trailing boundary so sentence-ending
-    # periods (e.g., `See foo.sh.`) and compound-extension forms (e.g.,
-    # `file.md.bak`) match — these are real-world citation forms.
-    if grep -Eq '(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.(cc|cfg|cjs|cpp|css|csv|cs|c|dart|env|gradle|groovy|go|html|htm|hpp|h|java|json|jsx|js|kt|lock|lua|mjs|mk|mm|md|m|php|pl|proto|py|rb|rs|r|sass|scala|scss|sh|sql|swift|toml|tsx|tsv|ts|txt|vue|xml|yaml|yml)(:[0-9]+(-[0-9]+)?)?($|[^A-Za-z0-9_:/-])' "$INPUT"; then
+    # extension set + trailing-boundary rule, #473 split into LONG and SHORT
+    # tiers to fix generic-English false positives like `the spin.lock
+    # primitive`). Longest-first ordering preserved inside prefix-conflict
+    # families (e.g., `cc|cfg|cjs|cpp|css|csv|cs`, `html|htm|hpp`,
+    # `json|jsx|js`, `mjs|mk|mm|md`, `tsx|tsv|ts`) so BSD/macOS grep -E
+    # does not need to backtrack through alternation. Boundary
+    # `(^|[^A-Za-z0-9])` and trailing `($|[^A-Za-z0-9_:/-])` are unchanged
+    # from #447 — see header for the boundary semantics; `.` IS still a
+    # valid trailing boundary so sentence-ending periods (`See foo.sh.`)
+    # and long-tier compound extensions (`bundle.js.map`) still match.
+    #
+    # SHORT-tier strict rule (#473): the short extension set
+    # {c, env, h, lock, m, r, txt} overlaps with English words / short
+    # identifiers, so the path-stem must carry a path-likeness signal:
+    #   - `/`, `_`, or `-` somewhere in the stem, OR
+    #   - a trailing `:[0-9]+(-[0-9]+)?` line reference.
+    # The first stem character `[A-Za-z_]` may be `_`, but the strict-mode
+    # `[/_-]` requires a signal AFTER the start char, so a bare-underscore
+    # start does not by itself satisfy the rule.
+    PROBE1_LONG_EXTS='cc|cfg|cjs|cpp|css|csv|cs|dart|gradle|groovy|go|html|htm|hpp|java|json|jsx|js|kt|lua|mjs|mk|mm|md|php|pl|proto|py|rb|rs|sass|scala|scss|sh|sql|swift|toml|tsx|tsv|ts|vue|xml|yaml|yml'
+    PROBE1_SHORT_EXTS='lock|env|txt|c|h|m|r'
+    PROBE1_LONG_RE='(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.('"$PROBE1_LONG_EXTS"')(:[0-9]+(-[0-9]+)?)?($|[^A-Za-z0-9_:/-])'
+    PROBE1_SHORT_PATH_RE='(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*[/_-][A-Za-z0-9_./-]*\.('"$PROBE1_SHORT_EXTS"')(:[0-9]+(-[0-9]+)?)?($|[^A-Za-z0-9_:/-])'
+    PROBE1_SHORT_LINE_RE='(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.('"$PROBE1_SHORT_EXTS"'):[0-9]+(-[0-9]+)?($|[^A-Za-z0-9_:/-])'
+    if grep -Eq "$PROBE1_LONG_RE|$PROBE1_SHORT_PATH_RE|$PROBE1_SHORT_LINE_RE" "$INPUT"; then
         exit 0
     fi
 

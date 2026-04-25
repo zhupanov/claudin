@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.22] - 2026-04-25
+
+### Fixed
+
+- `scripts/validate-research-output.sh` probe 1 split into long-tier (relaxed rule, current behavior unchanged) and short-tier (strict path-likeness rule for the `lock|env|txt|c|h|m|r` extensions). Short-tier citations must carry a path-likeness signal — `/`, `_`, `-` somewhere in the stem, OR a trailing `:line-ref` — so prose tokens like `the spin.lock primitive`, `the my.env switch`, `the big.m optimization`, `the foo.r constant`, and `the raw.txt format` no longer match probe 1. **Forward-compat behavioral change**: bare short-extension citations like standalone `Cargo.lock`, `main.c`, `app.env`, `foo.h`, `notes.txt` (no `/`, `_`, `-` in basename, no `:line-ref`) are no longer markers — operators citing short-extension files in `/research` outputs must add a line-ref (e.g., `Cargo.lock:7`) or path segment (e.g., `kernel/spin.lock`, `parser_state.h`, `kernel-mod.h`). Long-tier extensions (`.go`, `.py`, `.md`, `.json`, etc.) are unaffected. The fix updates the script header, the sibling contract `scripts/validate-research-output.md`, the regression harness `scripts/test-validate-research-output.sh` (51 cases now, up from 38; 13 new cases for the short-extension rule), and the case-count line in `docs/linting.md`. BSD/macOS `grep -E` compatible. Closes #473.
+
 ## [7.4.21] - 2026-04-25
 
 ### Fixed
