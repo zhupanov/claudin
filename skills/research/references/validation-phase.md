@@ -2,9 +2,9 @@
 
 **Consumer**: `/research` Step 2 — loaded via the `MANDATORY — READ ENTIRE FILE` directive at Step 2 entry in SKILL.md.
 
-**Contract**: scale-aware findings-validation invariant. `RESEARCH_SCALE=standard` (default) keeps the 3-lane shape — 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude Code Reviewer subagent fallbacks when an external tool is unavailable. `RESEARCH_SCALE=deep` adds 2 extra Claude Code Reviewer subagent lanes (lane-local "prioritize security" / "prioritize architecture" overlays on the same unified Code Reviewer archetype — NOT new agent slugs) for a total of 5 lanes (1 Cursor + 1 Codex + 3 Claude). `RESEARCH_SCALE=quick` is **unreachable** at this reference — SKILL.md Step 2 skips Step 2 entirely and does NOT load this file when `RESEARCH_SCALE=quick`. Owns the launch-order rule, Cursor and Codex validation-reviewer launch bash blocks with their long reviewer prompts, per-slot fallback rules, the Claude Code Reviewer subagent archetype variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) for research validation, the deep-mode `{OUTPUT_INSTRUCTION}` overlays for the 2 extra Claude lanes, the process-Claude-findings-immediately rule, Step 2.4 collection with zero-externals branch + runtime-timeout replacement, Codex/Cursor negotiation delegation, and the Finalize Validation procedure.
+**Contract**: scale-aware findings-validation invariant. `RESEARCH_SCALE=standard` (default) keeps the 3-lane shape — 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude Code Reviewer subagent fallbacks when an external tool is unavailable. `RESEARCH_SCALE=deep` adds 2 extra Claude Code Reviewer subagent lanes (lane-local "prioritize security" / "prioritize architecture" overlays on the same unified Code Reviewer archetype — NOT new agent slugs) for a total of 5 lanes (1 Cursor + 1 Codex + 3 Claude). `RESEARCH_SCALE=quick` is **unreachable** at this reference — SKILL.md Step 2 skips Step 2 entirely and does NOT load this file when `RESEARCH_SCALE=quick`. Owns the launch-order rule, Cursor and Codex validation-reviewer launch bash blocks with their long reviewer prompts, per-slot fallback rules, the Claude Code Reviewer subagent archetype variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) for research validation, the deep-mode `{OUTPUT_INSTRUCTION}` overlays for the 2 extra Claude lanes, the process-Claude-findings-immediately rule, Step 2.4 collection with zero-externals branch + runtime-timeout replacement, Codex/Cursor negotiation delegation, the Finalize Validation procedure, and the **rejection-rationale capture sites A and B** that persist `(finding, rejection_rationale)` records to `$RESEARCH_TMPDIR/rejected-findings.md` for Step 2.5 (`adjudication-phase.md`) consumption. The captures run unconditionally regardless of `RESEARCH_ADJUDICATE` — the data lands in tmpdir scratch (wiped at Step 4), so a future flag-on run has source material, and a flag-off run produces no user-visible change.
 
-**When to load**: once Step 2 is about to execute. Do NOT load during Step 0, Step 1, Step 3, or Step 4. SKILL.md emits the Step 2 entry breadcrumb and the Step 2 completion print; this file does NOT emit those — it owns body content only.
+**When to load**: once Step 2 is about to execute. Do NOT load during Step 0, Step 1, Step 2.5, Step 3, or Step 4. SKILL.md emits the Step 2 entry breadcrumb and the Step 2 completion print; this file does NOT emit those — it owns body content only.
 
 ---
 
@@ -153,6 +153,21 @@ The same research-specific acceptance criteria apply to both extra lanes. The 5-
 
 **Process Claude findings immediately** — do not wait for external reviewers before starting. The always-on Claude Code Reviewer subagent lane returns first; collect its findings right away. If Cursor or Codex was unavailable (or both), each pre-launch Claude subagent fallback lane returns findings via the Agent tool — collect and merge those at the same time. In standard happy-path there is one Claude stream (the always-on lane); in standard degraded-path there are 2 or 3 Claude streams. In deep happy-path there are 3 Claude streams (`Code` + `Code-Sec` + `Code-Arch`); in deep degraded-path up to 5 Claude streams. Merge them all before external-reviewer collection, preserving per-lane attribution (`Code` / `Code-Sec` / `Code-Arch`) so dedup later can attribute findings correctly.
 
+### Rejection-rationale capture — Site A (Claude-subagent in-scope findings)
+
+For each Claude-subagent in-scope finding the orchestrator decides to **reject** during this merge — per the Research-specific acceptance criteria above ("factually incorrect" — misidentifies code, misattributes behavior, contradicts something verifiable by reading source files — or "already addressed in the synthesis") — append a structured record to `$RESEARCH_TMPDIR/rejected-findings.md`:
+
+```markdown
+### REJECTED_FINDING_<N>
+- **Reviewer**: Code
+- **Finding**: <verbatim finding text from the Claude subagent's output, with attribution prefixes/suffixes preserved as-is>
+- **Rejection rationale**: <one substantive paragraph (>= 50 words) explaining why the orchestrator rejected — must be detailed enough to serve as the THESIS defense in Step 2.5's adjudication ballot. State which specific check the finding failed (factually incorrect / already addressed) and the codebase or synthesis evidence that grounds the rejection.>
+```
+
+`<N>` is a per-session sequential index from 1, incremented across BOTH Site A and Site B captures. Use the `Write` tool (the file lives under `$RESEARCH_TMPDIR`, which is under canonical `/tmp` and thus permitted by the skill-scoped PreToolUse hook). On first call, create the file with the new entry; on subsequent calls, append. **Site A capture runs unconditionally** regardless of `RESEARCH_ADJUDICATE` — the data lands in tmpdir scratch and is wiped at Step 4 if Step 2.5 short-circuits.
+
+If zero Claude-subagent in-scope findings are rejected during this merge, do not create the file at this site.
+
 ## 2.4 — Collect and Validate External Reviewers
 
 Build the argument list from only the externals that were actually launched:
@@ -209,6 +224,21 @@ If any external reviewers produced findings, negotiate with each independently u
 **Note on negotiation prompt files**: Negotiation prompt files live under `$RESEARCH_TMPDIR` (which is always a path under `/tmp`), so they may be created either via the `Write` tool or via a Bash heredoc (e.g., `cat > "$RESEARCH_TMPDIR/codex-negotiation-prompt.txt" <<'EOF' ... EOF`). The skill-scoped PreToolUse hook permits `Write` to paths under canonical `/tmp`; both approaches are equivalent.
 
 Merge accepted/rejected outcomes after both complete.
+
+### Rejection-rationale capture — Site B (post-negotiation external-reviewer findings)
+
+The Negotiation Protocol in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` step 3 documents that "Claude makes the final call on any remaining disputes" after up to `max_rounds` rounds. For each external-reviewer in-scope finding whose rejection the orchestrator **upholds at the final-call step** (the reviewer maintained the finding through negotiation but the orchestrator concludes it is factually incorrect or already addressed), append a structured record to `$RESEARCH_TMPDIR/rejected-findings.md` using the same schema as Site A:
+
+```markdown
+### REJECTED_FINDING_<N>
+- **Reviewer**: Cursor | Codex
+- **Finding**: <verbatim finding text from the reviewer's output, with attribution prefixes/suffixes preserved as-is>
+- **Rejection rationale**: <one substantive paragraph (>= 50 words) explaining the orchestrator's final-call rejection — incorporate the reviewer's negotiation response (what argument the reviewer maintained) and explain why the orchestrator's position prevails. Must be detailed enough to serve as the THESIS defense in Step 2.5's adjudication ballot.>
+```
+
+Continue the per-session `<N>` counter started by Site A — DO NOT reset. Append (do not truncate). **Site B capture runs unconditionally** regardless of `RESEARCH_ADJUDICATE`, same as Site A.
+
+A finding the orchestrator accepts at the final-call step is NOT captured (only rejections are adjudication-eligible). A finding the reviewer withdraws during negotiation is NOT captured (no contested rejection remains).
 
 ## Finalize Validation
 
