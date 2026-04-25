@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.20] - 2026-04-25
+
+### Fixed
+
+- `scripts/build-research-adjudication-ballot.md` fixture-case table row at line 108 corrected to use the leading `]`-delimiter case. The prior row claimed input `[Code] The orchestrator skipped negotiation step 3.` is stripped, with a rationale citing the regex `^[Code]\s*`, but the leading-prefix regex applied at `scripts/build-research-adjudication-ballot.sh:252` is anchored on the alternation members (`Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer`) followed by a delimiter from `{':', ']', ')'}` — a line whose first non-space character is `[` does not satisfy the anchored alternation, so `[Code] ...` is NOT stripped. Row rewritten to first-line input `Code] The orchestrator skipped negotiation step 3.` with rationale citing the regex `^Code\s*]\s*`, preserving pedagogical coverage of the `]`-delimiter alternative in the fixture table. Pre-existing OOS — not introduced by issue #461. Closes #485.
+
 ## [7.4.19] - 2026-04-25
 
 ### Fixed

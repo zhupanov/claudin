@@ -105,7 +105,7 @@ The ballot body MUST NOT contain `Cursor`, `Codex`, `Claude`, `Code`, `Code-Sec`
 | Input first/last line | Stripped? | Rationale |
 |-----------------------|-----------|-----------|
 | `Cursor: The merge step lacks a deterministic sort.` (first line) | YES — leading | Pattern matches `^Cursor:\s*` exactly. |
-| `[Code] The orchestrator skipped negotiation step 3.` (first line) | YES — leading | Pattern matches `^[Code]\s*` exactly. |
+| `Code] The orchestrator skipped negotiation step 3.` (first line) | YES — leading | Pattern matches `^Code\s*]\s*` exactly. |
 | `Code-Sec: missing input validation on user-supplied URL.` (first line) | YES — leading | Deep-mode security lane attribution; pattern matches `^Code-Sec:\s*`. |
 | `Code-Arch: violates separation of concerns between layers.` (first line) | YES — leading | Deep-mode architecture lane attribution; pattern matches `^Code-Arch:\s*`. |
 | `(— Cursor)` at end of last line | YES — trailing | Pattern matches `\s*\(—\s*Cursor\s*\)$`. |
