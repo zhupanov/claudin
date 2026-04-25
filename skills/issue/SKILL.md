@@ -36,6 +36,7 @@ Supported flags (all optional):
 - `--go` — post `GO` as the final comment on each newly-created issue so it becomes eligible for `/fix-issue` automation. Works in both single and batch modes: Step 6 handles the GO post inline after each successful CREATE. Duplicates, failed creates, and dry-run items never get a GO comment.
 - `--repo OWNER/REPO` — explicit repo (otherwise inferred from the current working directory via `gh repo view`).
 - `--closed-window-days N` — override the closed-issue dedup window (default 90; set 0 to skip closed-issue dedup).
+- `--sentinel-file PATH` — absolute path at which Step 7 will write the post-success sentinel KV file (see `## Sentinel file (post-success)` below). The path must be absolute and must not contain `..`. When set, `SENTINEL_PATH_EXPLICIT=true` and the parent owns the sentinel's lifecycle (Step 9 does NOT remove it). When unset, `SENTINEL_PATH_EXPLICIT=false` and the helper writes to a child-local default `${TMPDIR:-/tmp}/larch-issue-$$.sentinel` that Step 9 cleans up itself (issue #509 plan review FINDING_3 fix). Save the resolved path as `SENTINEL_PATH`.
 
 After flag stripping:
 - If `--input-file` is set, set `MODE=batch`. Save `INPUT_FILE`. If any trailing non-flag token remains, abort with `**ERROR: --input-file cannot be combined with a free-form description.**`
@@ -246,6 +247,56 @@ Plus the per-item `ISSUE_<i>_*` lines accumulated above.
 - All warnings (`**⚠ …`), fail-open notes, and human prose go to **stderr**.
 - No sentinel terminator. The consumer (e.g. `/implement` Step 9a.1) parses any line matching `^(ISSUES?_[A-Z0-9_]+)=(.*)$` from stdout.
 
+**Post-success sentinel write** (after the machine lines above; runs unconditionally — the helper internally gates on the run state):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/write-sentinel.sh \
+  --path "$SENTINEL_PATH" \
+  --issues-created "$ISSUES_CREATED" \
+  --issues-deduplicated "$ISSUES_DEDUPLICATED" \
+  --issues-failed "$ISSUES_FAILED" \
+  $([ "$DRY_RUN" = "true" ] && echo "--dry-run")
+```
+
+`SENTINEL_PATH` is the resolved value from Step 1: explicit `--sentinel-file` if passed, else the child-local default `${TMPDIR:-/tmp}/larch-issue-$$.sentinel`. The helper writes the sentinel only when `ISSUES_FAILED=0 AND not dry-run` (sentinel proves **execution**, not creation count — the all-dedup case `ISSUES_CREATED=0 AND ISSUES_FAILED=0` DOES write the sentinel; this is the FINDING_1 fix from issue #509 plan review). Status output goes to stderr (`WROTE=true` or `WROTE=false REASON=<dry_run|failures>`) — does NOT corrupt the stdout grammar above. See `## Sentinel file (post-success)` below for the full contract.
+
+## Sentinel file (post-success)
+
+A small KV file `/issue` writes to mark a successful run that a parent skill (e.g. `/research`'s `## Filing findings as issues` numbered procedure) reads via `${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file` to confirm the child completed before continuing. Defense in depth on top of stdout `ISSUES_*` parsing.
+
+**Path resolution** (from Step 1):
+- Explicit `--sentinel-file <path>` → `SENTINEL_PATH=<path>`, `SENTINEL_PATH_EXPLICIT=true`. Parent owns lifecycle.
+- Unset → `SENTINEL_PATH=${TMPDIR:-/tmp}/larch-issue-$$.sentinel` (child-local), `SENTINEL_PATH_EXPLICIT=false`. Step 9 removes it.
+
+The default path is **child-local only** — `$$` is the child process's PID, which differs from the parent's, so the default cannot serve as a cross-process handoff. Parents that want to verify the sentinel MUST pass `--sentinel-file <path>` explicitly with a path the parent can also reach (typically under the parent's tmpdir). Issue #509 plan review FINDING_4.
+
+**Write conditions** (gate inside `write-sentinel.sh`):
+- `ISSUES_FAILED=0` AND `--dry-run` not set → write.
+- `ISSUES_FAILED >= 1` → no write (partial-failure is fail-closed by design — see FINDING_8 in `/research`).
+- `--dry-run` set → no write (dry-run produces no real GitHub side effects; `/issue` Step 6 conceptually counts dry-run as `ISSUES_CREATED+=1` so we cannot infer dry-run from counters).
+
+**The all-dedup case writes the sentinel** (`ISSUES_CREATED=0`, `ISSUES_DEDUPLICATED>=1`, `ISSUES_FAILED=0`): a successful dedup-only run is a legitimate `/issue` outcome and the sentinel proves the child ran, not that it created anything. Counters inside the sentinel let consumers distinguish all-create vs all-dedup vs mixed if they care. (Issue #509 plan review FINDING_1: gating on `ISSUES_CREATED>=1` would create a false-failure mode in `/research` callers.)
+
+**Sentinel content** (KV at `$SENTINEL_PATH`):
+
+```
+ISSUE_SENTINEL_VERSION=1
+ISSUES_CREATED=<N>
+ISSUES_DEDUPLICATED=<N>
+ISSUES_FAILED=<N>
+TIMESTAMP=<ISO 8601 UTC>
+```
+
+`ISSUE_SENTINEL_VERSION=1` enables future format changes without silent mis-parse.
+
+**Atomicity**: `write-sentinel.sh` writes to a same-directory `mktemp`, then `mv` to `SENTINEL_PATH`. Final file is either complete or absent — never partial.
+
+**Channel discipline**: helper status output (`WROTE=true`, `WROTE=false REASON=...`, `ERROR=<msg>`) goes to **stderr**. Stdout remains the `ISSUES_*` grammar consumers like `/implement` Step 9a.1 parse. (Issue #509 plan review FINDING_5.)
+
+**Backward compatibility**: existing `/issue` callers that do not pass `--sentinel-file` are unaffected — the child-local default sentinel is written and removed in the same run by Step 9 cleanup, so `/tmp` does not accumulate sentinel files. Callers that pass `--sentinel-file` (e.g. `/research`) own the path and the lifecycle.
+
+**Helper**: `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/write-sentinel.sh`. Sibling contract: `write-sentinel.md`. Regression coverage: `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-sentinel-write.sh` (sibling `test-sentinel-write.md`), wired into `make lint` via the `test-sentinel-write` target.
+
 ## Step 8 — Single-Mode Human Summary (backward compat)
 
 Only when `MODE=single`, also print one human-readable summary line (after all machine lines, to stderr so it does not corrupt the structured stdout stream for programmatic consumers):
@@ -260,3 +311,11 @@ Only when `MODE=single`, also print one human-readable summary line (after all m
 ## Step 9 — Cleanup
 
 Remove `$ISSUE_TMPDIR` if it exists.
+
+If `SENTINEL_PATH_EXPLICIT=false` (default-path was used because no `--sentinel-file` was passed), also remove the child-local sentinel — it was never of interest to a parent. This prevents `/tmp` accumulation for callers that did not opt in (issue #509 plan review FINDING_3 fix):
+
+```bash
+[ "$SENTINEL_PATH_EXPLICIT" = "false" ] && rm -f "$SENTINEL_PATH"
+```
+
+When `SENTINEL_PATH_EXPLICIT=true`, the sentinel is preserved — the parent that supplied `--sentinel-file` owns its lifecycle and cleans it up when its session tmpdir is removed.
