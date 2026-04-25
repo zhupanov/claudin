@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.2] - 2026-04-24
+
+### Changed
+
+- `/fix-issue` defers session setup until after `fetch-eligible-issue.sh` finds an eligible issue (issue #437). Previously Step 0 (setup) created a tmpdir, derived `REPO` via `gh repo view`, checked Slack config, and wrote `session-env.sh` unconditionally; when the subsequent fetch returned no eligible issue (the common cron-style invocation outcome), all of that work was wasted. Step 0 is now `Fetch Eligible Issue` and Step 1 is `Setup`; on `fetch-eligible-issue.sh` exit 1 / 2+, the skill skips directly to Step 9 with `FIX_ISSUE_TMPDIR` unset. Step 1 sets `FIX_ISSUE_TMPDIR=$SESSION_TMPDIR` immediately after parsing — before any abort branch — so a post-mktemp setup failure (e.g., `REPO_UNAVAILABLE=true`) still cleans up. Step 9 cleanup is now gated on `FIX_ISSUE_TMPDIR` being non-empty; the no-tmpdir path emits `⏭️ 9: cleanup — skipped (no temp dir created)` and proceeds to the standard completion breadcrumb. In-body breadcrumb literals in the new Step 0 fetch body renamed from `1: fetch issue` → `0: fetch issue` to match the swapped Step Name Registry. Cross-reference touch-ups: anti-pattern #1, positional-argument flag prose, Step 4 'Do NOT load' gate, Known Limitations blocked-by line, plus `skills/shared/subskill-invocation.md` and `skills/fix-issue/references/triage-classification.md`. Test-harness pins (`### 6a`, `## Step 7`, `Skip to Step 9`) unaffected — `test-fix-issue-bail-detection.sh` still passes 6/6 assertions. A follow-up `fetch → lock → setup` reorder (raised by Codex during plan review) was filed as a separate issue rather than expanded into this PR's scope.
+
 ## [7.3.1] - 2026-04-25
 
 ### Fixed
