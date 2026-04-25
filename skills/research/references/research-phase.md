@@ -26,7 +26,7 @@ The 3 research agents:
 
 **Shared prompt** (used verbatim by all 3 lanes — Cursor, Codex, inline Claude, and any Claude fallbacks):
 
-`RESEARCH_PROMPT` = `"You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Consider alternative perspectives to the obvious interpretation. Actively scrutinize for edge cases, gaps, missing pieces, and assumption failures. Explore the codebase to ground your findings. Write 2-3 paragraphs covering: (1) key findings and observations, including any that challenge the obvious reading, (2) relevant files/modules/areas and architectural patterns, (3) risks, constraints, feasibility concerns, edge cases, and gaps. Do NOT modify files."`
+`RESEARCH_PROMPT` = ``"You are researching a codebase to answer this question: <RESEARCH_QUESTION>. Consider alternative perspectives to the obvious interpretation. Actively scrutinize for edge cases, gaps, missing pieces, and assumption failures. Explore the codebase to ground your findings with verifiable provenance (see (4)). Write 2-3 paragraphs covering: (1) key findings and observations, including any that challenge the obvious reading, (2) relevant files/modules/areas and architectural patterns, (3) risks, constraints, feasibility concerns, edge cases, and gaps, (4) Every concrete claim must carry provenance: a `file:line` (or `file:line-range`) reference for repo-internal claims, a fenced command + 1–3 lines of its output for behavior claims, or a URL for external claims. Pure prose summaries without provenance are acceptable only for synthesis sentences that aggregate already-cited claims. Do NOT modify files."``
 
 **Cursor research** (if `cursor_available`):
 
