@@ -156,13 +156,13 @@ grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
 grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_MD" \
   || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of quick|standard|deep (got: foo). Aborting.' required) (#418, #460)"
 
-# Check 13 (#418 + #424 + #510): SKILL.md documents that --debug, --scale,
-# --adjudicate, and --keep-sidecar are independent flags (order-independence).
-# Pin the explicit independence statement — four flags now after #510 added
-# --keep-sidecar.
+# Check 13 (#418 + #424 + #510 + #518): SKILL.md documents that --debug,
+# --scale, --adjudicate, --keep-sidecar, and --token-budget are independent
+# flags (order-independence). Pin the explicit independence statement — five
+# flags now after #518 added --token-budget.
 # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
-grep -Eq -e '`--debug`, `--scale`, `--adjudicate`, and `--keep-sidecar` are independent' "$SKILL_MD" \
-  || fail "SKILL.md must explicitly state that '--debug', '--scale', '--adjudicate', and '--keep-sidecar' are independent (order-independence) (#418 + #424 + #510)"
+grep -Eq -e '`--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, and `--token-budget` are independent' "$SKILL_MD" \
+  || fail "SKILL.md must explicitly state that '--debug', '--scale', '--adjudicate', '--keep-sidecar', and '--token-budget' are independent (order-independence) (#418 + #424 + #510 + #518)"
 
 # Check 14 (#418): research-phase.md ### Standard subsection contains a stable
 # byte-drift pin (the existing standard-mode cursor research output filename

@@ -1,7 +1,7 @@
 ---
 name: research
-description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass (standard or deep); --adjudicate adds 3-judge dialectic; --keep-sidecar keeps /issue-batch sidecar."
-argument-hint: "[--debug] [--plan] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] <research question or topic>"
+description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass (standard or deep); --adjudicate adds 3-judge dialectic; --keep-sidecar keeps /issue-batch sidecar; --token-budget caps measurable Claude subagent tokens."
+argument-hint: "[--debug] [--plan] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
   PreToolUse:
@@ -23,13 +23,28 @@ Collaborative best-effort read-only-repo research task with a scale-aware lane s
 - **Boolean flags**: default to `false`. Only set to `true` when the `--flag` token is explicitly present in the arguments.
 - **Value flags** (separate class — boolean defaults rule does NOT apply): each value flag has its own non-`false` default documented per flag below; only an explicit `--flag=value` token overrides it; malformed forms (unknown value, missing `=`, missing value) abort with an explicit error.
 
-Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, `--adjudicate`, and `--keep-sidecar` are independent and may appear in any order at the start of `$ARGUMENTS`.
+Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, and `--token-budget` are independent and may appear in any order at the start of `$ARGUMENTS`.
 
 - `--debug` (boolean): Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--plan` (boolean): Set a mental flag `RESEARCH_PLAN=true`. Enables an optional planner pre-pass before the lane fan-out: a single Claude Agent subagent decomposes `RESEARCH_QUESTION` into 2–4 focused subquestions, each lane researches its assigned subquestion(s), and synthesis is organized by subquestion. Default: `RESEARCH_PLAN=false` (byte-equivalent to pre-#420 behavior). See "Planner pre-pass — scale interaction" below for the `--scale` cross-effect; the planner is bounded (2–4 subquestions, no recursion) and falls back cleanly to single-question mode on any planner failure.
 - `--scale=quick|standard|deep` (value): Set a mental flag `RESEARCH_SCALE` to the explicitly-provided value. Default: `RESEARCH_SCALE=standard`. Selects the lane shape (1 / 3+3 / 5+5) for the research and validation phases — see "Scale matrix" below. Reject malformed forms with explicit error and abort: `--scale=foo` (unknown value) → print `**⚠ /research: --scale must be one of quick|standard|deep (got: foo). Aborting.**` and exit; `--scale` without `=value` → print `**⚠ /research: --scale requires a value (quick|standard|deep). Aborting.**` and exit; `--scale=` (empty value) → same error as missing value.
 - `--adjudicate` (boolean): Set a mental flag `RESEARCH_ADJUDICATE=true`. When set, runs a 3-judge dialectic adjudication after Step 2's Finalize Validation over every reviewer finding the orchestrator rejected during validation merge/dedup — see Step 2.5 below. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding"; majority binds. Default: `RESEARCH_ADJUDICATE=false` (Step 2.5 short-circuits with `⏩` and behavior is unchanged from prior versions). The `(finding, rejection_rationale)` capture in Step 2 runs unconditionally (regardless of this flag), but writes only to tmpdir scratch — when the flag is off, no extra LLM work, no external-tool launches, and no additional user-visible output is produced. Composes cleanly with `--scale=quick` (which skips Step 2 entirely): when both are set, Step 2.5 short-circuits with `⏩ no rejections to adjudicate (--scale=quick skipped Step 2)` since `rejected-findings.md` is never written.
 - `--keep-sidecar` AND `--keep-sidecar=<PATH>` (boolean + value form, NO positional value): Set a mental flag `KEEP_SIDECAR=true`. Set a second mental flag `KEEP_SIDECAR_PATH` per the form variant: bare `--keep-sidecar` → `KEEP_SIDECAR_PATH=` (empty); `--keep-sidecar=<PATH>` → `KEEP_SIDECAR_PATH=<PATH>` (the literal path text after `=`). Step 4 reads `KEEP_SIDECAR_PATH` and falls back to `./research-findings-batch.md` only when it is empty (#510 review FINDING_6 — without an explicit `KEEP_SIDECAR_PATH` binding, the explicit-path form would silently fall back to the default). Step 4 cleanup preserves a `/issue`-batch markdown sidecar of the findings (one `### <title>` block per finding, parseable by `skills/issue/scripts/parse-input.sh`) past the tmpdir cleanup. Default: `KEEP_SIDECAR=false`; the sidecar is generated under `$RESEARCH_TMPDIR` at Step 3 and wiped at Step 4. **Form variants**: bare `--keep-sidecar` preserves to `./research-findings-batch.md`; `--keep-sidecar=<PATH>` preserves to `<PATH>` (must be writable; must NOT resolve under `$RESEARCH_TMPDIR`). Reject malformed forms with explicit error and abort: `--keep-sidecar=` (empty value) → print `**⚠ /research: --keep-sidecar=<path> requires a non-empty value. Aborting.**` and exit; `--keep-sidecar <some-path>` (positional value, NO `=`) → the parser stops at the first non-flag token per the existing flag-grammar contract, so `<some-path>` becomes the start of `RESEARCH_QUESTION` — operators wanting an explicit path MUST use `--keep-sidecar=<PATH>`. **Read-only-repo contract**: this is an opt-in workspace write via Bash `cp` (the prompt-only constrained tier — see "Read-only-repo contract" below); the operator opts in by using the flag. Operators should review the sidecar (and apply redaction if needed) before filing — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane. See `${CLAUDE_PLUGIN_ROOT}/SECURITY.md` § [External reviewer write surface in /research and /loop-review](../../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review) and `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.md` for the helper contract and known limitations.
+- `--token-budget=<positive integer>` (value): Set a mental flag `RESEARCH_TOKEN_BUDGET` to the explicit numeric value. Default: `RESEARCH_TOKEN_BUDGET=` (empty — no budget enforcement). When set, between-phase budget gates run after Step 1, Step 2, and Step 2.5 — see "Token telemetry and budget enforcement" below. The budget governs **measurable Claude subagent tokens only** (lanes whose `Agent`-tool return carries `<usage>total_tokens: N</usage>`); Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from the cap. Reject malformed forms with explicit error and abort: `--token-budget=foo` (non-integer) → print `**⚠ /research: --token-budget must be a positive integer (got: foo). Aborting.**` and exit; `--token-budget=` (empty value) → print `**⚠ /research: --token-budget=<N> requires a value. Aborting.**` and exit; `--token-budget=0` or negative → print `**⚠ /research: --token-budget must be > 0 (got: <val>). Aborting.**` and exit. See GitHub issue #518 for the umbrella feature.
+
+## Token telemetry and budget enforcement
+
+Step 4 always renders a `## Token Spend` section (immediately before `cleanup-tmpdir.sh`) summarizing per-phase Claude subagent token totals. The renderer (`scripts/token-tally.sh report`) globs per-lane sidecar files written by the orchestrator after each `Agent`-tool return. Sidecar schema: `PHASE=research|validation|adjudication`, `LANE=<stable slot name>`, `TOOL=claude`, `TOTAL_TOKENS=<integer or "unknown">`. See `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.md` for the helper contract.
+
+**Measurable lanes** (sidecar-writing): the planner subagent (Step 1.1.a, when `--plan`); pre-launch and runtime-timeout Cursor/Codex fallback subagents in research and validation phases; the always-on Claude `Code` subagent in validation; the deep-mode `Code-Sec` and `Code-Arch` subagents in validation; the always-on Claude judge subagent and any judge replacements in adjudication.
+
+**Unmeasurable lanes** (no sidecar): Claude inline (the orchestrator's own activity — no self-introspection); external Cursor/Codex lanes that successfully ran (their runners do not expose token counts).
+
+**Budget enforcement** runs **between phases only**: after Step 1, after Step 2, after Step 2.5. On overage, the run aborts before the next phase starts, sets `BUDGET_ABORTED=true`, skips Step 3 entirely (no `## Research Report` rendered), and proceeds to Step 4 to render the partial token report and clean up. The completion line carries the `(aborted: budget exceeded)` suffix. `TOTAL_TOKENS=unknown` sidecars contribute zero to the budget sum (a parser-broken `<usage>` block does not silently fail open — the unknown count is surfaced explicitly in the start-of-run notice and the budget-overage message).
+
+### Cost column (optional)
+
+When the env var `LARCH_TOKEN_RATE_PER_M` is set to a positive number (USD per million tokens), the Step 4 token report includes a `$` cost column. When unset (default), the cost column is omitted entirely. Single combined rate v1: the Anthropic Agent-tool API currently exposes only `total_tokens` (no input/output split), so a single rate suffices. See `${CLAUDE_PLUGIN_ROOT}/docs/configuration-and-permissions.md` for the env-var entry.
 
 ## Scale matrix
 
@@ -212,6 +227,12 @@ Parse the output for `HEAD_SHA` and `CURRENT_BRANCH`. If `CURRENT_BRANCH` is emp
 
 Print: `✅ 0: setup — researching on branch <CURRENT_BRANCH> at <HEAD_SHA> (<elapsed>)`
 
+### Token-budget start-of-run notice
+
+When `RESEARCH_TOKEN_BUDGET` is non-empty AND `RESEARCH_SCALE != quick`, print: `**ℹ --token-budget=$RESEARCH_TOKEN_BUDGET governs measured Claude subagent tokens only; Claude inline + external lanes (Cursor/Codex) are excluded from the cap. Unmeasurable lanes are reported separately.**`. When `RESEARCH_SCALE=quick`, omit the notice — quick mode runs only Claude inline (unmeasurable), so the cap would have nothing to apply to.
+
+Initialize `BUDGET_ABORTED=false` for the remainder of the run.
+
 ## Step 1 — Collaborative Research Perspectives
 
 Print: `> **🔶 1: research**`
@@ -219,6 +240,18 @@ Print: `> **🔶 1: research**`
 **MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the scale-aware research-lane invariant banner, the four named angle-prompt literals (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) used by standard mode (3 of 4) and deep mode (all 4), the external-evidence trigger detector and the conditional `RESEARCH_PROMPT_BASELINE` literals (one per `external_evidence_mode` value, used by quick mode and deep-mode's Claude inline lane only), the standard-mode per-lane angle assignment table (Cursor → ARCH; Codex → EDGE by default or EXT when `external_evidence_mode=true`; Claude inline → SEC), the optional Step 1.1 (Planner Pre-Pass) and Step 1.2 (Lane Assignment) gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE != quick` (enabled for both standard and deep), the per-scale launch subsections (### Standard / ### Quick / ### Deep) with the Cursor and Codex launch bash blocks and their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.4 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer (including the per-lane suffix rehydration from `lane-assignments.txt` when planner ran — suffix appended to each lane's angle base prompt; deep-mode runtime fallbacks consult the canonical lane→slot→angle mapping in §1.4 Deep), and Step 1.5 synthesis requirements (per-scale: standard names the angle perspectives and treats angle-driven divergence as expected, sub-sectioned by subquestion when `RESEARCH_PLAN=true` with explicit single-angle-perspective acknowledgment; quick single-lane with explicit confidence disclaimer; deep names the four diversified angles by name in synthesis — and when `RESEARCH_PLAN=true` adds subquestion-major sections + Per-angle highlights + Cross-cutting findings). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md` at Step 1** — that reference is Step 2.5's body and loading it now would pollute context with the wrong phase's prompts.
 
 Execute Step 1 per the reference file above (phases 1.1 through 1.5; phases 1.1 and 1.2 are gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE != quick`), branching by `RESEARCH_SCALE`. SKILL.md is the sole owner of Step 1 entry and completion breadcrumbs; the reference file emits none. On completion, set `LANE_COUNT` from `RESEARCH_SCALE` (`quick` → 1, `standard` → 3, `deep` → 5) and print: `✅ 1: research — synthesis complete, $LANE_COUNT agents (<elapsed>)` (e.g. "1 agent" for quick, "3 agents" for standard, "5 agents" for deep — the count must reflect the actual lane count of the configured scale).
+
+### Budget gate (after Step 1)
+
+When `RESEARCH_TOKEN_BUDGET` is non-empty, run the budget check before Step 2. The exit code is captured via `|| budget_rc=$?` so `set -e` does NOT propagate on exit 2 (which is the budget-overage signal):
+
+```bash
+budget_rc=0
+budget_out=$("${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh" check-budget \
+  --budget "$RESEARCH_TOKEN_BUDGET" --dir "$RESEARCH_TMPDIR") || budget_rc=$?
+```
+
+If `budget_rc == 2`: print `**⚠ /research: --token-budget=$RESEARCH_TOKEN_BUDGET exceeded after Step 1 ($budget_out). Aborting before Step 2.**`, set `BUDGET_ABORTED=true`, **skip Step 2 / Step 2.5 / Step 3 entirely**, jump directly to Step 4 (which will render the partial token report and clean up). When `RESEARCH_TOKEN_BUDGET` is empty (no budget set), this gate is skipped.
 
 ## Step 2 — Findings Validation
 
@@ -232,6 +265,10 @@ Execute Step 2 per the reference file above, branching by `RESEARCH_SCALE` (stan
 - If all reviewers reported no issues: `✅ 2: validation — all findings validated, no corrections needed ($VALIDATION_COUNT reviewers) (<elapsed>)`
 - If any findings were accepted and the synthesis was revised: `✅ 2: validation — corrections applied, <N> findings accepted ($VALIDATION_COUNT reviewers) (<elapsed>)`
 
+### Budget gate (after Step 2)
+
+When `RESEARCH_TOKEN_BUDGET` is non-empty, run the same budget check as the after-Step-1 gate (capturing exit code via `|| budget_rc=$?`). On `budget_rc == 2`: print `**⚠ /research: --token-budget=$RESEARCH_TOKEN_BUDGET exceeded after Step 2 ($budget_out). Aborting before Step 2.5.**`, set `BUDGET_ABORTED=true`, skip Step 2.5 and Step 3, jump to Step 4.
+
 ## Step 2.5 — Adjudicate Rejections
 
 Print: `> **🔶 2.5: adjudication**`
@@ -243,6 +280,10 @@ If `RESEARCH_ADJUDICATE=false`: print `⏩ 2.5: adjudication — skipped (--adju
 Execute Step 2.5 per the reference file above. SKILL.md is the sole owner of Step 2.5 entry and completion breadcrumbs; the reference file emits none. On completion, print one of these branches:
 - If `rejected-findings.md` was empty/absent: `⏩ 2.5: adjudication — no rejections to adjudicate (<elapsed>)`
 - Otherwise: `✅ 2.5: adjudication — <X> reinstated, <Y> upheld (<elapsed>)`
+
+### Budget gate (after Step 2.5)
+
+When `RESEARCH_TOKEN_BUDGET` is non-empty, run the same budget check as the prior gates (capturing exit code via `|| budget_rc=$?`). On `budget_rc == 2`: print `**⚠ /research: --token-budget=$RESEARCH_TOKEN_BUDGET exceeded after Step 2.5 ($budget_out). Aborting before Step 3.**`, set `BUDGET_ABORTED=true`, skip Step 3, jump to Step 4.
 
 ## Step 3 — Final Research Report
 
@@ -387,6 +428,25 @@ Print: `✅ 3: report — complete (<elapsed>)`
 
 ## Step 4 — Cleanup and Final Warnings
 
+### Budget-abort prelude (when `BUDGET_ABORTED=true`)
+
+If `BUDGET_ABORTED=true` (set by any of the budget gates after Steps 1, 2, or 2.5), Step 3 was skipped — no `## Research Report` was rendered. Print: `**Step 3 skipped (aborted: --token-budget exceeded). Partial telemetry follows.**` so the operator sees the cause clearly.
+
+### Token Spend report (always)
+
+Render the `## Token Spend` section before `cleanup-tmpdir.sh` so sidecars under `$RESEARCH_TMPDIR` are still readable. The script owns the full section (header + body) — SKILL.md just executes it and prints the stdout:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh report \
+  --dir "$RESEARCH_TMPDIR" \
+  --scale "$RESEARCH_SCALE" \
+  --adjudicate "$RESEARCH_ADJUDICATE" \
+  --planner "$RESEARCH_PLAN" \
+  --budget-aborted "$BUDGET_ABORTED"
+```
+
+The script is a no-op-safe call: when no sidecars exist (e.g., quick mode with no measurable lanes), it prints a `_(no measurements available)_` placeholder; if `$RESEARCH_TMPDIR` was already removed, it prints `_(token telemetry unavailable)_`. Either path exits 0 — the report block is always emitted, even on degraded paths. See `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.md` for the full contract.
+
 ### Preserve sidecar (when `KEEP_SIDECAR=true`)
 
 If `KEEP_SIDECAR=true`, copy the generated sidecar to the operator-controlled destination BEFORE invoking `cleanup-tmpdir.sh`. The implementation uses Bash `cp` (the prompt-only constrained tier of the read-only-repo contract — see "Read-only-repo contract" above). Default destination is `./research-findings-batch.md`; an explicit `--keep-sidecar=<PATH>` form sets the destination from the flag.
@@ -435,4 +495,4 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$RESEARCH_TMPDIR"
 - `**⚠ Cursor research timed out / produced empty output**`
 - `**⚠ Codex research timed out / produced empty output**`
 
-Print: `✅ 4: cleanup — research complete! (<elapsed>)`
+Print: `✅ 4: cleanup — research complete! (<elapsed>)` — when `BUDGET_ABORTED=true`, append the suffix `(aborted: budget exceeded)` so the completion line reads `✅ 4: cleanup — research complete! (<elapsed>) (aborted: budget exceeded)`.

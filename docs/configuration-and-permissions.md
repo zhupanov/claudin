@@ -127,3 +127,16 @@ Codex reasoning effort for reviewer launches. Accepted values: `minimal`, `low`,
 - Setting `LARCH_CODEX_EFFORT=""` explicitly does NOT disable emission; to suppress effort flags entirely, the callers already omit the `--with-effort` flag (e.g., `check-reviewers.sh` health probes do not use max effort regardless of env var setting).
 
 **Scope**: Claude and Cursor reviewers run at their defaults. Only Codex is bumped to `high` by default. This is deliberate — Claude's sonnet default is already well-suited to review work, and Cursor has no dedicated reasoning-effort CLI flag today.
+
+### `LARCH_TOKEN_RATE_PER_M`
+
+Per-million-token cost rate (USD) used by `/research`'s Step 4 token report (`## Token Spend` section). When set to a positive number, the report renders an additional `$` cost column for each per-phase row and the run total. When unset (default) or set to a non-numeric value, the `$` column is omitted entirely.
+
+**When set:**
+- The Step 4 report includes a `$` column. Cost is computed as `(total_tokens × rate) / 1_000_000` via `awk` floating-point.
+- Single combined rate v1: the Anthropic Agent-tool API currently exposes only `total_tokens` (no input/output split), so a single rate suffices. If/when input/output split becomes available, this env var may be supplemented (or replaced) by `LARCH_TOKEN_RATE_INPUT_PER_M` / `LARCH_TOKEN_RATE_OUTPUT_PER_M` in a backwards-compatible way.
+
+**When not set:**
+- The `$` column is omitted; the report shows only token counts.
+
+**Scope**: Token telemetry covers Claude subagent (Agent-tool) invocations only. Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from both the totals and the cost column. The report labels itself "Claude tokens only; external lanes excluded" so operators see the coverage honestly. See [`scripts/token-tally.md`](../scripts/token-tally.md) for the helper contract and `--token-budget` interaction.
