@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.15] - 2026-04-25
+
+### Changed
+
+- `skills/fix-issue/SKILL.md` Known Limitations — extended the "Lock-before-setup behavioral delta" bullet to explicitly cite preflight `git fetch origin main` (run by `session-setup.sh` via `preflight.sh` before mktemp) as the network-bound, transient Step 2 failure most likely to leave a stale `IN PROGRESS` lock under the `fetch → lock → setup` ordering introduced by PR #468, alongside the existing non-network `REPO_UNAVAILABLE=true` example. Adds an editorial note recording that the design panel for the related reorder voted 3 EXONERATE on the heavier "split `session-setup.sh` into pre-lock preflight + post-lock setup" mitigation (judging the structural split heavier than warranted), so the documented failure mode is the accepted trade-off rather than a deferred bug. Documentation-only; no `session-setup.sh` / `preflight.sh` code changes, no step reordering, no new test harness. Closes #471.
+
 ## [7.4.14] - 2026-04-25
 
 ### Fixed
