@@ -198,12 +198,24 @@ validate_eval_set() {
   local count=0
   local rc=0
   local seen_categories=""
+  local seen_ids=""
   while IFS=$'\t' read -r id cat prov kw q notes; do
     if [[ -z "$id" || -z "$cat" || -z "$prov" || -z "$kw" || -z "$q" || -z "$notes" ]]; then
       printf 'eval-research: entry has missing field(s): id=%s cat=%s prov=%s\n' "$id" "$cat" "$prov" >&2
       rc=1
       continue
     fi
+    if ! [[ "$id" =~ ^[a-z0-9-]+$ ]]; then
+      printf 'eval-research: entry has invalid id (must match ^[a-z0-9-]+$, kebab-case): %s\n' "$id" >&2
+      rc=1
+    fi
+    case "$seen_ids" in
+      *"|$id|"*)
+        printf 'eval-research: duplicate eval id: %s\n' "$id" >&2
+        rc=1
+        ;;
+      *) seen_ids="${seen_ids}|$id|" ;;
+    esac
     case "$cat" in
       lookup|architecture|external-comparison|risk-assessment|feasibility) ;;
       *)
