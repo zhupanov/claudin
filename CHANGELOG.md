@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.10] - 2026-04-24
+
+### Changed
+
+- `skills/research/references/validation-phase.md`: Cursor and Codex external-reviewer lanes now render the unified Code Reviewer archetype from `skills/shared/reviewer-templates.md` via the new `scripts/render-reviewer-prompt.sh`, so all 3 lanes (Claude always-on + Cursor + Codex) walk the same five focus areas (code-quality / risk-integration / correctness / architecture / security) with XML-wrapped untrusted-context (`<reviewer_research_question>` + `<reviewer_research_findings>`) for prompt-injection hardening. Lanes use a foreground-render → background-launch pattern so render failure escalates synchronously to a Claude Code Reviewer subagent fallback (preserves the 3-lane invariant) rather than blocking on a missing `.done` sentinel. The helper applies a research-validation sentinel-override (`No in-scope issues found.` → `NO_ISSUES_FOUND`) and a section-keyed `{OUTPUT_INSTRUCTION}` expansion that instructs models to leave the OOS section empty for research validation — preserving `/research`'s negotiation-pipeline single-list contract. Adds `scripts/render-reviewer-prompt.{sh,md}` (sibling contract per AGENTS.md) and `scripts/test-render-reviewer-prompt.{sh,md}` (18 assertions: happy + 5 negative + 3 regression + 1 lane-specific integration). Updates `docs/review-agents.md` to retire the documented Codex/Cursor 4-perspectives asymmetry. Wires the new harness into `Makefile` `test-harnesses` and excludes it from `agent-lint.toml` G004/dead-script (Makefile-only invocation pattern, mirroring `test-research-structure.sh` siblings). `scripts/test-research-structure.sh` runs unchanged — Check 6 stays green via the unchanged Claude variable-binding section. Closes #417.
+
 ## [7.0.9] - 2026-04-24
 
 ### Changed
