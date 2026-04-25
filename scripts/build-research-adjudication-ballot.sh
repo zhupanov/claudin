@@ -235,7 +235,6 @@ function trim_right(s) { sub(/[[:space:]]+$/, "", s); return s; }
 }
 END {
   if (NR == 0) exit 0;
-  prefix_re = "^[[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[:|]?[[:space:]]*\\)?[[:space:]]*";
   prefix_re_short = "^[[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*[:\\]\\)][[:space:]]*";
   suffix_re = "[[:space:]]*[\\(—-][[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*\\)?[[:space:]]*$";
   if (first_nb > 0) {
