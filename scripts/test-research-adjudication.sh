@@ -20,6 +20,10 @@
 #      lines into the ballot file; caller-style `2>&1` merge still surfaces
 #      ERROR= for the existing run-research-adjudication.sh extraction
 #      (regression guard for issue #463).
+#  11. Deep-mode reviewer name stripping (issue #461) — anchored leading prefix `Code-Sec:` /
+#      `Code-Arch:` and anchored trailing suffix ` (Code-Sec)` / ` — Code-Arch` are stripped from
+#      defense bodies; mid-content occurrences are preserved. Code-Sec and Code-Arch are the
+#      deep-mode reviewer attributions introduced by /research --scale=deep.
 #
 # Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
 # locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
@@ -301,6 +305,67 @@ echo "$merged_out" | grep -qE '^ERROR=' \
   || fail "Test 10: caller-style 2>&1 capture lost ERROR= line (got: $merged_out)"
 
 pass "Test 10: emit_failure routes FAILED=/ERROR= to stderr; caller 2>&1 merge still captures it"
+
+# --- Test 11: deep-mode reviewer name stripping (Code-Sec / Code-Arch) ------
+
+# Regression test for issue #461. /research --scale=deep introduces two extra
+# Claude Code Reviewer subagent attributions: Code-Sec (security lane) and
+# Code-Arch (architecture lane). The attribution scrubber must strip these at
+# anchored prefix/suffix positions and preserve them mid-content. Without this
+# coverage, a deep-mode reviewer's rejected finding would carry its
+# "Code-Sec: " / "Code-Arch: " attribution into <defense_content>, breaking
+# the anonymous Defense A/B guarantee.
+
+deep_input="$WORK_DIR/deep-rej.md"
+deep_output="$WORK_DIR/deep-ballot.txt"
+
+# Two deep-mode rejections plus mid-content tokens to verify preservation.
+# The Finding line carries an anchored leading "Code-Sec: " / "Code-Arch: ";
+# the Rejection rationale's last line carries an anchored trailing suffix
+# (one in parentheses, one with em-dash) to exercise the suffix regex.
+cat > "$deep_input" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Code-Sec
+- **Finding**: Code-Sec: the documented retry policy at validation-phase.md:142 omits the rate-limit error code path that production traffic actually surfaces under burst load.
+- **Rejection rationale**: The retry policy does cover the rate-limit case via the generic transient-error branch at validation-phase.md:151. Code-Sec misread the contract — the orchestrator routes rate-limit responses through the same backoff loop. (Code-Sec)
+
+### REJECTED_FINDING_2
+- **Reviewer**: Code-Arch
+- **Finding**: Code-Arch: the new helper at scripts/foo.sh:42 mixes orchestration responsibility with serialization concerns and should be split into two separate scripts following the existing layering convention.
+- **Rejection rationale**: The helper's two responsibilities are tightly coupled by a shared invariant the existing layering does not address; splitting would force the invariant into both halves. The Code-Arch checklist anticipates this exception under "shared invariant supersedes layering". — Code-Arch
+EOF
+
+builder_out_11="$("$BUILDER" --input "$deep_input" --output "$deep_output")"
+echo "$builder_out_11" | grep -qE '^DECISION_COUNT=2$' \
+  || fail "Test 11: deep-mode input expected DECISION_COUNT=2, got: $builder_out_11"
+
+deep_body="$(cat "$deep_output")"
+
+# (a) Anchored prefix Code-Sec: / Code-Arch: stripped from defense first line.
+echo "$deep_body" | grep -qE 'Code-Sec: the documented retry policy' && \
+  fail "Test 11a: leading 'Code-Sec: ' attribution prefix was NOT stripped from defense body"
+echo "$deep_body" | grep -qE 'Code-Arch: the new helper' && \
+  fail "Test 11a: leading 'Code-Arch: ' attribution prefix was NOT stripped from defense body"
+
+# After stripping, the original body content must survive verbatim.
+echo "$deep_body" | grep -qF "the documented retry policy at validation-phase.md:142" \
+  || fail "Test 11a: Code-Sec finding body content lost after attribution stripping"
+echo "$deep_body" | grep -qF "the new helper at scripts/foo.sh:42" \
+  || fail "Test 11a: Code-Arch finding body content lost after attribution stripping"
+
+# (b) Anchored trailing suffix " (Code-Sec)" / " — Code-Arch" stripped from last line.
+echo "$deep_body" | grep -qE '\(Code-Sec\)' && \
+  fail "Test 11b: trailing ' (Code-Sec)' attribution suffix was NOT stripped from defense body"
+echo "$deep_body" | grep -qE '— Code-Arch[[:space:]]*$' && \
+  fail "Test 11b: trailing ' — Code-Arch' attribution suffix was NOT stripped from defense body"
+
+# (c) Mid-content "Code-Sec" / "Code-Arch" tokens must be preserved.
+echo "$deep_body" | grep -qF "Code-Sec misread the contract" \
+  || fail "Test 11c: mid-content 'Code-Sec misread the contract' was incorrectly stripped"
+echo "$deep_body" | grep -qF "The Code-Arch checklist anticipates this exception" \
+  || fail "Test 11c: mid-content 'The Code-Arch checklist anticipates this exception' was incorrectly stripped"
+
+pass "Test 11: deep-mode Code-Sec/Code-Arch — anchored prefix/suffix stripped, mid-content preserved"
 
 # --- All tests passed --------------------------------------------------------
 

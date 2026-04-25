@@ -64,7 +64,7 @@ The naming difference is intentional: distinct stdout key vocabularies make the 
 
 After parsing the input file into per-block records, the helper sorts records by:
 
-1. **Primary key**: `Reviewer` field (lexicographic ascending; case-sensitive — `Code` < `Codex` < `Cursor`).
+1. **Primary key**: `Reviewer` field (lexicographic ascending; case-sensitive — `Code` < `Code-Arch` < `Code-Sec` < `Codex` < `Cursor`; `Code-Arch` and `Code-Sec` are the deep-mode Claude Code Reviewer subagent attributions and sort between `Code` and `Codex`).
 2. **Secondary key**: `sha256(Finding text)` (lexicographic ascending of the hex-encoded digest).
 
 The sorted order then determines the `DECISION_<N>` numbering: the first record becomes `DECISION_1`, the second `DECISION_2`, etc. **The same set of input rejections always produces a byte-identical ballot regardless of the order in which they were appended to `rejected-findings.md`** during the validation phase — this is the guarantee that allows append-time concurrency (Site A processes Claude findings immediately while Site B processes externals after parallel negotiations) without producing run-to-run nondeterminism in adjudication outcomes.
@@ -82,20 +82,22 @@ The judge's vote token (`THESIS` / `ANTI_THESIS`) maps to the **side** (`rejecti
 
 ## Anchored-only attribution stripping
 
-The ballot body MUST NOT contain `Cursor`, `Codex`, `Claude`, `Code`, `orchestrator`, or `Code Reviewer` tokens at line-anchored attribution positions on the first/last non-empty line of each defense body. Mid-content occurrences of these tokens are preserved verbatim — `/research` is sometimes run on topics that legitimately reference reviewer orchestration (e.g., "the orchestrator's pre-negotiation merge step"), and blunt search-and-replace would mutilate such content.
+The ballot body MUST NOT contain `Cursor`, `Codex`, `Claude`, `Code`, `Code-Sec`, `Code-Arch`, `orchestrator`, or `Code Reviewer` tokens at line-anchored attribution positions on the first/last non-empty line of each defense body. `Code-Sec` and `Code-Arch` are the two extra Claude Code Reviewer subagent attributions introduced by `/research --scale=deep` (validation phase); they must be stripped under the same anchored-only rule as the standard reviewer set so the anonymous Defense A/B guarantee holds for deep-mode rejections that flow into adjudication. Mid-content occurrences of any of these tokens are preserved verbatim — `/research` is sometimes run on topics that legitimately reference reviewer orchestration (e.g., "the orchestrator's pre-negotiation merge step"), and blunt search-and-replace would mutilate such content.
 
 ### Regex applied
+
+`Code-Sec` and `Code-Arch` precede `Code` in the alternation so the longer deep-mode names match before the shorter `Code` prefix (POSIX ERE leftmost-longest within an alternation is unreliable across awk implementations; explicit ordering is portable).
 
 **Leading prefix on the first non-empty line** (case-sensitive; the matched group is removed):
 
 ```
-^[[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*[:\]\)][[:space:]]*
+^[[:space:]]*(Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer)[[:space:]]*[:\]\)][[:space:]]*
 ```
 
 **Trailing suffix on the last non-empty line** (case-sensitive; iteratively applied — multiple anchored suffixes can be stripped):
 
 ```
-[[:space:]]*[\(—-][[:space:]]*(Cursor|Codex|Claude|Code|orchestrator|Code Reviewer)[[:space:]]*\)?[[:space:]]*$
+[[:space:]]*[\(—-][[:space:]]*(Cursor|Codex|Claude|Code-Sec|Code-Arch|Code|orchestrator|Code Reviewer)[[:space:]]*\)?[[:space:]]*$
 ```
 
 ### Fixture cases
@@ -104,10 +106,15 @@ The ballot body MUST NOT contain `Cursor`, `Codex`, `Claude`, `Code`, `orchestra
 |-----------------------|-----------|-----------|
 | `Cursor: The merge step lacks a deterministic sort.` (first line) | YES — leading | Pattern matches `^Cursor:\s*` exactly. |
 | `[Code] The orchestrator skipped negotiation step 3.` (first line) | YES — leading | Pattern matches `^[Code]\s*` exactly. |
+| `Code-Sec: missing input validation on user-supplied URL.` (first line) | YES — leading | Deep-mode security lane attribution; pattern matches `^Code-Sec:\s*`. |
+| `Code-Arch: violates separation of concerns between layers.` (first line) | YES — leading | Deep-mode architecture lane attribution; pattern matches `^Code-Arch:\s*`. |
 | `(— Cursor)` at end of last line | YES — trailing | Pattern matches `\s*\(—\s*Cursor\s*\)$`. |
+| `(Code-Sec)` at end of last line | YES — trailing | Deep-mode trailing suffix; pattern matches `\s*\(\s*Code-Sec\s*\)$`. |
+| `— Code-Arch` at end of last line | YES — trailing | Deep-mode trailing em-dash suffix; pattern matches `\s*—\s*Code-Arch\s*$`. |
 | `The orchestrator's merge logic at validation-phase.md:73 is incorrect.` (first line) | NO | `orchestrator` is mid-content; no anchored colon/bracket. |
 | `Findings should not include Cursor's negotiation prompts.` (last line) | NO | `Cursor's` is mid-content; no anchored leading punctuation. |
 | `Reviewer Cursor missed an edge case` (last line) | NO | `Cursor` mid-content (after `Reviewer`); no anchored separator. |
+| `The Code-Sec checklist already covers SSRF.` (mid-content) | NO | `Code-Sec` mid-content; no anchored leading punctuation. |
 
 The fixture cases above are reproduced verbatim in the offline test harness `scripts/test-research-adjudication.sh`.
 
