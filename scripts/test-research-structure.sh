@@ -141,14 +141,13 @@ done
 grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
   || fail "SKILL.md must contain the literal quick-mode skip breadcrumb '⏩ 2: validation — skipped (--scale=quick)' (#418)"
 
-# Check 12 (#418): SKILL.md documents abort-on-invalid-value for --scale.
-# Pin the abort message literal so a future edit cannot drop the explicit
-# rejection of malformed --scale values.
-if grep -Fq -e "Aborting" "$SKILL_MD" && grep -Fq -e "must be one of quick|standard|deep" "$SKILL_MD"; then
-  : # both literals present
-else
-  fail "SKILL.md must document abort-on-invalid for --scale (literals 'must be one of quick|standard|deep' and 'Aborting' both required) (#418)"
-fi
+# Check 12 (#418, #460): SKILL.md documents abort-on-invalid-value for --scale.
+# Pin the full composite error sentence as a single literal so the check
+# cannot pass spuriously if only one of two unrelated substrings appears
+# (#460: an unrelated `Aborting` elsewhere would otherwise satisfy the prior
+# two-grep AND).
+grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_MD" \
+  || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of quick|standard|deep (got: foo). Aborting.' required) (#418, #460)"
 
 # Check 13 (#418 + #424): SKILL.md documents that --debug, --scale, and --adjudicate
 # are independent flags (order-independence). Pin the explicit independence statement
