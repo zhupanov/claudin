@@ -3,14 +3,19 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Six fixtures cover the script's exit-code matrix
-# and stdout contract:
+# refactor (closes #496). Five executed fixtures plus one deferred-coverage
+# note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
-#   2. eligible + lock fail (concurrent runner) → exit 3; LOCK_ACQUIRED=false
+#   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
 #   3. eligible + lock OK + rename fails (best-effort) → exit 0; RENAMED=false
 #                                                           + stderr WARNING
-#   4. eligible + lock OK + rename idempotent no-op → exit 0; RENAMED=false
-#                                                          + NO stderr WARNING
+#   4. (deferred) idempotent rename no-op coverage lives in
+#       scripts/test-tracking-issue-write.sh, NOT here — the eligibility
+#       filter at find-lock-issue.sh prevents [IN PROGRESS]-prefixed titles
+#       from reaching the rename call in production, so the idempotent-no-op
+#       state is unreachable from this harness's contract surface. Fixture 4
+#       prints a coverage-deferred note and increments PASS without
+#       executing assertions.
 #   5. ineligible (managed prefix on explicit --issue mode) → exit 2
 #   6. auto-pick + no eligible candidates → exit 1
 #

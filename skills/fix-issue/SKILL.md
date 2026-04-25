@@ -52,7 +52,7 @@ Step Name Registry:
 
 ## Anti-patterns
 
-Each rule states **Why** (the specific consequence of breaking the rule) and **How to apply** (where the invariant is load-bearing). Rules marked **CI-backed: yes** are mechanically enforced by `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` via an `awk` extraction over the `### 6a` block; the remaining rules are editorial invariants that depend on the SKILL.md text being unambiguous.
+Each rule states **Why** (the specific consequence of breaking the rule) and **How to apply** (where the invariant is load-bearing). Rules marked **CI-backed: yes** are mechanically enforced by `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` via an `awk` extraction over the `### 5a` block (under Step 5 — Execute); the remaining rules are editorial invariants that depend on the SKILL.md text being unambiguous.
 
 1. **NEVER run Step 1+ on an unlocked issue.** **Why**: the `IN PROGRESS` lock acquired at Step 0 is how concurrent runners avoid stepping on each other — `find-lock-issue.sh` skips candidates whose last comment is `IN PROGRESS`, so posting `IN PROGRESS` installs the lock at the comment-stream tail (same tail semantics the find filter reads) AND prepends `[IN PROGRESS]` to the title so the visual lifecycle reflects the active run immediately. Duplicate detection is best-effort, not fully atomic — see Known Limitations "Single-runner assumption". Stepping past Step 0 unlocked races every other `/fix-issue` invocation on the same repo. **How to apply**: treat Step 0 as structural; do not re-order the step sequence or skip it under any flag. **CI-backed**: no (editorial invariant).
 
@@ -68,7 +68,7 @@ Each rule states **Why** (the specific consequence of breaking the rule) and **H
 
 ## Step 0 — Find and Lock
 
-Run find + lock + title rename FIRST so that no setup work (tmpdir, preflight, Slack/repo derivation, session-env write) is performed when there is no eligible issue, and so the `[IN PROGRESS]` title prefix is applied immediately on lock acquisition rather than minutes later (closes #496 — the prior delay came from /implement Step 0.5 Branch 2 owning the rename, which only ran after `/fix-issue`'s Step 2 setup, Step 3 read-details, Step 4 triage, Step 5 classification, Step 6a delegation, and `/implement`'s own Step 0 setup all completed).
+Run find + lock + title rename FIRST so that no setup work (tmpdir, preflight, Slack/repo derivation, session-env write) is performed when there is no eligible issue, and so the `[IN PROGRESS]` title prefix is applied immediately on lock acquisition rather than minutes later (closes #496 — the prior delay came from /implement Step 0.5 Branch 2 owning the rename, which only ran after `/fix-issue`'s Step 1 setup, Step 2 read-details, Step 3 triage, Step 4 classification, Step 5a delegation, and `/implement`'s own Step 0 setup all completed; mapped from the pre-renumber Step 2/3/4/5/6a names by the fold-find-and-lock refactor).
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/find-lock-issue.sh ["$ISSUE_ARG"]
@@ -87,7 +87,7 @@ Handle exit codes:
 - **Exit 0**: Parse `ISSUE_NUMBER`, `ISSUE_TITLE`, `LOCK_ACQUIRED=true`, `RENAMED`. Print `> **🔶 0: find & lock — found and locked #$ISSUE_NUMBER: $ISSUE_TITLE**`. If `RENAMED=false`, the title rename failed best-effort (a stderr WARNING from the script signals this) — print `**⚠ 0: find & lock — title rename failed; /implement Branch 2 will retry. (<elapsed>)**` and continue. If `RENAMED=true`, print `✅ 0: find & lock — issue #$ISSUE_NUMBER locked and titled [IN PROGRESS] (<elapsed>)`. Continue to Step 1.
 - **Exit 1**: Print `✅ 0: find & lock — no approved issues found (<elapsed>)`. Skip to Step 8. **Note**: `FIX_ISSUE_TMPDIR` is unset on this path; Step 8's cleanup guard handles the no-tmpdir case.
 - **Exit 2**: Parse `ERROR` from stdout. Print `**⚠ 0: find & lock — error: $ERROR (<elapsed>)**`. Skip to Step 8. **Note**: `FIX_ISSUE_TMPDIR` is unset on this path; Step 8's cleanup guard handles the no-tmpdir case.
-- **Exit 3**: Eligibility passed but lock acquisition failed (concurrent runner won the race, or the GO sentinel changed between the eligibility scan and the lock attempt). Parse `ISSUE_NUMBER` and `ERROR`. Print `**⚠ 0: find & lock — lock failed for #$ISSUE_NUMBER: $ERROR. Another run may have claimed this issue. (<elapsed>)**`. Skip to Step 8. The candidate is NOT locked; no recovery is needed (the comment stream is unchanged on this path because `issue-lifecycle.sh comment --lock` only mutates remote state on the success path).
+- **Exit 3**: Eligibility passed but lock acquisition failed (concurrent runner won the race, the GO sentinel changed between the eligibility scan and the lock attempt, or `gh` API failed mid-sequence). Parse `ISSUE_NUMBER` and `ERROR`. Print `**⚠ 0: find & lock — lock failed for #$ISSUE_NUMBER: $ERROR. Another run may have claimed this issue, or the GO/IN PROGRESS comment stream may have been partially mutated — see Known Limitations "Stale IN PROGRESS lock" for recovery before re-running. (<elapsed>)**`. Skip to Step 8. The candidate may NOT be cleanly recoverable: `issue-lifecycle.sh comment --lock` deletes the GO comment BEFORE posting `IN PROGRESS`, so a `gh issue comment` failure between those two writes leaves the issue with no comment sentinel; a duplicate-`IN PROGRESS` post-check failure leaves both `IN PROGRESS` comments present. Both states require manual recovery per Known Limitations "Stale IN PROGRESS lock". The pre-write GO-tail re-check failure mode (last comment is no longer GO) IS clean — comment stream unchanged.
 
 ## Step 1 — Setup
 
@@ -101,7 +101,7 @@ Parse output for `SESSION_TMPDIR`, `SLACK_OK`, `SLACK_MISSING`, `REPO`, `REPO_UN
 
 If `REPO_UNAVAILABLE=true`, print `**⚠ Could not determine repository. GitHub issue access requires a valid repo. Aborting.**` and skip to Step 8.
 
-If `SLACK_OK=true`, set `slack_available=true`. **Do NOT make a separate Bash call to resolve Slack env vars.** When Slack tokens are needed (Steps 4 and 8), use inline shell expansion: `"${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}"` and `"${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"`.
+If `SLACK_OK=true`, set `slack_available=true`. **Do NOT make a separate Bash call to resolve Slack env vars.** When Slack tokens are needed (Steps 3 and 7), use inline shell expansion: `"${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}"` and `"${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}"`.
 
 If `SLACK_OK=false`, print (only when `slack_enabled=true`) `**⚠ Slack not configured ($SLACK_MISSING). Slack announcements will be skipped.**` Set `slack_available=false`. When `slack_enabled=false` (user passed `--no-slack`), suppress the warning.
 

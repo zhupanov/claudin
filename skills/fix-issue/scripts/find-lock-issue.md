@@ -30,7 +30,15 @@ Stderr carries diagnostics (skipping-blocked-by messages, deprecated-flag warnin
 | `0` | Eligible issue found AND comment lock acquired. Rename may have succeeded or failed best-effort — `RENAMED=true` vs `RENAMED=false` distinguishes. |
 | `1` | No eligible issues (auto-pick mode only). |
 | `2` | Error: `gh` CLI failure, or explicit-issue request rejected (not open, has managed prefix, last comment is not `GO`, blocked by open dependencies, etc.). |
-| `3` | Eligibility passed but comment lock could not be acquired. Concurrent runner won the race, or the GO sentinel changed between eligibility scan and lock attempt. `LOCK_ACQUIRED=false ERROR=...` on stdout. |
+| `3` | Eligibility passed but comment lock could not be acquired. Concurrent runner won the race, the GO sentinel changed between eligibility scan and lock attempt, OR a `gh` API failure mid-sequence (after GO delete but before IN PROGRESS post — see "Recovery semantics on exit 3" below). `LOCK_ACQUIRED=false ERROR=...` on stdout. |
+
+## Recovery semantics on exit 3
+
+Exit 3 spans three sub-cases that differ in remote-state mutation. The script does NOT differentiate them on stdout — operators should consult `skills/fix-issue/SKILL.md` Known Limitations "Stale IN PROGRESS lock" for the per-case recovery flow.
+
+- **Pre-write GO-tail re-check failure** — `cmd_comment` reads the comment list, sees the tail is no longer `GO`, and exits before mutating any remote state. Comment stream UNCHANGED. Recovery: re-add `GO` if desired (the candidate has been claimed by another runner OR the operator changed the sentinel mid-flight).
+- **Post-failure mid-write** — `cmd_comment` deletes the `GO` comment, then `gh issue comment --body "IN PROGRESS"` fails. Comment stream MUTATED — `GO` is gone, no `IN PROGRESS` posted. Recovery: manually re-add `GO`. The issue is no longer pickable by `/fix-issue` until `GO` is restored.
+- **Duplicate-IN-PROGRESS post-check** — `cmd_comment` succeeds at delete + post, but its post-write re-fetch detects 2+ `IN PROGRESS` comments after the deleted-`GO` timestamp (concurrent runner race). Comment stream MUTATED — `GO` is gone, `IN PROGRESS` is present (twice). Recovery: manually delete the duplicate `IN PROGRESS` comments and re-add `GO`.
 
 ## set -e / set -o pipefail propagation
 
@@ -55,4 +63,4 @@ The rename failure mode is non-fatal because:
 
 ## Test harness
 
-`skills/fix-issue/scripts/test-find-lock-issue.sh` is the offline regression harness. PATH-prepended `gh` stub. Cases: ok (lock + rename); lock-fail (exit 3); rename-fail best-effort (exit 0, RENAMED=false, stderr WARNING); rename idempotent no-op (exit 0, RENAMED=false, no WARNING); ineligible managed prefix (exit 2); auto-pick no candidate (exit 1). Wired into `make lint` via the `test-find-lock-issue` target. Both `.sh` and `.md` are in `agent-lint.toml`'s `exclude` list per the Makefile-only-reference pattern.
+`skills/fix-issue/scripts/test-find-lock-issue.sh` is the offline regression harness. PATH-prepended `gh` stub. Five executed fixtures + one deferred-coverage note: ok (lock + rename); lock-fail (exit 3); rename-fail best-effort (exit 0, RENAMED=false, stderr WARNING); rename idempotent no-op coverage deferred to `scripts/test-tracking-issue-write.sh` (idempotent state unreachable from this harness's contract surface — the eligibility filter rejects `[IN PROGRESS]`-prefixed titles before the rename call); ineligible managed prefix (exit 2); auto-pick no candidate (exit 1). Wired into `make lint` via the `test-find-lock-issue` target. Both `.sh` and `.md` are in `agent-lint.toml`'s `exclude` list per the Makefile-only-reference pattern.

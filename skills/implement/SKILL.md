@@ -254,7 +254,7 @@ gh issue view "$ISSUE_ARG" --json state,url --jq '{state,url}'
 
 Detect PR-vs-issue: if `.url` contains `/pull/`, print `**⚠ 0.5: tracking issue — #$ISSUE_ARG is a pull request, not an issue. Aborting.**` and skip to Step 18.
 
-If `.state == "CLOSED"`: print `**⚠ 0.5: tracking issue — adopted issue #$ISSUE_ARG is CLOSED. Aborting.**`, emit `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout, skip to Step 18. (`/fix-issue` Step 6a consumes this bail token and branches to a specific warning + skip-to-cleanup path without calling `issue-lifecycle.sh close`.)
+If `.state == "CLOSED"`: print `**⚠ 0.5: tracking issue — adopted issue #$ISSUE_ARG is CLOSED. Aborting.**`, emit `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout, skip to Step 18. (`/fix-issue` Step 5a consumes this bail token and branches to a specific warning + skip-to-cleanup path without calling `issue-lifecycle.sh close`.)
 
 Else (`.state == "OPEN"`): **adopt safely without clobbering any populated existing anchor**. First try to locate an existing anchor via marker search:
 
@@ -388,7 +388,7 @@ If `repo_unavailable=true`: skip all Step 0.5 branches, do NOT invoke `gh issue 
 
 ### /fix-issue coordination
 
-`/fix-issue` Step 6a forwards `--issue $ISSUE_NUMBER` to `/implement` so the two skills converge on the same tracking issue via Branch 2 by construction — `/implement` adopts the issue `/fix-issue` already locked, avoiding a duplicate tracking-issue on the `/fix-issue` path. On `IMPLEMENT_BAIL_REASON=adopted-issue-closed` (Branch 2 CLOSED early-exit above), `/fix-issue` Step 6a branches to a specific warning and skips its close call. GO/IN PROGRESS lock-check logic in `/fix-issue` is unaffected by anchor comments: `/implement`'s anchor comment carries the `<!-- larch:implement-anchor v1 issue=<N> -->` first-line marker, and `tracking-issue-read.sh`'s anchor-marker filter skips it from aggregated task content — the lock-check ignores anchors by construction. See `skills/fix-issue/SKILL.md` Step 6a and `scripts/tracking-issue-read.md` (anchor-marker filter section).
+`/fix-issue` Step 5a forwards `--issue $ISSUE_NUMBER` to `/implement` so the two skills converge on the same tracking issue via Branch 2 by construction — `/implement` adopts the issue `/fix-issue` already locked, avoiding a duplicate tracking-issue on the `/fix-issue` path. On `IMPLEMENT_BAIL_REASON=adopted-issue-closed` (Branch 2 CLOSED early-exit above), `/fix-issue` Step 5a branches to a specific warning and skips its close call. GO/IN PROGRESS lock-check logic in `/fix-issue` is unaffected by anchor comments: `/implement`'s anchor comment carries the `<!-- larch:implement-anchor v1 issue=<N> -->` first-line marker, and `tracking-issue-read.sh`'s anchor-marker filter skips it from aggregated task content — the lock-check ignores anchors by construction. See `skills/fix-issue/SKILL.md` Step 5a and `scripts/tracking-issue-read.md` (anchor-marker filter section).
 
 ### Anchor-section accumulation (Steps 1, 2, 5, 7a, 8, 9a.1, 11)
 

@@ -23,7 +23,7 @@
 - `comment` success: `COMMENTED=true` (plus `LOCK_ACQUIRED=true` with `--lock`).
 - `update-body` success: `UPDATED=true` (plus `SKIPPED=already_present` when the PR URL is already in the body).
 
-`/fix-issue` Step 7 reads stdout loosely (substring match), so additional `INFO:` lines on stderr do not affect callers. The stdout contract is byte-stable across the OPEN and CLOSED idempotency branches.
+`/fix-issue` Step 6 (and Step 3 on the not-material path) reads stdout loosely (substring match), so additional `INFO:` lines on stderr do not affect callers. The stdout contract is byte-stable across the OPEN and CLOSED idempotency branches.
 
 ## Exit codes
 
