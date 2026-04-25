@@ -14,8 +14,10 @@
 #                comment, then post the new comment (typically "IN PROGRESS").
 #                Re-reads afterward to detect concurrent duplicate locks via
 #                "IN PROGRESS" comments created after the deleted GO timestamp.
+#                Called by `find-lock-issue.sh` at /fix-issue Step 0.
 #   close      — Close an issue. Optionally post a comment first.
 #                With --pr-url: update the issue body with the PR link before closing.
+#                Called by /fix-issue Step 3 (not-material close) and Step 6 (DONE close).
 #   update-body — Append a PR link to the issue body (idempotent).
 #
 # Exit codes:

@@ -100,7 +100,7 @@
 - **question**: What concurrency hazards exist when `/fix-issue` and `/implement` run against the same tracking issue, and how does the IN PROGRESS comment lock interact with the `parent-issue.md` sentinel?
 - **category**: risk-assessment
 - **expected_provenance_count**: 2
-- **expected_keywords**: IN PROGRESS, fetch-eligible-issue.sh, single-runner, sentinel, ADOPTED
+- **expected_keywords**: IN PROGRESS, find-lock-issue.sh, single-runner, sentinel, ADOPTED
 - **notes**: Risk; should describe the comment-stream locking pattern, the duplicate-creation mode if Branch 4 is interrupted between issue-create and sentinel-write, and the Known Limitations note about single-runner assumption.
 
 ### eval-14: implement-cursor-timeout-mid-sketch
