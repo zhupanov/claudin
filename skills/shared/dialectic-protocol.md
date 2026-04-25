@@ -8,16 +8,14 @@ Shared protocol for **post-debate adjudication** of contested design decisions. 
 
 ## Caller Binding
 
-This protocol is written in terms of a caller-bound logical session-tmpdir variable, **`$DIALECTIC_TMPDIR`**. Every path placeholder below (e.g., `$DIALECTIC_TMPDIR/dialectic-ballot.txt`, `$DIALECTIC_TMPDIR/dialectic-resolutions.md`, `$DIALECTIC_TMPDIR/cursor-judge-output.txt`, `$DIALECTIC_TMPDIR/codex-judge-output.txt`) resolves through that variable.
+This protocol is written in terms of a caller-bound path-prefix placeholder, **`$DIALECTIC_TMPDIR`**. Every concrete path below (e.g., `$DIALECTIC_TMPDIR/dialectic-ballot.txt`, `$DIALECTIC_TMPDIR/dialectic-resolutions.md`, `$DIALECTIC_TMPDIR/cursor-judge-output.txt`, `$DIALECTIC_TMPDIR/codex-judge-output.txt`) is the placeholder + a basename; callers substitute the placeholder with their own session-tmpdir path at prompt-construction time. **This is a prompt-construction substitution rule, not a shell-level variable export** — external CLIs (Cursor/Codex) do not expand shell variables in prompt arguments, so substitution must happen at construction time, not in the receiving CLI's environment.
 
-**Callers MUST bind `DIALECTIC_TMPDIR` to their own session tmpdir before invoking any choreography that quotes this protocol.** The two known callers today:
+**Callers MUST substitute the literal `$DIALECTIC_TMPDIR` token with their own session-tmpdir path before invoking any choreography that quotes this protocol.** The two known callers today, each documenting the substitution mapping inline:
 
-- `/design` Step 2a.5 binds `DIALECTIC_TMPDIR=$DESIGN_TMPDIR` (see `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md`).
-- `/research --adjudicate` Step 2.5 binds `DIALECTIC_TMPDIR=$RESEARCH_TMPDIR` (see `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md`).
+- `/design` Step 2a.5: when copying protocol text into a `/design` context, the literal `$DIALECTIC_TMPDIR` token maps to `$DESIGN_TMPDIR` (which the orchestrator then substitutes to the actual session-tmpdir path). See `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md`.
+- `/research --adjudicate` Step 2.5: same substitution rule, mapping the literal `$DIALECTIC_TMPDIR` token to `$RESEARCH_TMPDIR`. See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md`.
 
 `DIALECTIC_TMPDIR` is a **directory placeholder only** — it does NOT rename skill-specific artifacts. Callers may keep distinct basenames (e.g., `/research --adjudicate` writes `research-adjudication-ballot.txt` and `adjudication-resolutions.md` instead of the design-context defaults `dialectic-ballot.txt` and `dialectic-resolutions.md`); the protocol's field schema is identical across callers.
-
-External CLIs (Cursor/Codex) do not expand shell variables in prompt arguments, so callers MUST replace the literal `$DIALECTIC_TMPDIR` token with the bound value at prompt-construction time (same convention as the pre-existing tmpdir-substitution rules already documented in each caller).
 
 ## Overview
 
