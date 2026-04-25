@@ -206,16 +206,19 @@ validate_eval_set() {
       continue
     fi
     if ! [[ "$id" =~ ^[a-z0-9-]+$ ]]; then
-      printf 'eval-research: entry has invalid id (must match ^[a-z0-9-]+$, kebab-case): %s\n' "$id" >&2
+      printf 'eval-research: entry has invalid id (must match ^[a-z0-9-]+$ — lowercase letters, digits, and hyphens only): %s\n' "$id" >&2
       rc=1
+    else
+      # Duplicate check is gated on format validity so glob metacharacters
+      # in $id (e.g. `*`, `?`, `[`) cannot leak into the case-pattern below.
+      case "$seen_ids" in
+        *"|$id|"*)
+          printf 'eval-research: duplicate eval id: %s\n' "$id" >&2
+          rc=1
+          ;;
+        *) seen_ids="${seen_ids}|$id|" ;;
+      esac
     fi
-    case "$seen_ids" in
-      *"|$id|"*)
-        printf 'eval-research: duplicate eval id: %s\n' "$id" >&2
-        rc=1
-        ;;
-      *) seen_ids="${seen_ids}|$id|" ;;
-    esac
     case "$cat" in
       lookup|architecture|external-comparison|risk-assessment|feasibility) ;;
       *)
