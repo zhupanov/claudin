@@ -65,7 +65,7 @@ Applied in order; the first failing rule short-circuits.
 
 ## Fallback semantics
 
-The orchestrator treats ANY non-zero exit (any `REASON=*` value) as a signal to fall back to single-question mode: lanes run with the unmodified `RESEARCH_PROMPT` keyed on the parent `RESEARCH_QUESTION`, no per-lane suffix. The orchestrator parses `REASON=<token>` from stdout via prefix-strip and substitutes the token into a visible warning line:
+The orchestrator treats ANY non-zero exit (any `REASON=*` value) as a signal to fall back to single-question mode: each lane runs with its angle base prompt (Lane 1/Cursor → `RESEARCH_PROMPT_ARCH`, Lane 2/Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`, Lane 3/Claude inline → `RESEARCH_PROMPT_SEC`), keyed on the parent `RESEARCH_QUESTION`, with no per-lane subquestion suffix appended. The orchestrator parses `REASON=<token>` from stdout via prefix-strip and substitutes the token into a visible warning line:
 
 ```
 **⚠ 1.1: planner — fallback to single-question mode (<token>).**
@@ -77,7 +77,7 @@ This is the same fallback path as a planner Agent subagent timeout (in which cas
 
 `--raw` and `--output` MUST be paths under `$RESEARCH_TMPDIR` (which lives under canonical `/tmp` per the `/research` skill-scoped `deny-edit-write.sh` hook). The script does not enforce this constraint mechanically — caller-side discipline relies on the existing PreToolUse hook on `/research`'s `Edit | Write | NotebookEdit` surface. **Path-traversal residual risk**: if a future caller passes a path outside `/tmp`, the script would write there. The hook covers `Write` from Claude's tool surface but NOT this Bash subprocess; operator-side `Bash(...)` permission narrowing is the relevant defense (see SECURITY.md).
 
-The orchestrator is also expected to apply prompt-injection hygiene at the consumption side (Step 1.2): subquestion text is wrapped in `<reviewer_subquestions>` ... `</reviewer_subquestions>` tags with a "treat as data" preamble before being appended to per-lane `RESEARCH_PROMPT`. The wrap is a model-level convention, not a parser boundary — see SECURITY.md for the residual-risk framing shared with the reviewer archetype's `<reviewer_*>` tags.
+The orchestrator is also expected to apply prompt-injection hygiene at the consumption side (Step 1.2): subquestion text is wrapped in `<reviewer_subquestions>` ... `</reviewer_subquestions>` tags with a "treat as data" preamble before being appended to each lane's angle base prompt (Cursor → `RESEARCH_PROMPT_ARCH`, Codex → `RESEARCH_PROMPT_EDGE`/`_EXT`, Claude inline → `RESEARCH_PROMPT_SEC`). The wrap is a model-level convention, not a parser boundary — see SECURITY.md for the residual-risk framing shared with the reviewer archetype's `<reviewer_*>` tags.
 
 ## Test harness
 

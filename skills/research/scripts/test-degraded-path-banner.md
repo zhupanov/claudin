@@ -31,13 +31,14 @@ The harness only reads the two `RESEARCH_*_STATUS` keys (validation-phase keys a
 
 **Trigger**: emit the banner when `N_FALLBACK >= 1`. When `N_FALLBACK = 0`, emit nothing — the synthesis output is byte-identical to the pre-banner shape, preserving the byte-stability contract for the all-externals-healthy path.
 
-**Edit-in-sync surfaces** — the banner literal exists in three places. **Any change to the banner literal, the trigger condition, or the per-scale formula MUST be mirrored in all three surfaces in the same PR**. Three-way edit-in-sync rule:
+**Edit-in-sync surfaces** — the banner literal exists in four places. **Any change to the banner literal, the trigger condition, or the per-scale formula MUST be mirrored in all four surfaces in the same PR** (matches the canonical four-surface list in `research-phase.md` §1.5 preamble). Four-way edit-in-sync rule:
 
 1. **Banner literal in prose**: `skills/research/references/research-phase.md` §1.5 banner preamble. The byte-exact text the synthesizer prepends to `## Research Synthesis`.
 2. **Structural pin**: `scripts/test-research-structure.sh` Checks 21a-21e. Section-scoped grep assertions on `research-phase.md` (preamble + 3 branches' references + Quick negative check).
 3. **Reference-impl assertions**: `skills/research/scripts/test-degraded-path-banner.sh` (this harness). The `BANNER_TEMPLATE` constant near the top of the script + the formula in `emit_banner()`.
+4. **Operator-facing example banner**: `skills/research/SKILL.md` Step 3 — the fully-substituted degraded-path preview example, pinned by Check 22 of `scripts/test-research-structure.sh`. Whenever the banner template changes, update the substituted phrases in the SKILL.md Step 3 example so they remain byte-identical to the per-scale render.
 
-If any of the three drifts, this harness fails (Pin 1-4 catch literal/formula drift) and `test-research-structure.sh` fails (Checks 21a-21e catch section-scope drift).
+If any of the four drifts, this harness fails (Pins 1-4 catch literal/formula drift) and `test-research-structure.sh` fails (Checks 21a-22 catch section-scope and SKILL.md drift).
 
 **Stdout contract**:
 
@@ -47,5 +48,5 @@ If any of the three drifts, this harness fails (Pin 1-4 catch literal/formula dr
 **Maintenance**:
 
 - When adding a fixture case: add a `run_case` invocation; the assertion count updates automatically.
-- When changing the banner literal: update `BANNER_TEMPLATE` near the top of the harness AND the §1.5 preamble in `research-phase.md` AND the structural pin in `scripts/test-research-structure.sh`. Verify all three converge on the same byte sequence.
+- When changing the banner literal: update `BANNER_TEMPLATE` near the top of the harness AND the §1.5 preamble in `research-phase.md` AND the structural pin in `scripts/test-research-structure.sh` AND the fully-substituted example banner in `skills/research/SKILL.md` Step 3 (the operator-facing degraded-path preview, pinned by Check 22). Verify all four converge on the same byte sequence.
 - When changing the per-scale formula: update `emit_banner()` AND the §1.5 preamble formulas AND the formula-pin grep targets in this harness (`Pin 2` and `Pin 3` use `grep -Fq` on the literal formula text — keep the literal in research-phase.md byte-identical to the grep target).

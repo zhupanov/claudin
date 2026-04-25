@@ -12,7 +12,11 @@
 #    in the first 20 lines (a /research-local tightening layered on top of the cross-skill
 #    presence check enforced by scripts/test-references-headers.sh — matches the sibling
 #    contract's literal 'opens with' promise)
-#  - RESEARCH_PROMPT literal appears in research-phase.md (substring pin for byte-drift detection)
+#  - RESEARCH_PROMPT_BASELINE literal (and by substring `RESEARCH_PROMPT`, all four angle
+#    prompt names: RESEARCH_PROMPT_ARCH / _EDGE / _EXT / _SEC) appear in research-phase.md
+#    (substring pin for byte-drift detection — `grep -F "RESEARCH_PROMPT"` matches every
+#    legal post-#508 identifier, since BASELINE and the four angle names all carry it as a
+#    substring)
 #  - reviewer XML wrapper tags (<reviewer_research_question>, <reviewer_research_findings>)
 #    appear in validation-phase.md (byte pin for prompt-injection hardening)
 #  - render-lane-status.sh + lane-status.txt pins (#421)
@@ -91,12 +95,15 @@ for ref_path in "$RESEARCH_MD" "$VALIDATION_MD" "$ADJUDICATION_MD"; do
   done
 done
 
-# Check 5: RESEARCH_PROMPT literal (substring pin for byte-drift detection).
+# Check 5: RESEARCH_PROMPT_BASELINE literal (substring pin for byte-drift detection).
+# `grep -F "RESEARCH_PROMPT"` matches every legal post-#508 identifier, since BASELINE and
+# the four angle prompt names (ARCH/EDGE/EXT/SEC) all carry "RESEARCH_PROMPT" as a substring.
 grep -Fq "RESEARCH_PROMPT" "$RESEARCH_MD" \
-  || fail "references/research-phase.md lacks RESEARCH_PROMPT literal identifier"
-# Pin the opening 'You are researching a codebase' substring of the prompt body itself.
+  || fail "references/research-phase.md lacks RESEARCH_PROMPT_BASELINE / RESEARCH_PROMPT_ARCH / _EDGE / _EXT / _SEC identifier"
+# Pin the opening 'You are researching a codebase' substring of the prompt body itself
+# (still appears in BASELINE and all four angle prompt bodies).
 grep -Fq "You are researching a codebase to answer this question" "$RESEARCH_MD" \
-  || fail "references/research-phase.md lacks RESEARCH_PROMPT body opening substring 'You are researching a codebase to answer this question'"
+  || fail "references/research-phase.md lacks RESEARCH_PROMPT_BASELINE body opening substring 'You are researching a codebase to answer this question'"
 
 # Check 6: Validation reviewer XML wrapper tags (byte pin for prompt-injection hardening).
 grep -Fq "<reviewer_research_question>" "$VALIDATION_MD" \
