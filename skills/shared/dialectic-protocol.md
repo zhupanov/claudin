@@ -232,7 +232,7 @@ If a judge's output is completely unparseable (no valid vote lines at all), prin
 
 ## Tally and Resolution
 
-For each `voted`-eligible decision (bothhere sides passed the eligibility gate and at least one judge cast a parseable vote):
+For each `voted`-eligible decision (both sides passed the eligibility gate and at least one judge cast a parseable vote):
 
 1. Count THESIS and ANTI_THESIS votes from eligible judges.
 2. Apply the threshold rules above.
