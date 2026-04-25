@@ -399,7 +399,10 @@ if [[ "$SUBSTANTIVE_VALIDATION" == "true" ]]; then
         # Run validator. Diagnostic on stdout; capture both stdout and stderr.
         # The collector runs without `set -e`, so a non-zero exit from the
         # validator does NOT abort the loop.
-        DIAG=$("$VALIDATOR" "${VAL_ARGS[@]}" "$REVIEWER_FILE" 2>&1)
+        # bash 3.2 portability: `"${VAL_ARGS[@]}"` on an empty array fires
+        # `unbound variable` under `set -u` on macOS /bin/bash (3.2.57); the
+        # `${arr[@]+"${arr[@]}"}` guard expands to nothing when empty. #511.
+        DIAG=$("$VALIDATOR" "${VAL_ARGS[@]+"${VAL_ARGS[@]}"}" "$REVIEWER_FILE" 2>&1)
         VAL_EXIT=$?
         if [[ "$VAL_EXIT" -ne 0 ]]; then
             # Sanitize: strip '|' (would corrupt pipe-delimited RESULTS), replace
