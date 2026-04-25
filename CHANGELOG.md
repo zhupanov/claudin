@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.8] - 2026-04-25
+
+### Fixed
+
+- `SECURITY.md` line 70 — corrected the `tracking-issue-write.sh` outbound-path subsection's count from "nine assertion categories" to "eleven assertion categories (a)–(k)", matching the canonical (a)–(k) ID table in `scripts/test-tracking-issue-write.md` and the `Eleven assertion categories (a-k)` header comment in `scripts/test-tracking-issue-write.sh`. Added an inline pointer from the SECURITY.md sentence to the canonical ID table so future drift between the count word and the table is caught at edit-time. Pre-existing OOS surfaced during PR #420 review (Cursor); not introduced by #420. Closes #456.
+
 ## [7.4.7] - 2026-04-25
 
 ### Fixed
