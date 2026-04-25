@@ -299,20 +299,51 @@ SECTION_15_PREAMBLE=$(awk '/^## 1\.5 — Synthesis/{f=1} f && /^### Standard \(R
 
 BANNER_LITERAL='**⚠ Reduced lane diversity: <N_FALLBACK> of <LANE_TOTAL> external research lanes ran as Claude-fallback. The model-family heterogeneity claim does not hold for this run.**'
 
-# Check 21a (#506): §1.5 banner preamble must contain the banner literal,
-# the N_FALLBACK formula, and a reference to lane-status.txt. This is the
-# single source of truth for the banner contract; without these pins, a
-# future edit could silently weaken or relocate the contract.
+# Check 21a (#506 + #507): §1.5 banner preamble + canonical executable.
+# - The banner literal AND the formula literals exist on a 5-surface
+#   edit-in-sync contract per #507. The banner literal stays in
+#   research-phase.md §1.5 preamble (documentation pin) AND in
+#   compute-degraded-banner.sh (canonical executable pin). The per-scale
+#   formula literals moved to compute-degraded-banner.sh under #507 (the
+#   helper is now the canonical executable; research-phase.md preamble
+#   carries them for documentation only).
+# - Without these pins, a future edit could silently weaken or relocate
+#   the contract.
 echo "$SECTION_15_PREAMBLE" | grep -Fq "$BANNER_LITERAL" \
   || fail "references/research-phase.md §1.5 banner preamble must contain the byte-exact banner literal (#506 Check 21a)"
 echo "$SECTION_15_PREAMBLE" | grep -Fq 'N_FALLBACK = (RESEARCH_CURSOR_STATUS != ok) + (RESEARCH_CODEX_STATUS != ok)' \
-  || fail "references/research-phase.md §1.5 banner preamble must contain the standard-mode N_FALLBACK formula literal (#506 Check 21a)"
+  || fail "references/research-phase.md §1.5 banner preamble must contain the standard-mode N_FALLBACK formula literal for documentation (#506 + #507 Check 21a)"
 echo "$SECTION_15_PREAMBLE" | grep -Fq '2*(RESEARCH_CURSOR_STATUS != ok) + 2*(RESEARCH_CODEX_STATUS != ok)' \
-  || fail "references/research-phase.md §1.5 banner preamble must contain the deep-mode N_FALLBACK formula literal with 2* multiplier (#506 Check 21a)"
+  || fail "references/research-phase.md §1.5 banner preamble must contain the deep-mode N_FALLBACK formula literal with 2* multiplier for documentation (#506 + #507 Check 21a)"
 echo "$SECTION_15_PREAMBLE" | grep -Fq "lane-status.txt" \
   || fail "references/research-phase.md §1.5 banner preamble must reference lane-status.txt (the source of truth for fallback status) (#506 Check 21a)"
 echo "$SECTION_15_PREAMBLE" | grep -Fq "research-report.txt" \
   || fail "references/research-phase.md §1.5 banner preamble must mention research-report.txt (BOTH-outputs contract) (#506 Check 21a)"
+
+# Check 21a-helper (#507): the canonical executable compute-degraded-banner.sh
+# MUST exist, be executable, and contain the banner template + per-scale
+# formula literals (canonical executable pin — moved from research-phase.md
+# under #507 per dialectic D1 resolution).
+HELPER_SCRIPT="$REPO_ROOT/skills/research/scripts/compute-degraded-banner.sh"
+[[ -f "$HELPER_SCRIPT" ]] \
+  || fail "skills/research/scripts/compute-degraded-banner.sh must exist (#507 Check 21a-helper — canonical executable home for the banner formula)"
+[[ -x "$HELPER_SCRIPT" ]] \
+  || fail "skills/research/scripts/compute-degraded-banner.sh must be executable (chmod +x) (#507 Check 21a-helper)"
+if [[ -f "$HELPER_SCRIPT" ]]; then
+  grep -Fq "$BANNER_LITERAL" "$HELPER_SCRIPT" \
+    || fail "skills/research/scripts/compute-degraded-banner.sh must contain the byte-exact BANNER_TEMPLATE constant matching the prose literal (#507 Check 21a-helper — 5-surface edit-in-sync rule)"
+  grep -Fq 'N_FALLBACK = (RESEARCH_CURSOR_STATUS != ok) + (RESEARCH_CODEX_STATUS != ok)' "$HELPER_SCRIPT" \
+    || fail "skills/research/scripts/compute-degraded-banner.sh must document the standard-mode N_FALLBACK formula literal in comments (#507 Check 21a-helper)"
+  grep -Fq '2*(RESEARCH_CURSOR_STATUS != ok) + 2*(RESEARCH_CODEX_STATUS != ok)' "$HELPER_SCRIPT" \
+    || fail "skills/research/scripts/compute-degraded-banner.sh must document the deep-mode N_FALLBACK formula literal with 2* multiplier in comments (#507 Check 21a-helper)"
+fi
+
+# Check 21a-helper-fork (#507): research-phase.md §1.5 preamble must reference
+# the fork pattern that loads the helper at runtime — the orchestrator's
+# runtime banner computation is a fork of compute-degraded-banner.sh, NOT a
+# source-and-run pattern.
+echo "$SECTION_15_PREAMBLE" | grep -Fq "compute-degraded-banner.sh" \
+  || fail "references/research-phase.md §1.5 banner preamble must reference compute-degraded-banner.sh (the canonical executable; #507 Check 21a-helper-fork)"
 
 # Section extractors for the three branches that apply the banner. The
 # extractors bound each subsection to its own scope so a banner reference
