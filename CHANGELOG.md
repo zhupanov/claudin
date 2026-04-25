@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.13] - 2026-04-25
+
+### Fixed
+
+- `skills/research/SKILL.md` — aligned two outlier prose statements with the canonical "always-print-with-zero-marker" rule for quick mode's report-publication layer. Line 17 (overview) previously said "skips the validation phase entirely"; line 139 (Step 0b) previously said Step 3 "omits the validation-phase line entirely". Both contradicted the Step 3 Quick branch (lines 226-233) which sets `VALIDATION_HEADER="0 reviewers (validation phase skipped — see synthesis disclaimer)"` and explicitly states "the validation-phase line is still rendered ... so the report template's structure is preserved", and the unconditional report template at line 252 (`**Validation phase**: <VALIDATION_HEADER>`). The fix disambiguates two surfaces: (a) execution layer — Step 2 (validation panel) does not run in quick mode; (b) publication layer — the report still renders a `**Validation phase**: 0 reviewers (...)` placeholder line so the template shape is uniform across scales. Edit 2's parenthetical uses a section-heading anchor rather than approximate line numbers (per /design plan-review FINDING_1). Closes #449.
+
 ## [7.4.12] - 2026-04-25
 
 ### Fixed
