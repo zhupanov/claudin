@@ -113,6 +113,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 
 - The global reference rules enforced by `scripts/test-references-headers.sh` and documented in `scripts/test-references-headers.md`. The `**Consumer**:` / `**Contract**:` / `**When to load**:` triplet must appear at line-start. The `**Contract**:` paragraph must be a single paragraph (terminated by a blank line) and must NOT contain `L<digits>-<digits>` line-range citations.
 - The entry schema. Each entry begins with `### eval-N: <id>` and has six bulleted fields in order: `question`, `category`, `expected_provenance_count`, `expected_keywords`, `notes`. Fields use the format `- **<name>**: <value>`.
+- The id rule. Each `<id>` must match `^[a-z0-9-]+$` (lowercase letters, digits, and hyphens only) and must be unique across the eval set — `validate_eval_set()` rejects duplicates and path-like ids under `--smoke-test` because `run_one_research()` later uses the raw `id` as `$WORK_DIR/$id`. The same rule is enforced at lint time by `scripts/test-eval-set-structure.sh` Check 5b.
 - The structural invariants enforced by `scripts/test-eval-set-structure.sh`: at least 20 entries, all five categories present, two entries flagged `ADVERSARIAL` in `notes`, and the harness file containing the Anthropic-blog citation literal.
 
 ## Edit-in-sync

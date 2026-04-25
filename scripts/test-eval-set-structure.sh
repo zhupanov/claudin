@@ -13,6 +13,12 @@
 #   5. Every entry has all six required fields: question, category,
 #      expected_provenance_count, expected_keywords, notes (the id is in
 #      the heading itself).
+#   5b. Every entry id matches ^[a-z0-9-]+$ (kebab-case) and is unique
+#       across the eval set — mirrors validate_eval_set() in
+#       scripts/eval-research.sh so duplicate / path-like ids are
+#       rejected at lint time, not just at smoke-test time. Path-like
+#       ids would otherwise escape $WORK_DIR/$id when a future operator
+#       hand-edits eval-set.md (closes #442).
 #   6. At least two entries are flagged ADVERSARIAL in their notes —
 #      one targeting fictitious-mechanism, one targeting data-absence.
 #   7. eval-baseline.json exists, parses as JSON, and has the required
@@ -98,6 +104,21 @@ missing_fields=$(awk '
 ' "$EVAL_SET")
 if [[ -n "$missing_fields" ]]; then
   fail "eval-set.md entries with missing fields:\n$missing_fields"
+fi
+
+# Check 5b: Every entry id matches ^[a-z0-9-]+$ and is unique. Walk
+# `### eval-N: <id>` headings; report format violations and duplicates
+# in one pass. Mirrors validate_eval_set() in scripts/eval-research.sh.
+bad_ids=$(awk '
+  /^### eval-[0-9]+:/ {
+    sub(/^### eval-[0-9]+:[[:space:]]*/, "")
+    id = $0
+    if (id !~ /^[a-z0-9-]+$/) print "format: " id
+    if (seen[id]++) print "duplicate: " id
+  }
+' "$EVAL_SET")
+if [[ -n "$bad_ids" ]]; then
+  fail "eval-set.md has invalid entry ids:\n$bad_ids"
 fi
 
 # Check 6: >= 2 adversarial entries, AND each documented adversarial shape

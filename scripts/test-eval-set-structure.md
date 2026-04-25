@@ -13,6 +13,7 @@ It is a **standalone Makefile target**, not a `test-harnesses` prerequisite — 
 3. `eval-set.md` declares at least 20 entries via `### eval-<N>:` headings.
 4. All five required categories appear at least once: `lookup`, `architecture`, `external-comparison`, `risk-assessment`, `feasibility`.
 5. Every entry has all six required fields: `question`, `category`, `expected_provenance_count`, `expected_keywords`, `notes` (the `id` is in the heading itself; the field schema validation is line-anchored against `^- \*\*<name>\*\*:`).
+5b. Every entry id matches `^[a-z0-9-]+$` (lowercase letters, digits, and hyphens only) and is unique across the eval set. Mirrors `validate_eval_set()` in `scripts/eval-research.sh` so duplicate or path-like ids are rejected at lint time, not just at smoke-test time. Path-like ids would otherwise escape `$WORK_DIR/$id` when a future operator hand-edits `eval-set.md` (closes #442).
 6. At least two entries are flagged `ADVERSARIAL` in their `notes` line — the catalog's "test over-claiming" contract requires both a fictitious-mechanism question and a data-absence question.
 7. `skills/research/references/eval-baseline.json` exists, parses as JSON (via `jq` when available, with a `grep` fallback), and contains the `version`, `scale`, and `entries` keys with `entries` typed as an array.
 8. `scripts/eval-research.sh` contains the literal Anthropic-blog citation tag (`anthropic.com/engineering/built-multi-agent-research-system`) — pinned so a future edit cannot drop the source attribution silently.
