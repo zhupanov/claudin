@@ -2,11 +2,12 @@
 # test-tracking-issue-write.sh — regression harness for tracking-issue-write.sh.
 #
 # Mirrors the stub-gh + PATH-override pattern of scripts/test-redact-secrets.sh.
-# Ten assertion categories (a-j) covering redaction, exit codes, truncation,
+# Eleven assertion categories (a-k) covering redaction, exit codes, truncation,
 # anchor-skeleton preservation, anchor-upsert semantics, gh-failure redaction,
 # the anchor-section-markers.sh startup-guard fail-closed, the
-# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, and the rename subcommand
-# (idempotency, strip-exactly-one, redaction, invalid --state). All
+# SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, the rename subcommand
+# (idempotency, strip-exactly-one, redaction, invalid --state), and the
+# seed-only visible placeholder upsert survival (issue #431). All
 # assertions run in a hermetic mktemp -d tmproot with a stub gh binary on
 # PATH.
 #

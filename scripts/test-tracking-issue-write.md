@@ -24,6 +24,10 @@ Regression harness for `scripts/tracking-issue-write.sh`. Mirrors the stub-`gh` 
 | (f1) | Idempotency: `upsert-anchor` against a stubbed comment-list with exactly one anchor-marker comment PATCHes that comment (id echoed on stdout), emits `UPDATED=true`, does not create a new comment. |
 | (f2) | Multiple-anchor fail-closed: `upsert-anchor` against a stubbed comment-list with two anchor-marker comments exits 2 with `FAILED=true ERROR=multiple anchor comments found (ids: 5001,5002)`. |
 | (g) | gh-failure redaction: stub gh emits a token-bearing stderr on failure path → the `ERROR=…` line on stdout contains `<REDACTED-TOKEN>` and does not leak the raw token. |
+| (h) | `tracking-issue-write.sh` startup-guard: running a copy of the script in a fake tree without the sibling `anchor-section-markers.sh` helper exits 1 with `FAILED=true ERROR=missing helper: …`. |
+| (i) | `SECTION_MARKERS ⊆ COLLAPSE_PRIORITY` invariant (set-membership): every slug in `SECTION_MARKERS` (sourced from `anchor-section-markers.sh`) appears in `tracking-issue-write.sh`'s inline `COLLAPSE_PRIORITY` array. Drift would silently de-prioritize a section from body-level collapse. |
+| (j) | `rename` subcommand: idempotency (no-op when title already at target state emits `RENAMED=false`), strip-exactly-one (only one prefix is stripped on transition; stacked residue is preserved verbatim), redaction (sk-ant fixture in title is replaced with `<REDACTED-TOKEN>` in the outbound `gh issue edit` arg and stdout), and invalid `--state` rejection (exits 1 with full canonical `ERROR=invalid --state: <value>`). |
+| (k) | `upsert-anchor` preserves the seed-only visible placeholder line: a non-section content line inserted between the first-line anchor marker and the first `<!-- section:... -->` open marker (the placeholder emitted by `scripts/assemble-anchor.sh` when every fragment is empty per the lenient predicate, issue #431) survives the redact + truncate publish path verbatim, on its own line, in the captured outbound body. Pins position invariants: line 1 = anchor marker, line 2 = placeholder, line 3 = first section open marker. |
 
 ## Fixture tokens
 
