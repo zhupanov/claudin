@@ -1,7 +1,7 @@
 ---
 name: research
-description: "Use when best-effort read-only research is needed. Scale-aware: --scale=quick|standard|deep → 1 / 3+3 / 5+5 lanes (default standard). Mechanical guard: Edit/Write only; Bash + externals prompt-enforced. May invoke /issue."
-argument-hint: "[--debug] [--scale=quick|standard|deep] <research question or topic>"
+description: "Use when best-effort read-only research is needed. Scale-aware: --scale=quick|standard|deep → 1 / 3+3 / 5+5 lanes (default standard). Optional --adjudicate runs a 3-judge dialectic over rejected validation findings. Mechanical guard: Edit/Write only; Bash + externals prompt-enforced. May invoke /issue."
+argument-hint: "[--debug] [--scale=quick|standard|deep] [--adjudicate] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
   PreToolUse:
@@ -23,10 +23,11 @@ Collaborative best-effort read-only-repo research task with a scale-aware lane s
 - **Boolean flags**: default to `false`. Only set to `true` when the `--flag` token is explicitly present in the arguments.
 - **Value flags** (separate class — boolean defaults rule does NOT apply): each value flag has its own non-`false` default documented per flag below; only an explicit `--flag=value` token overrides it; malformed forms (unknown value, missing `=`, missing value) abort with an explicit error.
 
-Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug` and `--scale` are independent and may appear in either order at the start of `$ARGUMENTS`.
+Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, and `--adjudicate` are independent and may appear in any order at the start of `$ARGUMENTS`.
 
 - `--debug` (boolean): Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--scale=quick|standard|deep` (value): Set a mental flag `RESEARCH_SCALE` to the explicitly-provided value. Default: `RESEARCH_SCALE=standard`. Selects the lane shape (1 / 3+3 / 5+5) for the research and validation phases — see "Scale matrix" below. Reject malformed forms with explicit error and abort: `--scale=foo` (unknown value) → print `**⚠ /research: --scale must be one of quick|standard|deep (got: foo). Aborting.**` and exit; `--scale` without `=value` → print `**⚠ /research: --scale requires a value (quick|standard|deep). Aborting.**` and exit; `--scale=` (empty value) → same error as missing value.
+- `--adjudicate` (boolean): Set a mental flag `RESEARCH_ADJUDICATE=true`. When set, runs a 3-judge dialectic adjudication after Step 2's Finalize Validation over every reviewer finding the orchestrator rejected during validation merge/dedup — see Step 2.5 below. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding"; majority binds. Default: `RESEARCH_ADJUDICATE=false` (Step 2.5 short-circuits with `⏩` and behavior is unchanged from prior versions). The `(finding, rejection_rationale)` capture in Step 2 runs unconditionally (regardless of this flag), but writes only to tmpdir scratch — when the flag is off, no extra LLM work, no external-tool launches, and no additional user-visible output is produced. Composes cleanly with `--scale=quick` (which skips Step 2 entirely): when both are set, Step 2.5 short-circuits with `⏩ no rejections to adjudicate (--scale=quick skipped Step 2)` since `rejected-findings.md` is never written.
 
 ## Scale matrix
 
@@ -73,6 +74,7 @@ Step Name Registry:
 | 0 | setup |
 | 1 | research |
 | 2 | validation |
+| 2.5 | adjudication |
 | 3 | report |
 | 4 | cleanup |
 
@@ -159,7 +161,7 @@ Print: `✅ 0: setup — researching on branch <CURRENT_BRANCH> at <HEAD_SHA> (<
 
 Print: `> **🔶 1: research**`
 
-**MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the scale-aware research-lane invariant banner, the four named angle-prompt literals (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) used in deep mode, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT` literals (one per `external_evidence_mode` value), the per-scale launch subsections (### Standard / ### Quick / ### Deep) with the Cursor and Codex launch bash blocks and their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.3 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer, and Step 1.4 synthesis requirements (per-scale: standard byte-identical; quick single-lane with explicit confidence disclaimer; deep names the four diversified angles by name in synthesis). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts.
+**MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the scale-aware research-lane invariant banner, the four named angle-prompt literals (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) used in deep mode, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT` literals (one per `external_evidence_mode` value), the per-scale launch subsections (### Standard / ### Quick / ### Deep) with the Cursor and Codex launch bash blocks and their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.3 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer, and Step 1.4 synthesis requirements (per-scale: standard byte-identical; quick single-lane with explicit confidence disclaimer; deep names the four diversified angles by name in synthesis). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md` at Step 1** — that reference is Step 2.5's body and loading it now would pollute context with the wrong phase's prompts.
 
 Execute Step 1 per the reference file above (phases 1.2, 1.3, 1.4), branching by `RESEARCH_SCALE`. SKILL.md is the sole owner of Step 1 entry and completion breadcrumbs; the reference file emits none. On completion, set `LANE_COUNT` from `RESEARCH_SCALE` (`quick` → 1, `standard` → 3, `deep` → 5) and print: `✅ 1: research — synthesis complete, $LANE_COUNT agents (<elapsed>)` (e.g. "1 agent" for quick, "3 agents" for standard, "5 agents" for deep — the count must reflect the actual lane count of the configured scale).
 
@@ -167,13 +169,25 @@ Execute Step 1 per the reference file above (phases 1.2, 1.3, 1.4), branching by
 
 Print: `> **🔶 2: validation**`
 
-**Quick-mode skip gate (emitted FIRST, before any reference load — Check 3 of `scripts/test-research-structure.sh` requires the MANDATORY directive line below to remain on a single line carrying both the directive and the reciprocal `Do NOT load` guard, so the skip gate is structured to short-circuit BEFORE that line)**: if `RESEARCH_SCALE=quick`, print `⏩ 2: validation — skipped (--scale=quick) (<elapsed>)` and proceed directly to Step 3 without loading `validation-phase.md`. The single-lane research-report.txt produced at Step 1.4 is the canonical input to Step 3.
+**Quick-mode skip gate (emitted FIRST, before any reference load — Check 3 of `scripts/test-research-structure.sh` requires the MANDATORY directive line below to remain on a single line carrying both the directive and the reciprocal `Do NOT load` guards, so the skip gate is structured to short-circuit BEFORE that line)**: if `RESEARCH_SCALE=quick`, print `⏩ 2: validation — skipped (--scale=quick) (<elapsed>)` and proceed directly to Step 3 without loading `validation-phase.md`. The single-lane research-report.txt produced at Step 1.4 is the canonical input to Step 3.
 
-**MANDATORY — READ ENTIRE FILE** before executing Step 2: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md`. It carries the scale-aware validation invariant banner, the Cursor and Codex validation-reviewer launch bash blocks with their long prompts and per-slot Claude Code Reviewer subagent fallbacks, the always-on Claude Code Reviewer subagent lane with the research-validation variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) and research-specific acceptance criteria, the deep-mode 2 extra Claude lanes (`Code-Sec` / `Code-Arch` lane-local emphasis on the unified Code Reviewer archetype, reusing the same `{CONTEXT_BLOCK}` XML wrapper), the process-Claude-findings-immediately rule, Step 2.4 `COLLECT_ARGS` + zero-externals branch + runtime-timeout replacement, the Codex/Cursor negotiation delegation to `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, and the Finalize Validation procedure. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` at Step 2** — that reference is Step 1's body and loading it now would pollute context with the wrong phase's prompts.
+**MANDATORY — READ ENTIRE FILE** before executing Step 2: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md`. It carries the scale-aware validation invariant banner, the Cursor and Codex validation-reviewer launch bash blocks with their long prompts and per-slot Claude Code Reviewer subagent fallbacks, the always-on Claude Code Reviewer subagent lane with the research-validation variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) and research-specific acceptance criteria, the deep-mode 2 extra Claude lanes (`Code-Sec` / `Code-Arch` lane-local emphasis on the unified Code Reviewer archetype, reusing the same `{CONTEXT_BLOCK}` XML wrapper), the process-Claude-findings-immediately rule, Step 2.4 `COLLECT_ARGS` + zero-externals branch + runtime-timeout replacement, the Codex/Cursor negotiation delegation to `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`, the Finalize Validation procedure, and the **rejection-rationale capture sites A and B** that persist `(finding, rejection_rationale)` records to `$RESEARCH_TMPDIR/rejected-findings.md` for downstream consumption by Step 2.5 (the captures themselves run unconditionally regardless of `RESEARCH_ADJUDICATE`). **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` at Step 2** — that reference is Step 1's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md` at Step 2** — that reference is Step 2.5's body and loading it now would pollute context with the wrong phase's prompts.
 
 Execute Step 2 per the reference file above, branching by `RESEARCH_SCALE` (standard launches 3 lanes; deep additionally launches 2 extra Claude lanes for a 5-lane panel). SKILL.md is the sole owner of Step 2 entry and completion breadcrumbs; the reference file emits none. On completion, set `VALIDATION_COUNT` from `RESEARCH_SCALE` (`standard` → 3, `deep` → 5; quick is unreachable here — already short-circuited above) and print one of the two branches depending on the Finalize Validation outcome:
 - If all reviewers reported no issues: `✅ 2: validation — all findings validated, no corrections needed ($VALIDATION_COUNT reviewers) (<elapsed>)`
 - If any findings were accepted and the synthesis was revised: `✅ 2: validation — corrections applied, <N> findings accepted ($VALIDATION_COUNT reviewers) (<elapsed>)`
+
+## Step 2.5 — Adjudicate Rejections
+
+Print: `> **🔶 2.5: adjudication**`
+
+If `RESEARCH_ADJUDICATE=false`: print `⏩ 2.5: adjudication — skipped (--adjudicate not set) (<elapsed>)` and proceed to Step 3 WITHOUT loading `adjudication-phase.md`.
+
+**MANDATORY — READ ENTIRE FILE** before executing Step 2.5: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md`. It carries the conditional skip-path on empty `rejected-findings.md`, the pre-launch coordinator invocation (`scripts/run-research-adjudication.sh`), the 3-judge panel launch and collection (replacement-first when externals unhealthy), the dialectic-protocol.md parser-tolerance + threshold-rule reuse, the `adjudication-resolutions.md` schema (pinned to `dialectic-protocol.md`'s Consumer Contract field names), and the reinstatement-into-validated-synthesis sub-step that revises the report under the existing `## Revised Research Findings` header before Step 3 reads it. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` at Step 2.5** — that reference is Step 1's body and loading it now would pollute context with the wrong phase's prompts. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 2.5** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts.
+
+Execute Step 2.5 per the reference file above. SKILL.md is the sole owner of Step 2.5 entry and completion breadcrumbs; the reference file emits none. On completion, print one of these branches:
+- If `rejected-findings.md` was empty/absent: `⏩ 2.5: adjudication — no rejections to adjudicate (<elapsed>)`
+- Otherwise: `✅ 2.5: adjudication — <X> reinstated, <Y> upheld (<elapsed>)`
 
 ## Step 3 — Final Research Report
 
@@ -222,6 +236,7 @@ Print the final research report under a `## Research Report` header with the fol
 **Codebase context**: Branch `<CURRENT_BRANCH>`, commit `<HEAD_SHA>`
 **Research phase**: <RESEARCH_HEADER>
 **Validation phase**: <VALIDATION_HEADER>
+<ADJUDICATION_HEADER>
 
 ### Findings Summary
 <synthesized and validated findings, organized by topic>
@@ -250,6 +265,11 @@ Example rendered headers (one degraded research lane, one degraded validation la
 ```
 
 If risk assessment, difficulty estimate, or feasibility verdict are not applicable to the nature of the research question (e.g., a pure "how does X work?" question), mark them as **N/A** with a brief explanation.
+
+**Adjudication header**: substitute the `<ADJUDICATION_HEADER>` placeholder per `RESEARCH_ADJUDICATE`:
+- `RESEARCH_ADJUDICATE=false`: replace the placeholder line with an empty line (no header rendered).
+- `RESEARCH_ADJUDICATE=true` AND Step 2.5 ran: render `**Adjudication phase**: <X> reinstated, <Y> upheld` where `<X>` is the count of `Disposition: voted` resolutions whose `Resolution: reinstate` (ANTI_THESIS won) and `<Y>` is the count of resolutions whose `Resolution: rejection-stands` (THESIS won) plus any `Disposition: fallback-to-synthesis` (rejection stands by default). Both counts come from `$RESEARCH_TMPDIR/adjudication-resolutions.md` (parse before Step 4 cleanup).
+- `RESEARCH_ADJUDICATE=true` AND Step 2.5 short-circuited (no rejections to adjudicate): render `**Adjudication phase**: 0 reinstated, 0 upheld (no rejections to adjudicate)`.
 
 Print: `✅ 3: report — complete (<elapsed>)`
 

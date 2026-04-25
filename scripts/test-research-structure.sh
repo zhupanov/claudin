@@ -1,11 +1,13 @@
 #!/bin/bash
 # Structural regression test for /research skill progressive-disclosure refactor.
-# Asserts that the skill's 2-reference topology survives edits:
-#  - skills/research/references/research-phase.md and validation-phase.md both exist
+# Asserts that the skill's 3-reference topology survives edits:
+#  - skills/research/references/research-phase.md, validation-phase.md, and
+#    adjudication-phase.md all exist
 #  - Each appears on a 'MANDATORY — READ ENTIRE FILE' line in skills/research/SKILL.md,
-#    and the SAME line also carries the reciprocal 'Do NOT load <other-reference>' guard
-#    (line-scoped so a future edit cannot split the MANDATORY and the Do-NOT-load into
-#    different paragraphs without the harness catching the drift)
+#    and the SAME line also carries reciprocal 'Do NOT load <each-other-reference>'
+#    guards naming BOTH other references (line-scoped so a future edit cannot split
+#    the MANDATORY and the Do-NOT-load directives into different paragraphs without
+#    the harness catching the drift)
 #  - Each references/*.md OPENS WITH the Consumer / Contract / When-to-load header triplet
 #    in the first 20 lines (a /research-local tightening layered on top of the cross-skill
 #    presence check enforced by scripts/test-references-headers.sh — matches the sibling
@@ -17,6 +19,10 @@
 #  - --scale=quick|standard|deep value-flag surface (#418): flag enum + 4 named angle
 #    prompt identifiers + literal quick-mode skip breadcrumb + abort-on-invalid + flag
 #    independence statement + ### Standard byte-drift pins on existing filename literals
+#  - --substantive-validation flag wiring + STATUS=NOT_SUBSTANTIVE token mapping
+#    (#416 Phase 3 of umbrella #413, substantive content validator)
+#  - adjudication-phase.md mentions both build-research-adjudication-ballot.sh and
+#    run-research-adjudication.sh (byte pin for the ballot-builder + coordinator wiring) (#424)
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 set -euo pipefail
@@ -26,6 +32,7 @@ SKILL_MD="$REPO_ROOT/skills/research/SKILL.md"
 REFS_DIR="$REPO_ROOT/skills/research/references"
 RESEARCH_MD="$REFS_DIR/research-phase.md"
 VALIDATION_MD="$REFS_DIR/validation-phase.md"
+ADJUDICATION_MD="$REFS_DIR/adjudication-phase.md"
 
 fail() {
   echo "FAIL: $1" >&2
@@ -35,20 +42,35 @@ fail() {
 # Check 1: SKILL.md exists.
 [[ -f "$SKILL_MD" ]] || fail "SKILL.md missing: $SKILL_MD"
 
-# Check 2: Both reference files exist.
-[[ -f "$RESEARCH_MD" ]] || fail "references/research-phase.md missing: $RESEARCH_MD"
-[[ -f "$VALIDATION_MD" ]] || fail "references/validation-phase.md missing: $VALIDATION_MD"
+# Check 2: All three reference files exist.
+[[ -f "$RESEARCH_MD" ]]      || fail "references/research-phase.md missing: $RESEARCH_MD"
+[[ -f "$VALIDATION_MD" ]]    || fail "references/validation-phase.md missing: $VALIDATION_MD"
+[[ -f "$ADJUDICATION_MD" ]]  || fail "references/adjudication-phase.md missing: $ADJUDICATION_MD"
 
 # Check 3: Each reference file is named on a MANDATORY — READ ENTIRE FILE line in SKILL.md
-#          AND that same line carries the reciprocal 'Do NOT load <other>' guard. Line-scoped
-#          by construction (grep operates line-by-line) so a future edit that splits the
-#          directive across lines — parking 'Do NOT load X' in a different paragraph — fails.
-grep -q 'MANDATORY — READ ENTIRE FILE.*research-phase\.md.*Do NOT load.*validation-phase\.md' "$SKILL_MD" \
-  || grep -q 'Do NOT load.*validation-phase\.md.*MANDATORY — READ ENTIRE FILE.*research-phase\.md' "$SKILL_MD" \
-  || fail "SKILL.md Step 1 MANDATORY for research-phase.md must share a line with 'Do NOT load ... validation-phase.md' guard"
-grep -q 'MANDATORY — READ ENTIRE FILE.*validation-phase\.md.*Do NOT load.*research-phase\.md' "$SKILL_MD" \
-  || grep -q 'Do NOT load.*research-phase\.md.*MANDATORY — READ ENTIRE FILE.*validation-phase\.md' "$SKILL_MD" \
-  || fail "SKILL.md Step 2 MANDATORY for validation-phase.md must share a line with 'Do NOT load ... research-phase.md' guard"
+#          AND that same line carries reciprocal 'Do NOT load <each-other>' guards naming
+#          BOTH other references. Line-scoped by construction (grep operates line-by-line)
+#          so a future edit that splits the directive across lines — parking 'Do NOT load X'
+#          in a different paragraph — fails.
+#
+# Each MANDATORY line for reference X must also mention BOTH other references in Do-NOT-load
+# clauses. The Do-NOT-load clauses may be in either order on the line (the harness checks
+# for both possible orderings), but both other reference filenames must be present.
+
+# research-phase.md: MANDATORY line must mention BOTH validation-phase.md AND adjudication-phase.md
+grep -qE 'MANDATORY — READ ENTIRE FILE.*research-phase\.md.*Do NOT load.*validation-phase\.md.*Do NOT load.*adjudication-phase\.md' "$SKILL_MD" \
+  || grep -qE 'MANDATORY — READ ENTIRE FILE.*research-phase\.md.*Do NOT load.*adjudication-phase\.md.*Do NOT load.*validation-phase\.md' "$SKILL_MD" \
+  || fail "SKILL.md Step 1 MANDATORY for research-phase.md must share a line with reciprocal 'Do NOT load' guards naming BOTH validation-phase.md AND adjudication-phase.md"
+
+# validation-phase.md: MANDATORY line must mention BOTH research-phase.md AND adjudication-phase.md
+grep -qE 'MANDATORY — READ ENTIRE FILE.*validation-phase\.md.*Do NOT load.*research-phase\.md.*Do NOT load.*adjudication-phase\.md' "$SKILL_MD" \
+  || grep -qE 'MANDATORY — READ ENTIRE FILE.*validation-phase\.md.*Do NOT load.*adjudication-phase\.md.*Do NOT load.*research-phase\.md' "$SKILL_MD" \
+  || fail "SKILL.md Step 2 MANDATORY for validation-phase.md must share a line with reciprocal 'Do NOT load' guards naming BOTH research-phase.md AND adjudication-phase.md"
+
+# adjudication-phase.md: MANDATORY line must mention BOTH research-phase.md AND validation-phase.md
+grep -qE 'MANDATORY — READ ENTIRE FILE.*adjudication-phase\.md.*Do NOT load.*research-phase\.md.*Do NOT load.*validation-phase\.md' "$SKILL_MD" \
+  || grep -qE 'MANDATORY — READ ENTIRE FILE.*adjudication-phase\.md.*Do NOT load.*validation-phase\.md.*Do NOT load.*research-phase\.md' "$SKILL_MD" \
+  || fail "SKILL.md Step 2.5 MANDATORY for adjudication-phase.md must share a line with reciprocal 'Do NOT load' guards naming BOTH research-phase.md AND validation-phase.md"
 
 # Check 4: Each references/*.md opens with the Consumer / Contract / When-to-load header
 #          triplet in the first 20 lines. The sibling contract says "opens with" — enforce that
@@ -62,7 +84,7 @@ contract_header_patterns=(
   '^\*\*Contract\*\*:'
   '^\*\*When to load\*\*:'
 )
-for ref_path in "$RESEARCH_MD" "$VALIDATION_MD"; do
+for ref_path in "$RESEARCH_MD" "$VALIDATION_MD" "$ADJUDICATION_MD"; do
   for pattern in "${contract_header_patterns[@]}"; do
     head -n 20 "$ref_path" | grep -Eq "$pattern" \
       || fail "references/$(basename "$ref_path") must open with anchored header matching '$pattern' in the first 20 lines"
@@ -128,11 +150,12 @@ else
   fail "SKILL.md must document abort-on-invalid for --scale (literals 'must be one of quick|standard|deep' and 'Aborting' both required) (#418)"
 fi
 
-# Check 13 (#418): SKILL.md documents that --debug and --scale are independent
-# flags (order-independence). Pin the explicit independence statement.
+# Check 13 (#418 + #424): SKILL.md documents that --debug, --scale, and --adjudicate
+# are independent flags (order-independence). Pin the explicit independence statement
+# — three flags now after #424 added --adjudicate.
 # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
-grep -Eq -e '`--debug` and `--scale` are independent' "$SKILL_MD" \
-  || fail "SKILL.md must explicitly state that '--debug' and '--scale' are independent (order-independence) (#418)"
+grep -Eq -e '`--debug`, `--scale`, and `--adjudicate` are independent' "$SKILL_MD" \
+  || fail "SKILL.md must explicitly state that '--debug', '--scale', and '--adjudicate' are independent (order-independence) (#418 + #424)"
 
 # Check 14 (#418): research-phase.md ### Standard subsection contains a stable
 # byte-drift pin (the existing standard-mode cursor research output filename
@@ -174,5 +197,14 @@ grep -Fq "NOT_SUBSTANTIVE" "$RESEARCH_MD" \
 grep -Fq "NOT_SUBSTANTIVE" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must map STATUS=NOT_SUBSTANTIVE in lane-status token bullet (#416 Phase 3)"
 
-echo "PASS: test-research-structure.sh — all 17 structural invariants hold"
+# Check 18 (#424): adjudication-phase.md must reference both the ballot builder
+# and the pre-launch coordinator. Without these pins, a future edit could silently
+# drop the wiring and Step 2.5 would have no helper invocation, making the
+# adjudication step a no-op even when --adjudicate is on.
+grep -Fq "build-research-adjudication-ballot.sh" "$ADJUDICATION_MD" \
+  || fail "references/adjudication-phase.md must reference scripts/build-research-adjudication-ballot.sh (#424)"
+grep -Fq "run-research-adjudication.sh" "$ADJUDICATION_MD" \
+  || fail "references/adjudication-phase.md must reference scripts/run-research-adjudication.sh (#424)"
+
+echo "PASS: test-research-structure.sh — all 18 structural invariants hold"
 exit 0

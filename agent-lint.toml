@@ -361,6 +361,12 @@ exclude = [
   "scripts/test-orchestrator-scope-sync.sh",
   "scripts/test-quick-mode-docs-sync.sh",
   "scripts/test-research-structure.sh",
+  # scripts/test-research-adjudication.sh is the offline regression harness for
+  # scripts/build-research-adjudication-ballot.sh (closes #424 — /research
+  # --adjudicate flag). Invoked only from Makefile (test-research-adjudication
+  # target) and scripts/test-research-adjudication.md (sibling contract),
+  # matching the same Makefile-only pattern as the other test-* harnesses above.
+  "scripts/test-research-adjudication.sh",
   "scripts/test-review-structure.sh",
   "scripts/test-render-reviewer-prompt.sh",
   # Phase 1 of umbrella #348 (tracking-issue foundation helpers) —

@@ -107,7 +107,7 @@ Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint, gitleaks
 
 ## `/research`
 
-**Arguments**: `[--debug] [--scale=quick|standard|deep] <research question or topic>`
+**Arguments**: `[--debug] [--scale=quick|standard|deep] [--adjudicate] <research question or topic>`
 
 **Source**: [`skills/research/SKILL.md`](../skills/research/SKILL.md) · [Diagram](../skills/research/diagram.svg)
 
@@ -117,7 +117,7 @@ Collaborative best-effort read-only research with a scale-aware lane shape selec
 - `--scale=quick`: 1 inline Claude lane only (single-lane confidence — fastest, lowest assurance), Step 2 validation phase skipped entirely. Synthesis carries an explicit "single-lane confidence" disclaimer. Useful for trivial single-fact lookups; avoid when correctness or completeness matter.
 - `--scale=deep`: 5 research lanes (Claude inline running baseline `RESEARCH_PROMPT` + 2 Cursor slots and 2 Codex slots carrying the four diversified angle prompts `RESEARCH_PROMPT_ARCH` / `RESEARCH_PROMPT_EDGE` / `RESEARCH_PROMPT_EXT` / `RESEARCH_PROMPT_SEC` for architecture / edge cases / external comparisons / security) + 5-reviewer validation panel (the standard 3 plus 2 extra Claude Code Reviewer subagents `Code-Sec` and `Code-Arch` carrying lane-local emphasis on the unified Code Reviewer archetype — NOT new agent slugs). The synthesis must explicitly name the four diversified angles so the operator can see they were genuinely covered.
 
-All scales produce a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict (the report's lane-count headers reflect the configured scale dynamically). Tracked repo files are not modified by the Claude `Edit | Write | NotebookEdit` tool surface — scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook). Bash and external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review). `/issue` may be invoked via the Skill tool to file research-result issues.
+All scales produce a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict (the report's lane-count headers reflect the configured scale dynamically). With `--adjudicate` (default off, composes with any `--scale`), runs an additional 3-judge dialectic adjudication step (Step 2.5) over reviewer findings the orchestrator rejected during validation merge/dedup; majority binds, with reinstated findings folded into the validated synthesis before the report renders — see [`skills/research/references/adjudication-phase.md`](../skills/research/references/adjudication-phase.md). When `--scale=quick` is set, Step 2 is skipped so there are no rejections to adjudicate and Step 2.5 short-circuits cleanly. Tracked repo files are not modified by the Claude `Edit | Write | NotebookEdit` tool surface — scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook). Bash and external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review). `/issue` may be invoked via the Skill tool to file research-result issues.
 
 ## `/review`
 

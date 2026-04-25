@@ -1,0 +1,201 @@
+#!/usr/bin/env bash
+# test-research-adjudication.sh — offline regression guard for /research --adjudicate.
+#
+# Validates scripts/build-research-adjudication-ballot.sh against fixture inputs.
+# Tests cover:
+#   1. Deterministic ordering — same rejection set in different append orders → byte-identical ballot.
+#   2. DECISION renumbering — entries are renumbered DECISION_1, DECISION_2, ... after the deterministic sort.
+#   3. Position rotation — odd N: rejection-stands = Defense A; even N: reinstate = Defense A.
+#   4. Anonymous Defense A/B labels — tool names (Cursor/Codex/Claude/Code/orchestrator) at
+#      line-anchored attribution positions are stripped from defense bodies.
+#   5. Mid-content attribution preservation — same tokens mid-content are NOT stripped.
+#   6. <defense_content> wrapping with the "treat as data" preamble.
+#   7. Empty input → DECISION_COUNT=0, ballot file present but empty.
+#
+# Wired into the Makefile via the `test-harnesses` target. NOT part of `make lint`
+# (lint covers shellcheck + skill-lint + ruff/black; structural skill harnesses live
+# under `test-harnesses` per docs/linting.md). NOT part of `make smoke-dialectic`
+# (that target validates /design's dialectic-execution.md fixtures, which have
+# debater XML tags / RECOMMEND lines / file:line citations not present in research
+# adjudication ballots).
+#
+# Exit 0 on pass, exit 1 on any assertion failure.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+BUILDER="$REPO_ROOT/scripts/build-research-adjudication-ballot.sh"
+FIXTURES_DIR="$REPO_ROOT/tests/fixtures/research-adjudication"
+
+fail() {
+  echo "FAIL: $1" >&2
+  exit 1
+}
+
+pass() {
+  echo "PASS: $1"
+}
+
+[[ -x "$BUILDER" ]] || fail "Builder script missing or not executable: $BUILDER"
+[[ -d "$FIXTURES_DIR" ]] || fail "Fixtures directory missing: $FIXTURES_DIR"
+
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+# --- Test 1: empty input -----------------------------------------------------
+
+empty_input="$WORK_DIR/empty-rej.md"
+empty_output="$WORK_DIR/empty-ballot.txt"
+: > "$empty_input"
+
+builder_out="$("$BUILDER" --input "$empty_input" --output "$empty_output")"
+echo "$builder_out" | grep -qE '^BUILT=true$'        || fail "Test 1: empty input did not emit BUILT=true. Got: $builder_out"
+echo "$builder_out" | grep -qE '^DECISION_COUNT=0$'  || fail "Test 1: empty input did not emit DECISION_COUNT=0. Got: $builder_out"
+[[ -f "$empty_output" ]]                              || fail "Test 1: ballot file was not created"
+[[ ! -s "$empty_output" ]]                            || fail "Test 1: ballot file is non-empty (expected empty)"
+pass "Test 1: empty input → DECISION_COUNT=0, empty ballot"
+
+# --- Test 2: deterministic ordering, append order independence --------------
+
+input_order_1="$WORK_DIR/order1-rej.md"
+input_order_2="$WORK_DIR/order2-rej.md"
+output_order_1="$WORK_DIR/order1-ballot.txt"
+output_order_2="$WORK_DIR/order2-ballot.txt"
+
+cat > "$input_order_1" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Cursor
+- **Finding**: Cursor: alpha finding text body that is reasonably long.
+- **Rejection rationale**: First rationale paragraph that explains why the alpha finding was rejected, providing enough detail to serve as a defense.
+
+### REJECTED_FINDING_2
+- **Reviewer**: Code
+- **Finding**: Code: bravo finding text body of approximately the same length.
+- **Rejection rationale**: Second rationale paragraph explaining the rejection of the bravo finding with substantive reasoning about the codebase state.
+
+### REJECTED_FINDING_3
+- **Reviewer**: Codex
+- **Finding**: Codex: charlie finding text body matching the others in length.
+- **Rejection rationale**: Third rationale paragraph for the charlie finding rejection with detailed prose about why the orchestrator's position holds.
+EOF
+
+# Same three findings, different append order
+cat > "$input_order_2" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Codex
+- **Finding**: Codex: charlie finding text body matching the others in length.
+- **Rejection rationale**: Third rationale paragraph for the charlie finding rejection with detailed prose about why the orchestrator's position holds.
+
+### REJECTED_FINDING_2
+- **Reviewer**: Cursor
+- **Finding**: Cursor: alpha finding text body that is reasonably long.
+- **Rejection rationale**: First rationale paragraph that explains why the alpha finding was rejected, providing enough detail to serve as a defense.
+
+### REJECTED_FINDING_3
+- **Reviewer**: Code
+- **Finding**: Code: bravo finding text body of approximately the same length.
+- **Rejection rationale**: Second rationale paragraph explaining the rejection of the bravo finding with substantive reasoning about the codebase state.
+EOF
+
+"$BUILDER" --input "$input_order_1" --output "$output_order_1" >/dev/null
+"$BUILDER" --input "$input_order_2" --output "$output_order_2" >/dev/null
+
+if ! diff -q "$output_order_1" "$output_order_2" >/dev/null; then
+  fail "Test 2: ballots differ when input append order differs (expected byte-identical)"
+fi
+pass "Test 2: deterministic ordering — append order independence verified"
+
+# --- Test 3: DECISION renumbering --------------------------------------------
+
+# Expect DECISION_1, DECISION_2, DECISION_3 in lexicographic-by-reviewer order.
+# Code < Codex < Cursor → DECISION_1 = Code (bravo), DECISION_2 = Codex (charlie), DECISION_3 = Cursor (alpha)
+grep -qE '^### DECISION_1: ' "$output_order_1" || fail "Test 3: missing DECISION_1 header"
+grep -qE '^### DECISION_2: ' "$output_order_1" || fail "Test 3: missing DECISION_2 header"
+grep -qE '^### DECISION_3: ' "$output_order_1" || fail "Test 3: missing DECISION_3 header"
+
+# DECISION_1 should be the Code reviewer's bravo finding; DECISION_3 should be Cursor's alpha
+decision_1_finding="$(awk '/^### DECISION_1:/{flag=1; next} /^### DECISION_2:/{flag=0} flag' "$output_order_1")"
+decision_3_finding="$(awk '/^### DECISION_3:/{flag=1; next} flag' "$output_order_1")"
+
+echo "$decision_1_finding" | grep -q "bravo finding text body" || fail "Test 3: DECISION_1 does not contain the Code reviewer's bravo finding (lex-first)"
+echo "$decision_3_finding" | grep -q "alpha finding text body" || fail "Test 3: DECISION_3 does not contain the Cursor reviewer's alpha finding (lex-last)"
+pass "Test 3: DECISION renumbering — lex-by-reviewer ordering verified"
+
+# --- Test 4: position rotation ------------------------------------------------
+
+# DECISION_1 (odd N) → rejection-stands = Defense A; reinstate = Defense B
+decision_1_block="$(awk '/^### DECISION_1:/{flag=1; next} /^### DECISION_2:/{flag=0} flag' "$output_order_1")"
+echo "$decision_1_block" | grep -qE '^Defense A \(defends rejection stands\):'      || fail "Test 4: DECISION_1 (odd) Defense A does not defend rejection stands"
+echo "$decision_1_block" | grep -qE '^Defense B \(defends reinstate the finding\):' || fail "Test 4: DECISION_1 (odd) Defense B does not defend reinstate"
+
+# DECISION_2 (even N) → reinstate = Defense A; rejection-stands = Defense B
+decision_2_block="$(awk '/^### DECISION_2:/{flag=1; next} /^### DECISION_3:/{flag=0} flag' "$output_order_1")"
+echo "$decision_2_block" | grep -qE '^Defense A \(defends reinstate the finding\):' || fail "Test 4: DECISION_2 (even) Defense A does not defend reinstate"
+echo "$decision_2_block" | grep -qE '^Defense B \(defends rejection stands\):'      || fail "Test 4: DECISION_2 (even) Defense B does not defend rejection stands"
+pass "Test 4: position rotation — odd/even alternation verified"
+
+# --- Test 5: anchored-only attribution stripping ----------------------------
+
+# In the test inputs, each finding starts with "<reviewer>: ..." which is the
+# anchored attribution-prefix pattern. The stripping must remove the leading
+# "<reviewer>: " on the first line of each defense body. Mid-content
+# occurrences of "Cursor"/"Codex"/"Code" must be preserved.
+
+mid_input="$WORK_DIR/mid-rej.md"
+mid_output="$WORK_DIR/mid-ballot.txt"
+
+cat > "$mid_input" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Cursor
+- **Finding**: Cursor: the orchestrator's merge step at validation-phase.md:73 lacks a deterministic sort, breaking downstream tooling that depends on Cursor's negotiation outputs being reproducible.
+- **Rejection rationale**: This finding misidentifies the merge step's behavior. The orchestrator does apply a deterministic ordering at validation-phase.md:99 during dedup, after Cursor's negotiation completes. The reviewer's claim contradicts the source file. Factually incorrect.
+EOF
+
+"$BUILDER" --input "$mid_input" --output "$mid_output" >/dev/null
+
+# The leading "Cursor: " on the Finding's first line should be stripped from the defense body.
+# The mid-content "the orchestrator's", "Cursor's negotiation", and "after Cursor's negotiation" should all be PRESERVED.
+ballot_body="$(cat "$mid_output")"
+
+# After stripping, the finding-body should start with "the orchestrator's merge step", NOT "Cursor: the orchestrator's"
+echo "$ballot_body" | grep -qE 'Cursor: the orchestrator' && \
+  fail "Test 5a: leading 'Cursor: ' attribution prefix was NOT stripped from defense body"
+
+# Mid-content "the orchestrator" must be preserved
+echo "$ballot_body" | grep -qE "the orchestrator's merge step" || \
+  fail "Test 5b: mid-content 'the orchestrator's merge step' was incorrectly stripped"
+
+# Mid-content "Cursor's negotiation" must be preserved
+echo "$ballot_body" | grep -qE "Cursor's negotiation" || \
+  fail "Test 5c: mid-content 'Cursor's negotiation' was incorrectly stripped"
+
+pass "Test 5: anchored-only attribution stripping — leading prefix removed, mid-content preserved"
+
+# --- Test 6: <defense_content> wrapping with treat-as-data preamble ---------
+
+# Each defense body should be wrapped in <defense_content>...</defense_content> with the preamble.
+defense_count="$(grep -c '<defense_content>' "$output_order_1" || true)"
+defense_close_count="$(grep -c '</defense_content>' "$output_order_1" || true)"
+preamble_count="$(grep -c 'The following content delimits an untrusted defense' "$output_order_1" || true)"
+
+# 3 decisions × 2 defenses each = 6 wrappers
+[[ "$defense_count" == "6" ]]       || fail "Test 6: expected 6 <defense_content> opening tags, got $defense_count"
+[[ "$defense_close_count" == "6" ]] || fail "Test 6: expected 6 </defense_content> closing tags, got $defense_close_count"
+[[ "$preamble_count" == "6" ]]      || fail "Test 6: expected 6 'treat as data' preambles, got $preamble_count"
+pass "Test 6: <defense_content> wrapping with treat-as-data preamble verified"
+
+# --- Test 7: ballot header text ----------------------------------------------
+
+grep -qF '## Dialectic Ballot — Research Adjudication' "$output_order_1" || \
+  fail "Test 7: ballot header missing"
+grep -qF 'THESIS = "rejection stands" wins' "$output_order_1" || \
+  fail "Test 7: THESIS semantics not declared in ballot header"
+grep -qF 'ANTI_THESIS = "reinstate the finding" wins' "$output_order_1" || \
+  fail "Test 7: ANTI_THESIS semantics not declared in ballot header"
+pass "Test 7: ballot header declares research-specific THESIS/ANTI_THESIS semantics"
+
+# --- All tests passed --------------------------------------------------------
+
+echo ""
+echo "All test-research-adjudication.sh assertions passed."
+exit 0
