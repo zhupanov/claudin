@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.8] - 2026-04-24
+
+### Changed
+
+- `skills/research/references/research-phase.md`: Step 1.2 now carries an external-evidence trigger detector and a conditional `RESEARCH_PROMPT` branch (Phase 2 of umbrella #413). When `RESEARCH_QUESTION` matches a documented case-insensitive keyword list (`external`, `other repos`, `github`, `compare with`, `contrast`, `reputable sources`, `karpathy`, `anthropic`, `open source`, `oss`, `large amount of stars`, `high stars`, `star count`), `external_evidence_mode` flips to `true` and the prompt prepends an external-evidence stanza inviting `WebSearch` / `WebFetch` against reputable origins (vendor docs, well-known engineer blogs, high-star GitHub repos), with URL provenance required for every external claim. The 3-lane invariant holds at the prompt-text level; a residual asymmetry note documents that Cursor's `cursor agent` runtime does not expose web tools the way Claude does, so external-evidence yield is realized primarily through Codex + Claude-inline. SKILL.md Step 1 entry blurb updated to match. Closes #415.
+
 ## [7.0.7] - 2026-04-24
 
 ### Changed

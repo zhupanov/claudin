@@ -106,7 +106,7 @@ Print: `✅ 0: setup — researching on branch <CURRENT_BRANCH> at <HEAD_SHA> (<
 
 Print: `> **🔶 1: research**`
 
-**MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the 3-lane research invariant banner, the `RESEARCH_PROMPT` literal, the Cursor and Codex launch bash blocks with their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.3 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer, and Step 1.4 synthesis requirements. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts.
+**MANDATORY — READ ENTIRE FILE** before executing Step 1: `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`. It carries the 3-lane research invariant banner, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT` literals (one per `external_evidence_mode` value), the Cursor and Codex launch bash blocks with their per-slot Claude fallbacks, the Claude inline-research independence rule, Step 1.3 `COLLECT_ARGS` + zero-externals branch + Runtime Timeout Fallback pointer, and Step 1.4 synthesis requirements. **Do NOT load `${CLAUDE_PLUGIN_ROOT}/skills/research/references/validation-phase.md` at Step 1** — that reference is Step 2's body and loading it now would pollute context with the wrong phase's prompts.
 
 Execute Step 1 per the reference file above (phases 1.2, 1.3, 1.4). SKILL.md is the sole owner of Step 1 entry and completion breadcrumbs; the reference file emits none. On completion, print: `✅ 1: research — synthesis complete, 3 agents (<elapsed>)`
 
