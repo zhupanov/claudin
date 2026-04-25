@@ -12,6 +12,40 @@
 
 Launch **all 3 lanes in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest first: Cursor (slowest), then Codex, then the Claude Code Reviewer subagent (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
 
+## Step 2 entry — Propagate research-phase fallbacks to VALIDATION_* keys
+
+Before any external launch in Step 2, copy each currently-unavailable external lane's research-phase status into the corresponding `VALIDATION_*` keys in `$RESEARCH_TMPDIR/lane-status.txt`. Without this propagation, a runtime fallback that flipped `cursor_available`/`codex_available` to `false` during research-phase Step 1.3 would leave the Step 0b-initialized `VALIDATION_<TOOL>_STATUS=ok` in place — `collect-reviewer-results.sh` is never called for a lane whose `*_available` flag is false at validation entry, so Step 2.4 below cannot downgrade it. The result would be a header showing `Cursor: ✅` for a validation lane that actually ran as a Claude fallback.
+
+For each external tool, if `cursor_available` (resp. `codex_available`) is currently `false`, copy `RESEARCH_<TOOL>_STATUS` and `RESEARCH_<TOOL>_REASON` into `VALIDATION_<TOOL>_STATUS` and `VALIDATION_<TOOL>_REASON`. Lanes whose `*_available` flag is currently `true` are left alone — Step 2.4 will update them after `collect-reviewer-results.sh` returns.
+
+If both `cursor_available` and `codex_available` are `true` at Step 2 entry, no update is needed.
+
+Otherwise, surgically update only the `VALIDATION_*` slice (preserve `RESEARCH_*` keys verbatim):
+
+```bash
+LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
+LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
+# Read current RESEARCH_* values for any propagation needed below.
+RESEARCH_CURSOR_STATUS_VAL=$(grep '^RESEARCH_CURSOR_STATUS=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CURSOR_STATUS=}"; })
+RESEARCH_CURSOR_REASON_VAL=$(grep '^RESEARCH_CURSOR_REASON=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CURSOR_REASON=}"; })
+RESEARCH_CODEX_STATUS_VAL=$(grep '^RESEARCH_CODEX_STATUS=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CODEX_STATUS=}"; })
+RESEARCH_CODEX_REASON_VAL=$(grep '^RESEARCH_CODEX_REASON=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CODEX_REASON=}"; })
+# For each tool, decide the new VALIDATION_* values:
+#   - if *_available=false: copy from RESEARCH_<TOOL>_*
+#   - if *_available=true:  keep current VALIDATION_<TOOL>_* (initialized in Step 0b)
+# Then preserve RESEARCH_* keys verbatim and emit fresh VALIDATION_* keys.
+grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
+{
+    printf 'VALIDATION_CURSOR_STATUS=%s\n' "<cursor token>"
+    printf 'VALIDATION_CURSOR_REASON=%s\n' "<cursor reason>"
+    printf 'VALIDATION_CODEX_STATUS=%s\n' "<codex token>"
+    printf 'VALIDATION_CODEX_REASON=%s\n' "<codex reason>"
+} >> "$LANE_STATUS_TMP"
+mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
+```
+
+Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
+
 ## External Reviewer Setup (if `codex_available` or `cursor_available`)
 
 The research report is already written to `$RESEARCH_TMPDIR/research-report.txt` from Step 1.4, so both Codex and Cursor can read it.
@@ -137,6 +171,29 @@ Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background:
 1. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Read valid output files.
 2. **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the availability flag (`cursor_available` or `codex_available`), then **immediately launch the matching single Claude Code Reviewer subagent fallback** and wait for it before negotiation. This preserves the 3-lane invariant at negotiation time.
 3. Merge external reviewer findings (and any runtime-fallback Claude findings) into the always-on Claude lane findings and any pre-launch Claude fallback findings.
+4. **Update lane-status.txt (VALIDATION_* slice only)**: After Runtime Timeout Fallback determinations are made, surgically update only the `VALIDATION_*` slice of `$RESEARCH_TMPDIR/lane-status.txt` — `RESEARCH_*` keys must be preserved verbatim. For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:
+   - `STATUS=TIMED_OUT` or `SENTINEL_TIMEOUT` → token `fallback_runtime_timeout`, reason empty
+   - `STATUS=FAILED` or `EMPTY_OUTPUT` → token `fallback_runtime_failed`, reason = sanitized `FAILURE_REASON` (strip `=` and `|`, collapse whitespace, trim, truncate to 80 chars)
+
+   If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched in this phase because pre-launch fallback or research-phase propagation already applied), no update is needed — the `VALIDATION_*` keys remain correct.
+
+   Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `VALIDATION_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep their current value):
+
+   ```bash
+   LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
+   LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
+   # Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
+   grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
+   {
+       printf 'VALIDATION_CURSOR_STATUS=%s\n' "<cursor token>"
+       printf 'VALIDATION_CURSOR_REASON=%s\n' "<cursor sanitized reason or empty>"
+       printf 'VALIDATION_CODEX_STATUS=%s\n' "<codex token>"
+       printf 'VALIDATION_CODEX_REASON=%s\n' "<codex sanitized reason or empty>"
+   } >> "$LANE_STATUS_TMP"
+   mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
+   ```
+
+   Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
 
 ## Codex and Cursor Negotiation (in parallel)
 
