@@ -444,7 +444,7 @@ Step 2 (validation) consumes the report and validates against the parent `RESEAR
 
 ### Quick (RESEARCH_SCALE=quick)
 
-Read the single Claude inline research output. Produce a single-lane synthesis under a `## Research Synthesis` header that explicitly opens with a "**Single-lane confidence — no validation pass.**" disclaimer (one short sentence noting that the result reflects one perspective and was not cross-checked by a multi-lane synthesis or a validation panel). Then summarize the inline findings: key observations, relevant files/modules/areas and architectural patterns, and risks / constraints / feasibility concerns.
+Read the single Claude inline research output. Produce a single-lane synthesis under a `## Research Synthesis` header that explicitly opens with the byte-canonical disclaimer literal stored at `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer.txt` (currently `**Single-lane confidence — no validation pass.**` — the data file is the single source of truth, also consumed by SKILL.md Step 3 when invoking `render-findings-batch.sh --quick-disclaimer`). The disclaimer is one short sentence noting that the result reflects one perspective and was not cross-checked by a multi-lane synthesis or a validation panel. Then summarize the inline findings: key observations, relevant files/modules/areas and architectural patterns, and risks / constraints / feasibility concerns.
 
 Write `$RESEARCH_TMPDIR/research-report.txt` with the same content (research question, branch + commit, single-lane synthesis with disclaimer). The Step 1.5 contract is preserved — the report file MUST exist so Step 3 can render it, even though Step 2 is skipped.
 
