@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.1] - 2026-04-25
+
+### Changed
+
+- `/research` external-evidence prompts now instruct lanes to issue 3+ independent web-search/fetch calls in parallel rather than sequentially when the runtime supports it and queries are independent, with explicit "degrade to serial when one query's result must inform the next" guard. Closes #521 (per Anthropic's multi-agent research guidance: "subagents that fan tool calls 3+ in parallel cut research time materially"). Edit confined to two prompt literals in `skills/research/references/research-phase.md`: (1) `RESEARCH_PROMPT_BASELINE` (the `external_evidence_mode=true` variant — applies to quick mode and deep mode's Claude inline integrator when external_evidence is triggered), and (2) `RESEARCH_PROMPT_EXT` (deep mode's Codex-Ext slot always; standard mode's Codex lane when external_evidence_mode=true). The instruction is best-effort prompt-level guidance, not a runtime contract — Codex/Claude runtimes that support parallel tool calls within a single turn benefit; runtimes that serialize degrade gracefully. Per dialectic resolutions: ARCH/EDGE/SEC angle prompts intentionally NOT modified (DECISION_1 voted 2-1 for proportionality — synthesis decision stands), and the concrete "3+" anchor lives only in the two web-fanout prompts (DECISION_2 voted 3-0 — matches Anthropic's exact citation, ARCH/EDGE/SEC kept qualitative if they had been edited). Co-evolved with /design + /review: 1 design round (5-agent sketch all converged on EXT being primary edit target with concrete 3+ wording; 2-decision dialectic resolved 2-1 ANTI_THESIS / 3-0 THESIS; 3-reviewer plan-review with 5 of 7 in-scope findings accepted including soften-to-best-effort framing, drop the Anthropic vendor parenthetical from prompt body, fix "byte-exactly" wording, fix degrade-to-serial failure-mode misattribution, remove bogus test script reference; 2 rejected — restrict-to-EXT-only and document-deep-mode-EDGE-residual; 1 OOS not filed — body-level prompt pin in test harnesses) + 1 code review round (corrected diff after fast-forwarding stale local main; Cursor and Codex both reported NO_ISSUES_FOUND on the single-commit diff; 1 Claude finding rejected 3-0 as misreading "this branch" in pre-existing prose).
+
 ## [7.8.0] - 2026-04-25
 
 ### Added
