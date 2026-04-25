@@ -28,7 +28,7 @@ make eval-research ARGS="--id eval-1 --timeout 4200"
 |------|---------|--------|
 | `--id <id>` | empty | Run only the entry with this `id` from `eval-set.md` (debugging single-question iterations). |
 | `--scale <s>` | `standard` | Forward-compat metadata recorded in `eval-baseline.json`. `/research` does NOT yet accept `--scale` (issue #418 is open). When #418 lands, edit the `build_research_prompt` function so the literal CLAUDE_SCALE_PASSTHROUGH branch is used. |
-| `--baseline <ref>` | empty | Compare against the baseline JSON at the given git ref (sha, tag, or branch). The ref is regex-validated against `^[0-9A-Za-z._/-]+$` before any shell interpolation. |
+| `--baseline <ref>` | empty | Pre-fetches the baseline JSON at the given git ref (sha, tag, or branch) into `$WORK_DIR/baseline-rows.json` for manual diffing. **Inline delta columns are NOT yet wired** in this PR — a stdout `PREVIEW MODE` banner makes the partial implementation visible alongside the summary table. The ref is regex-validated against `^[0-9A-Za-z._/-]+$` before any shell interpolation. **Exits 2 if the ref cannot be resolved** (the bad-ref branch used to silently disable with a stderr-only warning; that produced misleading green-looking runs and is fixed in issue #441). |
 | `--work-dir <dir>` | `$(mktemp -d)` | Per-run scratch base. Each entry runs in a unique subdirectory underneath. Override only when resuming a prior run for forensics. |
 | `--write-baseline <file>` | unset | Write run results in `eval-baseline.json` shape to this file path. Used to populate the committed baseline after a clean end-to-end run. |
 | `--timeout <sec>` | `4200` | Per-question timeout for the `/research` subprocess. Default is above `/research`'s composite budget (Step 1 1860s + Step 2 1860s = 3720s) so healthy runs never misclassify as harness timeouts. |
@@ -135,7 +135,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 
 - `0` — harness ran. Per-entry timeouts and parse failures are reported in the `status` column / `research_status` JSON field, not the exit code.
 - `1` — schema validation of `eval-set.md` or `eval-baseline.json` failed.
-- `2` — argument parse error.
+- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, or baseline ref that cannot be resolved via `git show`).
 - `3` — required tooling missing (`claude`, `jq`, or `awk`).
 
 ## Security

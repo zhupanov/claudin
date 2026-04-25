@@ -424,6 +424,13 @@ exclude = [
   # pattern as the test-* harnesses and halt-rate-probe above.
   "scripts/eval-research.sh",
   "scripts/test-eval-set-structure.sh",
+  # scripts/test-eval-research-baseline-flag.sh is the standalone offline
+  # regression harness for the --baseline flag handling in
+  # scripts/eval-research.sh (closes #441). Same Makefile-only shape as
+  # eval-research and test-eval-set-structure above — referenced only
+  # from a standalone Makefile target (test-eval-research-baseline-flag,
+  # NOT a test-harnesses prerequisite) and its sibling .md contract.
+  "scripts/test-eval-research-baseline-flag.sh",
   # scripts/test-validate-research-output.sh is the regression harness for
   # scripts/validate-research-output.sh (the substantive-content validator
   # added by #416 — Phase 3 of umbrella #413). The validator itself is

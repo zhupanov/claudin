@@ -22,9 +22,13 @@
 #                         tracks adding it). When #418 lands, flip the
 #                         CLAUDE_SCALE_PASSTHROUGH variable in the
 #                         build_research_prompt function. Default: standard.
-#   --baseline <ref>      Compare scores against the eval-baseline.json file
-#                         at the given git ref (sha, tag, or branch). The
-#                         ref is regex-validated before shell interpolation.
+#   --baseline <ref>      Pre-fetches the eval-baseline.json file from the
+#                         given git ref (sha, tag, or branch) into $WORK_DIR
+#                         for manual diffing. Inline delta columns are NOT
+#                         yet wired in this PR — a stdout banner makes the
+#                         preview-only status visible at run time. The ref
+#                         is regex-validated before shell interpolation.
+#                         Exits 2 if the ref cannot be resolved.
 #   --work-dir <dir>      Per-run scratch base. Default: $(mktemp -d). Each
 #                         entry runs in a unique subdirectory under this.
 #   --write-baseline <f>  Write the run results in eval-baseline.json shape
@@ -48,7 +52,9 @@
 #   0 — harness ran (individual per-entry timeouts/parse-failures are
 #       reported in the status column, not the exit code).
 #   1 — schema validation of eval-set.md or eval-baseline.json failed.
-#   2 — argument parse error.
+#   2 — argument parse error or invalid argument value (e.g., bad timeout
+#       integer, regex-invalid baseline ref, or baseline ref that cannot be
+#       resolved via git show).
 #   3 — required tooling missing (claude, jq, awk).
 #
 # Security: --baseline accepts only [0-9A-Za-z_./-]+ to avoid shell
@@ -548,18 +554,30 @@ validate_baseline_json "$EVAL_BASELINE_FILE" || exit 1
 
 # Optional baseline pull. The summary-table delta column is not yet wired
 # in this PR — operators get the baseline JSON cached under $WORK_DIR for
-# manual diffing or future amendment, but no inline columns. The "WARNING:
-# delta columns not yet implemented" message makes this explicit so the
-# flag is not silently a no-op.
+# manual diffing or future amendment, but no inline columns. A stdout
+# banner (alongside the existing stderr WARNING) keeps the preview-only
+# status visible on the same stream operators read for results, so the
+# flag cannot be mistaken for a successful comparison run. An unresolvable
+# ref is treated as an invalid argument value (exit 2) rather than a
+# silent no-op, since the bad-ref path otherwise produces a normal-looking
+# summary table with no baseline behind it.
 BASELINE_ROWS_FILE=""
 if [[ -n "$BASELINE_REF" ]]; then
   BASELINE_ROWS_FILE="$WORK_DIR/baseline-rows.json"
-  if git show "${BASELINE_REF}:skills/research/references/eval-baseline.json" > "$BASELINE_ROWS_FILE" 2>/dev/null; then
+  baseline_git_err="$WORK_DIR/baseline-git-stderr.log"
+  if git -C "$CLAUDE_PLUGIN_ROOT" show "${BASELINE_REF}:skills/research/references/eval-baseline.json" > "$BASELINE_ROWS_FILE" 2>"$baseline_git_err"; then
     printf 'eval-research: baseline ref %s cached at %s\n' "$BASELINE_REF" "$BASELINE_ROWS_FILE"
+    printf '\neval-research: --baseline: PREVIEW MODE — baseline JSON pre-fetched to %s; inline delta columns are not yet wired in this PR (a future amendment will add them).\n\n' "$BASELINE_ROWS_FILE"
     printf 'eval-research: WARNING — --baseline delta columns are not yet wired in this PR; the baseline JSON is cached at the path printed above for manual diffing or future amendment, but no inline comparison column appears in the summary table.\n' >&2
+    rm -f "$baseline_git_err"
   else
-    printf 'eval-research: WARNING — baseline ref %s could not be resolved; baseline cache disabled\n' "$BASELINE_REF" >&2
-    BASELINE_ROWS_FILE=""
+    printf 'eval-research: ERROR — --baseline ref %s could not be resolved via git show; aborting (would otherwise produce a misleading run with no baseline behind it).\n' "$BASELINE_REF" >&2
+    if [[ -s "$baseline_git_err" ]]; then
+      printf 'eval-research: git show stderr (last 5 lines):\n' >&2
+      tail -n 5 "$baseline_git_err" | sed 's/^/  /' >&2
+    fi
+    rm -f "$BASELINE_ROWS_FILE" "$baseline_git_err"
+    exit 2
   fi
 fi
 
