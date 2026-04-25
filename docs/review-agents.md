@@ -55,6 +55,12 @@ Larch uses a single unified Claude reviewer archetype — **Code Reviewer** — 
 
 **Model**: Sonnet (default); effort inherits from session. The Claude subagent is deliberately not bumped to opus/max; max reasoning effort is applied only to the external Codex reviewer via `codex_effort` plugin userConfig / `LARCH_CODEX_EFFORT` env var (default `high`).
 
+## External reviewer trust boundary (skills using Cursor / Codex against `$PWD`)
+
+Reviewer **topology** (the 3-lane composition described in the table above) and reviewer **sandboxing** are separate concerns. In `/research` and `/loop-review`, external reviewers (Cursor, Codex) launch directly against the working tree (`cursor agent ... --workspace "$PWD"`, `codex exec --full-auto -C "$PWD"`) and inherit the user's filesystem privileges; their non-modification is requested in the reviewer prompt only, not mechanically enforced. Skill authors adding new reviewer lanes against `$PWD` (or any other writable workspace) should treat reviewer non-modification as a **behavioral constraint**, not a sandbox.
+
+This complements but is distinct from the existing note at the bottom of *The Code Reviewer Archetype* about external-reviewer prompt taxonomy ("4 review perspectives" wording on `/research` / `/loop-review` lanes) — that note covers **what** external reviewers are asked to look at; this section covers **what** they can do to the filesystem regardless of what they were asked. See [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review) for the full trust-model framing and [`docs/external-reviewers.md`](external-reviewers.md) for integration mechanics (launch order, timeouts, sentinel monitoring).
+
 ## Persistent Agent vs. Inline Template
 
 There are two related but distinct mechanisms for invoking this archetype:
