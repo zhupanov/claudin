@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.27] - 2026-04-25
+
+### Changed
+
+- `skills/shared/dialectic-protocol.md` `## Disposition Enum` section's two /design-only-framed clauses scoped for both callers after #469 made the Consumer Contract dual-caller. The `over-cap` row's `Step 3.5 treats as still-contested` clause now carries an explicit `For /design:` qualifier (no /research --adjudicate parallel — research has no Step 3.5, and the "no debate occurred" semantics already suffice). The trailing paragraph after the disposition table now scopes its /design-only `Step 2a.4` / `Step 2b` / "antithesis engagement prose" sentence with `For /design:` and adds a parallel `For /research --adjudicate:` clause matching the existing Consumer Contract item 3 vocabulary (validation-merge synthesis stands; Step 2.5 must not reinstate a finding for non-`voted` entries — no reinstatement-into-validated-synthesis sub-step where the dialectic layer did not produce a heard counter-position). Pre-existing drift; predates #469. Closes #499.
+
 ## [7.4.26] - 2026-04-25
 
 ### Fixed
