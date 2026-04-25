@@ -53,8 +53,10 @@ emit_banner() {
   local cursor_fallback codex_fallback
   local n_fallback lane_total
 
-  if [[ ! -f "$fixture" ]]; then
-    # Fallback default per prose: missing/unreadable lane-status.txt → no banner.
+  # Fallback default per prose ("missing or unreadable" → no banner). The -r
+  # check covers the chmod-000 case; a present-but-unreadable file would
+  # otherwise let grep collapse to empty values and treat them as fallbacks.
+  if [[ ! -f "$fixture" ]] || [[ ! -r "$fixture" ]]; then
     return 0
   fi
 
@@ -74,8 +76,11 @@ emit_banner() {
       lane_total=4
       ;;
     *)
-      echo "INTERNAL: unknown scale '$scale'" >&2
-      return 1
+      # Internal-only failure path — log and emit empty (no banner). Returning
+      # non-zero would abort the harness under `set -e` when called inside
+      # command substitution. Callers are expected to pass standard|deep.
+      echo "INTERNAL: emit_banner unknown scale '$scale'" >&2
+      return 0
       ;;
   esac
 
@@ -154,6 +159,7 @@ run_case "both-fallback-deep"        "fallback_probe_failed"    "fallback_binary
 
 # Empty values count as non-`ok` per prose ("ok is the sole non-fallback token").
 run_case "empty-status-standard" "" "" "standard" "$BANNER_S_2"
+run_case "empty-status-deep"     "" "" "deep"     "$BANNER_D_4"
 
 # Missing fixture path → no banner (defensive default).
 MISSING_FIXTURE_RESULT="$(emit_banner "$TMPDIR_TEST/does-not-exist.txt" "standard")"
@@ -162,6 +168,25 @@ if [[ -n "$MISSING_FIXTURE_RESULT" ]]; then
 else
   PASS=$((PASS + 1))
 fi
+
+# Unreadable fixture (chmod 000) → no banner. Skip the test on environments
+# where the chmod has no effect (e.g., running as root, or a filesystem that
+# ignores POSIX permission bits) — `unreadable_test` would still be readable
+# and produce a banner.
+UNREADABLE_FIXTURE="$TMPDIR_TEST/unreadable.txt"
+write_fixture "$UNREADABLE_FIXTURE" "fallback_binary_missing" "fallback_binary_missing"
+chmod 000 "$UNREADABLE_FIXTURE"
+if [[ ! -r "$UNREADABLE_FIXTURE" ]]; then
+  UNREADABLE_RESULT="$(emit_banner "$UNREADABLE_FIXTURE" "standard")"
+  if [[ -n "$UNREADABLE_RESULT" ]]; then
+    fail "[unreadable-fixture] expected empty output (defensive default per prose), got: '$UNREADABLE_RESULT'"
+  else
+    PASS=$((PASS + 1))
+  fi
+else
+  echo "SKIP: [unreadable-fixture] chmod 000 had no effect (running as root or non-POSIX filesystem); test inapplicable in this environment" >&2
+fi
+chmod 644 "$UNREADABLE_FIXTURE" 2>/dev/null || true  # restore for trap cleanup
 
 # ---------- Prose-pin tests against research-phase.md ----------
 

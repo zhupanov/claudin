@@ -364,14 +364,17 @@ This preamble defines the **degraded-path banner** that the `### Standard` and `
 
 **Trigger condition**: emit the banner when `N_FALLBACK >= 1`. When `N_FALLBACK = 0`, do NOT emit the banner — the synthesis output is byte-identical to the pre-banner shape.
 
+**Known limitation (deep mode, partial degradation)**: `lane-status.txt`'s `RESEARCH_CURSOR_STATUS` / `RESEARCH_CODEX_STATUS` are per-tool aggregates — a single non-`ok` value covers BOTH that tool's slots in deep mode (Cursor-Arch + Cursor-Edge for Cursor; Codex-Ext + Codex-Sec for Codex). The `2*` multiplier in the deep formula reflects this aggregate semantics, so the banner can OVERSTATE actual fallback when one tool slot succeeded mid-flight at Step 1.4 while the other fell back (e.g., Cursor-Arch returned `OK` at Step 1.4, Cursor-Edge ran out the runtime timeout — `RESEARCH_CURSOR_STATUS` flips to non-`ok` for the aggregate, and the banner reads "2 of 4" when the factual count is 1). This is an accepted trade-off for the simpler aggregate schema; per-slot accuracy would require a schema change to `lane-status.txt` (separate `RESEARCH_CURSOR_ARCH_STATUS` / `RESEARCH_CURSOR_EDGE_STATUS` keys). The banner errs on the side of operator-visible disclosure (overstating diversity loss is safer than understating it).
+
 **Fallback default**: if `lane-status.txt` is missing or unreadable (should not happen in standard/deep — Step 0b always writes it for non-quick scales), treat as `N_FALLBACK=0` (no banner). Quick mode never reaches this preamble.
 
 **Output placement**: when `N_FALLBACK >= 1`, the banner literal (with integer substitutions applied) is prepended to BOTH the printed synthesis (immediately under the `## Research Synthesis` header, before any agree/diverge/significance content; in the planner branch, before the per-subquestion sub-sections) AND to `$RESEARCH_TMPDIR/research-report.txt` (immediately under the same header, before the synthesized findings). The word "BOTH" is load-bearing — emitting the banner only to stdout but not the file means downstream Step 2 reviewers (who consume `research-report.txt`) lose the disclaimer.
 
-**Edit-in-sync surfaces** (any change to the banner literal or trigger formula MUST be mirrored in all three surfaces in the same PR — see `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.md` for the contract):
+**Edit-in-sync surfaces** (any change to the banner literal or trigger formula MUST be mirrored in all four surfaces in the same PR — see `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.md` for the contract):
 1. The banner literal in this preamble.
 2. The structural pin in `${CLAUDE_PLUGIN_ROOT}/scripts/test-research-structure.sh` (Checks 21a-21e).
 3. The reference-impl assertions in `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.sh`.
+4. The fully-substituted example banner in `${CLAUDE_PLUGIN_ROOT}/skills/research/SKILL.md` Step 3 (the operator-facing degraded-path preview).
 
 ### Standard (RESEARCH_SCALE=standard, default)
 
@@ -389,11 +392,12 @@ Produce a synthesis that:
 4. Highlights **architectural patterns** observed in the codebase (each lane's prompt requires coverage of this dimension)
 5. Highlights **risks, constraints, and feasibility** concerns (each lane's prompt requires coverage of this dimension)
 
-Print the synthesis under a `## Research Synthesis` header (with the banner prepended when `N_FALLBACK >= 1`). Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash so it can be used by Step 2. The file should contain:
-- The original research question
-- The branch and commit being researched
-- The reduced-diversity banner (if `N_FALLBACK >= 1`)
-- The synthesized findings
+Print the synthesis under a `## Research Synthesis` header (with the banner prepended when `N_FALLBACK >= 1`). Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash so it can be used by Step 2. The file MUST contain (in this top-to-bottom order):
+1. The original research question.
+2. The branch and commit being researched.
+3. The `## Research Synthesis` header.
+4. **Immediately under that header, when `N_FALLBACK >= 1`**: the reduced-diversity banner (one line, the banner literal with integer substitutions). When `N_FALLBACK = 0`, this line is absent.
+5. The synthesized findings (agree / diverge / significance / architectural patterns / risks).
 
 #### When `RESEARCH_PLAN=true` (and `RESEARCH_PLAN_N>0`)
 
@@ -412,12 +416,13 @@ Re-organize the synthesis BY SUBQUESTION. Read each lane's research output and p
 
 The synthesis MUST do BOTH the intra-subquestion convergence (per-subquestion sub-sections) AND the cross-subquestion integration (Cross-cutting findings sub-section) — each subquestion's section is bounded to that subquestion's findings; cross-lane integration belongs in Cross-cutting.
 
-Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash. The file should contain:
-- The original research question (parent `RESEARCH_QUESTION` — NOT the subquestions)
-- The branch and commit being researched
-- A note that planner mode produced N subquestions
-- The reduced-diversity banner (if `N_FALLBACK >= 1`)
-- The synthesized findings, organized as above (subquestion sub-sections + cross-cutting sub-section)
+Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash. The file MUST contain (in this top-to-bottom order):
+1. The original research question (parent `RESEARCH_QUESTION` — NOT the subquestions).
+2. The branch and commit being researched.
+3. A note that planner mode produced N subquestions.
+4. The `## Research Synthesis` header.
+5. **Immediately under that header, when `N_FALLBACK >= 1`**: the reduced-diversity banner (one line). When `N_FALLBACK = 0`, this line is absent.
+6. The synthesized findings, organized as above (subquestion sub-sections + cross-cutting sub-section).
 
 Step 2 (validation) consumes the report and validates against the parent `RESEARCH_QUESTION` — the validation contract is unchanged, since `research-report.txt` still leads with the original question. The per-subquestion sub-sections are clearly scoped, so reviewers can validate findings against their respective subquestion claims without losing the integrative view.
 

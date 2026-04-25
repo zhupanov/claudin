@@ -309,32 +309,46 @@ echo "$SECTION_15_PREAMBLE" | grep -Fq "research-report.txt" \
 # Section extractors for the three branches that apply the banner. The
 # extractors bound each subsection to its own scope so a banner reference
 # that is present in one branch cannot satisfy the check for another.
-SECTION_15_STANDARD_FALSE=$(awk '
+#
+# CRITICAL: research-phase.md has THREE pairs of `### Quick (RESEARCH_SCALE=quick)`
+# and `### Deep (RESEARCH_SCALE=deep)` headings — one pair each in §1.3 (Launch
+# Research Perspectives), §1.4 (Wait and Validate), and §1.5 (Synthesis). A
+# whole-file awk scan keyed only on the heading would concatenate all three
+# pairs, allowing cross-section leakage.
+#
+# Mitigation: first slice the §1.5 window (from `## 1.5 — Synthesis` to the
+# next `## ` heading, or EOF), then run the per-subsection extractors against
+# THAT window so each pattern can match at most one §1.5 subsection.
+SECTION_15_FULL=$(awk '
+  /^## 1\.5 — Synthesis/{f=1; next}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+[[ -n "$SECTION_15_FULL" ]] \
+  || fail "references/research-phase.md must contain a '## 1.5 — Synthesis' section terminated by the next '## ' heading — Checks 21b-21e cannot anchor without it (#506)"
+
+SECTION_15_STANDARD_FALSE=$(echo "$SECTION_15_FULL" | awk '
   /^#### When `RESEARCH_PLAN=false`/{f=1; next}
   f && /^#### /{f=0}
   f && /^### /{f=0}
-  f && /^## /{f=0}
   f
-' "$RESEARCH_MD")
-SECTION_15_STANDARD_TRUE=$(awk '
+')
+SECTION_15_STANDARD_TRUE=$(echo "$SECTION_15_FULL" | awk '
   /^#### When `RESEARCH_PLAN=true`/{f=1; next}
   f && /^#### /{f=0}
   f && /^### /{f=0}
-  f && /^## /{f=0}
   f
-' "$RESEARCH_MD")
-SECTION_15_DEEP=$(awk '
+')
+SECTION_15_DEEP=$(echo "$SECTION_15_FULL" | awk '
   /^### Deep \(RESEARCH_SCALE=deep\)/{f=1; next}
   f && /^### /{f=0}
-  f && /^## /{f=0}
   f
-' "$RESEARCH_MD")
-SECTION_15_QUICK=$(awk '
+')
+SECTION_15_QUICK=$(echo "$SECTION_15_FULL" | awk '
   /^### Quick \(RESEARCH_SCALE=quick\)/{f=1; next}
   f && /^### /{f=0}
-  f && /^## /{f=0}
   f
-' "$RESEARCH_MD")
+')
 
 [[ -n "$SECTION_15_STANDARD_FALSE" ]] \
   || fail "references/research-phase.md must contain a '#### When \`RESEARCH_PLAN=false\`' subsection — Check 21b cannot anchor (#506)"
@@ -372,5 +386,21 @@ fi
 echo "$SECTION_15_QUICK" | grep -Fq "Single-lane confidence" \
   || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must retain the 'Single-lane confidence' disclaimer (#506 Check 21e positive)"
 
-echo "PASS: test-research-structure.sh — all 25 structural invariants hold"
+# Check 22 (#506): SKILL.md Step 3 must contain the byte-stable banner phrase
+# in its degraded-path preview. SKILL.md is the operator-facing example surface
+# and is on the four-way edit-in-sync list (research-phase.md preamble,
+# test-research-structure.sh, test-degraded-path-banner.sh, SKILL.md).
+# Without this pin, a future change to the banner template would not fail CI
+# from SKILL.md drift — operators would see a stale example.
+#
+# Pin a sentinel phrase that appears in the banner (any of: "Reduced lane
+# diversity", "external research lanes ran as Claude-fallback", "model-family
+# heterogeneity claim does not hold"). Pin one phrase to keep the check tight
+# without over-constraining the prose around the example.
+grep -Fq "Reduced lane diversity" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must contain the 'Reduced lane diversity' banner phrase (degraded-path preview) — keep in sync with research-phase.md §1.5 banner preamble (#506 Check 22)"
+grep -Fq "model-family heterogeneity claim does not hold" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must contain the 'model-family heterogeneity claim does not hold' banner phrase — keep in sync with research-phase.md §1.5 banner preamble (#506 Check 22)"
+
+echo "PASS: test-research-structure.sh — all 26 structural invariants hold"
 exit 0
