@@ -51,7 +51,11 @@ The research agents per scale:
 - `high stars`
 - `star count`
 
-**Shared prompt** (used verbatim by all 3 lanes — Cursor, Codex, inline Claude, and any Claude fallbacks; identical across lanes — do NOT branch per-lane):
+**Shared prompt** (`RESEARCH_PROMPT`). Per-scale applicability:
+
+- `RESEARCH_SCALE=standard` — used verbatim by **all 3 lanes** (Cursor, Codex, inline Claude, and any Claude fallbacks); identical across lanes; do NOT branch per-lane.
+- `RESEARCH_SCALE=quick` — the single inline Claude lane runs `RESEARCH_PROMPT` verbatim.
+- `RESEARCH_SCALE=deep` — only the **inline Claude lane** runs `RESEARCH_PROMPT` (general/synthesis-style role); the four external slots (Cursor-Arch, Cursor-Edge, Codex-Ext, Codex-Sec) and their per-slot Claude fallbacks run the corresponding **named angle prompts** (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) defined further below — NOT this shared literal.
 
 When `external_evidence_mode=false`:
 

@@ -74,7 +74,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh \
   > "$RESEARCH_TMPDIR/cursor-prompt.txt"
 ```
 
-**On non-zero exit**: follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the research-validation archetype bindings below. This preserves the 3-lane invariant.
+**On non-zero exit**: follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the research-validation archetype bindings below. This preserves the configured lane count for the active `RESEARCH_SCALE` (3 lanes in standard mode, 5 lanes in deep mode).
 
 **On success**, launch in background:
 
@@ -163,7 +163,7 @@ COLLECT_ARGS=()
 [[ "$codex_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/codex-validation-output.txt")
 ```
 
-**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty — the 3 lanes are the always-on Claude lane plus 2 Claude fallback lanes), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. Merge the 3 Claude findings and proceed to Finalize Validation.
+**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. The lane composition depends on `RESEARCH_SCALE`: standard mode has 3 Claude streams (the always-on Claude lane plus 2 Claude fallback lanes for the missing Cursor + Codex slots); deep mode has 5 Claude streams (the 3 always-on Claude lanes — `Code` + `Code-Sec` + `Code-Arch` — plus 2 Claude fallback lanes for the missing Cursor + Codex slots). Merge ALL Claude findings (preserving per-lane attribution: `Code` / `Code-Sec` / `Code-Arch` / `Cursor` / `Codex` for the slots that carry distinct attribution) and proceed to Finalize Validation.
 
 Otherwise, after processing Claude findings, invoke the script with only the launched paths:
 
@@ -174,7 +174,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLL
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
 1. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Read valid output files.
-2. **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the availability flag (`cursor_available` or `codex_available`), then **immediately launch the matching single Claude Code Reviewer subagent fallback** and wait for it before negotiation. This preserves the 3-lane invariant at negotiation time.
+2. **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the availability flag (`cursor_available` or `codex_available`), then **immediately launch the matching single Claude Code Reviewer subagent fallback** and wait for it before negotiation. This preserves the configured lane count for the active `RESEARCH_SCALE` at negotiation time (3 lanes in standard mode, 5 lanes in deep mode).
 3. Merge external reviewer findings (and any runtime-fallback Claude findings) into the always-on Claude lane findings and any pre-launch Claude fallback findings.
 4. **Update lane-status.txt (VALIDATION_* slice only)**: After Runtime Timeout Fallback determinations are made, surgically update only the `VALIDATION_*` slice of `$RESEARCH_TMPDIR/lane-status.txt` — `RESEARCH_*` keys must be preserved verbatim. For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:
    - `STATUS=TIMED_OUT` or `SENTINEL_TIMEOUT` → token `fallback_runtime_timeout`, reason empty
