@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.17] - 2026-04-25
+
+### Fixed
+
+- `scripts/build-research-adjudication-ballot.sh` attribution scrubber now strips the deep-mode reviewer attributions `Code-Sec` and `Code-Arch` (introduced by `/research --scale=deep`) at anchored prefix/suffix positions, in addition to the standard `Cursor|Codex|Claude|Code|orchestrator|Code Reviewer` set. Without this, a deep-mode reviewer's rejected finding carried into adjudication preserved its leading `Code-Sec:` / `Code-Arch:` attribution inside `<defense_content>`, breaking the anonymous-Defense-A/B guarantee since judges could infer which deep-mode lane authored the defense. The two new tokens precede `Code` in the alternation so the longer deep-mode names match before the shorter prefix (POSIX ERE leftmost-longest within an alternation is unreliable across awk implementations; explicit ordering is portable). The script's file-header comment block documenting the regex literal and the sibling contract `scripts/build-research-adjudication-ballot.md` (Anchored-only attribution stripping section, Regex applied block, fixture-case table, deterministic-ordering inequality chain) are updated in lockstep. The harness `scripts/test-research-adjudication.sh` adds Test 11 covering anchored prefix stripping (`Code-Sec:` / `Code-Arch:`), anchored suffix stripping (`(Code-Sec)` / `— Code-Arch`), and mid-content preservation. Closes #461.
+
 ## [7.4.16] - 2026-04-25
 
 ### Fixed
