@@ -104,6 +104,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Validate timeout values are positive integers (a typo like `--timeout abc`
+# would otherwise abort the run mid-poll-loop under set -e with an opaque
+# "integer expression expected" error).
+if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( TIMEOUT_SECONDS < 1 )); then
+  printf 'eval-research: --timeout must be a positive integer (got: %s)\n' "$TIMEOUT_SECONDS" >&2
+  exit 2
+fi
+if ! [[ "$JUDGE_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( JUDGE_TIMEOUT_SECONDS < 1 )); then
+  printf 'eval-research: --judge-timeout must be a positive integer (got: %s)\n' "$JUDGE_TIMEOUT_SECONDS" >&2
+  exit 2
+fi
+
 # ---- Tooling check (skipped under --smoke-test) --------------------------
 require_tool() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -295,15 +307,18 @@ run_one_research() {
   : > "$out_file"
   : > "$stderr_file"
 
-  local start_epoch
+  local start_epoch end_epoch rc=0
   start_epoch="$(date +%s)"
 
+  # `|| rc=$?` keeps `set -e` from aborting the function when the subshell
+  # exits non-zero, so the timing.txt write below always runs — failed and
+  # timed-out entries get accurate wall-clock data, not a silent 0s.
   (
     cd "$CLAUDE_PLUGIN_ROOT"
     claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
       < "$prompt_file" > "$out_file" 2> "$stderr_file" &
-    local pid=$!
-    local elapsed=0
+    pid=$!
+    elapsed=0
     while kill -0 "$pid" 2>/dev/null; do
       if [[ "$elapsed" -ge "$TIMEOUT_SECONDS" ]]; then
         kill "$pid" 2>/dev/null || true
@@ -318,10 +333,8 @@ run_one_research() {
     done
     wait "$pid"
     exit $?
-  )
-  local rc=$?
+  ) || rc=$?
 
-  local end_epoch
   end_epoch="$(date +%s)"
   printf 'WALL_CLOCK_SECONDS=%s\n' "$((end_epoch - start_epoch))" > "$timing_file"
   printf 'EXIT_CODE=%s\n' "$rc" >> "$timing_file"
@@ -345,7 +358,11 @@ score_deterministic() {
   lowered="$(tr '[:upper:]' '[:lower:]' < "$out_file")"
 
   local prov_file_line prov_repo_path prov_url
-  prov_file_line="$(grep -oE '[A-Za-z0-9_/.-]+\.[a-z]+:[0-9]+' "$out_file" | sort -u | wc -l | tr -d ' ')"
+  # Match file:line citations with mixed-case extensions (e.g. `.MD`, `.SH`)
+  # AND extensionless basenames like `Makefile:42`, `Dockerfile:10` (which
+  # fall on the `[A-Za-z0-9_/.-]+:[0-9]+` branch since the prior `\.[a-z]+`
+  # required a lowercase extension).
+  prov_file_line="$(grep -oE '[A-Za-z0-9_/.-]+:[0-9]+' "$out_file" | grep -vE '^https?:|^[0-9]+:[0-9]+$' | sort -u | wc -l | tr -d ' ')"
   prov_repo_path="$(grep -oE '(scripts|skills|hooks|docs|tests|agents)/[A-Za-z0-9_/.-]+' "$out_file" | sort -u | wc -l | tr -d ' ')"
   prov_url="$(grep -oE 'https?://[A-Za-z0-9._/?#&=%-]+' "$out_file" | sort -u | wc -l | tr -d ' ')"
 
@@ -424,12 +441,13 @@ run_judge() {
   : > "$judge_out_file"
   : > "$judge_err_file"
 
+  local rc=0
   (
     cd "$CLAUDE_PLUGIN_ROOT"
     claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
       < "$judge_prompt_file" > "$judge_out_file" 2> "$judge_err_file" &
-    local pid=$!
-    local elapsed=0
+    pid=$!
+    elapsed=0
     while kill -0 "$pid" 2>/dev/null; do
       if [[ "$elapsed" -ge "$JUDGE_TIMEOUT_SECONDS" ]]; then
         kill "$pid" 2>/dev/null || true
@@ -443,36 +461,54 @@ run_judge() {
     done
     wait "$pid"
     exit $?
-  )
+  ) || rc=$?
+  return $rc
 }
 
 # Fail-closed parser. Mirrors the discipline of
 # scripts/parse-skill-judge-grade.sh: any malformed input yields a single
-# JUDGE_STATUS=parse_failed line with all numeric fields null.
+# JUDGE_STATUS=parse_failed line with all numeric fields null. Required
+# fields: TOTAL plus all five per-dimension scores. Range checks use a
+# decimal regex so leading-zero values (e.g. `0100`) cannot smuggle past
+# the `(( ))` arithmetic comparison via octal interpretation.
 parse_judge_output() {
   local judge_file="$1"
   if [[ ! -s "$judge_file" ]]; then
     printf 'JUDGE_STATUS=parse_failed\nJUDGE_TOTAL=null\n'
     return 0
   fi
-  local total
+
+  local total f c m q t
   total="$(grep -oE '^JUDGE_SCORE_TOTAL=[0-9]+' "$judge_file" | head -1 | sed 's/JUDGE_SCORE_TOTAL=//')"
-  if [[ -z "$total" ]]; then
-    printf 'JUDGE_STATUS=parse_failed\nJUDGE_TOTAL=null\n'
-    return 0
-  fi
-  if (( total < 0 || total > 100 )); then
-    printf 'JUDGE_STATUS=parse_failed\nJUDGE_TOTAL=null\n'
-    return 0
-  fi
-  local f c m q t
   f="$(grep -oE '^JUDGE_SCORE_FACTUAL=[0-9]+' "$judge_file" | head -1 | sed 's/.*=//')"
   c="$(grep -oE '^JUDGE_SCORE_CITATION=[0-9]+' "$judge_file" | head -1 | sed 's/.*=//')"
   m="$(grep -oE '^JUDGE_SCORE_COMPLETENESS=[0-9]+' "$judge_file" | head -1 | sed 's/.*=//')"
   q="$(grep -oE '^JUDGE_SCORE_SOURCE_QUALITY=[0-9]+' "$judge_file" | head -1 | sed 's/.*=//')"
   t="$(grep -oE '^JUDGE_SCORE_TOOL_EFFICIENCY=[0-9]+' "$judge_file" | head -1 | sed 's/.*=//')"
+
+  # All six fields required (Codex review #1: parser was previously too
+  # permissive on missing per-dimension scores).
+  if [[ -z "$total" || -z "$f" || -z "$c" || -z "$m" || -z "$q" || -z "$t" ]]; then
+    printf 'JUDGE_STATUS=parse_failed\nJUDGE_TOTAL=null\n'
+    return 0
+  fi
+
+  # Decimal-only range checks (Cursor review #2: octal interpretation in
+  # `(( ))` would silently miscompare values like `0100`).
+  if ! [[ "$total" =~ ^(100|[1-9]?[0-9])$ ]]; then
+    printf 'JUDGE_STATUS=parse_failed\nJUDGE_TOTAL=null\n'
+    return 0
+  fi
+  local v
+  for v in "$f" "$c" "$m" "$q" "$t"; do
+    if ! [[ "$v" =~ ^(20|1?[0-9])$ ]]; then
+      printf 'JUDGE_STATUS=parse_failed\nJUDGE_TOTAL=null\n'
+      return 0
+    fi
+  done
+
   printf 'JUDGE_STATUS=ok\nJUDGE_FACTUAL=%s\nJUDGE_CITATION=%s\nJUDGE_COMPLETENESS=%s\nJUDGE_SOURCE_QUALITY=%s\nJUDGE_TOOL_EFFICIENCY=%s\nJUDGE_TOTAL=%s\n' \
-    "${f:-null}" "${c:-null}" "${m:-null}" "${q:-null}" "${t:-null}" "$total"
+    "$f" "$c" "$m" "$q" "$t" "$total"
 }
 
 # ---- Domain-reputability classifier (external-comparison only) -----------
@@ -483,8 +519,8 @@ classify_url_reputability() {
   while read -r url; do
     [[ -z "$url" ]] && continue
     case "$url" in
-      *anthropic.com*|*openai.com*|*.gov/*|*.edu/*|*deepmind.com*|*microsoft.com/research*|*arxiv.org*|*nature.com*) high=$((high + 1)) ;;
-      *medium.com*|*dev.to*|*.blog/*|*substack.com*|*hashnode.dev*) low=$((low + 1)) ;;
+      *anthropic.com*|*openai.com*|*.gov*|*.edu*|*deepmind.com*|*microsoft.com/research*|*arxiv.org*|*nature.com*) high=$((high + 1)) ;;
+      *medium.com*|*dev.to*|*.blog*|*substack.com*|*hashnode.dev*) low=$((low + 1)) ;;
       *) unknown=$((unknown + 1)) ;;
     esac
   done < <(grep -oE 'https?://[A-Za-z0-9._/?#&=%-]+' "$out_file" | sort -u)
@@ -495,14 +531,19 @@ classify_url_reputability() {
 validate_eval_set "$EVAL_SET_FILE" || exit 1
 validate_baseline_json "$EVAL_BASELINE_FILE" || exit 1
 
-# Optional baseline diff: pull rows at $BASELINE_REF.
+# Optional baseline pull. The summary-table delta column is not yet wired
+# in this PR — operators get the baseline JSON cached under $WORK_DIR for
+# manual diffing or future amendment, but no inline columns. The "WARNING:
+# delta columns not yet implemented" message makes this explicit so the
+# flag is not silently a no-op.
 BASELINE_ROWS_FILE=""
 if [[ -n "$BASELINE_REF" ]]; then
   BASELINE_ROWS_FILE="$WORK_DIR/baseline-rows.json"
   if git show "${BASELINE_REF}:skills/research/references/eval-baseline.json" > "$BASELINE_ROWS_FILE" 2>/dev/null; then
-    printf 'eval-research: baseline ref %s loaded\n' "$BASELINE_REF"
+    printf 'eval-research: baseline ref %s cached at %s\n' "$BASELINE_REF" "$BASELINE_ROWS_FILE"
+    printf 'eval-research: WARNING — --baseline delta columns are not yet wired in this PR; the baseline JSON is cached at the path printed above for manual diffing or future amendment, but no inline comparison column appears in the summary table.\n' >&2
   else
-    printf 'eval-research: WARNING — baseline ref %s could not be resolved; baseline diff disabled\n' "$BASELINE_REF" >&2
+    printf 'eval-research: WARNING — baseline ref %s could not be resolved; baseline cache disabled\n' "$BASELINE_REF" >&2
     BASELINE_ROWS_FILE=""
   fi
 fi

@@ -100,11 +100,19 @@ if [[ -n "$missing_fields" ]]; then
   fail "eval-set.md entries with missing fields:\n$missing_fields"
 fi
 
-# Check 6: >= 2 adversarial entries.
+# Check 6: >= 2 adversarial entries, AND each documented adversarial shape
+# (fictitious-mechanism, data-absence) is represented at least once. The
+# loose count alone would let two unrelated "ADVERSARIAL" notes satisfy
+# the harness without enforcing the two distinct adversarial shapes the
+# catalog Contract documents.
 adv_count=$(grep -ciE '^- \*\*notes\*\*:.*adversarial' "$EVAL_SET" || printf '0')
 if (( adv_count < 2 )); then
   fail "eval-set.md has $adv_count entries flagged ADVERSARIAL in notes; need at least 2"
 fi
+grep -qiE '^- \*\*notes\*\*:.*adversarial.*(fictitious|fabricat|invent)' "$EVAL_SET" \
+  || fail "eval-set.md must contain at least one ADVERSARIAL entry whose notes mention a fictitious/fabricated/invented mechanism (over-claiming test)"
+grep -qiE '^- \*\*notes\*\*:.*adversarial.*(data[- ]absen|no data|don.t have data)' "$EVAL_SET" \
+  || fail "eval-set.md must contain at least one ADVERSARIAL entry whose notes mention data-absence (we-don't-have-data test)"
 
 # Check 7: eval-baseline.json parses and has required keys.
 [[ -f "$EVAL_BASELINE" ]] || fail "skills/research/references/eval-baseline.json missing"

@@ -44,7 +44,7 @@ These are the contract-level definitions of every metric the harness emits. Mech
 
 The harness emits three orthogonal counters, each as the count of unique matches across the research output:
 
-- **`prov_fl`** (file-with-line): regex `[A-Za-z0-9_/.-]+\.[a-z]+:[0-9]+`. Matches anchored citations like `scripts/foo.sh:42` or `skills/x/SKILL.md:100`. The strongest provenance form.
+- **`prov_fl`** (file-with-line): regex `[A-Za-z0-9_/.-]+:[0-9]+` filtered to drop `https?:` URLs and pure-numeric `<n>:<m>` line-range tokens. Matches anchored citations like `scripts/foo.sh:42`, `skills/x/SKILL.md:100`, mixed-case extensions like `INSTALL.MD:5`, and extensionless basenames like `Makefile:9` or `Dockerfile:10`. The strongest provenance form.
 - **`prov_path`** (repo path): regex `(scripts|skills|hooks|docs|tests|agents)/[A-Za-z0-9_/.-]+`. Matches plain repo-path mentions without a line anchor — the form `/research`'s "Key Files and Areas" section emits today.
 - **`prov_url`**: regex `https?://[A-Za-z0-9._/?#&=%-]+`. Matches absolute URLs.
 

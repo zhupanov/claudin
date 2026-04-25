@@ -20,11 +20,11 @@
 - **notes**: Lookup; should cite `scripts/rebase-push.sh` plus at least two consumers (the Rebase Checkpoint Macro in `/implement` and any Step 1 / Step 1.m caller).
 
 ### eval-2: deny-edit-write-hook-contract
-- **question**: What hook enforces the `/research` skill's read-only-repo contract, what exact paths does it permit, and what is the residual risk if the hook is bypassed?
+- **question**: How does the `/research` skill's best-effort read-only contract partition mechanically enforced versus prompt-enforced perimeters, what hook backs the mechanical tier, and what tools fall under the prompt-enforced tier?
 - **category**: lookup
 - **expected_provenance_count**: 2
-- **expected_keywords**: deny-edit-write.sh, /tmp, PreToolUse, SECURITY.md
-- **notes**: Lookup; should cite `scripts/deny-edit-write.sh`, the SKILL.md hooks frontmatter, and the SECURITY.md residual-risk paragraph.
+- **expected_keywords**: deny-edit-write.sh, /tmp, PreToolUse, best-effort, Bash, external reviewers, SECURITY.md
+- **notes**: Lookup; should cite `scripts/deny-edit-write.sh` for the mechanical tier (Edit/Write/NotebookEdit confined to canonical `/tmp`), name Bash + external Cursor/Codex reviewers as the prompt-enforced tier, and reference the SECURITY.md residual-risk framing.
 
 ### eval-3: anchor-section-slugs
 - **question**: What are the 8 canonical anchor section slugs in `/implement`, in assembly order, and which script defines them?
