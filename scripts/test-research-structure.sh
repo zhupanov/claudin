@@ -276,5 +276,101 @@ if echo "$DEEP_SECTION" | grep -qE 'session-wide.*cursor_available|cursor_availa
   fail "SKILL.md Step 3 ### Deep subsection must not derive headers from session-wide cursor_available/codex_available flags (#451 — use render-deep-lane-status.sh + lane-status.txt slices instead)"
 fi
 
-echo "PASS: test-research-structure.sh — all 20 structural invariants hold"
+# Check 21 (#506): degraded-path reduced-diversity banner contract.
+# When any external research lane (Cursor or Codex) ran as a Claude-fallback,
+# Step 1.5 prepends a banner to ## Research Synthesis and to research-report.txt.
+# The banner contract lives in research-phase.md §1.5; this check pins it
+# section by section so cross-section leakage is impossible.
+#
+# Section extractor for the §1.5 banner preamble (between '## 1.5 — Synthesis'
+# and '### Standard (RESEARCH_SCALE=standard'). Mirrors the per-section awk
+# extraction pattern used by Check 16 above.
+SECTION_15_PREAMBLE=$(awk '/^## 1\.5 — Synthesis/{f=1} f && /^### Standard \(RESEARCH_SCALE=standard/{exit} f' "$RESEARCH_MD")
+[[ -n "$SECTION_15_PREAMBLE" ]] \
+  || fail "references/research-phase.md must contain a '## 1.5 — Synthesis' preamble window terminated by '### Standard (RESEARCH_SCALE=standard' — Checks 21a-21e cannot anchor without it (#506)"
+
+BANNER_LITERAL='**⚠ Reduced lane diversity: <N_FALLBACK> of <LANE_TOTAL> external research lanes ran as Claude-fallback. The model-family heterogeneity claim does not hold for this run.**'
+
+# Check 21a (#506): §1.5 banner preamble must contain the banner literal,
+# the N_FALLBACK formula, and a reference to lane-status.txt. This is the
+# single source of truth for the banner contract; without these pins, a
+# future edit could silently weaken or relocate the contract.
+echo "$SECTION_15_PREAMBLE" | grep -Fq "$BANNER_LITERAL" \
+  || fail "references/research-phase.md §1.5 banner preamble must contain the byte-exact banner literal (#506 Check 21a)"
+echo "$SECTION_15_PREAMBLE" | grep -Fq 'N_FALLBACK = (RESEARCH_CURSOR_STATUS != ok) + (RESEARCH_CODEX_STATUS != ok)' \
+  || fail "references/research-phase.md §1.5 banner preamble must contain the standard-mode N_FALLBACK formula literal (#506 Check 21a)"
+echo "$SECTION_15_PREAMBLE" | grep -Fq '2*(RESEARCH_CURSOR_STATUS != ok) + 2*(RESEARCH_CODEX_STATUS != ok)' \
+  || fail "references/research-phase.md §1.5 banner preamble must contain the deep-mode N_FALLBACK formula literal with 2* multiplier (#506 Check 21a)"
+echo "$SECTION_15_PREAMBLE" | grep -Fq "lane-status.txt" \
+  || fail "references/research-phase.md §1.5 banner preamble must reference lane-status.txt (the source of truth for fallback status) (#506 Check 21a)"
+echo "$SECTION_15_PREAMBLE" | grep -Fq "research-report.txt" \
+  || fail "references/research-phase.md §1.5 banner preamble must mention research-report.txt (BOTH-outputs contract) (#506 Check 21a)"
+
+# Section extractors for the three branches that apply the banner. The
+# extractors bound each subsection to its own scope so a banner reference
+# that is present in one branch cannot satisfy the check for another.
+SECTION_15_STANDARD_FALSE=$(awk '
+  /^#### When `RESEARCH_PLAN=false`/{f=1; next}
+  f && /^#### /{f=0}
+  f && /^### /{f=0}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+SECTION_15_STANDARD_TRUE=$(awk '
+  /^#### When `RESEARCH_PLAN=true`/{f=1; next}
+  f && /^#### /{f=0}
+  f && /^### /{f=0}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+SECTION_15_DEEP=$(awk '
+  /^### Deep \(RESEARCH_SCALE=deep\)/{f=1; next}
+  f && /^### /{f=0}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+SECTION_15_QUICK=$(awk '
+  /^### Quick \(RESEARCH_SCALE=quick\)/{f=1; next}
+  f && /^### /{f=0}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+
+[[ -n "$SECTION_15_STANDARD_FALSE" ]] \
+  || fail "references/research-phase.md must contain a '#### When \`RESEARCH_PLAN=false\`' subsection — Check 21b cannot anchor (#506)"
+[[ -n "$SECTION_15_STANDARD_TRUE" ]] \
+  || fail "references/research-phase.md must contain a '#### When \`RESEARCH_PLAN=true\`' subsection — Check 21c cannot anchor (#506)"
+[[ -n "$SECTION_15_DEEP" ]] \
+  || fail "references/research-phase.md must contain a '### Deep (RESEARCH_SCALE=deep)' subsection — Check 21d cannot anchor (#506)"
+[[ -n "$SECTION_15_QUICK" ]] \
+  || fail "references/research-phase.md must contain a '### Quick (RESEARCH_SCALE=quick)' subsection — Check 21e cannot anchor (#506)"
+
+# Check 21b (#506): Standard RESEARCH_PLAN=false branch must reference the
+# banner preamble. Anchor on the literal "Reduced-diversity banner preamble"
+# phrase (the preamble's own subsection name) so the reference is unambiguous.
+echo "$SECTION_15_STANDARD_FALSE" | grep -Fq "Reduced-diversity banner preamble" \
+  || fail "references/research-phase.md §1.5 '#### When \`RESEARCH_PLAN=false\`' must reference the 'Reduced-diversity banner preamble' (#506 Check 21b)"
+
+# Check 21c (#506): Standard RESEARCH_PLAN=true branch must reference the preamble.
+echo "$SECTION_15_STANDARD_TRUE" | grep -Fq "Reduced-diversity banner preamble" \
+  || fail "references/research-phase.md §1.5 '#### When \`RESEARCH_PLAN=true\`' must reference the 'Reduced-diversity banner preamble' (#506 Check 21c)"
+
+# Check 21d (#506): Deep branch must reference the preamble.
+echo "$SECTION_15_DEEP" | grep -Fq "Reduced-diversity banner preamble" \
+  || fail "references/research-phase.md §1.5 '### Deep (RESEARCH_SCALE=deep)' must reference the 'Reduced-diversity banner preamble' (#506 Check 21d)"
+
+# Check 21e (#506): Quick branch must NOT contain the banner literal or
+# trigger language. Quick mode has its own 'Single-lane confidence' disclaimer;
+# accidentally adding the reduced-diversity banner there would be a regression.
+if echo "$SECTION_15_QUICK" | grep -Fq "Reduced lane diversity"; then
+  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT contain the reduced-diversity banner — Quick mode carries its own 'Single-lane confidence' disclaimer (#506 Check 21e negative)"
+fi
+if echo "$SECTION_15_QUICK" | grep -Fq "Reduced-diversity banner preamble"; then
+  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT reference the reduced-diversity banner preamble (#506 Check 21e negative)"
+fi
+# Sanity: Quick still has its single-lane disclaimer (the existing contract).
+echo "$SECTION_15_QUICK" | grep -Fq "Single-lane confidence" \
+  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must retain the 'Single-lane confidence' disclaimer (#506 Check 21e positive)"
+
+echo "PASS: test-research-structure.sh — all 25 structural invariants hold"
 exit 0

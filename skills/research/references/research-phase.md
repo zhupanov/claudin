@@ -341,13 +341,45 @@ Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-sta
 
 ## 1.5 — Synthesis
 
-Synthesis branches by `RESEARCH_SCALE`. The `### Standard` body is byte-stable for backward compatibility when `RESEARCH_PLAN=false`. All three branches MUST write `$RESEARCH_TMPDIR/research-report.txt` so Step 2 (when not skipped) and Step 3 can consume it — quick mode is no exception to this contract.
+Synthesis branches by `RESEARCH_SCALE`. The `### Standard` body is byte-stable for backward compatibility when `RESEARCH_PLAN=false` AND `N_FALLBACK=0` (see "Reduced-diversity banner preamble" below — when any external research lane fell back to Claude, the synthesis carries a one-line banner prefix and the body is no longer byte-identical to pre-fallback output). All three branches MUST write `$RESEARCH_TMPDIR/research-report.txt` so Step 2 (when not skipped) and Step 3 can consume it — quick mode is no exception to this contract.
+
+### Reduced-diversity banner preamble (Standard + Deep only)
+
+This preamble defines the **degraded-path banner** that the `### Standard` and `### Deep` synthesis branches prepend to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt` when any external research lane (Cursor or Codex) ran as a Claude-fallback. Quick mode (`RESEARCH_SCALE=quick`) does NOT apply this preamble — it carries its own `**Single-lane confidence — no validation pass.**` disclaimer instead.
+
+**Banner literal (fixed template; only `<N_FALLBACK>` and `<LANE_TOTAL>` are integer-substituted; never splice `_REASON` or raw KV lines from `lane-status.txt` into the banner)**:
+
+```
+**⚠ Reduced lane diversity: <N_FALLBACK> of <LANE_TOTAL> external research lanes ran as Claude-fallback. The model-family heterogeneity claim does not hold for this run.**
+```
+
+**Trigger and per-scale formulas** (read `$RESEARCH_TMPDIR/lane-status.txt` via Bash; parse `RESEARCH_CURSOR_STATUS=` / `RESEARCH_CODEX_STATUS=` lines via prefix-strip — same KV vocabulary that `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status-lib.sh` reads; `ok` is the sole non-fallback token, every other value (including empty) is a fallback):
+
+- **Standard** (`RESEARCH_SCALE=standard`, 2 external lanes — Cursor + Codex):
+  - `LANE_TOTAL=2`
+  - `N_FALLBACK = (RESEARCH_CURSOR_STATUS != ok) + (RESEARCH_CODEX_STATUS != ok)` ∈ {0, 1, 2}
+- **Deep** (`RESEARCH_SCALE=deep`, 4 external lanes — 2 Cursor slots Arch+Edge, 2 Codex slots Ext+Sec; `lane-status.txt` aggregates per-tool, so a tool-level fallback covers both that tool's slots):
+  - `LANE_TOTAL=4`
+  - `N_FALLBACK = 2*(RESEARCH_CURSOR_STATUS != ok) + 2*(RESEARCH_CODEX_STATUS != ok)` ∈ {0, 2, 4}
+
+**Trigger condition**: emit the banner when `N_FALLBACK >= 1`. When `N_FALLBACK = 0`, do NOT emit the banner — the synthesis output is byte-identical to the pre-banner shape.
+
+**Fallback default**: if `lane-status.txt` is missing or unreadable (should not happen in standard/deep — Step 0b always writes it for non-quick scales), treat as `N_FALLBACK=0` (no banner). Quick mode never reaches this preamble.
+
+**Output placement**: when `N_FALLBACK >= 1`, the banner literal (with integer substitutions applied) is prepended to BOTH the printed synthesis (immediately under the `## Research Synthesis` header, before any agree/diverge/significance content; in the planner branch, before the per-subquestion sub-sections) AND to `$RESEARCH_TMPDIR/research-report.txt` (immediately under the same header, before the synthesized findings). The word "BOTH" is load-bearing — emitting the banner only to stdout but not the file means downstream Step 2 reviewers (who consume `research-report.txt`) lose the disclaimer.
+
+**Edit-in-sync surfaces** (any change to the banner literal or trigger formula MUST be mirrored in all three surfaces in the same PR — see `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.md` for the contract):
+1. The banner literal in this preamble.
+2. The structural pin in `${CLAUDE_PLUGIN_ROOT}/scripts/test-research-structure.sh` (Checks 21a-21e).
+3. The reference-impl assertions in `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.sh`.
 
 ### Standard (RESEARCH_SCALE=standard, default)
 
 Read all 3 research outputs (Claude inline + Cursor or its fallback + Codex or its fallback). Branch on `RESEARCH_PLAN`:
 
-#### When `RESEARCH_PLAN=false` (default — byte-stable)
+#### When `RESEARCH_PLAN=false` (default — byte-stable when `N_FALLBACK=0`)
+
+0. **Apply the Reduced-diversity banner preamble** (see "Reduced-diversity banner preamble" above). Compute `N_FALLBACK` and `LANE_TOTAL` per the standard formula (`LANE_TOTAL=2`); when `N_FALLBACK >= 1`, prepend the banner literal to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt`, before the agree/diverge content below.
 
 Produce a synthesis that:
 
@@ -357,14 +389,17 @@ Produce a synthesis that:
 4. Highlights **architectural patterns** observed in the codebase (each lane's prompt requires coverage of this dimension)
 5. Highlights **risks, constraints, and feasibility** concerns (each lane's prompt requires coverage of this dimension)
 
-Print the synthesis under a `## Research Synthesis` header. Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash so it can be used by Step 2. The file should contain:
+Print the synthesis under a `## Research Synthesis` header (with the banner prepended when `N_FALLBACK >= 1`). Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash so it can be used by Step 2. The file should contain:
 - The original research question
 - The branch and commit being researched
+- The reduced-diversity banner (if `N_FALLBACK >= 1`)
 - The synthesized findings
 
 #### When `RESEARCH_PLAN=true` (and `RESEARCH_PLAN_N>0`)
 
-Re-organize the synthesis BY SUBQUESTION. Read each lane's research output and partition the findings by the subquestion(s) the lane was assigned (per `$RESEARCH_TMPDIR/lane-assignments.txt`). Print under the same `## Research Synthesis` header, with the following structure:
+0. **Apply the Reduced-diversity banner preamble** (see "Reduced-diversity banner preamble" above). Compute `N_FALLBACK` and `LANE_TOTAL` per the standard formula (`LANE_TOTAL=2`); when `N_FALLBACK >= 1`, prepend the banner literal to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt`, **before the per-subquestion `### Subquestion N` sub-sections** below.
+
+Re-organize the synthesis BY SUBQUESTION. Read each lane's research output and partition the findings by the subquestion(s) the lane was assigned (per `$RESEARCH_TMPDIR/lane-assignments.txt`). Print under the same `## Research Synthesis` header (with the banner prepended when `N_FALLBACK >= 1`), with the following structure:
 
 - For each subquestion `s_i` (i = 1..N), a sub-section `### Subquestion N: <subquestion text>` containing:
   - **Per-subquestion agreements/divergences** across the lanes that researched `s_i`. (For N=2, all 3 lanes researched both subquestions, so this is the convergence across all 3 perspectives. For N=3 each subquestion is researched by exactly 1 lane, so "convergence" reduces to that lane's findings; surface them with a brief one-line note that this subquestion had a single-lane perspective. For N=4 lane 1 researched two subquestions, so its perspective contributes to two sub-sections.)
@@ -381,6 +416,7 @@ Write the synthesis to `$RESEARCH_TMPDIR/research-report.txt` via Bash. The file
 - The original research question (parent `RESEARCH_QUESTION` — NOT the subquestions)
 - The branch and commit being researched
 - A note that planner mode produced N subquestions
+- The reduced-diversity banner (if `N_FALLBACK >= 1`)
 - The synthesized findings, organized as above (subquestion sub-sections + cross-cutting sub-section)
 
 Step 2 (validation) consumes the report and validates against the parent `RESEARCH_QUESTION` — the validation contract is unchanged, since `research-report.txt` still leads with the original question. The per-subquestion sub-sections are clearly scoped, so reviewers can validate findings against their respective subquestion claims without losing the integrative view.
@@ -393,7 +429,9 @@ Write `$RESEARCH_TMPDIR/research-report.txt` with the same content (research que
 
 ### Deep (RESEARCH_SCALE=deep)
 
-Read all 5 research outputs (Claude inline running baseline `RESEARCH_PROMPT` + 4 angle lanes — `Cursor-Arch` running `RESEARCH_PROMPT_ARCH`, `Cursor-Edge` running `RESEARCH_PROMPT_EDGE`, `Codex-Ext` running `RESEARCH_PROMPT_EXT`, `Codex-Sec` running `RESEARCH_PROMPT_SEC`, or their respective Claude subagent fallbacks). Produce a synthesis under a `## Research Synthesis` header that:
+0. **Apply the Reduced-diversity banner preamble** (see "Reduced-diversity banner preamble" above). Compute `N_FALLBACK` and `LANE_TOTAL` per the deep formula (`LANE_TOTAL=4`, `N_FALLBACK = 2*(RESEARCH_CURSOR_STATUS != ok) + 2*(RESEARCH_CODEX_STATUS != ok)` — the `2*` multiplier reflects that `lane-status.txt` aggregates per-tool, but each tool covers 2 external slots in deep mode); when `N_FALLBACK >= 1`, prepend the banner literal to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt`, before the agree/diverge content below.
+
+Read all 5 research outputs (Claude inline running baseline `RESEARCH_PROMPT` + 4 angle lanes — `Cursor-Arch` running `RESEARCH_PROMPT_ARCH`, `Cursor-Edge` running `RESEARCH_PROMPT_EDGE`, `Codex-Ext` running `RESEARCH_PROMPT_EXT`, `Codex-Sec` running `RESEARCH_PROMPT_SEC`, or their respective Claude subagent fallbacks). Produce a synthesis under a `## Research Synthesis` header (with the banner prepended when `N_FALLBACK >= 1`) that:
 
 1. Explicitly **names each of the four diversified angles by name** ("architecture & data flow", "edge cases & failure modes", "external comparisons", "security & threat surface") in the synthesis prose, summarizing the most significant finding from each angle so the operator can see the angles were genuinely covered.
 2. Identifies where the 5 perspectives **agree** on key findings (treat the four angle lanes as complementary, not redundant — convergence across angle boundaries is the strongest signal).
@@ -402,4 +440,4 @@ Read all 5 research outputs (Claude inline running baseline `RESEARCH_PROMPT` + 
 5. Highlights **architectural patterns** observed in the codebase (`Cursor-Arch` is the primary source but Claude inline and other angles may contribute).
 6. Highlights **risks, constraints, and feasibility** concerns (`Cursor-Edge` and `Codex-Sec` are the primary sources for failure-mode and security risks, respectively).
 
-Write `$RESEARCH_TMPDIR/research-report.txt` with the synthesis (research question, branch + commit, 5-lane synthesis naming the four diversified angles).
+Write `$RESEARCH_TMPDIR/research-report.txt` with the synthesis (research question, branch + commit, the reduced-diversity banner if `N_FALLBACK >= 1`, 5-lane synthesis naming the four diversified angles).
