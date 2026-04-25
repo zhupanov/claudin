@@ -13,7 +13,7 @@ Design an implementation plan for a feature and review it with a unified 3-revie
 
 | Flag | Default | Purpose | Load-bearing detail |
 |------|---------|---------|---------------------|
-| `--auto` | `false` | Skip interactive question checkpoints (1c, 1d, 3.5, 3a) | No-op when caller sets `--quick` and `/design` is skipped |
+| `--auto` | `false` | Skip interactive question checkpoints (1c, 1d, 3.5) | No-op when caller sets `--quick` and `/design` is skipped |
 | `--debug` | `false` | Verbose output (see Verbosity Control) | — |
 | `--session-env <path>` | empty | Forward discovered session values to `session-setup.sh` | Empty = standalone invocation, full discovery |
 | `--step-prefix <prefix>` | empty | Nested-numbering prefix from `/implement` | `::` delimiter splits numeric prefix from breadcrumb path; `"1."` (bare numeric) is backward-compat |
@@ -43,7 +43,6 @@ Step Name Registry:
 | 2b | full plan |
 | 3 | plan review |
 | 3.5 | discussion r2 |
-| 3a | confirmation |
 | 3b | arch diagram |
 | 4 | rejected findings |
 | 5 | cleanup |
@@ -354,30 +353,15 @@ Launch the Claude subagent **last** in the same message (it finishes fastest). U
 
 Follow `plan-review.md` (loaded via the MANDATORY at the top of Step 3) for: Collecting External Reviewer Results (process Claude findings immediately, then `collect-reviewer-results.sh` for externals, dedup in-scope and OOS separately, merge Claude attribution), Voting Panel launch-order + threshold + Competition scoring, Finalize Plan Review (accepted findings revise plan, write `$DESIGN_TMPDIR/accepted-plan-findings.md`, write accepted OOS to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-design.md` when `SESSION_ENV_PATH` is non-empty, print non-accepted OOS under `## Out-of-Scope Observations`), and Track Rejected Plan Review Findings (append to `$DESIGN_TMPDIR/rejected-findings.md`, in-scope only).
 
-If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 if `auto_mode=false`, or Step 3a if `auto_mode=true`.
+If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 if `auto_mode=false`, or Step 3b if `auto_mode=true`.
 
 ## Step 3.5 — Design Discussion (Round 2)
 
 Print: `> **🔶 3.5: discussion r2**`
 
-**If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode) (<elapsed>)` and proceed to Step 3a. **Do NOT load `discussion-rounds.md` when `auto_mode=true`.**
+**If `auto_mode=true`**: Print `⏩ 3.5: discussion r2 — skipped (auto mode) (<elapsed>)` and proceed to Step 3b. **Do NOT load `discussion-rounds.md` when `auto_mode=true`.**
 
 **If `auto_mode=false`**: Execute the Step 3.5 body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely. The body defines Inputs, Behavior (still-contested criteria including close 2-1 voted, fallback-to-synthesis, bucket-skipped, over-cap), Short-circuit, Output schema, Cap, and Terse-answer rules.
-
-## Step 3a — Post-Review Confirmation
-
-Print: `> **🔶 3a: confirmation**`
-
-**If `auto_mode=true`**: Print `⏩ 3a: confirmation — skipped (auto mode) (<elapsed>)` and proceed to Step 3b.
-
-**Determine design-stage interaction state** (gate inputs for the approval pause):
-
-- `qa_happened=true` iff `$DESIGN_TMPDIR/user-qa-happened.md` exists. The sentinel is touched by Steps 1c/1d/3.5 whenever at least one `AskUserQuestion` actually asks the user a question; its absence means no Q/A took place at any of those steps (either each step short-circuited without asking, or all were skipped).
-- `dialectic_adjudicated=true` iff `$DESIGN_TMPDIR/dialectic-resolutions.md` exists AND `grep -qE '^\*\*Disposition\*\*:[[:space:]]+(voted|fallback-to-synthesis)[[:space:]]*$' "$DESIGN_TMPDIR/dialectic-resolutions.md"` succeeds (the canonical verbatim field-name form per `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-protocol.md` "Consumer Contract"; the pattern tolerates one-or-more spaces after the colon and trailing whitespace, the only drift variants expected from a compliant writer). Only `voted` (judges adjudicated a contested debate) and `fallback-to-synthesis` (dialectic attempted but couldn't produce a clear answer) count as "contested opinions subjected to dialectic adjudication". `bucket-skipped` and `over-cap` entries do NOT count — no adjudication occurred on those decisions (tool unavailable, or decision ranked outside the top-5 cap).
-
-**If neither `qa_happened` nor `dialectic_adjudicated`**: Print `⏩ 3a: confirmation — skipped (no Q/A or dialectic adjudication) (<elapsed>)` and proceed to Step 3b. This is the "no design-stage interaction, no debate" short-circuit — the plan proceeds to implementation without a second approval, since Claude neither needed to clarify ambiguity with the user nor had to adjudicate contested opinions.
-
-**If `auto_mode=false` AND (`qa_happened` OR `dialectic_adjudicated`)**: Execute the Step 3a body in `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md`. If already loaded at Step 1c or 3.5, no need to re-load; otherwise **MANDATORY — READ ENTIRE FILE**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/discussion-rounds.md` completely. The body defines the approval-only confirmation procedure and the proceed-on-rejection rule.
 
 ## Step 3b — Architecture Diagram
 

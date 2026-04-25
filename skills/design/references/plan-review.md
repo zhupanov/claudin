@@ -4,7 +4,7 @@
 
 **Contract**: 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude fallbacks when externals are unavailable), dual-list output (In-Scope Findings + Out-of-Scope Observations), then a 3-voter panel using YES/NO/EXONERATE with 2+ YES threshold and the proportionality rule. Claude subagent voter replacement when external tool unavailable so the panel always remains at 3.
 
-**When to load**: once Step 3 begins, via the MANDATORY directive at the top of Step 3 in SKILL.md. Do NOT load during Steps 0, 1, 2a, 2a.5, 2b, 3.5, 3a, 3b, 4, or 5 — the reviewer archetype, ballot handling, voting panel launch, finalize procedure, and rejected-findings template defined here are all Step-3-internal concerns.
+**When to load**: once Step 3 begins, via the MANDATORY directive at the top of Step 3 in SKILL.md. Do NOT load during Steps 0, 1, 2a, 2a.5, 2b, 3.5, 3b, 4, or 5 — the reviewer archetype, ballot handling, voting panel launch, finalize procedure, and rejected-findings template defined here are all Step-3-internal concerns.
 
 ---
 
@@ -67,7 +67,7 @@ For Codex, Cursor, and their Claude replacement voters, instruct each: `"You are
 4. Deduplicate in-scope findings separately. Assign each a stable sequential ID (`FINDING_1`, `FINDING_2`, etc.) and note which reviewer(s) proposed each.
 5. Deduplicate out-of-scope observations separately. Assign each an `OOS_` prefixed ID (`OOS_1`, `OOS_2`, etc.). If the same issue appears in both in-scope and OOS from different reviewers, merge under the in-scope finding (in-scope takes precedence).
 
-If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
+If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3b (Architecture Diagram) if `auto_mode=true`.
 
 ---
 
@@ -97,7 +97,7 @@ If any in-scope findings were **accepted by vote** (2+ YES votes):
 
 Print any non-accepted OOS items under a `## Out-of-Scope Observations` header for visibility. These are not filed as issues but are recorded for future attention.
 
-If voting rejects all in-scope findings, print: `**ℹ Voting panel rejected all in-scope findings. Plan unchanged.**` (OOS items accepted for issue filing are processed separately by `/implement`.) Proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3a (Post-Review Confirmation) if `auto_mode=true`.
+If voting rejects all in-scope findings, print: `**ℹ Voting panel rejected all in-scope findings. Plan unchanged.**` (OOS items accepted for issue filing are processed separately by `/implement`.) Proceed to Step 3.5 (Design Discussion Round 2) if `auto_mode=false`, or Step 3b (Architecture Diagram) if `auto_mode=true`.
 
 ### Accepted FINDING_N template (byte-preserved)
 
