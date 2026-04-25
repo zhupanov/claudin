@@ -32,6 +32,7 @@ When processing reviewer results (after `wait-for-reviewers.sh` returns), check 
 - Sentinel exit code is non-zero (any other failure)
 - Output is empty/invalid after the retry-once procedure (per "Validating External Reviewer Output" below)
 - `wait-for-reviewers.sh` reports `TIMEOUT` for the reviewer (sentinel never appeared — wrapper killed externally)
+- `STATUS=NOT_SUBSTANTIVE` (output passed sentinel + non-empty + retry checks but failed substantive-content validation under `collect-reviewer-results.sh --substantive-validation` — same Claude-subagent-fallback behavior as a timeout, since the lane is unusable for synthesis; Phase 3 of umbrella #413, closes #416)
 
 Print: `**⚠ <Reviewer> failed — <FAILURE_REASON>. Using Claude replacement for remainder of session.**`
 
@@ -57,7 +58,7 @@ Only include output file paths for reviewers that were actually launched. For th
 ```
 REVIEWER_FILE=<output-path>
 TOOL=<codex|cursor|unknown>
-STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT>
+STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT|NOT_SUBSTANTIVE>
 EXIT_CODE=<N>
 HEALTHY=<true|false>
 FAILURE_REASON=<explanation>

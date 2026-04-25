@@ -188,17 +188,17 @@ COLLECT_ARGS=()
 
 **Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-reviewer-results.sh` entirely** — the script exits non-zero when called with an empty path list. Proceed directly to Step 1.4 with the 3 Claude outputs (inline + 2 fallback subagents).
 
-Otherwise, invoke the script with only the launched paths:
+Otherwise, invoke the script with only the launched paths. Pass `--substantive-validation` so the collector promotes the documented "caller's responsibility" content check (this very paragraph, historically) into a deterministic gate that emits `STATUS=NOT_SUBSTANTIVE` for outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 "${COLLECT_ARGS[@]}"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
 ```
 
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
-Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For research outputs, additionally check that valid output contains at least one paragraph of substantive prose (the script validates non-empty; content validation is the caller's responsibility).
+Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Under `--substantive-validation`, content validation is performed by `collect-reviewer-results.sh` (via `scripts/validate-research-output.sh`); a lane that returns thin-but-cited or long-but-uncited prose is rejected with `STATUS=NOT_SUBSTANTIVE` and a diagnostic in `FAILURE_REASON`.
 
-**Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the corresponding availability flag, then **immediately launch a Claude subagent fallback via the Agent tool** (no `subagent_type`, carrying `RESEARCH_PROMPT` verbatim — same as the pre-launch fallback in Step 1.2) and wait for it before synthesis. This preserves the 3-lane invariant at synthesis time; without it, a mid-run external timeout silently reduces the synthesis input from 3 perspectives to 2.
+**Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK` (including `NOT_SUBSTANTIVE`), follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the corresponding availability flag, then **immediately launch a Claude subagent fallback via the Agent tool** (no `subagent_type`, carrying `RESEARCH_PROMPT` verbatim — same as the pre-launch fallback in Step 1.2) and wait for it before synthesis. This preserves the 3-lane invariant at synthesis time; without it, a mid-run external timeout silently reduces the synthesis input from 3 perspectives to 2.
 
 ### Quick (RESEARCH_SCALE=quick)
 
@@ -232,7 +232,7 @@ For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`: after Runtime Timeout F
 
 For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:
 - `STATUS=TIMED_OUT` or `SENTINEL_TIMEOUT` → token `fallback_runtime_timeout`, reason empty
-- `STATUS=FAILED` or `EMPTY_OUTPUT` → token `fallback_runtime_failed`, reason = sanitized `FAILURE_REASON` (strip `=` and `|`, collapse whitespace, trim, truncate to 80 chars)
+- `STATUS=FAILED` or `EMPTY_OUTPUT` or `NOT_SUBSTANTIVE` → token `fallback_runtime_failed`, reason = sanitized `FAILURE_REASON` (strip `=` and `|`, collapse whitespace, trim, truncate to 80 chars)
 
 If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched because pre-launch fallback already applied), no update is needed — the `RESEARCH_*` keys from Step 0b remain correct.
 

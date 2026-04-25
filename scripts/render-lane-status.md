@@ -39,6 +39,19 @@ All keys are optional. A missing or empty `*_STATUS` renders as `(unknown)`.
 | `` (missing or empty) | `(unknown)` (no stderr warning) |
 | anything else, non-empty | `(unknown)` (with stderr warning) |
 
+## Collector `STATUS=`→token mapping
+
+`scripts/collect-reviewer-results.sh` emits a per-reviewer `STATUS=` value drawn from the enum `OK | TIMED_OUT | FAILED | EMPTY_OUTPUT | SENTINEL_TIMEOUT | NOT_SUBSTANTIVE`. The orchestrator-side update logic in `skills/research/references/research-phase.md` (Step 1.3) and `skills/research/references/validation-phase.md` (Step 2.4) translates non-`OK` statuses to the lane-status tokens above before writing `lane-status.txt`. The mapping:
+
+| Collector `STATUS` | lane-status token | Reason field |
+|-------|----------|----------|
+| `OK` | `ok` | empty |
+| `TIMED_OUT` / `SENTINEL_TIMEOUT` | `fallback_runtime_timeout` | empty |
+| `FAILED` / `EMPTY_OUTPUT` | `fallback_runtime_failed` | sanitized `FAILURE_REASON` |
+| `NOT_SUBSTANTIVE` | `fallback_runtime_failed` | sanitized `FAILURE_REASON` |
+
+`NOT_SUBSTANTIVE` shares the `fallback_runtime_failed` token because the operator-facing distinction lives in `FAILURE_REASON` (e.g., "body too thin: 5/200 words after stripping fenced code") rather than in a dedicated render token. Introducing a separate token (e.g., `fallback_content_invalid`) was considered and rejected at design time — it would require updating `render_lane()`, the test harness, and the contract for low signal: the diagnostic already disambiguates cause for the operator. If the renderer ever needs to disambiguate at the header level (e.g., to color-code content vs runtime failures distinctly), introduce a new token in lockstep with the orchestrator-side mapping update.
+
 ## Reason sanitization
 
 Applied inside the script after parse, before render:

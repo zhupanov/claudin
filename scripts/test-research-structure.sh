@@ -151,5 +151,28 @@ grep -Fq "cursor-validation-output.txt" "$VALIDATION_MD" \
 grep -Fq "codex-validation-output.txt" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must contain the standard-mode 'codex-validation-output.txt' filename literal (#418 byte-drift guard)"
 
-echo "PASS: test-research-structure.sh — all 15 structural invariants hold"
+# Check 16 (#416): Both phase references must invoke collect-reviewer-results.sh
+# with --substantive-validation (Phase 3 of umbrella #413). Without these pins,
+# a future edit could silently drop the flag and revert /research to the
+# pre-Phase-3 "non-empty is enough" check, allowing thin/uncited lane outputs
+# to slip through to synthesis. Match a line that contains both the invocation
+# basename and the flag, so reordering or whitespace changes do not bypass the
+# pin while a paragraph elsewhere on the page that mentions both tokens
+# separately would.
+grep -Eq 'collect-reviewer-results\.sh.*--substantive-validation' "$RESEARCH_MD" \
+  || fail "references/research-phase.md must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
+grep -Eq 'collect-reviewer-results\.sh.*--substantive-validation' "$VALIDATION_MD" \
+  || fail "references/validation-phase.md must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
+
+# Check 17 (#416): Both phase references must map STATUS=NOT_SUBSTANTIVE in the
+# lane-status update bullet so the new collector status flows into the correct
+# render token (fallback_runtime_failed). The pre-existing bullet only listed
+# FAILED/EMPTY_OUTPUT; without this pin a future edit could drop NOT_SUBSTANTIVE
+# silently and the render helper would emit (unknown) for it.
+grep -Fq "NOT_SUBSTANTIVE" "$RESEARCH_MD" \
+  || fail "references/research-phase.md must map STATUS=NOT_SUBSTANTIVE in lane-status token bullet (#416 Phase 3)"
+grep -Fq "NOT_SUBSTANTIVE" "$VALIDATION_MD" \
+  || fail "references/validation-phase.md must map STATUS=NOT_SUBSTANTIVE in lane-status token bullet (#416 Phase 3)"
+
+echo "PASS: test-research-structure.sh — all 17 structural invariants hold"
 exit 0
