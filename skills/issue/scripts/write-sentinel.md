@@ -10,7 +10,9 @@ Partial-failure (`ISSUES_FAILED>=1`) suppresses the sentinel by design: this is 
 
 ## Atomicity
 
-Writes to a same-directory `mktemp`, then `mv` to the final path. Same pattern as `scripts/write-session-env.sh`. The final file is guaranteed either complete or absent — never partial. If the helper crashes mid-`mv` the temp file is left orphaned in the same directory but the target path is never half-written.
+Writes the full content to a same-directory `mktemp`, then `mv` to the final path. Same pattern as `scripts/write-session-env.sh`. The `mv` is atomic on a single filesystem, so the target path is either the complete final content or absent — never partial. If the helper crashes mid-`mv` the temp file is left orphaned in the same directory but the target path is never half-written.
+
+This is **rename-atomicity**, not durability — the script does NOT call `fsync(2)`. A host crash before the kernel flushes the dirty page cache could lose the rename. That is acceptable for this signal because the parent runs in the same session as the child: a host crash mid-run discards both processes (#509 review FINDING_1).
 
 ## Channel discipline
 

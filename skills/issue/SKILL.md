@@ -1,7 +1,7 @@
 ---
 name: issue
 description: "Use when creating GitHub issues with LLM-based semantic duplicate detection. Single (free-form description) or batch (--input-file) mode. 2-phase dedup against open + recently-closed issues. Flags: --go, --dry-run, --title-prefix, --label."
-argument-hint: "[--input-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [<issue description>]"
+argument-hint: "[--input-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--sentinel-file PATH] [<issue description>]"
 allowed-tools: Bash, Read, Write
 ---
 

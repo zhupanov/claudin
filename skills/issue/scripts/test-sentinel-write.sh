@@ -183,11 +183,24 @@ assert_grep "$TMPDIR_TEST/j-stderr" "ERROR=.*'\\.\\.'" "  (j) stderr ERROR= ment
 echo
 echo "Case (k): non-numeric counter → ERROR, exit 1"
 set +e
-"$HELPER" --path "/tmp/k-sentinel" --issues-created abc --issues-deduplicated 0 --issues-failed 0 2>"$TMPDIR_TEST/k-stderr"
+"$HELPER" --path "$TMPDIR_TEST/k-sentinel" --issues-created abc --issues-deduplicated 0 --issues-failed 0 2>"$TMPDIR_TEST/k-stderr"
 EXIT_K=$?
 set -e
 if [[ "$EXIT_K" == "1" ]]; then pass "  (k) exit code 1"; else fail "  (k) exit code 1" "got $EXIT_K"; fi
 assert_grep "$TMPDIR_TEST/k-stderr" '^ERROR=.*non-negative integers' "  (k) stderr ERROR= mentions integers"
+
+# ---------------------------------------------------------------------------
+echo
+echo "Case (l): missing value for --issues-failed → ERROR, exit 1 (#509 review FINDING_3)"
+# Final argv token is a value-taking flag with no following value. Without
+# the require_value guard, set -u would abort with a cryptic 'unbound
+# variable' instead of the documented stable ERROR= contract.
+set +e
+"$HELPER" --path "$TMPDIR_TEST/l-sentinel" --issues-created 1 --issues-deduplicated 0 --issues-failed 2>"$TMPDIR_TEST/l-stderr"
+EXIT_L=$?
+set -e
+if [[ "$EXIT_L" == "1" ]]; then pass "  (l) exit code 1"; else fail "  (l) exit code 1" "got $EXIT_L"; fi
+assert_grep "$TMPDIR_TEST/l-stderr" '^ERROR=Missing value for --issues-failed' "  (l) stderr ERROR= mentions missing value"
 
 # ---------------------------------------------------------------------------
 echo

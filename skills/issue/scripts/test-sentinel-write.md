@@ -20,6 +20,7 @@ Argument-validation cases (defense in depth):
 - **(i)** non-absolute `--path` → `ERROR=` mentions "absolute", exit 1.
 - **(j)** `..` in `--path` → `ERROR=` mentions `'..'`, exit 1.
 - **(k)** non-numeric counter → `ERROR=` mentions "non-negative integers", exit 1.
+- **(l)** missing value for value-taking flag (final argv token is `--issues-failed` with nothing after it) → `ERROR=Missing value for --issues-failed`, exit 1. Pins the FINDING_3 fix from review: under `set -u`, dereferencing `$2` without a presence check would have aborted with a cryptic `unbound variable` instead of the documented stable `ERROR=` contract.
 
 ## Running
 

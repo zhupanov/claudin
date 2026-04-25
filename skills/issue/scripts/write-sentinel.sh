@@ -16,9 +16,14 @@
 #   consumer that wants them.
 #
 # Atomicity:
-#   Writes to a same-directory mktemp, fsync via shell `>`, then `mv`. Same
-#   pattern as scripts/write-session-env.sh. This guarantees the final file
-#   is either complete or absent — never partial.
+#   Writes the full content to a same-directory mktemp, then `mv` to the
+#   target path. Same pattern as scripts/write-session-env.sh. The mv is
+#   atomic on a single filesystem, so the target is either the complete
+#   final content or absent — never partial. NOTE: this is rename-atomicity,
+#   not durability. The script does NOT call fsync(2); a host crash before
+#   the kernel flushes the dirty page cache could lose the rename. That is
+#   acceptable for this signal because the parent runs in the same session
+#   as the child — a host crash mid-run discards both processes.
 #
 # Channel discipline:
 #   All status output goes to STDERR, not stdout. /issue Step 7's published
@@ -56,12 +61,24 @@ ISSUES_DEDUPLICATED=""
 ISSUES_FAILED=""
 DRY_RUN="false"
 
+# require_value: emit a stable ERROR= line when a value-taking flag has no
+# value (e.g., final argv token is `--path` with nothing after it). Uses
+# ${2-} so `set -u` does not abort with a cryptic "unbound variable" before
+# the script can emit its documented stderr contract (#509 review FINDING_3).
+require_value() {
+  local flag="$1" value="${2-}"
+  if [[ -z "$value" ]]; then
+    echo "ERROR=Missing value for $flag" >&2
+    exit 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --path)                PATH_ARG="$2"; shift 2 ;;
-    --issues-created)      ISSUES_CREATED="$2"; shift 2 ;;
-    --issues-deduplicated) ISSUES_DEDUPLICATED="$2"; shift 2 ;;
-    --issues-failed)       ISSUES_FAILED="$2"; shift 2 ;;
+    --path)                require_value "$1" "${2-}"; PATH_ARG="$2"; shift 2 ;;
+    --issues-created)      require_value "$1" "${2-}"; ISSUES_CREATED="$2"; shift 2 ;;
+    --issues-deduplicated) require_value "$1" "${2-}"; ISSUES_DEDUPLICATED="$2"; shift 2 ;;
+    --issues-failed)       require_value "$1" "${2-}"; ISSUES_FAILED="$2"; shift 2 ;;
     --dry-run)             DRY_RUN="true"; shift ;;
     *) echo "ERROR=Unknown argument: $1" >&2; exit 1 ;;
   esac
