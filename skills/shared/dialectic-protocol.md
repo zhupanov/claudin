@@ -268,13 +268,18 @@ Field rules per disposition:
 
 ## Consumer Contract
 
-Step 2b (`/design` plan generation) and Step 3.5 (design discussion round 2) parse `dialectic-resolutions.md`. Consumers MUST:
+This contract is shared across both callers — the field-name set and Disposition enum below apply identically to both, so future tooling that consumes either resolutions file can use one parser. Two callers parse the resolutions, each from its own caller-specific basename:
+
+- `/design` Step 2b (plan generation) and Step 3.5 (design discussion round 2) parse `$DESIGN_TMPDIR/dialectic-resolutions.md`.
+- `/research --adjudicate` Step 2.5 (the reinstatement-into-validated-synthesis sub-step) and Step 3 (final report rendering of the `**Adjudication phase**: <X> reinstated, <Y> upheld` header line) parse `$RESEARCH_TMPDIR/adjudication-resolutions.md`.
+
+The two artifact files use distinct basenames so they do not collide on disk; the field schema below is identical across them. Consumers MUST:
 
 1. Parse field names verbatim: `**Resolution**:`, `**Disposition**:`, `**Vote tally**:`, `**Thesis summary**:`, `**Antithesis summary**:`, `**Why thesis prevails**:` / `**Why antithesis prevails**:` / `**Why fallback**:` / `**Why skipped**:` / `**Why over-cap**:`.
 2. Recognize exactly these four Disposition values: `voted`, `fallback-to-synthesis`, `bucket-skipped`, `over-cap`.
-3. Treat `voted` as binding (plan must follow `Resolution` and engage antithesis). Treat the other three as non-binding (synthesis decision stands for that point; do NOT fabricate antithesis-engagement prose where no antithesis was heard).
+3. Treat `voted` as binding (consumer must follow `Resolution` — for `/design` the plan must engage antithesis; for `/research --adjudicate` `Resolution: reinstate` triggers the reinstatement-into-validated-synthesis sub-step). Treat the other three Dispositions as non-binding (synthesis decision stands for that point; do NOT fabricate antithesis-engagement prose where no antithesis was heard).
 
-### Step 3.5 still-contested criterion
+### Step 3.5 still-contested criterion (`/design` only)
 
 Step 3.5 reads `dialectic-resolutions.md` to identify decisions that warrant user discussion. A decision is "still contested" if any of:
 
