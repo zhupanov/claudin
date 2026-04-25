@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.21] - 2026-04-25
+
+### Fixed
+
+- `scripts/eval-research.sh` now exits 2 (not 1) when a value-taking flag is invoked with no following value (e.g. a trailing `--baseline`). Pre-fix, `shift 2` aborted under `set -euo pipefail` with exit 1, colliding with the documented schema-validation exit code and making malformed flag invocations indistinguishable from real schema failures to wrappers checking `$?`. A new `require_value` helper applies an arity check before each `shift 2` for all seven value-taking flags (`--id`, `--scale`, `--baseline`, `--work-dir`, `--write-baseline`, `--timeout`, `--judge-timeout`) and emits a clear stderr message naming the offending flag. The exit-code contract in `scripts/eval-research.md` is updated, and `scripts/test-eval-research-baseline-flag.sh` adds Sub-4 spot-checking the trailing-`--baseline` regression. Closes #477.
+
 ## [7.4.20] - 2026-04-25
 
 ### Fixed
