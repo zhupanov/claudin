@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.24] - 2026-04-25
+
+### Changed
+
+- `skills/shared/dialectic-protocol.md` Consumer Contract section now enumerates both callers (`/design` Steps 2b/3.5 parsing `$DESIGN_TMPDIR/dialectic-resolutions.md`; `/research --adjudicate` Steps 2.5/3 parsing `$RESEARCH_TMPDIR/adjudication-resolutions.md`) and documents per-caller existence/short-circuit guards, the caller-specific `Resolution` literal sets (`/design` uses `{CHOSEN}`/`{ALTERNATIVE}`; `/research --adjudicate` uses `reinstate`/`rejection-stands`), and a parallel research-side paragraph in `## Scope and Precedence`. Field names and the `Disposition` enum stay shared across callers so a single parser can extract them. Pre-existing documentation gap unrelated to issue #440. Closes #469.
+
 ## [7.4.23] - 2026-04-25
 
 ### Fixed
