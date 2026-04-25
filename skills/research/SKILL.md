@@ -138,11 +138,11 @@ Set mental flags `codex_available` and `cursor_available` based on the output, a
 
 **Skip this entire sub-step when `RESEARCH_SCALE=quick`.** Quick mode has no external lanes to attribute; Step 3 emits a literal "1 agent (Claude inline only — single-lane confidence)" research-phase header and the literal `0 reviewers (validation phase skipped — see synthesis disclaimer)` validation-phase header, without consulting `lane-status.txt` (Step 3 Quick branch sets these literals directly — see the `### Quick (RESEARCH_SCALE=quick)` subsection below).
 
-For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`, write `$RESEARCH_TMPDIR/lane-status.txt` with the per-tool aggregate pre-launch attribution. The same 8-key schema below covers both standard (1 Cursor + 1 Codex per phase) and deep (per-tool aggregate across 2 Cursor + 2 Codex in research, 1 Cursor + 1 Codex in validation): `RESEARCH_CURSOR_*` reflects the per-tool aggregate over both Cursor research slots in deep mode; same for `RESEARCH_CODEX_*`. Step 1.4 (research-phase) and Step 2 entry / validation-phase render-failure handlers (Cursor / Codex `On non-zero exit` paths) / Step 2.4 (validation-phase) update this file later via surgical phase-local rewrites; Step 3 reads it via `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh` to render the final-report header for standard mode (deep mode emits its own scale-aware header in Step 3 — see Step 3 below).
+For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`, write `$RESEARCH_TMPDIR/lane-status.txt` with the per-tool aggregate pre-launch attribution. The same 8-key schema below covers both standard (1 Cursor + 1 Codex per phase) and deep (per-tool aggregate across 2 Cursor + 2 Codex in research, 1 Cursor + 1 Codex in validation): `RESEARCH_CURSOR_*` reflects the per-tool aggregate over both Cursor research slots in deep mode; same for `RESEARCH_CODEX_*`. Step 1.4 (research-phase) and Step 2 entry / validation-phase render-failure handlers (Cursor / Codex `On non-zero exit` paths) / Step 2.4 (validation-phase) update this file later via surgical phase-local rewrites; Step 3 reads it via `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh` for standard mode and `${CLAUDE_PLUGIN_ROOT}/scripts/render-deep-lane-status.sh` for deep mode to render the final-report header (both share the rendering library `render-lane-status-lib.sh`). Quick mode does NOT consult this file — see Step 3 ### Quick.
 
 Sanitize each `*_PROBE_ERROR` value before writing: strip embedded `=` and `|` characters, collapse whitespace runs to single space, trim, truncate to 80 chars. The render script applies the same rules as defense-in-depth, but writer-side sanitization keeps the KV file well-formed.
 
-Use the orchestrator-resolved pre-launch status for each lane (Step 0a determined `ok` / `fallback_binary_missing` / `fallback_probe_failed` per lane). Both Research and Validation rows initialize from the same pre-launch facts; runtime updates come later. Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
+Use the orchestrator-resolved pre-launch status for each lane (Step 0a determined `ok` / `fallback_binary_missing` / `fallback_probe_failed` per lane). Both Research and Validation rows initialize from the same pre-launch facts; runtime updates come later. Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status-lib.md` (the canonical token table; both `render-lane-status.sh` and `render-deep-lane-status.sh` source the same library).
 
 The heredoc body uses a **quoted delimiter** (`<<'EOF'`) so that any residual shell metacharacters (dollar sign, backticks, backslashes, double quotes) in a substituted reason value are preserved verbatim instead of being expanded — a defense against hostile content in `*_PROBE_ERROR` from `.diag` files of external tools. The orchestrator literally substitutes the resolved per-lane status and sanitized reason text into the placeholders below before writing the command.
 
@@ -207,7 +207,7 @@ Execute Step 2.5 per the reference file above. SKILL.md is the sole owner of Ste
 
 Print: `> **🔶 3: report**`
 
-Render the per-lane attribution headers per `RESEARCH_SCALE`. The standard branch is byte-stable (uses `render-lane-status.sh` with the unchanged 8-key schema). Quick and deep emit literal headers without the helper.
+Render the per-lane attribution headers per `RESEARCH_SCALE`. Standard and deep both consult `$RESEARCH_TMPDIR/lane-status.txt` via per-mode helpers (`render-lane-status.sh` and `render-deep-lane-status.sh` respectively, sharing `render-lane-status-lib.sh` for token rendering and reason sanitization). Quick emits literal headers without consulting `lane-status.txt`. The standard branch is byte-stable (uses `render-lane-status.sh` with the unchanged 8-key schema); the deep branch derives headers from the same 8-key schema's per-phase slices, eliminating the cross-phase contamination bug fixed by #451.
 
 ### Standard (RESEARCH_SCALE=standard, default)
 
@@ -234,12 +234,19 @@ The validation-phase line is still rendered (with the 0-reviewers literal) so th
 
 ### Deep (RESEARCH_SCALE=deep)
 
-Skip `render-lane-status.sh` for deep mode (the helper's hardcoded "3 agents" / "3 reviewers" prefixes do not match deep's 5+5 shape). Emit literal headers using the per-tool aggregate status (the orchestrator tracks the session-wide `cursor_available` and `codex_available` flags throughout the run; render Cursor/Codex slots as `✅` when their flag was true at all checkpoints, else `Claude-fallback`):
+Render the per-lane attribution headers from `$RESEARCH_TMPDIR/lane-status.txt` via the deep-mode renderer:
 
-- `RESEARCH_HEADER="5 agents (Claude inline + Cursor-Arch + Cursor-Edge + Codex-Ext + Codex-Sec)"`
-- `VALIDATION_HEADER="5 reviewers (Code + Code-Sec + Code-Arch + Cursor + Codex)"`
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/render-deep-lane-status.sh --input "$RESEARCH_TMPDIR/lane-status.txt"
+```
 
-When any external lane was a Claude fallback, append a parenthetical note to the affected slot — e.g., `Cursor-Arch + Cursor-Edge (both Claude-fallback: <reason>)` — using the same fallback-reason vocabulary as `render-lane-status.md` (binary missing / probe failed / runtime timeout / runtime failed).
+Parse the two output lines via prefix-strip (NOT `cut -d=`, since rendered values can contain `=` characters):
+- `RESEARCH_HEADER="${line#RESEARCH_HEADER=}"` for the line beginning with `RESEARCH_HEADER=`
+- `VALIDATION_HEADER="${line#VALIDATION_HEADER=}"` for the line beginning with `VALIDATION_HEADER=`
+
+`render-deep-lane-status.sh` reads the same 8-key schema as standard (`RESEARCH_CURSOR_*`, `RESEARCH_CODEX_*`, `VALIDATION_CURSOR_*`, `VALIDATION_CODEX_*`) and emits the deep-mode 5+5 shape: `5 agents (Claude inline, Cursor-Arch: <r>, Cursor-Edge: <r>, Codex-Ext: <r>, Codex-Sec: <r>)` and `5 reviewers (Code: ✅, Code-Sec: ✅, Code-Arch: ✅, Cursor: <r>, Codex: <r>)`. Both Cursor research slots (Arch + Edge) share the per-tool aggregate `RESEARCH_CURSOR_*` token (matching the aggregate semantics in Step 0b); same for Codex research slots and `RESEARCH_CODEX_*`. The three Claude validation lanes (Code, Code-Sec, Code-Arch) have no fallback path and are hard-coded `✅`. Fallback-reason vocabulary (binary missing / probe failed / runtime timeout / runtime failed) is the same canonical set as standard, sourced from `render-lane-status-lib.sh`.
+
+If the helper exits non-zero (e.g., `lane-status.txt` is missing — should not happen since Step 0b always writes it), substitute the placeholder line `_Lane attribution unavailable._` for both header rows and log to terminal: `**⚠ 3: report — render-deep-lane-status failed; lane attribution unavailable.**`.
 
 Print the final research report under a `## Research Report` header with the following structure (substituting the rendered values for `<RESEARCH_HEADER>` and `<VALIDATION_HEADER>`):
 

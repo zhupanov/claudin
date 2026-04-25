@@ -235,5 +235,33 @@ grep -Fq "build-research-adjudication-ballot.sh" "$ADJUDICATION_MD" \
 grep -Fq "run-research-adjudication.sh" "$ADJUDICATION_MD" \
   || fail "references/adjudication-phase.md must reference scripts/run-research-adjudication.sh (#424)"
 
-echo "PASS: test-research-structure.sh — all 18 structural invariants hold"
+# Check 19 (#451): SKILL.md Step 3 deep branch must invoke the deep-mode
+# renderer so the per-phase attribution slices in `lane-status.txt` are the
+# source of truth for deep headers (the bug #451 fixed: previously the deep
+# branch derived headers from session-wide cursor_available / codex_available
+# flags, which caused validation-phase fallbacks to retroactively taint
+# research-phase attribution). Without this pin, a future edit could silently
+# revert deep mode to the flag-driven literal-header construction.
+grep -Fq "render-deep-lane-status.sh" "$SKILL_MD" \
+  || fail "SKILL.md must reference render-deep-lane-status.sh in Step 3 (#451 deep-mode lane attribution)"
+
+# Check 20 (#451): SKILL.md Step 3 ### Deep subsection must NOT derive headers
+# from session-wide cursor_available / codex_available flags — that pattern
+# is the pre-fix bug. The check is section-scoped via awk to the
+# `### Deep (RESEARCH_SCALE=deep)` subsection only, since the same identifier
+# names appear legitimately elsewhere in SKILL.md (Step 0a session-flag setup,
+# etc.). End-anchor is the next `###` heading.
+DEEP_SECTION=$(awk '/^### Deep \(RESEARCH_SCALE=deep\)/{f=1; next} f && /^### /{f=0} f' "$SKILL_MD")
+[[ -n "$DEEP_SECTION" ]] \
+  || fail "SKILL.md must contain a '### Deep (RESEARCH_SCALE=deep)' subsection — Check 20 cannot anchor without it (#451)"
+# Negative grep against the dangerous flag-driven rendering phrases. We
+# specifically pin language that ties HEADERS to session flags ("session-wide
+# ... cursor_available", "tracks the session-wide", "throughout the run"),
+# not bare mentions of the identifier names (the deep section may
+# legitimately reference other parts of SKILL.md that mention the flags).
+if echo "$DEEP_SECTION" | grep -qE 'session-wide.*cursor_available|cursor_available.*throughout the run|orchestrator tracks the session-wide'; then
+  fail "SKILL.md Step 3 ### Deep subsection must not derive headers from session-wide cursor_available/codex_available flags (#451 — use render-deep-lane-status.sh + lane-status.txt slices instead)"
+fi
+
+echo "PASS: test-research-structure.sh — all 20 structural invariants hold"
 exit 0

@@ -2,15 +2,19 @@
 
 ## Purpose
 
-Format the per-lane attribution record used by `/research`'s Step 3 final-report header. Reads a small KV file, emits two `<NAME>_HEADER=<value>` lines on stdout that SKILL.md Step 3 substitutes into the report. Closes #421.
+Format the per-lane attribution record used by `/research`'s Step 3 final-report header in **standard mode** (3 research agents + 3 validation reviewers). Reads a small KV file, emits two `<NAME>_HEADER=<value>` lines on stdout that SKILL.md Step 3 substitutes into the report. Deep mode uses a sibling renderer, `scripts/render-deep-lane-status.sh` — both share rendering primitives via `scripts/render-lane-status-lib.sh`. Closes #421 and #451.
+
+## Library
+
+Sources `scripts/render-lane-status-lib.sh` for `render_lane()` and `sanitize_reason()`. Sets `RENDER_LANE_CALLER="render-lane-status"` before sourcing so the unknown-token stderr warning attributes to this script's basename. The shared library is the single source of truth for the status-token vocabulary and reason-sanitization rules.
 
 ## Invariants
 
 1. **Pure formatter** — I/O is limited to the single input file path (`--input`) plus stdout/stderr (stdin is unused). No git, no network, no temp files.
-2. **3-lane count is hard-coded — standard-mode only** — both header lines emit `3 agents` / `3 reviewers`. The script is used only by the `### Standard` branch of `skills/research/SKILL.md` Step 3 (quick / deep emit literal headers without this script — see #418). The standard-mode 3-lane shape is pinned in the `### Standard` subsections of `skills/research/references/research-phase.md` and `skills/research/references/validation-phase.md`, and is byte-drift-guarded by `scripts/test-research-structure.sh` Checks 14 / 15 (filename literals on the Standard subsection). If the standard-mode lane count ever changes, this script, both references' Standard subsections, and the harness pins must be updated together.
+2. **Lane count is hard-coded per consumer — standard mode (3 agents / 3 reviewers) via this script; deep mode (5 agents / 5 reviewers) via the sibling `render-deep-lane-status.sh`. Quick mode emits literal headers without either script.** The script is used only by the `### Standard` branch of `skills/research/SKILL.md` Step 3. The standard-mode 3-lane shape is pinned in the `### Standard` subsections of `skills/research/references/research-phase.md` and `skills/research/references/validation-phase.md`, and is byte-drift-guarded by `scripts/test-research-structure.sh` Checks 14 / 15 (filename literals on the Standard subsection). If the standard-mode lane count ever changes, this script, both references' Standard subsections, and the harness pins must be updated together.
 3. **Code lane is hard-coded `✅`** — the Claude code-reviewer subagent has no fallback path (it is the always-on lane in the validation phase). This script does NOT consult the input file for the Code lane.
-4. **Status tokens are the single rendering vocabulary** — the case statement in `render_lane()` is the authoritative token list. Tokens that do not match render as `(unknown)` with a stderr warning.
-5. **Reasons are sanitized on render** — defense-in-depth. The orchestrator prompt in SKILL.md / phase references is supposed to sanitize before heredoc-write, but `sanitize_reason()` re-applies the same rules so a misformed file never breaks the report markdown.
+4. **Status tokens are the single rendering vocabulary** — the case statement lives in the shared library `scripts/render-lane-status-lib.sh`; this script does not duplicate it. Tokens that do not match render as `(unknown)` with a stderr warning attributed to `render-lane-status`.
+5. **Reasons are sanitized on render** — defense-in-depth via the shared library's `sanitize_reason()`. The orchestrator prompt in SKILL.md / phase references is supposed to sanitize before heredoc-write, but the library re-applies the same rules so a misformed file never breaks the report markdown.
 
 ## Input KV schema
 
@@ -107,9 +111,13 @@ Two distinct error paths share this surface:
 
 ## Consumers
 
-- `skills/research/SKILL.md` Step 3 — invokes the script and parses both header lines into the final report.
+- `skills/research/SKILL.md` Step 3 `### Standard` branch — invokes the script and parses both header lines into the final report.
 - `skills/research/references/research-phase.md` Step 1.3 — surgically updates the `RESEARCH_*` slice of `lane-status.txt` after `collect-reviewer-results.sh` returns.
 - `skills/research/references/validation-phase.md` Step 2 entry + render-failure handlers (Cursor / Codex `On non-zero exit` paths) + Step 2.4 — surgically updates the `VALIDATION_*` slice (Step 2 entry propagates downgrades from research phase per #421 plan-review FINDING_6; the render-failure handlers downgrade a lane to `fallback_runtime_failed` when `render-reviewer-prompt.sh` exits non-zero before background launch — closes #435; Step 2.4 captures post-launch runtime failures from `collect-reviewer-results.sh`).
+
+## Sibling renderer
+
+`scripts/render-deep-lane-status.sh` is the deep-mode counterpart of this script. It reads the same 8-key KV file but emits the 5-agent / 5-reviewer header shape used by `skills/research/SKILL.md` Step 3 `### Deep` branch. Both scripts source `scripts/render-lane-status-lib.sh` for `render_lane()` and `sanitize_reason()`, so the token vocabulary and sanitization rules stay in lockstep. See `scripts/render-deep-lane-status.md` for the deep contract.
 
 ## Test harness
 
@@ -117,7 +125,8 @@ Two distinct error paths share this surface:
 
 ## Edit-in-sync rules
 
-- **Adding/removing/renaming a status token** → update the case statement in `render_lane()`, the table in this contract, the orchestrator-side mapping in `skills/research/references/research-phase.md` (Step 1.3) and `validation-phase.md` (Step 2.4), and add/update a fixture in `scripts/test-render-lane-status.sh`.
-- **Changing the rendered string for an existing token** → update `render_lane()`, the table above, and the byte-exact stdout assertion in the harness fixture.
-- **Changing the reason sanitization rules** → update `sanitize_reason()`, the "Reason sanitization" section above, and the orchestrator-side prompt sanitization in SKILL.md Step 0a / `research-phase.md` Step 1.3 / `validation-phase.md` Step 2 entry, render-failure handlers (Cursor + Codex `On non-zero exit`), and Step 2.4.
-- **Changing the lane count or the Code-lane special case** → update both `printf` lines at the bottom of the script, the "Invariants" section above, and the assertion-count literal in the `scripts/test-research-structure.sh` success message (currently `all 15 structural invariants hold`).
+- **Adding/removing/renaming a status token** → update the case statement in the shared library (`scripts/render-lane-status-lib.sh`), the canonical token table in `scripts/render-lane-status-lib.md`, both consumer contracts (this file + `scripts/render-lane-status.md`'s deep sibling at `scripts/render-deep-lane-status.md`), the orchestrator-side mapping in `skills/research/references/research-phase.md` (Step 1.3) and `validation-phase.md` (Step 2.4), and add fixtures in BOTH consumer harnesses (`scripts/test-render-lane-status.sh` AND `scripts/test-render-deep-lane-status.sh`).
+- **Changing the rendered string for an existing token** → update the library's `render_lane()` case statement and the byte-exact stdout assertion in BOTH harness fixture sets.
+- **Changing the reason sanitization rules** → update the shared library's `sanitize_reason()`, the rules section in `scripts/render-lane-status-lib.md`, and the orchestrator-side prompt sanitization in SKILL.md Step 0a / `research-phase.md` Step 1.3 / `validation-phase.md` Step 2 entry, render-failure handlers (Cursor + Codex `On non-zero exit`), and Step 2.4.
+- **Changing the standard-mode lane count or the Code-lane special case** → update both `printf` lines at the bottom of `scripts/render-lane-status.sh`, the "Invariants" section above, and the assertion-count literal in the `scripts/test-research-structure.sh` success message.
+- **Changing the caller-attributed warning convention (e.g., dropping `RENDER_LANE_CALLER`)** → update the library's `render_lane()`, both consumer scripts' `RENDER_LANE_CALLER=` settings, both consumer contracts, and both harness unknown-token fixtures.
