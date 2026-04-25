@@ -24,6 +24,23 @@
 #      `Code-Arch:` and anchored trailing suffix ` (Code-Sec)` / ` — Code-Arch` are stripped from
 #      defense bodies; mid-content occurrences are preserved. Code-Sec and Code-Arch are the
 #      deep-mode reviewer attributions introduced by /research --scale=deep.
+#  12. Mixed complete + incomplete blocks → fail-closed exit 2 with
+#      ERROR=REJECTED_FINDING_<N> is incomplete sentinel (issue #462). Asserts
+#      no partial 2-decision ballot is emitted from a 3-block input where one
+#      block is incomplete.
+#  13. Lone incomplete block → fail-closed exit 2 with the same sentinel.
+#  14. Whitespace-only Finding body → fail-closed exit 2 (FINDING_7 shadow-trim
+#      check verified).
+#  15. Coordinator surfaces `incomplete-input:` ERROR prefix on malformed
+#      REJECTED_FINDING input — narrow string guard at run-research-adjudication.sh
+#      pattern-matches the builder's sentinel and prepends `incomplete-input: `
+#      so operators can distinguish malformed input from generic builder
+#      failure (issue #462 dialectic resolution DECISION_2).
+#  16. Leading/trailing whitespace in Finding text preserved verbatim in ballot
+#      (issue #462 FINDING_1 from code review). Asserts the shadow-trim
+#      completeness check does NOT mutate finding/rationale payload — required
+#      so the Phase 2 sha256 sort key and Phase 3 ballot bytes match
+#      adjudication-phase.md Step 2.5.5's raw-block reverse mapping.
 #
 # Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
 # locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
@@ -366,6 +383,211 @@ echo "$deep_body" | grep -qF "The Code-Arch checklist anticipates this exception
   || fail "Test 11c: mid-content 'The Code-Arch checklist anticipates this exception' was incorrectly stripped"
 
 pass "Test 11: deep-mode Code-Sec/Code-Arch — anchored prefix/suffix stripped, mid-content preserved"
+
+# --- Test 12: mixed complete + incomplete blocks → fail-closed exit 2 ---------
+
+# Regression guard for issue #462. The builder MUST fail closed when ANY
+# REJECTED_FINDING_<N> block is missing one of Reviewer/Finding/Rejection
+# rationale, not soft-drop the incomplete block. A degraded `/research` run
+# that captured 2 complete records plus 1 incomplete record must NOT produce
+# a partial 2-decision ballot — that would create the DECISION_k → REJECTED_FINDING_<N>
+# mapping inconsistency that this PR closes.
+
+mixed_input="$WORK_DIR/mixed-rej.md"
+mixed_output="$WORK_DIR/mixed-ballot.txt"
+mixed_stderr="$WORK_DIR/mixed-stderr.txt"
+
+cat > "$mixed_input" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Cursor
+- **Finding**: Cursor: alpha finding text body that is reasonably long.
+- **Rejection rationale**: First rationale paragraph that explains why the alpha finding was rejected, providing enough detail to serve as a defense.
+
+### REJECTED_FINDING_2
+- **Reviewer**: Code
+- **Finding**: Code: bravo finding text body of approximately the same length.
+
+### REJECTED_FINDING_3
+- **Reviewer**: Codex
+- **Finding**: Codex: charlie finding text body matching the others in length.
+- **Rejection rationale**: Third rationale paragraph for the charlie finding rejection with detailed prose about why the orchestrator's position holds.
+EOF
+
+set +e
+"$BUILDER" --input "$mixed_input" --output "$mixed_output" 2> "$mixed_stderr"
+mixed_rc=$?
+set -e
+
+[[ "$mixed_rc" -eq 2 ]] \
+  || fail "Test 12: expected exit code 2 on incomplete block, got $mixed_rc"
+
+grep -qE '^FAILED=true$' "$mixed_stderr" \
+  || fail "Test 12: FAILED=true line missing from stderr (got: $(cat "$mixed_stderr"))"
+
+grep -qE '^ERROR=REJECTED_FINDING_2 is incomplete' "$mixed_stderr" \
+  || fail "Test 12: expected ERROR=REJECTED_FINDING_2 is incomplete... in stderr (got: $(cat "$mixed_stderr"))"
+
+# A partial ballot must NOT have been produced. The first builder run above
+# redirected only stderr (`2> "$mixed_stderr"`), leaving stdout inherited by
+# this test process — so we cannot observe whether BUILT=true leaked. Rerun
+# the builder with stdout captured to a file and assert no BUILT=true line.
+mixed_stdout="$WORK_DIR/mixed-stdout.txt"
+set +e
+"$BUILDER" --input "$mixed_input" --output "$mixed_output" \
+  > "$mixed_stdout" 2>/dev/null
+set -e
+if grep -qE '^BUILT=true$' "$mixed_stdout"; then
+  fail "Test 12: BUILT=true leaked to stdout on incomplete-block input (regression)"
+fi
+
+pass "Test 12: mixed complete + incomplete blocks → fail-closed exit 2 with REJECTED_FINDING_<N> is incomplete sentinel"
+
+# --- Test 13: lone incomplete block → fail-closed exit 2 ---------------------
+
+lone_input="$WORK_DIR/lone-incomplete-rej.md"
+lone_output="$WORK_DIR/lone-incomplete-ballot.txt"
+lone_stderr="$WORK_DIR/lone-incomplete-stderr.txt"
+
+cat > "$lone_input" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Code
+- **Finding**: This block is missing the Rejection rationale field entirely.
+EOF
+
+set +e
+"$BUILDER" --input "$lone_input" --output "$lone_output" 2> "$lone_stderr"
+lone_rc=$?
+set -e
+
+[[ "$lone_rc" -eq 2 ]] \
+  || fail "Test 13: expected exit code 2 on lone incomplete block, got $lone_rc"
+
+grep -qE '^FAILED=true$' "$lone_stderr" \
+  || fail "Test 13: FAILED=true line missing from stderr"
+
+grep -qE '^ERROR=REJECTED_FINDING_1 is incomplete' "$lone_stderr" \
+  || fail "Test 13: expected ERROR=REJECTED_FINDING_1 is incomplete... in stderr (got: $(cat "$lone_stderr"))"
+
+pass "Test 13: lone incomplete block → fail-closed exit 2"
+
+# --- Test 14: whitespace-only field body → fail-closed exit 2 ----------------
+
+# Regression guard for issue #462 FINDING_7. flush_record() must trim
+# Finding and Rejection rationale before the completeness check, so a
+# whitespace-only body (which would otherwise survive the `== ""` check
+# because it arrives via raw substr() with continuation-line concatenation)
+# is treated as missing.
+
+ws_input="$WORK_DIR/ws-only-rej.md"
+ws_output="$WORK_DIR/ws-only-ballot.txt"
+ws_stderr="$WORK_DIR/ws-only-stderr.txt"
+
+# Note: the leading character after "Finding**: " is intentionally a space
+# only; the bullet-line raw substr captures " " (one space). With the trim,
+# this normalizes to "" and the completeness check fires.
+cat > "$ws_input" <<'EOF'
+### REJECTED_FINDING_1
+- **Reviewer**: Code
+- **Finding**:
+- **Rejection rationale**: Otherwise complete rationale paragraph that meets the prose-length bar for a defense in adjudication.
+EOF
+
+set +e
+"$BUILDER" --input "$ws_input" --output "$ws_output" 2> "$ws_stderr"
+ws_rc=$?
+set -e
+
+[[ "$ws_rc" -eq 2 ]] \
+  || fail "Test 14: expected exit code 2 on whitespace-only Finding body, got $ws_rc"
+
+grep -qE '^ERROR=REJECTED_FINDING_1 is incomplete' "$ws_stderr" \
+  || fail "Test 14: expected ERROR=REJECTED_FINDING_1 is incomplete... in stderr (got: $(cat "$ws_stderr"))"
+
+pass "Test 14: whitespace-only Finding body → fail-closed exit 2 (FINDING_7 trim verified)"
+
+# --- Test 15: coordinator surfaces incomplete-input: ERROR prefix ------------
+
+# Regression guard for issue #462 dialectic resolution DECISION_2 + FINDING_4.
+# The coordinator (run-research-adjudication.sh) MUST detect the builder's
+# incomplete-block sentinel ERROR and prepend `incomplete-input: ` so
+# operators can distinguish malformed input from generic builder breakage at
+# the coordinator seam. We invoke the coordinator with the same fixture
+# Test 12 used (lone incomplete block) and assert the prefixed ERROR line.
+
+COORDINATOR="$REPO_ROOT/scripts/run-research-adjudication.sh"
+[[ -x "$COORDINATOR" ]] || fail "Test 15: coordinator script missing or not executable: $COORDINATOR"
+
+coord_tmpdir="$WORK_DIR/coord-tmpdir"
+mkdir -p "$coord_tmpdir"
+coord_stdout="$WORK_DIR/coord-stdout.txt"
+
+set +e
+"$COORDINATOR" --rejected-findings "$lone_input" --tmpdir "$coord_tmpdir" \
+  > "$coord_stdout" 2>&1
+coord_rc=$?
+set -e
+
+[[ "$coord_rc" -eq 2 ]] \
+  || fail "Test 15: expected coordinator exit 2 on incomplete-input, got $coord_rc"
+
+grep -qE '^RAN=false$' "$coord_stdout" \
+  || fail "Test 15: expected RAN=false from coordinator (got: $(cat "$coord_stdout"))"
+grep -qE '^FAILED=true$' "$coord_stdout" \
+  || fail "Test 15: expected FAILED=true from coordinator"
+grep -qE '^ERROR=incomplete-input: REJECTED_FINDING_1 is incomplete' "$coord_stdout" \
+  || fail "Test 15: expected ERROR=incomplete-input: REJECTED_FINDING_1 is incomplete... from coordinator (got: $(cat "$coord_stdout"))"
+
+# Coordinator must NEVER report RAN=true on malformed input.
+if grep -qE '^RAN=true$' "$coord_stdout"; then
+  fail "Test 15: coordinator surfaced RAN=true on malformed input (regression)"
+fi
+
+pass "Test 15: coordinator surfaces 'incomplete-input:' ERROR prefix on malformed REJECTED_FINDING block"
+
+# --- Test 16: leading/trailing whitespace in Finding preserved verbatim -----
+
+# Regression guard for issue #462 FINDING_1 (Codex review). The completeness
+# check trims via shadow variables only; the original finding/rationale text
+# MUST flow into the Phase 2 sha256 sort key and the Phase 3 ballot payload
+# unchanged. Verbatim preservation is required by the validation-phase capture
+# contract and by adjudication-phase.md Step 2.5.5's reverse mapping (which
+# hashes raw blocks from rejected-findings.md against DECISION_k order).
+
+ws_pres_input="$WORK_DIR/ws-preserved-rej.md"
+ws_pres_output="$WORK_DIR/ws-preserved-ballot.txt"
+
+# The Finding bullet has actual content followed by trailing-space-padded
+# continuation, then trailing whitespace on the last continuation line.
+# After awk's substr(), the captured finding starts at the first non-whitespace
+# character (regex consumes leading whitespace after the colon), so this
+# fixture exercises trailing whitespace preservation specifically.
+# Use printf to embed exact byte sequences without heredoc whitespace
+# stripping.
+printf '### REJECTED_FINDING_1\n- **Reviewer**: Code\n- **Finding**: alpha finding text body that ends with a trailing space   \n  with second line ending in space   \n- **Rejection rationale**: First substantive paragraph that explains the rejection in enough detail to serve as a defense in adjudication.\n' > "$ws_pres_input"
+
+set +e
+ws_pres_out="$("$BUILDER" --input "$ws_pres_input" --output "$ws_pres_output" 2>&1)"
+ws_pres_rc=$?
+set -e
+
+[[ "$ws_pres_rc" -eq 0 ]] \
+  || fail "Test 16: builder failed on whitespace-padded Finding (expected success, got rc=$ws_pres_rc; out: $ws_pres_out)"
+
+echo "$ws_pres_out" | grep -qE '^DECISION_COUNT=1$' \
+  || fail "Test 16: expected DECISION_COUNT=1, got: $ws_pres_out"
+
+# The trailing spaces in the Finding body MUST appear in the ballot — they
+# would be stripped if the trim mutated the finding payload. We use grep -F
+# with an explicitly constructed line including the trailing spaces.
+expected_trailing_line=$(printf 'alpha finding text body that ends with a trailing space   ')
+grep -qF "$expected_trailing_line" "$ws_pres_output" \
+  || fail "Test 16: trailing whitespace on Finding's first line was stripped from ballot (regression — trim must NOT mutate finding payload)"
+
+expected_continuation=$(printf '  with second line ending in space   ')
+grep -qF "$expected_continuation" "$ws_pres_output" \
+  || fail "Test 16: trailing whitespace on Finding's continuation line was stripped from ballot"
+
+pass "Test 16: leading/trailing whitespace in Finding text preserved verbatim in ballot (FINDING_1 shadow-trim verified)"
 
 # --- All tests passed --------------------------------------------------------
 

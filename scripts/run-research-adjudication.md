@@ -44,12 +44,27 @@ On failure:
   ERROR=<single-line message>
 ```
 
+**Consumers MUST gate ballot reads on `RAN=true` (and `DECISION_COUNT > 0`), not on file presence.** A prior successful run may leave `<tmpdir>/research-adjudication-ballot.txt` on disk; a subsequent run that fails before Phase 3's `{ ... } > "$OUTPUT"` truncates the file (e.g., the awk fail-closed path on incomplete input — see issue #462) does NOT unlink the stale ballot. Treating "file exists" as "ballot is fresh" would silently feed stale content to the judge panel. The structured contract above (`RAN=true` + matching `DECISION_COUNT`) is the only authoritative freshness signal.
+
 `RAN=false` short-circuit reasons (informational; not failures):
 
 - `rejected-findings file does not exist` — Site A and Site B never captured anything (no orchestrator rejections occurred this session).
 - `rejected-findings file is empty` — file exists but is zero-byte.
 - `rejected-findings file has no parseable blocks` — file is non-empty but contains no `### REJECTED_FINDING_<N>` headers.
-- `ballot builder produced 0 decisions (input blocks were incomplete)` — file had headers but every block was structurally incomplete (missing Reviewer, Finding, or Rejection rationale field).
+
+The previous `ballot builder produced 0 decisions (input blocks were incomplete)` short-circuit has been retired (issue #462). Header-positive input that produces `DECISION_COUNT=0` is now treated as a defensive **hard failure** indicating a possible parser regression — the coordinator emits `FAILED=true / ERROR=ballot builder unexpectedly produced 0 decisions on header-positive input — possible parser regression`. The all-blocks-incomplete case that previously routed through this short-circuit now reaches the coordinator as a builder fail-closed exit (see "Incomplete-input failure mode" below).
+
+### Incomplete-input failure mode
+
+When the ballot builder fails closed on a structurally incomplete `### REJECTED_FINDING_<N>` block (missing one of `Reviewer`, `Finding`, or `Rejection rationale`; whitespace-only fields are treated as missing), it exits 2 with `ERROR=REJECTED_FINDING_<N> is incomplete (missing one of Reviewer/Finding/Rejection rationale)`. The coordinator detects the anchored sentinel pattern `^REJECTED_FINDING_[0-9]+ is incomplete` in the builder's `ERROR=` line and **prepends `incomplete-input:` (with a trailing space) to its own `ERROR=` value** before calling `emit_failure`. The full operator-visible contract is:
+
+```
+RAN=false
+FAILED=true
+ERROR=incomplete-input: REJECTED_FINDING_<N> is incomplete (missing one of Reviewer/Finding/Rejection rationale)
+```
+
+This narrow string guard distinguishes malformed-input failures from generic builder breakage at the coordinator seam (per dialectic resolution DECISION_2 of issue #462). It introduces no new exit code, no new state machine, and no new control-flow branch beyond a single regex check on the failure path.
 
 ### Exit codes
 
@@ -74,6 +89,7 @@ A tool that is installed but unhealthy (`*_HEALTHY=false`) is treated as **unava
 This coordinator is exercised end-to-end by the offline harness `scripts/test-research-adjudication.sh` via fixture inputs. The harness validates:
 - Empty-input short-circuit (`RAN=false` with the expected `REASON=` message).
 - Successful path (`RAN=true` with a non-empty `BALLOT_PATH` and `DECISION_COUNT > 0`).
+- **Incomplete-input fail-closed path** (`RAN=false / FAILED=true / ERROR=incomplete-input: REJECTED_FINDING_<N> is incomplete...`) — see Test 14 in the harness.
 - Probe-helper failure handling (when the probe binary is unavailable).
 
 Wired into `make test-harnesses` (NOT `make lint`, NOT `make smoke-dialectic`).
