@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.4] - 2026-04-25
+
+### Changed
+
+- `skills/shared/dialectic-protocol.md` is now caller-neutral: every `$DESIGN_TMPDIR` placeholder in the Overview, Ballot Format, Judge Prompt Template, judge-launch bash blocks, and the Writing dialectic-resolutions.md section was renamed to a generic `$DIALECTIC_TMPDIR` placeholder, and a new `## Caller Binding` section near the top documents that callers MUST substitute the literal `$DIALECTIC_TMPDIR` token with their own session-tmpdir path at prompt-construction time (a *prompt-construction substitution rule, not a shell-level variable export* — external CLIs do not expand shell variables in prompt arguments). The two known callers were updated in lockstep with caller-binding paragraphs: `skills/design/references/dialectic-execution.md` documents `DIALECTIC_TMPDIR ↔ $DESIGN_TMPDIR` (semantic correspondence — the file's bash continues to use `$DESIGN_TMPDIR` directly); `skills/research/references/adjudication-phase.md` documents `DIALECTIC_TMPDIR ↔ $RESEARCH_TMPDIR` (body uses `$RESEARCH_TMPDIR` directly with research-context basenames `research-adjudication-ballot.txt` / `adjudication-resolutions.md`). The adjudication-phase.md substitution-note paragraph (line 13) was rewritten to drop the now-inaccurate "$RESEARCH_TMPDIR substituted for $DESIGN_TMPDIR" framing and replace the implementer checklist with three distinct, non-self-matching grep entries scoped to executable bash code-fenced blocks — items 1, 2, 3 cover the design-context tmpdir variable, ballot filename, and resolutions filename respectively, each describing the failure mode the grep catches without spelling the literal token in checklist prose. Closes #440.
+
 ## [7.4.3] - 2026-04-25
 
 ### Changed
