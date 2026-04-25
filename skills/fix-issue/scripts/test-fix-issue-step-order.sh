@@ -8,7 +8,8 @@
 # this harness is a CI guard against accidental reversion of the
 # reorder or stale renumbering.
 #
-# Nine assertions against skills/fix-issue/SKILL.md:
+# Twelve assertions against skills/fix-issue/SKILL.md (nine textual literal
+# pins + three operational ordering pins via awk-scoped block extraction):
 #   (1) Step Name Registry contains "| 1 | lock |" row.
 #   (2) Step Name Registry contains "| 2 | setup |" row.
 #   (3) Section heading "## Step 1 — Lock Issue" present.
@@ -18,6 +19,17 @@
 #   (7) Lock failure breadcrumb literal "⚠ 1: lock" present.
 #   (8) No stale "✅ 2: lock" breadcrumb remains.
 #   (9) No stale "⚠ 2: lock" breadcrumb remains.
+#  (10) Step 1 (Lock Issue) block contains the issue-lifecycle.sh `--lock` call.
+#  (11) Step 1 block does NOT contain `session-setup.sh` (operational ordering).
+#  (12) Step 2 (Setup) block contains the session-setup.sh invocation.
+#
+# Block extraction boundaries (assertions 10-12): `## Step 1 — Lock Issue`
+# (start, exact line match) through `## Step 2 — Setup` (end, exact line
+# match) for Step 1; `## Step 2 — Setup` (start) through `## Step 3` (end,
+# prefix match — heading is "## Step 3 — Read Issue Details") for Step 2.
+# Block-scoped assertions catch the regression a future edit could otherwise
+# slip through: keeping headings/registry/breadcrumbs intact while moving
+# `session-setup.sh` back into the lock block.
 #
 # Wired into `make lint` via the `test-fix-issue-step-order` target.
 # Referenced in agent-lint.toml's exclude list (Makefile-only harness pattern).
@@ -25,7 +37,8 @@
 # Run manually:
 #   bash skills/fix-issue/scripts/test-fix-issue-step-order.sh
 #
-# Exits 0 on success, 1 on the first failed assertion.
+# Exits 0 when all assertions pass; exits 1 after running every assertion
+# if any failed (accumulator pattern, so all failures are reported).
 
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
 set -euo pipefail
@@ -77,9 +90,52 @@ assert_contains '⚠ 1: lock' '(7) lock failure breadcrumb uses "1: lock"'
 assert_not_contains '✅ 2: lock' '(8) no stale "✅ 2: lock" breadcrumb'
 assert_not_contains '⚠ 2: lock' '(9) no stale "⚠ 2: lock" breadcrumb'
 
+# (10)-(12) Operational-ordering assertions on awk-scoped step blocks.
+# These guard against a future edit that keeps the headings/registry/
+# breadcrumbs intact while moving session-setup.sh back into Step 1's body.
+STEP1_BLOCK=$(awk '
+    /^## Step 1 — Lock Issue/ { in_block=1; next }
+    /^## Step 2 — Setup/      { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+STEP2_BLOCK=$(awk '
+    /^## Step 2 — Setup/ { in_block=1; next }
+    /^## Step 3/         { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+if [[ -z "$STEP1_BLOCK" ]]; then
+    echo "FAIL: Step 1 block extraction produced empty output (heading boundary missing?)" >&2
+    fail=1
+fi
+if [[ -z "$STEP2_BLOCK" ]]; then
+    echo "FAIL: Step 2 block extraction produced empty output (heading boundary missing?)" >&2
+    fail=1
+fi
+
+# (10) Step 1 block contains the lock script invocation.
+if ! grep -qF -- 'issue-lifecycle.sh comment' <<<"$STEP1_BLOCK" || \
+   ! grep -qF -- '--lock' <<<"$STEP1_BLOCK"; then
+    echo 'FAIL: (10) Step 1 block does not contain `issue-lifecycle.sh comment ... --lock`' >&2
+    fail=1
+fi
+
+# (11) Step 1 block does NOT contain session-setup.sh (the regression Codex flagged).
+if grep -qF -- 'session-setup.sh' <<<"$STEP1_BLOCK"; then
+    echo 'FAIL: (11) Step 1 block unexpectedly contains `session-setup.sh` (operational ordering broken)' >&2
+    fail=1
+fi
+
+# (12) Step 2 block contains the session-setup.sh invocation.
+if ! grep -qF -- 'session-setup.sh --prefix claude-fix-issue --skip-branch-check' <<<"$STEP2_BLOCK"; then
+    echo 'FAIL: (12) Step 2 block does not contain `session-setup.sh --prefix claude-fix-issue --skip-branch-check`' >&2
+    fail=1
+fi
+
 if [[ $fail -ne 0 ]]; then
     echo "test-fix-issue-step-order: FAILED" >&2
     exit 1
 fi
 
-echo "test-fix-issue-step-order: 9 assertions passed."
+echo "test-fix-issue-step-order: 12 assertions passed."
