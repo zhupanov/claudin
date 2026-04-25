@@ -122,7 +122,7 @@ extract_section() {
     }
     {
       # Toggle fence state on lines beginning exactly with three backticks.
-      if ($0 ~ /^```/) {
+      if ($0 ~ /^[[:space:]]*```/) {
         in_fence = 1 - in_fence
         if (in_section) print
         next
@@ -448,12 +448,16 @@ escape_body_lines() {
   awk '
     BEGIN { in_fence = 0 }
     {
-      if ($0 ~ /^```/) {
+      if ($0 ~ /^[[:space:]]*```/) {
         in_fence = 1 - in_fence
         print
         next
       }
-      if (!in_fence && $0 ~ /^### /) {
+      # Match the parse-input.sh line 393 regex (any whitespace after the
+      # three hashes), not just literal U+0020 space, so a body line with a
+      # tab after the hashes does not slip past the escape and split items
+      # downstream (#510 review FINDING_2).
+      if (!in_fence && $0 ~ /^###[[:space:]]/) {
         print "\\" $0
         next
       }

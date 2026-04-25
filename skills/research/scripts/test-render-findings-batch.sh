@@ -375,6 +375,66 @@ Yes
 EOF
 run_case "special characters in body" "$FIXTURE_SPECIAL" "" 0 2
 
+# Case 13 (#510 review FINDING_2): body line with `###<tab>Foo`.
+# parse-input.sh:393's regex is `^\#\#\#[[:space:]]+`, which matches tab too.
+# Without the FINDING_2 fix, this line would slip past the escape and split
+# items downstream.
+read -r -d '' FIXTURE_TAB_HEADER <<EOF || true
+## Research Report
+
+### Findings Summary
+
+- First finding here. Body has tab-after-###:
+###	Tabbed
+- Second finding.
+
+### Risk Assessment
+Low
+
+### Difficulty Estimate
+S
+
+### Feasibility Verdict
+Yes
+
+### Key Files and Areas
+- f.md
+
+### Open Questions
+EOF
+run_case "tab-after-### body escape (FINDING_2)" "$FIXTURE_TAB_HEADER" "" 0 2
+
+# Case 14 (#510 review FINDING_5): indented fenced block (3-space prefix)
+# inside a bulleted item's body. Without the fix, the inner `### Foo` line
+# would terminate the section prematurely or escape spuriously.
+read -r -d '' FIXTURE_INDENTED_FENCE <<'EOF' || true
+## Research Report
+
+### Findings Summary
+
+- First finding. Has indented fenced code:
+
+   ```
+   ### NotAHeading
+   ```
+- Second finding.
+
+### Risk Assessment
+Low
+
+### Difficulty Estimate
+S
+
+### Feasibility Verdict
+Yes
+
+### Key Files and Areas
+- f.md
+
+### Open Questions
+EOF
+run_case "indented fence with ### inside (FINDING_5)" "$FIXTURE_INDENTED_FENCE" "" 0 2
+
 # Case 12: multi-paragraph bulleted item.
 read -r -d '' FIXTURE_MULTILINE_BULLETS <<'EOF' || true
 ## Research Report

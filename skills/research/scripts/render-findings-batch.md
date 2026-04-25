@@ -27,7 +27,7 @@ All flags are required except `--quick-disclaimer`. The orchestrator passes `--q
 - **On success** (exit 0): `COUNT=<N>` on a single line where `N >= 1`.
 - **On empty findings** (exit 3): `COUNT=0` on a single line; the sidecar file is still written as a zero-byte file.
 - **On usage error** (exit 1): no machine output.
-- **On `--report` missing** (exit 2): no machine output.
+- **On exit 2**: no machine output. Exit 2 fires when `--report` is missing OR when the path exists but is not a regular file (e.g., a directory) — `[[ ! -f "$REPORT_PATH" ]]` rejects both. Stderr carries an `ERROR:` diagnostic line (#510 review FINDING_7 — single canonical wording).
 
 ### Stderr (human diagnostics)
 
@@ -56,7 +56,7 @@ The Findings Summary section is sliced from the line `### Findings Summary` (mat
 
 Generic <code>### </code> is NOT a terminator (planner mode produces `### Subquestion N: ...` headings inside Findings Summary, and a generic terminator would silently truncate findings). See FINDING_5a in the design review.
 
-The slicer is **fence-aware**: lines beginning with three backticks toggle an `IN_FENCE` boolean. Header detection is suppressed inside fenced blocks (defense against `### Foo` inside an inline code block). See FINDING_5b.
+The slicer is **fence-aware**: lines matching `^[[:space:]]*` followed by three backticks toggle an `IN_FENCE` boolean. Indented fences (e.g., a 3-space-prefixed fenced block inside a bulleted item's body) toggle the state correctly per #510 review FINDING_5 — earlier drafts matched only column-0 fences and would misparse indented fenced contents. Header detection is suppressed inside fenced blocks (defense against `### Foo` inside an inline code block). See FINDING_5b.
 
 ## Heuristic ladder (item splitting)
 
@@ -92,7 +92,7 @@ For each item, the body contains:
    **Files touched**: <comma-joined Key Files entries | N/A>
    ```
 3. The finding's prose body — verbatim from the synthesis, with one transformation:
-   - **Body-line <code>### </code> escape** (FINDING_5c): any line whose first 4 bytes are <code>### </code> is prefixed with a backslash so `parse-input.sh:393`'s `^\#\#\#[[:space:]]+(.+)$` regex does not match it as a new-item boundary downstream. Markdown rendering displays the line unchanged (the leading `\` escapes the first `#`). Lines inside fenced code blocks are NOT escaped (the `IN_FENCE` toggle is honored).
+   - **Body-line <code>### </code> escape** (FINDING_5c, refined per #510 review FINDING_2): any line matching `^###[[:space:]]` (any whitespace after the three hashes — space OR tab) is prefixed with a backslash so `parse-input.sh:393`'s `^\#\#\#[[:space:]]+(.+)$` regex does not match it as a new-item boundary downstream. Markdown rendering displays the line unchanged (the leading `\` escapes the first `#`). Lines inside fenced code blocks are NOT escaped (the `IN_FENCE` toggle is honored). Without the FINDING_2 fix, lines like `###<TAB>Foo` would slip past a literal-space-only escape and split items downstream.
 4. (Optional) `**Open questions** (if any): <semicolon-joined Open Questions entries>` line — emitted only when the Open Questions section is non-empty.
 5. **Audit-context separator and italic line**:
    ```
@@ -103,6 +103,10 @@ For each item, the body contains:
 The metadata `**Source**:` / `**Risk**:` / etc. lines (no leading <code>- </code>) cleanly pass through `parse-input.sh`'s generic-mode body — verified at `parse-input.sh:393-481`. In `CURRENT_MODE=generic`, the OOS field branches require leading `- **Description**:` / `- **Reviewer**:` / etc.; our format cannot trigger them.
 
 ## Known limitations
+
+- **Odd fence count leaves IN_FENCE stuck through EOF** (#510 review FINDING_8): if the input has an odd number of `^[[:space:]]*\`\`\`` lines (an opening fence with no closing fence in the slice), the toggle leaves `in_fence=1` for every subsequent line, suppressing header detection until end-of-input. The `### Findings Summary` section bound by named next-headers may be over-extended in this case. The synthesis prompt produces well-formed fenced blocks in practice; this is a defensive note for unusual inputs.
+
+## Other limitations
 
 - **Heuristic extraction is fuzzy**: LLM-shaped synthesis prose may produce slight under- or over-splitting. The harness includes stress fixtures (planner-nested headings, fenced blocks, body-`###` lines, multi-paragraph bullets) but cannot enumerate every real-world synthesis shape.
 - **Global metadata, not per-finding**: Risk / Difficulty / Feasibility / Files-touched are report-level sections and are repeated verbatim in every item. The repetition can imply per-finding precision that the source report does not actually carry. The audit-context italic line ("filed from /research output") signals the prose-derivation origin to mitigate this.
