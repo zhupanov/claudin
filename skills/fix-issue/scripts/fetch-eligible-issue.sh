@@ -317,6 +317,16 @@ if [[ -n "$ISSUE_ARG" ]]; then
 
     TRIMMED=$(echo "$LAST_COMMENT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
+    # Reject with a lock-specific error when the issue is locked by a
+    # concurrent /fix-issue run. Mirrors the auto-pick path's IN PROGRESS
+    # skip below; without this branch the GO check would still reject but
+    # with the misleading "not approved" framing.
+    if [ "$TRIMMED" = "IN PROGRESS" ]; then
+        echo "ELIGIBLE=false"
+        echo "ERROR=Issue #$ISSUE_NUM is locked by another /fix-issue run (last comment: IN PROGRESS)"
+        exit 2
+    fi
+
     if [ "$TRIMMED" != "GO" ]; then
         echo "ELIGIBLE=false"
         echo "ERROR=Issue #$ISSUE_NUM is not approved (last comment: ${TRIMMED:-empty})"
