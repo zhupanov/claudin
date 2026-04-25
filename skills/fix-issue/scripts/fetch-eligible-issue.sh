@@ -14,7 +14,7 @@
 #
 # Two orthogonal mechanisms coexist in this script:
 #   1) Comment-based "IN PROGRESS" lock — concurrency control on the
-#      fix-issue subject issue. Set at /fix-issue step 2 (last comment =
+#      fix-issue subject issue. Set at /fix-issue step 1 (last comment =
 #      exactly "IN PROGRESS"); cleared when work completes. Prevents two
 #      concurrent /fix-issue runners from picking the same subject.
 #   2) Title-based "[IN PROGRESS]" / "[DONE]" / "[STALLED]" lifecycle —

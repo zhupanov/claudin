@@ -30,7 +30,7 @@ Before processing each invocation, hold these four questions.
 
 **How fragile is the change?** Complexity (Step 5) picks `/implement --quick` (SIMPLE — single-reviewer loop) or the full `/design` + `/review` panel (HARD). Default to HARD — an extra design round on a truly simple issue costs little, while skipping `/design` on a multi-file refactor costs a broken PR.
 
-**Where does a crash leave the issue?** `IN PROGRESS` is a lock, not a status. A Step 2+ crash keeps the issue locked until a human clears the comment. Consult Known Limitations for each recovery path before deviating from the step sequence.
+**Where does a crash leave the issue?** `IN PROGRESS` is a lock, not a status. Once Step 1 reports `LOCK_ACQUIRED=true`, any later crash leaves `IN PROGRESS` as the last comment until a human clears it; a crash mid-Step-1 (after `GO` is deleted, before `IN PROGRESS` posts) can leave the issue with neither sentinel. Consult Known Limitations for each recovery path before deviating from the step sequence.
 
 ## Progress Reporting
 
@@ -41,8 +41,8 @@ Step Name Registry:
 | Step | Short Name |
 |------|-----------|
 | 0 | fetch issue |
-| 1 | setup |
-| 2 | lock |
+| 1 | lock |
+| 2 | setup |
 | 3 | read details |
 | 4 | triage |
 | 5 | classify |
@@ -55,7 +55,7 @@ Step Name Registry:
 
 Each rule states **Why** (the specific consequence of breaking the rule) and **How to apply** (where the invariant is load-bearing). Rules marked **CI-backed: yes** are mechanically enforced by `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` via an `awk` extraction over the `### 6a` block; the remaining rules are editorial invariants that depend on the SKILL.md text being unambiguous.
 
-1. **NEVER run Step 3+ on an unlocked issue.** **Why**: the `IN PROGRESS` lock (Step 2) is how concurrent runners avoid stepping on each other — Step 0's `fetch-eligible-issue.sh` skips candidates whose last comment is `IN PROGRESS`, so posting `IN PROGRESS` claims the issue atomically at the comment-stream tail. Stepping past Step 2 unlocked races every other `/fix-issue` invocation on the same repo. **How to apply**: treat Step 2 as structural; do not re-order the step sequence or skip it under any flag. **CI-backed**: no (editorial invariant).
+1. **NEVER run Step 2+ on an unlocked issue.** **Why**: the `IN PROGRESS` lock (Step 1) is how concurrent runners avoid stepping on each other — Step 0's `fetch-eligible-issue.sh` skips candidates whose last comment is `IN PROGRESS`, so posting `IN PROGRESS` installs the lock at the comment-stream tail (same tail semantics the fetch filter reads). Duplicate detection is best-effort, not fully atomic — see Known Limitations "Single-runner assumption". Stepping past Step 1 unlocked races every other `/fix-issue` invocation on the same repo. **How to apply**: treat Step 1 as structural; do not re-order the step sequence or skip it under any flag. **CI-backed**: no (editorial invariant).
 
 2. **NEVER drop the `--issue $ISSUE_NUMBER` forward from either Step 6a `/implement` invocation bullet (SIMPLE or HARD).** **Why**: `--issue $ISSUE_NUMBER` causes `/implement` Step 0.5 Branch 2 to adopt the already-locked tracking issue rather than creating a duplicate via Branch 4. Dropping the forward splits tracking onto two different issues, breaks the `Closes #<N>` PR-body recovery on resumed runs, and leaves the `/fix-issue`-side issue locked under `IN PROGRESS` with no auto-close on merge. **How to apply**: keep `--issue $ISSUE_NUMBER` in both SIMPLE and HARD `/implement` invocation bullets in Step 6a. **CI-backed**: yes — assertions (a1) and (a2) in `test-fix-issue-bail-detection.sh`.
 
@@ -79,7 +79,7 @@ Only include `"$ISSUE_ARG"` as a positional argument if `ISSUE_ARG` is non-empty
 
 Candidates are required to be open, have `GO` as their last comment, not be locked by a prior `IN PROGRESS` comment, and **have no currently-open blocking dependencies** from either of two sources: (1) GitHub's native issue-dependencies feature, queried via `repos/{owner}/{repo}/issues/{N}/dependencies/blocked_by`, and (2) prose-stated dependencies in the issue body and every comment body, matched against the conservative case-insensitive keyword set `Depends on #N`, `Blocked by #N`, `Blocked on #N`, `Requires #N`, `Needs #N` (each keyword followed by whitespace + `#<digits>`; emphasis wrappers like `**#150**` are tolerated, link-target forms like `[#150](url)` and cross-repo `owner/repo#N` are deliberately NOT matched). An issue whose listed blockers are all closed is eligible; an issue with even one open blocker (from either source) is skipped in auto-pick mode and reported as ineligible in explicit `--issue` mode. If either dependency check fails at any boundary (API unavailability, parser error, transient `gh` failure), it degrades silently to "no blockers known from that source" so API availability never hard-blocks the automation. Prose parsing is implemented by `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/parse-prose-blockers.sh`, guarded by the offline regression harness `test-parse-prose-blockers.sh` (run via `make lint`).
 
-`fetch-eligible-issue.sh` resolves the repo identity itself via `gh repo view` and does not depend on any session-setup-derived state — making this step safe to run before Step 1 setup.
+`fetch-eligible-issue.sh` resolves the repo identity itself via `gh repo view` and does not depend on any session-setup-derived state — making this step safe to run before Step 1 lock and Step 2 setup.
 
 Handle exit codes:
 
@@ -87,9 +87,22 @@ Handle exit codes:
 - **Exit 1**: Print `✅ 0: fetch issue — no approved issues found (<elapsed>)`. Skip to Step 9. **Note**: `FIX_ISSUE_TMPDIR` is unset on this path; Step 9's cleanup guard handles the no-tmpdir case.
 - **Exit 2+**: Parse `ERROR` from stdout. Print `**⚠ 0: fetch issue — error: $ERROR (<elapsed>)**`. Skip to Step 9. **Note**: `FIX_ISSUE_TMPDIR` is unset on this path; Step 9's cleanup guard handles the no-tmpdir case.
 
-## Step 1 — Setup
+## Step 1 — Lock Issue
 
-Runs only after Step 0 found an eligible issue.
+Lock immediately after finding an eligible issue, before any setup work, to minimize the TOCTOU window between candidate selection and lock acquisition. The lock script resolves the repo identity itself via `gh repo view` and does not depend on session-setup-derived state, so it is safe to run before Step 2.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
+  --issue $ISSUE_NUMBER --body "IN PROGRESS" --lock
+```
+
+Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 1: lock — failed ($ERROR). Another run may have claimed this issue. (<elapsed>)**` Skip to Step 9. **Note**: `FIX_ISSUE_TMPDIR` is unset on this path (Step 2 setup has not yet run); Step 9's cleanup guard handles the no-tmpdir case.
+
+If `LOCK_ACQUIRED=true`, print `✅ 1: lock — issue #$ISSUE_NUMBER locked (<elapsed>)`.
+
+## Step 2 — Setup
+
+Runs only after Step 1 successfully locked the issue. A failure here leaves the issue locked with `IN PROGRESS` — same recovery semantics as any mid-run crash (manual `IN PROGRESS` clearance + re-add `GO`).
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-fix-issue --skip-branch-check
@@ -111,21 +124,6 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/write-session-env.sh --output "$FIX_ISSUE_TMPDIR/s
   --codex-healthy true --cursor-healthy true
 ```
 
-**TOCTOU note**: setup runs between Step 0 fetch and Step 2 lock, so the time between candidate selection and lock acquisition is wider than under a hypothetical fetch → lock → setup ordering. The single-runner assumption (see Known Limitations) already covers the residual race. A follow-up reorder to fetch → lock → setup would tighten this further.
-
-## Step 2 — Lock Issue
-
-Lock immediately after finding an eligible issue to prevent race conditions with concurrent runs.
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/scripts/issue-lifecycle.sh comment \
-  --issue $ISSUE_NUMBER --body "IN PROGRESS" --lock
-```
-
-Parse output for `LOCK_ACQUIRED`. If `LOCK_ACQUIRED=false`, print `**⚠ 2: lock — failed ($ERROR). Another run may have claimed this issue. (<elapsed>)**` Skip to Step 9.
-
-If `LOCK_ACQUIRED=true`, print `✅ 2: lock — issue #$ISSUE_NUMBER locked (<elapsed>)`.
-
 ## Step 3 — Read Issue Details
 
 ```bash
@@ -139,7 +137,7 @@ Read `$FIX_ISSUE_TMPDIR/issue-details.txt` to get the full issue content.
 
 Print `> **🔶 4: triage**`
 
-**MANDATORY — READ ENTIRE FILE** before beginning triage: `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/references/triage-classification.md`. Contains the triage check list, the not-material closure flow detail (rationale composition with research summary), and the Step 5 classification detail that shares the same file. **Do NOT load** outside Steps 4 and 5 — this file is not consumed anywhere else. **Do NOT load** when Step 0's `fetch-eligible-issue.sh` returned exit 1 (no approved issues) or exit 2+ (error) — Steps 4 and 5 do not run on those paths.
+**MANDATORY — READ ENTIRE FILE** before beginning triage: `${CLAUDE_PLUGIN_ROOT}/skills/fix-issue/references/triage-classification.md`. Contains the triage check list, the not-material closure flow detail (rationale composition with research summary), and the Step 5 classification detail that shares the same file. **Do NOT load** outside Steps 4 and 5 — this file is not consumed anywhere else. **Do NOT load** on any path that has already branched to Step 9 (Steps 4 and 5 do not run there). Concrete examples: Step 0 returned exit 1 / 2+, Step 1 reported `LOCK_ACQUIRED=false`, Step 2 setup aborted with `REPO_UNAVAILABLE=true`.
 
 Decide whether the issue is still material against the codebase (see the reference for the check list and the triage-targets rule for investigation/review-only issues).
 
@@ -270,7 +268,7 @@ Print `✅ 8: slack announce — posted (<elapsed>)`
 
 ## Step 9 — Cleanup
 
-**This step ALWAYS runs**, regardless of the outcome of prior steps (success, failure, early exit, or abort). "Always runs" is a control-flow guarantee — the cleanup-tmpdir.sh invocation itself is gated on `FIX_ISSUE_TMPDIR` being set, since Step 0 may short-circuit before Step 1 setup creates the tmpdir.
+**This step ALWAYS runs**, regardless of the outcome of prior steps (success, failure, early exit, or abort). "Always runs" is a control-flow guarantee — the cleanup-tmpdir.sh invocation itself is gated on `FIX_ISSUE_TMPDIR` being set, since Step 0 fetch or Step 1 lock may short-circuit before Step 2 setup creates the tmpdir.
 
 If `FIX_ISSUE_TMPDIR` is set and non-empty:
 
@@ -278,14 +276,15 @@ If `FIX_ISSUE_TMPDIR` is set and non-empty:
 ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$FIX_ISSUE_TMPDIR"
 ```
 
-Otherwise (Step 0 exited 1 or 2+, or Step 1 setup failed before mktemp), print `⏭️ 9: cleanup — skipped (no temp dir created) (<elapsed>)`. (`cleanup-tmpdir.sh` rejects empty `--dir` with exit 1 as a backstop, so the guard is defense in depth, not the only line.)
+Otherwise (Step 0 exited 1 or 2+, Step 1 lock failed, or Step 2 setup failed before mktemp), print `⏭️ 9: cleanup — skipped (no temp dir created) (<elapsed>)`. (`cleanup-tmpdir.sh` rejects empty `--dir` with exit 1 as a backstop, so the guard is defense in depth, not the only line.)
 
 Then unconditionally print `✅ 9: cleanup — fix-issue complete! (<elapsed>)`
 
 ## Known Limitations
 
-- **Stale IN PROGRESS lock**: Step 2 deletes the `GO` comment and posts `IN PROGRESS` (so the `GO` sentinel no longer remains after locking). If the skill crashes after Step 2 completes, the issue's last comment is `IN PROGRESS` — recovery: manually delete the `IN PROGRESS` comment and re-add `GO`. If it crashes mid-Step-2 (between deleting `GO` and posting `IN PROGRESS`), the issue has neither sentinel — recovery: manually re-add `GO`.
-- **Single-runner assumption**: The comment-based locking (Step 2) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
+- **Stale IN PROGRESS lock**: Step 1 deletes the `GO` comment and posts `IN PROGRESS` (so the `GO` sentinel no longer remains after locking). If the skill crashes after Step 1 completes, the issue's last comment is `IN PROGRESS` — recovery: manually delete the `IN PROGRESS` comment and re-add `GO`. If it crashes mid-Step-1 (between deleting `GO` and posting `IN PROGRESS`), the issue has neither sentinel — recovery: manually re-add `GO`.
+- **Lock-before-setup behavioral delta**: under the `fetch → lock → setup` ordering, Step 2 setup failures (e.g. `REPO_UNAVAILABLE=true`) leave the issue locked with `IN PROGRESS` and require the same manual recovery as any post-lock failure. The earlier `fetch → setup → lock` ordering would have aborted before posting `IN PROGRESS` on the same setup failure, leaving the `GO` sentinel intact. The trade narrows the candidate-selection-to-lock-acquisition TOCTOU window in exchange for occasional manual `IN PROGRESS` clearance after a setup-stage abort.
+- **Single-runner assumption**: The comment-based locking (Step 1) includes duplicate detection but is not fully atomic. For reliable operation, run one instance of `/fix-issue` at a time per repository.
 - **Dependency check degrades silently on API failure**: The blocked-by check (Step 0) treats unreachable or erroring dependency-API responses as "no blockers known" to avoid hard-blocking the automation. If GitHub's issue-dependencies endpoint is returning 5xx or an unexpected payload, a blocked issue could temporarily be eligible. The GO sentinel still applies, so the blast radius is limited to whatever the reviewer intended to allow via `GO`.
 - **Prose-dependency check shares the same fail-open posture**: A parser regression, body/comment fetch failure, or per-reference state lookup failure all degrade to "no prose blockers known" for that candidate. The offline harness (`test-parse-prose-blockers.sh`, run via `make lint`) is the primary guard against parser regressions.
 - **Prose-dep check uses a strict keyword grammar**: The five recognized phrases (`Depends on`, `Blocked by`, `Blocked on`, `Requires`, `Needs`) must be immediately followed by whitespace + `#<digits>`. Typos like `Depends on#150` (no space), cross-repo references (`owner/repo#150`), URL forms (`https://github.com/…/150`), and bare `#150` mentions are deliberately NOT matched. Emphasis wrappers (`**#150**`, `_#150_`) ARE matched. Link-target wrappers (`[#150](url)`) are NOT matched, so link targets can never smuggle cross-repo references through the parser.

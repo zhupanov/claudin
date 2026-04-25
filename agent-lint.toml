@@ -99,7 +99,7 @@ suppress = [
 # harness for skills/fix-issue/scripts/parse-prose-blockers.sh (the prose-
 # dependency parser invoked by skills/fix-issue/scripts/fetch-eligible-issue.sh).
 # The parser itself IS structurally referenced from skills/fix-issue/SKILL.md's
-# Step 1 eligibility description and from fetch-eligible-issue.sh's
+# Step 0 (fetch / eligibility / dependencies) description and from fetch-eligible-issue.sh's
 # prose_open_blockers function, and is therefore not excluded; the test
 # harness is referenced only from Makefile (test-parse-prose-blockers target)
 # and skills/fix-issue/scripts/parse-prose-blockers.md (sibling contract),
@@ -108,7 +108,7 @@ suppress = [
 # skills/fix-issue/scripts/test-issue-lifecycle.sh is the regression harness
 # for skills/fix-issue/scripts/issue-lifecycle.sh close idempotency (Phase 2
 # of umbrella #348). The target script IS structurally referenced from
-# skills/fix-issue/SKILL.md's Steps 2, 4, and 7, and is therefore not
+# skills/fix-issue/SKILL.md's Steps 1, 4, and 7, and is therefore not
 # excluded; the test harness is referenced only from Makefile
 # (test-issue-lifecycle target) and skills/fix-issue/scripts/issue-lifecycle.md
 # (sibling contract), matching the same Makefile-only pattern as the other

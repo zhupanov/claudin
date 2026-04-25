@@ -1,6 +1,6 @@
 # skills/fix-issue/scripts/issue-lifecycle.md — contract
 
-`skills/fix-issue/scripts/issue-lifecycle.sh` is the subcommand-based GitHub-issue lifecycle script invoked by `/fix-issue` Steps 2 (`comment --lock`), 4 (`close` for not-material issues), and 7 (`close` for DONE). Three subcommands: `comment`, `close`, `update-body`.
+`skills/fix-issue/scripts/issue-lifecycle.sh` is the subcommand-based GitHub-issue lifecycle script invoked by `/fix-issue` Steps 1 (`comment --lock`), 4 (`close` for not-material issues), and 7 (`close` for DONE). Three subcommands: `comment`, `close`, `update-body`.
 
 ## Subcommands
 

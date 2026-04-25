@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.3] - 2026-04-25
+
+### Changed
+
+- `/fix-issue` now acquires the `IN PROGRESS` comment lock at Step 1, immediately after Step 0 fetches an eligible issue, before Step 2 session setup. The prior `fetch → setup → lock` ordering left a TOCTOU window between candidate selection and lock acquisition; the new `fetch → lock → setup` ordering narrows that window. Trade-off: a Step 2 setup failure (e.g. `REPO_UNAVAILABLE=true`) can now strand the issue locked with `IN PROGRESS` rather than leaving the `GO` sentinel intact — recovery is the same manual `IN PROGRESS` clearance + re-add `GO` flow as any other post-lock failure, documented in Known Limitations under "Lock-before-setup behavioral delta". `issue-lifecycle.sh` resolves repo identity itself via `gh repo view`, so the lock script does not depend on session-setup state. Cross-doc renumbering: `skills/fix-issue/SKILL.md` Step Name Registry, anti-pattern 1, Mindset crash-locus bullet, Step 0 / Step 9 cross-references, Known Limitations, the triage-classification reference's `Do NOT load` early-exit list; `skills/fix-issue/scripts/fetch-eligible-issue.sh` header comment; `skills/fix-issue/scripts/issue-lifecycle.md` contract preamble; `skills/shared/subskill-invocation.md` session-env handoff bullet; `scripts/tracking-issue-write.md` distinction-from-comment-lock note; `agent-lint.toml` parser-and-harness exclusion comments.
+
 ## [7.4.2] - 2026-04-25
 
 ### Fixed
