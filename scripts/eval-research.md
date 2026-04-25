@@ -137,7 +137,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 
 - `0` — harness ran. Per-entry timeouts and parse failures are reported in the `status` column / `research_status` JSON field, not the exit code.
 - `1` — schema validation of `eval-set.md` or `eval-baseline.json` failed.
-- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, or baseline ref that cannot be resolved via `git show`).
+- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, baseline ref that cannot be resolved via `git show`, or a value-taking flag with no following value — e.g. a trailing `--baseline` — which previously aborted with code 1 under `set -e` and collided with the schema-validation code; issue #477 separated the two).
 - `3` — required tooling missing (`claude`, `jq`, or `awk`).
 
 ## Security

@@ -53,8 +53,9 @@
 #       reported in the status column, not the exit code).
 #   1 — schema validation of eval-set.md or eval-baseline.json failed.
 #   2 — argument parse error or invalid argument value (e.g., bad timeout
-#       integer, regex-invalid baseline ref, or baseline ref that cannot be
-#       resolved via git show).
+#       integer, regex-invalid baseline ref, baseline ref that cannot be
+#       resolved via git show, or a value-taking flag with no following
+#       value such as a trailing `--baseline`).
 #   3 — required tooling missing (claude, jq, awk).
 #
 # Security: --baseline accepts only [0-9A-Za-z_./-]+ to avoid shell
@@ -91,15 +92,29 @@ print_usage() {
   awk '/^# Usage:/,/^# Security:/' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
 }
 
+# Guard for value-taking flags. Without this, a trailing flag with no
+# following value (e.g. `eval-research.sh --baseline`) reaches `shift 2`
+# with only one positional left, which fails under `set -e` and exits
+# with code 1 — colliding with the documented schema-validation exit
+# code (issue #477). Routing missing values to exit 2 lines up with the
+# script's other argument-parse errors (unknown argument, regex-invalid
+# baseline ref).
+require_value() {
+  if (( $2 < 2 )); then
+    printf 'eval-research: %s requires a value\n' "$1" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --id) ID_FILTER="${2:-}"; shift 2 ;;
-    --scale) SCALE="${2:-standard}"; shift 2 ;;
-    --baseline) BASELINE_REF="${2:-}"; shift 2 ;;
-    --work-dir) WORK_DIR="${2:-}"; shift 2 ;;
-    --write-baseline) WRITE_BASELINE_FILE="${2:-}"; shift 2 ;;
-    --timeout) TIMEOUT_SECONDS="${2:-4200}"; shift 2 ;;
-    --judge-timeout) JUDGE_TIMEOUT_SECONDS="${2:-600}"; shift 2 ;;
+    --id) require_value "$1" "$#"; ID_FILTER="${2:-}"; shift 2 ;;
+    --scale) require_value "$1" "$#"; SCALE="${2:-standard}"; shift 2 ;;
+    --baseline) require_value "$1" "$#"; BASELINE_REF="${2:-}"; shift 2 ;;
+    --work-dir) require_value "$1" "$#"; WORK_DIR="${2:-}"; shift 2 ;;
+    --write-baseline) require_value "$1" "$#"; WRITE_BASELINE_FILE="${2:-}"; shift 2 ;;
+    --timeout) require_value "$1" "$#"; TIMEOUT_SECONDS="${2:-4200}"; shift 2 ;;
+    --judge-timeout) require_value "$1" "$#"; JUDGE_TIMEOUT_SECONDS="${2:-600}"; shift 2 ;;
     --smoke-test) SMOKE_TEST="true"; shift ;;
     --help|-h) print_usage; exit 0 ;;
     *)
