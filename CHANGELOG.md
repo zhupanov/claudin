@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.2] - 2026-04-25
+
+### Fixed
+
+- `scripts/eval-research.sh validate_eval_set()` now rejects entries whose id does not match `^[a-z0-9-]+$` (lowercase letters, digits, and hyphens only) and tracks duplicate ids across the eval set, so duplicates and path-like ids fail fast under `--smoke-test` before `run_one_research()` uses the raw id as `$WORK_DIR/$id` (closes #442). The duplicate-detection `case` is gated on format-validity so glob metacharacters (`*`, `?`, `[`) in a malformed id cannot leak into the case pattern. The structural lint harness `scripts/test-eval-set-structure.sh` gains a Check 5b mirroring the same rule via a single awk pass over `### eval-N: <id>` headings, so duplicate / path-like ids are also rejected at `make lint` time. Sibling contracts updated in lockstep per AGENTS.md: `scripts/eval-research.md` authoring section adds the id rule; `scripts/test-eval-set-structure.md` adds the 5b assertion.
+
 ## [7.4.1] - 2026-04-25
 
 ### Fixed
