@@ -101,7 +101,7 @@ Re-calling `rename --state X` on an issue already at state X is a no-op (`RENAME
 
 The title prefix `[IN PROGRESS]` (followed by a space) is the **tracking-issue lifecycle state** — whose job is to signal human triage and filter `/fix-issue` auto-pick. It is orthogonal to `/fix-issue`'s existing **comment-based** lock (last comment equal to the bare text `IN PROGRESS`), which is the **concurrency lock** preventing two concurrent `/fix-issue` runners from picking the same subject issue. Both mechanisms coexist:
 - Comment lock: applies to any `/fix-issue` subject issue; set at step 2 of `/fix-issue`; cleared when work completes.
-- Title prefix: applies only to `/implement`-created tracking issues AND to `/improve-skill` / `/loop-improve-skill` standalone issues; never applied to adopted issues.
+- Title prefix: applied to `/implement`-managed tracking issues for the duration of the active run — both fresh-created (Step 0.5 Branch 4) and adopted (Branch 2/3, e.g. via `/fix-issue` forwarding `--issue <N>`). Step 12a/12b flips `[IN PROGRESS]` → `[DONE]` on merge; Step 18 flips it to `[STALLED]` on failure. `/improve-skill` / `/loop-improve-skill` standalone issues use the same lifecycle. The `rename` subcommand strips exactly one leading managed prefix before prepending the new one, so user-authored title text is preserved across transitions.
 
 ## Conventions
 
