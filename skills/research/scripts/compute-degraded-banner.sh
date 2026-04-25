@@ -19,9 +19,11 @@
 #   - On missing/unreadable fixture file: prints nothing (defensive default
 #     per research-phase.md prose).
 #   - On unknown <scale>: prints nothing; logs a diagnostic on stderr.
+#   - On insufficient args (< 2): prints nothing on stdout; logs a diagnostic
+#     on stderr.
 #   - Always exits 0 (failure-to-emit is signaled by empty stdout, never by
 #     a non-zero exit code, so callers using $(...) command substitution
-#     under `set -e` don't abort).
+#     under `set -e` don't abort — including the insufficient-args case).
 #
 # This is the **canonical executable truth** for the formula. Both the
 # /research orchestrator (research-phase.md §1.5 banner preamble prose) and
@@ -85,9 +87,13 @@ emit_banner() {
 }
 
 if (( $# < 2 )); then
-  echo "Usage: bash $(basename "$0") <lane-status.txt-path> <scale>" >&2
+  # Honor the "Always exits 0" contract documented in compute-degraded-banner.md.
+  # An orchestrator that mistakenly omits an argument under `set -e` would
+  # otherwise abort the run; emitting the diagnostic on stderr and exiting 0
+  # with empty stdout produces the documented "no banner" degraded path.
+  echo "WARNING: compute-degraded-banner.sh requires <lane-status.txt-path> <scale> (got $# arg(s)); emitting empty banner" >&2
   echo "  <scale> ∈ {standard, deep}" >&2
-  exit 2
+  exit 0
 fi
 
 emit_banner "$1" "$2"

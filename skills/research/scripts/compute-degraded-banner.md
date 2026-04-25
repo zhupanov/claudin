@@ -17,7 +17,8 @@
 - On `N_FALLBACK == 0`: prints nothing.
 - On missing/unreadable fixture: prints nothing (defensive default per research-phase.md prose).
 - On unknown `<scale>`: prints nothing; logs a diagnostic on stderr.
-- Always exits 0 (failure-to-emit is signaled by empty stdout, never by a non-zero exit code, so callers using `$(...)` command substitution under `set -e` do not abort).
+- On insufficient args (`< 2`): prints nothing on stdout; logs a diagnostic on stderr.
+- Always exits 0 (failure-to-emit is signaled by empty stdout, never by a non-zero exit code, so callers using `$(...)` command substitution under `set -e` do not abort — including the insufficient-args case).
 
 **Usage**:
 

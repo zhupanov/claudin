@@ -413,6 +413,23 @@ Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-sta
 
 Synthesis branches by `RESEARCH_SCALE`. All three branches MUST write `$RESEARCH_TMPDIR/research-report.txt` so Step 2 (when not skipped) and Step 3 can consume it — quick mode is no exception to this contract.
 
+**Token telemetry (synthesis subagent)**: in each non-quick branch, the synthesis subagent's Agent-tool return is a measurable Agent-tool call. After the subagent returns, parse `total_tokens` from the `<usage>` block and write a per-lane sidecar via `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write --phase research --lane Synthesis --tool claude --total-tokens <N|unknown> --dir "$RESEARCH_TMPDIR"`. The slot name `Synthesis` is uniform across all four non-quick branches (Standard `RESEARCH_PLAN=false` / Standard `RESEARCH_PLAN=true` / Deep `RESEARCH_PLAN=false` / Deep `RESEARCH_PLAN=true`). When `<usage>` is missing or unparseable, pass `--total-tokens unknown`. Inline-fallback synthesis (when the structural validator fails) is unmeasurable and does NOT write a sidecar — same posture as Claude inline.
+
+### Pre-synthesis lane-output persistence (Standard + Deep only — invoked before subagent invocation in each non-quick branch)
+
+Quick mode does NOT execute this step (no synthesis subagent runs). For Standard and Deep, the synthesis subagent's prompts in the branches below reference each lane's output by file path under `<lane_N_output_path>` tags and instruct the subagent to load those paths via its Read tool. Some lane outputs reach the orchestrator as in-conversation prose (the Claude inline lane at Step 1.3) or as Agent-tool return values (pre-launch and runtime Claude subagent fallbacks at Step 1.3 / Step 1.4) — those are NOT yet persisted on disk at the canonical slot file paths. The synthesis subagent's Read tool would hit ENOENT for any non-persisted lane.
+
+**Before invoking the synthesis subagent in any non-quick branch**, the orchestrator MUST persist every lane's output to its canonical slot file path under `$RESEARCH_TMPDIR`:
+
+- **Claude inline lane** (always present in Standard and Deep): write the inline research output produced at Step 1.3 (visible in conversation context under the `### Claude Research (inline)` header) to `$RESEARCH_TMPDIR/claude-inline-output.txt` via the `Write` tool.
+- **Claude pre-launch fallback subagents** (when `cursor_available=false` or `codex_available=false` at Step 1.3): write each Agent-tool return value to the corresponding external slot file path that the synthesis prompt references — Standard: `cursor-research-output.txt` (Cursor fallback) / `codex-research-output.txt` (Codex fallback); Deep: `cursor-research-arch-output.txt` / `cursor-research-edge-output.txt` (Cursor fallbacks) / `codex-research-ext-output.txt` / `codex-research-sec-output.txt` (Codex fallbacks). Write via the `Write` tool.
+- **Claude runtime-timeout fallback subagents** (Step 1.4 mid-run timeout replacement): write each Agent-tool return value to the same external slot file path the failed external lane would have written. Write via the `Write` tool.
+- **External lanes that ran successfully**: their outputs are already on disk at the canonical slot file paths via `run-external-reviewer.sh` — no orchestrator action needed.
+
+This persistence step preserves the synthesis subagent's "read every lane by file path" contract uniformly across the in-line / pre-launch-fallback / runtime-fallback / external paths. Without it, the synthesis subagent's Read tool would hit ENOENT on the Claude-produced lanes, triggering false structural-validator failures and routing every standard/deep run to the inline-synthesis fallback path (which re-introduces self-judge bias — the very pattern this refactor exists to eliminate).
+
+The Write tool is permitted on canonical `/tmp` paths under `$RESEARCH_TMPDIR` by the skill-scoped `deny-edit-write.sh` PreToolUse hook; same posture as the synthesis subagent's `synthesis-raw.txt` capture.
+
 ### Reduced-diversity banner preamble (Standard + Deep only)
 
 This preamble defines the **degraded-path banner** that the `### Standard` and `### Deep` synthesis branches prepend to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt` when any external research lane (Cursor or Codex) ran as a Claude-fallback. Quick mode (`RESEARCH_SCALE=quick`) does NOT apply this preamble — it carries its own `**Single-lane confidence — no validation pass.**` disclaimer instead.
@@ -434,13 +451,13 @@ This preamble defines the **degraded-path banner** that the `### Standard` and `
 
 `ok` is the sole non-fallback token; every other value (including empty) is a fallback. Same KV vocabulary that `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status-lib.sh` reads.
 
-**Runtime computation (orchestrator forks the helper)**: the orchestrator computes the banner BEFORE invoking the synthesis subagent by forking `compute-degraded-banner.sh` (NOT `source`-ing it — no shared shell state):
+**Runtime computation (orchestrator forks the helper)**: the orchestrator computes the banner BEFORE invoking the synthesis subagent by forking `compute-degraded-banner.sh` (NOT `source`-ing it — no shared shell state). The fork command MUST be guarded so a missing/unreadable helper degrades to empty `$BANNER` rather than aborting the synthesis path under `set -euo pipefail` (a missing executable would otherwise produce exit 126/127 and abort the outer shell):
 
 ```bash
-BANNER=$(bash "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/compute-degraded-banner.sh" "$RESEARCH_TMPDIR/lane-status.txt" "$RESEARCH_SCALE")
+BANNER=$(bash "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/compute-degraded-banner.sh" "$RESEARCH_TMPDIR/lane-status.txt" "$RESEARCH_SCALE" 2>/dev/null) || BANNER=""
 ```
 
-`$BANNER` is either the substituted banner literal (when `N_FALLBACK >= 1`) or the empty string. The orchestrator post-processes the synthesis subagent's response by prepending `$BANNER` (when non-empty) to the body before writing `research-report.txt`. **The synthesis subagent must NOT emit the banner literal — that is the orchestrator's exclusive responsibility.**
+The `|| BANNER=""` clause guarantees the assignment succeeds even when the helper is absent / unreadable / fails for any reason; combined with the helper's own "always exits 0" contract (see `compute-degraded-banner.md`), this makes the runtime computation robust under `set -e`. The `2>/dev/null` redirection suppresses helper-side diagnostics on the missing-file path so the operator only sees the natural "no banner" outcome rather than a confusing stderr trace. `$BANNER` is either the substituted banner literal (when `N_FALLBACK >= 1` and the helper executed successfully) or the empty string. The orchestrator post-processes the synthesis subagent's response by prepending `$BANNER` (when non-empty) to the body before writing `research-report.txt`. **The synthesis subagent must NOT emit the banner literal — that is the orchestrator's exclusive responsibility.**
 
 **Trigger condition**: emit the banner when `N_FALLBACK >= 1`. When `N_FALLBACK = 0`, the helper prints nothing and `$BANNER` is empty; the synthesis output is byte-identical to the pre-banner shape.
 
@@ -448,7 +465,7 @@ BANNER=$(bash "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/compute-degraded-ba
 
 **Fallback default**: if `lane-status.txt` is missing or unreadable (should not happen in standard/deep — Step 0b always writes it for non-quick scales), the helper prints nothing (`$BANNER` is empty). Quick mode never reaches this preamble.
 
-**Helper-absent fallback**: if `compute-degraded-banner.sh` itself is missing or unreadable (operator-error edge case — the file ships with the plugin; absence indicates a corrupted install), the orchestrator's fork command produces empty stdout (the script's parent directory is read by `bash`'s file-not-found handling). The orchestrator treats this as `BANNER=""` and proceeds — no banner is emitted on this degraded path. This trade-off is documented as accepted: surfacing the error would block research over a transient install issue, while the absence of the banner is operator-visible (research-report.txt lacks the expected diversity disclosure when degraded externals exist).
+**Helper-absent fallback**: if `compute-degraded-banner.sh` itself is missing or unreadable (operator-error edge case — the file ships with the plugin; absence indicates a corrupted install), the `bash` invocation inside the command substitution exits with code 126/127. The trailing `|| BANNER=""` clause in the guarded form above catches that non-zero exit and assigns the empty string to `$BANNER`. Without the `|| BANNER=""` clause, `set -euo pipefail` would propagate the non-zero exit and abort the synthesis path — the explicit `|| BANNER=""` is what produces the "treat as `BANNER=""` and proceed" behavior. No banner is emitted on this degraded path. This trade-off is documented as accepted: surfacing the error would block research over a corrupted install, while the absence of the banner is operator-visible (research-report.txt lacks the expected diversity disclosure when degraded externals exist).
 
 **Output placement**: when `$BANNER` is non-empty (i.e., `N_FALLBACK >= 1`), the orchestrator prepends it to BOTH the printed synthesis (immediately under the `## Research Synthesis` header, before the marker-delimited body content; in the planner branch, before the per-subquestion sub-sections) AND to `$RESEARCH_TMPDIR/research-report.txt` (immediately under the same header, before the synthesized findings). The word "BOTH" is load-bearing — emitting the banner only to stdout but not the file means downstream Step 2 reviewers (who consume `research-report.txt`) lose the disclaimer. The synthesis subagent's output (or inline-fallback output) is body-only — the orchestrator owns both the `## Research Synthesis` header and the banner.
 
