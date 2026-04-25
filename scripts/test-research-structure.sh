@@ -156,12 +156,13 @@ grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
 grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_MD" \
   || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of quick|standard|deep (got: foo). Aborting.' required) (#418, #460)"
 
-# Check 13 (#418 + #424): SKILL.md documents that --debug, --scale, and --adjudicate
-# are independent flags (order-independence). Pin the explicit independence statement
-# — three flags now after #424 added --adjudicate.
+# Check 13 (#418 + #424 + #510): SKILL.md documents that --debug, --scale,
+# --adjudicate, and --keep-sidecar are independent flags (order-independence).
+# Pin the explicit independence statement — four flags now after #510 added
+# --keep-sidecar.
 # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
-grep -Eq -e '`--debug`, `--scale`, and `--adjudicate` are independent' "$SKILL_MD" \
-  || fail "SKILL.md must explicitly state that '--debug', '--scale', and '--adjudicate' are independent (order-independence) (#418 + #424)"
+grep -Eq -e '`--debug`, `--scale`, `--adjudicate`, and `--keep-sidecar` are independent' "$SKILL_MD" \
+  || fail "SKILL.md must explicitly state that '--debug', '--scale', '--adjudicate', and '--keep-sidecar' are independent (order-independence) (#418 + #424 + #510)"
 
 # Check 14 (#418): research-phase.md ### Standard subsection contains a stable
 # byte-drift pin (the existing standard-mode cursor research output filename
@@ -461,5 +462,51 @@ echo "$FILING_SECTION" | grep -Fq "fail-closed" \
 echo "$FILING_SECTION" | grep -Fq "research-result-filing" \
   || fail "SKILL.md '## Filing findings as issues' must mention 'research-result-filing' semantics (#509 FINDING_8 intent doc)"
 
-echo "PASS: test-research-structure.sh — all 30 structural invariants hold"
+# Check 27 (#510): SKILL.md Step 3 must invoke render-findings-batch.sh after
+# writing the rendered final report (single-authoritative-write pattern from
+# #510 design FINDING_8). The grep is whole-file because the helper invocation
+# block is in the new "### Step 3 final-report write + sidecar generation"
+# subsection, anchored by name to make the check readable.
+grep -Fq "render-findings-batch.sh" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must invoke render-findings-batch.sh (#510)"
+
+# Check 28 (#510): SKILL.md must document --keep-sidecar in the Flags section
+# (boolean form) AND --keep-sidecar=<path> (value form). The positional form
+# (--keep-sidecar <path>) is intentionally NOT supported per #510 design
+# FINDING_6.
+grep -Fq -- "--keep-sidecar" "$SKILL_MD" \
+  || fail "SKILL.md must document --keep-sidecar flag (#510)"
+grep -Fq -- "--keep-sidecar=<PATH>" "$SKILL_MD" \
+  || fail "SKILL.md must document --keep-sidecar=<PATH> value form (#510)"
+
+# Check 29 (#510): SKILL.md Step 3 sources the canonical Quick disclaimer from
+# the data file; research-phase.md Quick branch references the same data file
+# path. This pin asserts the single-source-of-truth contract from #510 design
+# FINDING_4 — without both references in sync, the sidecar's per-item
+# disclaimer can diverge from the synthesis prose.
+DISCLAIMER_PATH="skills/research/data/quick-disclaimer.txt"
+grep -Fq "$DISCLAIMER_PATH" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must reference $DISCLAIMER_PATH (#510)"
+grep -Fq "$DISCLAIMER_PATH" "$REPO_ROOT/skills/research/references/research-phase.md" \
+  || fail "research-phase.md Quick branch must reference $DISCLAIMER_PATH (#510)"
+
+# Check 30 (#510): the canonical Quick disclaimer file must exist and be
+# non-empty.
+if [[ ! -s "$REPO_ROOT/$DISCLAIMER_PATH" ]]; then
+  fail "$DISCLAIMER_PATH must exist and be non-empty (#510)"
+fi
+
+# Check 31 (#510): SKILL.md Step 3 writes research-report-final.md before
+# invoking the helper (single-authoritative-write per #510 FINDING_8).
+grep -Fq "research-report-final.md" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must write research-report-final.md (#510 FINDING_8)"
+
+# Check 32 (#510): SKILL.md Step 4 contains a KEEP_SIDECAR cp branch. The
+# pin guards against accidental removal of the preserve-or-cleanup ordering
+# that ensures cp runs BEFORE cleanup-tmpdir.sh.
+if ! awk '/^## Step 4 — Cleanup/,0' "$SKILL_MD" | grep -Fq "KEEP_SIDECAR"; then
+  fail "SKILL.md Step 4 must reference KEEP_SIDECAR for the preserve branch (#510)"
+fi
+
+echo "PASS: test-research-structure.sh — all 36 structural invariants hold"
 exit 0

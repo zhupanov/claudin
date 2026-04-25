@@ -1,7 +1,7 @@
 ---
 name: research
-description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass (standard only); --adjudicate adds 3-judge dialectic. Guard: Edit/Write only."
-argument-hint: "[--debug] [--plan] [--scale=quick|standard|deep] [--adjudicate] <research question or topic>"
+description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass (standard only); --adjudicate adds 3-judge dialectic; --keep-sidecar preserves /issue-batch sidecar."
+argument-hint: "[--debug] [--plan] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
   PreToolUse:
@@ -23,12 +23,13 @@ Collaborative best-effort read-only-repo research task with a scale-aware lane s
 - **Boolean flags**: default to `false`. Only set to `true` when the `--flag` token is explicitly present in the arguments.
 - **Value flags** (separate class — boolean defaults rule does NOT apply): each value flag has its own non-`false` default documented per flag below; only an explicit `--flag=value` token overrides it; malformed forms (unknown value, missing `=`, missing value) abort with an explicit error.
 
-Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, and `--adjudicate` are independent and may appear in any order at the start of `$ARGUMENTS`.
+Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, `--adjudicate`, and `--keep-sidecar` are independent and may appear in any order at the start of `$ARGUMENTS`.
 
 - `--debug` (boolean): Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--plan` (boolean): Set a mental flag `RESEARCH_PLAN=true`. Enables an optional planner pre-pass before the lane fan-out: a single Claude Agent subagent decomposes `RESEARCH_QUESTION` into 2–4 focused subquestions, each lane researches its assigned subquestion(s), and synthesis is organized by subquestion. Default: `RESEARCH_PLAN=false` (byte-equivalent to pre-#420 behavior). See "Planner pre-pass — scale interaction" below for the `--scale` cross-effect; the planner is bounded (2–4 subquestions, no recursion) and falls back cleanly to single-question mode on any planner failure.
 - `--scale=quick|standard|deep` (value): Set a mental flag `RESEARCH_SCALE` to the explicitly-provided value. Default: `RESEARCH_SCALE=standard`. Selects the lane shape (1 / 3+3 / 5+5) for the research and validation phases — see "Scale matrix" below. Reject malformed forms with explicit error and abort: `--scale=foo` (unknown value) → print `**⚠ /research: --scale must be one of quick|standard|deep (got: foo). Aborting.**` and exit; `--scale` without `=value` → print `**⚠ /research: --scale requires a value (quick|standard|deep). Aborting.**` and exit; `--scale=` (empty value) → same error as missing value.
 - `--adjudicate` (boolean): Set a mental flag `RESEARCH_ADJUDICATE=true`. When set, runs a 3-judge dialectic adjudication after Step 2's Finalize Validation over every reviewer finding the orchestrator rejected during validation merge/dedup — see Step 2.5 below. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding"; majority binds. Default: `RESEARCH_ADJUDICATE=false` (Step 2.5 short-circuits with `⏩` and behavior is unchanged from prior versions). The `(finding, rejection_rationale)` capture in Step 2 runs unconditionally (regardless of this flag), but writes only to tmpdir scratch — when the flag is off, no extra LLM work, no external-tool launches, and no additional user-visible output is produced. Composes cleanly with `--scale=quick` (which skips Step 2 entirely): when both are set, Step 2.5 short-circuits with `⏩ no rejections to adjudicate (--scale=quick skipped Step 2)` since `rejected-findings.md` is never written.
+- `--keep-sidecar` AND `--keep-sidecar=<PATH>` (boolean + value form, NO positional value): Set a mental flag `KEEP_SIDECAR=true`. Step 4 cleanup preserves a `/issue`-batch markdown sidecar of the findings (one `### <title>` block per finding, parseable by `skills/issue/scripts/parse-input.sh`) past the tmpdir cleanup. Default: `KEEP_SIDECAR=false`; the sidecar is generated under `$RESEARCH_TMPDIR` at Step 3 and wiped at Step 4. **Form variants**: `--keep-sidecar` (no value) preserves to `./research-findings-batch.md`; `--keep-sidecar=<PATH>` preserves to the explicit path (must be writable; must NOT resolve under `$RESEARCH_TMPDIR`). Reject malformed forms with explicit error and abort: `--keep-sidecar=` (empty value) → print `**⚠ /research: --keep-sidecar=<path> requires a non-empty value. Aborting.**` and exit; `--keep-sidecar <some-path>` (positional value, NO `=`) → the parser stops at the first non-flag token per the existing flag-grammar contract, so `<some-path>` becomes the start of `RESEARCH_QUESTION` — operators wanting an explicit path MUST use `--keep-sidecar=<PATH>`. **Read-only-repo contract**: this is an opt-in workspace write via Bash `cp` (the prompt-only constrained tier — see "Read-only-repo contract" below); the operator opts in by using the flag. Operators should review the sidecar (and apply redaction if needed) before filing — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane. See `${CLAUDE_PLUGIN_ROOT}/SECURITY.md` § [External reviewer write surface in /research and /loop-review](../../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review) and `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.md` for the helper contract and known limitations.
 
 ## Scale matrix
 
@@ -344,9 +345,79 @@ If risk assessment, difficulty estimate, or feasibility verdict are not applicab
 - `RESEARCH_ADJUDICATE=true` AND Step 2.5 ran: render `**Adjudication phase**: <X> reinstated, <Y> upheld` where `<X>` is the count of `Disposition: voted` resolutions whose `Resolution: reinstate` (ANTI_THESIS won) and `<Y>` is the count of resolutions whose `Resolution: rejection-stands` (THESIS won) plus any `Disposition: fallback-to-synthesis` (rejection stands by default). Both counts come from `$RESEARCH_TMPDIR/adjudication-resolutions.md` (parse before Step 4 cleanup).
 - `RESEARCH_ADJUDICATE=true` AND Step 2.5 short-circuited (no rejections to adjudicate): render `**Adjudication phase**: 0 reinstated, 0 upheld (no rejections to adjudicate)`.
 
+### Step 3 final-report write + sidecar generation
+
+Single authoritative emission: write the full templated report block (header lines + every section above, with substituted values) to `$RESEARCH_TMPDIR/research-report-final.md` first, then `cat` the file for user-visible output. This avoids drift between two emission paths (FINDING_8 from issue #510's design review).
+
+The orchestrator writes the rendered report block (matching the template above with `## Research Report` header, `**Research question**:` / `**Codebase context**:` / `**Research phase**:` / `**Validation phase**:` / adjudication header lines, and the six `### ...` sections — Findings Summary, Risk Assessment, Difficulty Estimate, Feasibility Verdict, Key Files and Areas, Open Questions) to `$RESEARCH_TMPDIR/research-report-final.md` via Bash, with substituted values inline. Wrap the write in an explicit `if … ; then … ; fi` guard so a `cat >` failure (disk full, permission, etc.) does NOT abort the orchestrator block under `set -euo pipefail` — the cleanup at Step 4 must still run (FINDING_1). On write failure, set a mental flag `SKIP_SIDECAR=true` and emit a warning. Also write the research question to `$RESEARCH_TMPDIR/research-question.txt` so the helper can embed it in the audit-context line.
+
+After the write succeeds, invoke the helper to generate the sidecar. Source the Quick-mode disclaimer from the canonical file `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer.txt` only when `RESEARCH_SCALE=quick` (FINDING_4):
+
+```bash
+if [[ "$SKIP_SIDECAR" != "true" ]]; then
+  QUICK_DISCLAIMER_ARGS=()
+  if [[ "$RESEARCH_SCALE" == "quick" ]]; then
+    QUICK_DISCLAIMER=$(cat "${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer.txt")
+    QUICK_DISCLAIMER_ARGS=(--quick-disclaimer "$QUICK_DISCLAIMER")
+  fi
+  if ! ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.sh \
+    --report "$RESEARCH_TMPDIR/research-report-final.md" \
+    --output "$RESEARCH_TMPDIR/research-findings-batch.md" \
+    --research-question-file "$RESEARCH_TMPDIR/research-question.txt" \
+    --branch "$CURRENT_BRANCH" --commit "$HEAD_SHA" \
+    "${QUICK_DISCLAIMER_ARGS[@]+${QUICK_DISCLAIMER_ARGS[@]}}"; then
+    echo "**⚠ 3: report — render-findings-batch helper exited non-zero (likely empty findings — see warning above). Continuing.**"
+  fi
+fi
+```
+
+Helper exit 3 (empty findings) is non-fatal — the helper writes an empty sidecar and prints a warning to stderr. Exits 1 / 2 indicate operator/orchestrator bugs and are also logged but non-fatal here. See `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.md` for the full contract; the offline regression harness is `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-render-findings-batch.sh` (contract in sibling `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-render-findings-batch.md`), wired into `make lint`.
+
+Finally print the report for user visibility (single source of bytes):
+
+```bash
+cat "$RESEARCH_TMPDIR/research-report-final.md"
+```
+
 Print: `✅ 3: report — complete (<elapsed>)`
 
 ## Step 4 — Cleanup and Final Warnings
+
+### Preserve sidecar (when `KEEP_SIDECAR=true`)
+
+If `KEEP_SIDECAR=true`, copy the generated sidecar to the operator-controlled destination BEFORE invoking `cleanup-tmpdir.sh`. The implementation uses Bash `cp` (the prompt-only constrained tier of the read-only-repo contract — see "Read-only-repo contract" above). Default destination is `./research-findings-batch.md`; an explicit `--keep-sidecar=<PATH>` form sets the destination from the flag.
+
+Path validation (BEFORE the `cp`):
+
+1. The destination must NOT resolve under `$RESEARCH_TMPDIR`. Use `realpath` when available; fall back to a string-prefix check on `cd "$(dirname …)" && pwd` resolution. The `realpath`-based path is the security-stronger tier (defends against symlink/hardlink escapes); the fallback is best-effort. Maintainers MUST NOT remove the `realpath` branch (FINDING_11).
+2. The destination's parent directory must exist and be writable.
+
+If validation fails, print `**⚠ 4: cleanup — --keep-sidecar destination rejected: <reason>. Sidecar will be cleaned up with the tmpdir.**` and SKIP the `cp`; do NOT abort.
+
+If the helper at Step 3 produced a zero-byte sidecar (empty findings — exit 3), the operator-surface message changes (FINDING_10):
+
+```bash
+if [[ "$KEEP_SIDECAR" == "true" ]]; then
+  SIDECAR="$RESEARCH_TMPDIR/research-findings-batch.md"
+  DEST="${KEEP_SIDECAR_PATH:-./research-findings-batch.md}"
+  # Validate DEST per the rules above; assign DEST_OK=true/false.
+  if [[ "$DEST_OK" == "true" ]]; then
+    if cp "$SIDECAR" "$DEST"; then
+      if [[ -s "$DEST" ]]; then
+        echo "**📋 Sidecar preserved at $DEST. Run: /issue --input-file $DEST --label research --dry-run** (then escalate to /issue --go after review)"
+      else
+        echo "**📋 Sidecar preserved at $DEST, but it is empty (no findings extracted).**"
+      fi
+    else
+      echo "**⚠ 4: cleanup — cp to $DEST failed; sidecar will be cleaned up with the tmpdir.**"
+    fi
+  fi
+fi
+```
+
+The advertisement uses `--dry-run` (NOT `--go`) so the operator manually escalates to `--go` after reviewing the sidecar (FINDING_7) — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane.
+
+### Cleanup tmpdir
 
 Remove the session temp directory and all files within it:
 
