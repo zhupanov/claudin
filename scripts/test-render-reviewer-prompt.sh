@@ -340,6 +340,15 @@ if [[ -f "$VALIDATION_PHASE" ]]; then
   if [[ "$hits" -lt 2 ]]; then
     fail "static integration: skills/research/references/validation-phase.md must invoke render-reviewer-prompt.sh for both Cursor and Codex lanes (got $hits hit(s))"
   fi
+  # #435: each non-zero-exit handler must downgrade its lane's VALIDATION_*_STATUS
+  # to fallback_runtime_failed in lane-status.txt before launching the Claude fallback,
+  # so Step 3's final report cannot show a native pass for a lane that ran as a fallback.
+  if ! grep -Fq 'VALIDATION_CURSOR_STATUS=fallback_runtime_failed' "$VALIDATION_PHASE"; then
+    fail "static integration: skills/research/references/validation-phase.md must rewrite VALIDATION_CURSOR_STATUS=fallback_runtime_failed in the Cursor render-failure handler (#435)"
+  fi
+  if ! grep -Fq 'VALIDATION_CODEX_STATUS=fallback_runtime_failed' "$VALIDATION_PHASE"; then
+    fail "static integration: skills/research/references/validation-phase.md must rewrite VALIDATION_CODEX_STATUS=fallback_runtime_failed in the Codex render-failure handler (#435)"
+  fi
   note_pass
 fi
 
