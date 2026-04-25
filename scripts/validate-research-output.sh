@@ -69,12 +69,12 @@
 #   1 — usage error (missing/unknown flag, multiple file arguments)
 #   2 — body too thin (word count below --min-words after stripping fenced code)
 #   3 — no provenance marker found (only when --require-citations is on)
-#   4 — file not found / unreadable
+#   4 — file missing or not readable
 #
 # Diagnostic format:
 #   Exit 2: `body too thin: <count>/<min> words after stripping fenced code`
 #   Exit 3: `no provenance marker found`
-#   Exit 4: `file not found: <path>`
+#   Exit 4: `file missing or not readable: <path>`
 #
 # Portability: uses `awk` (POSIX) and `grep -E` (BSD + GNU). No `\d`, no
 # lookarounds, no `\w` — all character classes are explicit `[...]`.
@@ -132,7 +132,7 @@ if [[ -z "$INPUT" ]]; then
 fi
 
 if [[ ! -r "$INPUT" ]]; then
-    echo "file not found: $INPUT"
+    echo "file missing or not readable: $INPUT"
     exit 4
 fi
 
