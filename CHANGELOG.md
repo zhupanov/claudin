@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.25] - 2026-04-25
+
+### Changed
+
+- Cross-doc sweep applying the canonical execution-vs-publication disambiguation phrasing for `/research --scale=quick` (already in `skills/research/SKILL.md` line 17 + `### Quick (RESEARCH_SCALE=quick)` subsection per PR #482/#449) to 9 lines across 7 satellite docs: `README.md:111`, `docs/workflow-lifecycle.md` (lines 136 + 161), `docs/agents.md` (lines 49 + 75 — second occurrence in the Research Agents subsection caught during plan review and added to scope), `docs/review-agents.md` (lines 96 + 98 — both the table cell and Note A updated for within-file consistency), `docs/skills.md:117`, and `skills/research/references/research-phase.md:311` (appended cross-reference clause without modifying the existing lane-status sentence). Each new phrasing names both layers explicitly: Step 2 (validation panel) for execution and the 0-reviewer Validation phase placeholder line for publication. Two intentionally-untouched matches in `docs/workflow-lifecycle.md:163` and `docs/skills.md:122` describe `--adjudicate` orchestration semantics ("no rejections to adjudicate when Step 2 doesn't run"), not the report-rendering claim — code-review panel re-examined and confirmed (1Y/1E/1N, 2+ YES threshold not met). Pre-existing OOS surfaced during PR #482 plan review (FINDING_4, 3-0 accepted) and code review (FINDING_1, 3 EXONERATE). Closes #495.
+
 ## [7.4.24] - 2026-04-25
 
 ### Changed
