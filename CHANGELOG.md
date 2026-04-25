@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.13] - 2026-04-24
+
+### Added
+
+- `/research` evaluation set + harness for measuring prompt-side improvements to `/research`. New `skills/research/references/eval-set.md` (frozen catalog of 20 questions across 5 categories — `lookup`, `architecture`, `external-comparison`, `risk-assessment`, `feasibility` — with 2 entries flagged adversarial: one fictitious-mechanism, one data-absence, to test over-claiming). New `scripts/eval-research.sh` (opt-in operator harness — runs each entry through `/research` as a fresh `claude -p --plugin-dir` subprocess matching the `iteration.sh` pattern; scores each output along deterministic axes — file:line + repo-path + URL provenance counters, case-insensitive substring keyword-coverage, length — plus a fail-closed LLM-as-judge rubric heredoc with required-field parser; `--smoke-test` for offline schema validation; `--baseline <ref>` regex-validated against shell injection). New `skills/research/references/eval-baseline.json` (committed schema-only stub; operator populates via `--write-baseline` after merge). New `scripts/test-eval-set-structure.sh` (offline structural regression — entry count, category coverage, schema validity, ≥2 adversarial entries with both fictitious and data-absence shapes, baseline JSON shape, harness self-test invocation). Both new scripts plus their sibling `.md` contracts (per AGENTS.md). `Makefile` adds `eval-research` and `test-eval-set-structure` standalone targets to `.PHONY` (NEITHER is a `test-harnesses` prerequisite — explicit "not a CI gate" carve-out, mirroring the `halt-rate-probe` pattern). `agent-lint.toml` excludes both new scripts (Makefile-only references). `docs/linting.md` documents both targets in the opt-in operator-tools table. Source: Anthropic's *How we built our multi-agent research system* — small-sample (~20-case) rubric-based LLM-as-judge evaluation as the substrate for prompt-side iteration. Closes #419 under umbrella #413.
+
 ## [7.0.12] - 2026-04-24
 
 ### Changed
