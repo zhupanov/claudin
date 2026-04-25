@@ -11,7 +11,8 @@
   </defs>
 
   <!-- Title -->
-  <text x="220" y="20" fill="#333" font-size="16" font-weight="bold">/research</text>
+  <text x="220" y="14" fill="#333" font-size="16" font-weight="bold">/research</text>
+  <text x="220" y="30" fill="#666" font-size="10">shown: --scale=standard; quick=1 lane no validation; deep=5+5 lanes</text>
 
   <!-- Step 0: Session Setup -->
   <rect x="130" y="40" width="180" height="40" rx="4" fill="#6C757D"/>

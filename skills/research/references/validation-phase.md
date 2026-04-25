@@ -2,15 +2,15 @@
 
 **Consumer**: `/research` Step 2 — loaded via the `MANDATORY — READ ENTIRE FILE` directive at Step 2 entry in SKILL.md.
 
-**Contract**: 3-lane findings-validation invariant (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude Code Reviewer subagent fallbacks when an external tool is unavailable — the fallback lane is always `subagent_type: code-reviewer`, attributed as `Code`). Owns the launch-order rule, Cursor and Codex validation-reviewer launch bash blocks with their long reviewer prompts, per-slot fallback rules, the Claude Code Reviewer subagent archetype variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) for research validation, the process-Claude-findings-immediately rule, Step 2.4 collection with zero-externals branch + runtime-timeout replacement, Codex/Cursor negotiation delegation, and the Finalize Validation procedure.
+**Contract**: scale-aware findings-validation invariant. `RESEARCH_SCALE=standard` (default) keeps the 3-lane shape — 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, with Claude Code Reviewer subagent fallbacks when an external tool is unavailable. `RESEARCH_SCALE=deep` adds 2 extra Claude Code Reviewer subagent lanes (lane-local "prioritize security" / "prioritize architecture" overlays on the same unified Code Reviewer archetype — NOT new agent slugs) for a total of 5 lanes (1 Cursor + 1 Codex + 3 Claude). `RESEARCH_SCALE=quick` is **unreachable** at this reference — SKILL.md Step 2 skips Step 2 entirely and does NOT load this file when `RESEARCH_SCALE=quick`. Owns the launch-order rule, Cursor and Codex validation-reviewer launch bash blocks with their long reviewer prompts, per-slot fallback rules, the Claude Code Reviewer subagent archetype variable bindings (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`) for research validation, the deep-mode `{OUTPUT_INSTRUCTION}` overlays for the 2 extra Claude lanes, the process-Claude-findings-immediately rule, Step 2.4 collection with zero-externals branch + runtime-timeout replacement, Codex/Cursor negotiation delegation, and the Finalize Validation procedure.
 
 **When to load**: once Step 2 is about to execute. Do NOT load during Step 0, Step 1, Step 3, or Step 4. SKILL.md emits the Step 2 entry breadcrumb and the Step 2 completion print; this file does NOT emit those — it owns body content only.
 
 ---
 
-**IMPORTANT: Findings validation MUST ALWAYS run with 3 lanes: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor. When Codex is unavailable, launch 1 Claude Code Reviewer subagent fallback in its place. When Cursor is unavailable, launch 1 Claude Code Reviewer subagent fallback in its place. Never skip or abbreviate this step regardless of how straightforward the findings appear. Reviewers validate against the actual codebase state, catching inaccuracies or omissions that the research phase may have missed.**
+**IMPORTANT: Findings validation runs the lane shape selected by `RESEARCH_SCALE`. When `RESEARCH_SCALE=standard` (default) it MUST run with 3 lanes: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor. When `RESEARCH_SCALE=deep` it MUST run with 5 lanes: 1 Cursor + 1 Codex + 3 Claude Code Reviewer subagents (the existing always-on Claude lane plus 2 extra Claude lanes with lane-local "prioritize security" / "prioritize architecture" overlays). When Codex or Cursor is unavailable, launch 1 Claude Code Reviewer subagent fallback in its place to preserve the configured lane count. `RESEARCH_SCALE=quick` skips this phase entirely at the SKILL.md gate — this file is not loaded when `RESEARCH_SCALE=quick`. Never silently drop a lane within the configured scale.**
 
-Launch **all 3 lanes in parallel** (in a single message). **Spawn order matters for parallelism** — launch the slowest first: Cursor (slowest), then Codex, then the Claude Code Reviewer subagent (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
+Launch **all configured lanes in parallel** in a single message (3 in standard, 5 in deep). **Spawn order matters for parallelism** — launch the slowest first: Cursor (slowest), then Codex, then the Claude Code Reviewer subagent(s) (fastest). Each reviewer receives the research report and the original question. Each must **only report findings** — never edit files.
 
 ## Step 2 entry — Propagate research-phase fallbacks to VALIDATION_* keys
 
@@ -118,7 +118,7 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
 ## Claude Code Reviewer Subagent (always-on lane — launched **last** in the parallel message)
 
-Launch the always-on Claude Code Reviewer subagent lane via the Agent tool (`subagent_type: code-reviewer`) in the same parallel message as Cursor and Codex above. It finishes fastest, so launch it last.
+Launch the always-on Claude Code Reviewer subagent lane via the Agent tool (`subagent_type: code-reviewer`) in the same parallel message as Cursor and Codex above. It finishes fastest, so launch it last. Attribute as `Code`.
 
 Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filling in the variables for **research validation**:
 
@@ -139,9 +139,19 @@ Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/share
 
 **Research-specific acceptance criteria**: Accept a finding unless it is factually incorrect (misreads the codebase, references wrong file/line) or is already addressed in the synthesis. For research validation, "factually incorrect" means the finding misidentifies code, misattributes behavior, or contradicts something verifiable by reading source files.
 
+## Deep-mode extra Claude lanes (RESEARCH_SCALE=deep only)
+
+When `RESEARCH_SCALE=deep`, in the same parallel message that launches Cursor + Codex + the always-on Claude lane above, ALSO launch 2 extra Claude Code Reviewer subagent lanes via the Agent tool (`subagent_type: code-reviewer`) carrying lane-local emphasis on the **unified Code Reviewer archetype** — NOT new agent slugs. Both extra lanes reuse the SAME `{CONTEXT_BLOCK}` XML wrapper (`<reviewer_research_question>` / `<reviewer_research_findings>`) and the SAME literal-delimiter instruction prefix as the always-on Claude lane above (defense-in-depth against prompt injection in the research report). Only `{OUTPUT_INSTRUCTION}` differs:
+
+- **Lane "Code-Sec"** (security emphasis). Attribute as `Code-Sec`. `{REVIEW_TARGET}` = `"research findings"`. `{CONTEXT_BLOCK}` = identical to the always-on lane above. `{OUTPUT_INSTRUCTION}` = `"Prioritize the security focus area: injection vectors, authn/authz gaps, secret handling, crypto choices, deserialization risks, SSRF, path traversal, dependency CVEs, and any other security-relevant exposure surfaced by the research findings. What the concern is (inaccuracy, omission, or unsupported claim, with security as the lens)"` + `"Suggested correction or addition"`.
+
+- **Lane "Code-Arch"** (architecture emphasis). Attribute as `Code-Arch`. `{REVIEW_TARGET}` = `"research findings"`. `{CONTEXT_BLOCK}` = identical to the always-on lane above. `{OUTPUT_INSTRUCTION}` = `"Prioritize the architecture focus area: separation of concerns, contract boundaries, semantic invariants, layering, and abstraction quality surfaced by the research findings. What the concern is (inaccuracy, omission, or unsupported claim, with architecture as the lens)"` + `"Suggested correction or addition"`.
+
+The same research-specific acceptance criteria apply to both extra lanes. The 5-lane invariant for deep mode means each of `Code`, `Code-Sec`, `Code-Arch`, `Cursor`, `Codex` independently produces dual-list findings (in-scope / out-of-scope). Standard mode does not launch these extra lanes — when `RESEARCH_SCALE=standard`, skip this entire subsection.
+
 ## After all reviewers return
 
-**Process Claude findings immediately** — do not wait for external reviewers before starting. The always-on Claude Code Reviewer subagent lane returns first; collect its findings right away. If Cursor or Codex was unavailable (or both), each pre-launch Claude subagent fallback lane returns findings via the Agent tool — collect and merge those at the same time. In the happy path there is one Claude stream (the always-on lane); in the degraded path there are 2 or 3 Claude streams — merge them all before external-reviewer collection.
+**Process Claude findings immediately** — do not wait for external reviewers before starting. The always-on Claude Code Reviewer subagent lane returns first; collect its findings right away. If Cursor or Codex was unavailable (or both), each pre-launch Claude subagent fallback lane returns findings via the Agent tool — collect and merge those at the same time. In standard happy-path there is one Claude stream (the always-on lane); in standard degraded-path there are 2 or 3 Claude streams. In deep happy-path there are 3 Claude streams (`Code` + `Code-Sec` + `Code-Arch`); in deep degraded-path up to 5 Claude streams. Merge them all before external-reviewer collection, preserving per-lane attribution (`Code` / `Code-Sec` / `Code-Arch`) so dedup later can attribute findings correctly.
 
 ## 2.4 — Collect and Validate External Reviewers
 

@@ -107,11 +107,17 @@ Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint, gitleaks
 
 ## `/research`
 
-**Arguments**: `[--debug] <research question or topic>`
+**Arguments**: `[--debug] [--scale=quick|standard|deep] <research question or topic>`
 
 **Source**: [`skills/research/SKILL.md`](../skills/research/SKILL.md) · [Diagram](../skills/research/diagram.svg)
 
-Collaborative best-effort read-only research using 3 research agents (Claude inline + Cursor + Codex, uniformly briefed) then a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable. Produces a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict. Tracked repo files are not modified by the Claude `Edit | Write | NotebookEdit` tool surface — scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook). Bash and external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review). `/issue` may be invoked via the Skill tool to file research-result issues.
+Collaborative best-effort read-only research with a scale-aware lane shape selected by `--scale=quick|standard|deep` (default `standard`).
+
+- `--scale=standard` (default, byte-equivalent to pre-#418 behavior): 3 research agents (Claude inline + Cursor + Codex, uniformly briefed with a single shared `RESEARCH_PROMPT`) + 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Claude Code Reviewer subagent fallbacks preserve the 3-lane invariant when an external tool is unavailable.
+- `--scale=quick`: 1 inline Claude lane only (single-lane confidence — fastest, lowest assurance), Step 2 validation phase skipped entirely. Synthesis carries an explicit "single-lane confidence" disclaimer. Useful for trivial single-fact lookups; avoid when correctness or completeness matter.
+- `--scale=deep`: 5 research lanes (Claude inline running baseline `RESEARCH_PROMPT` + 2 Cursor slots and 2 Codex slots carrying the four diversified angle prompts `RESEARCH_PROMPT_ARCH` / `RESEARCH_PROMPT_EDGE` / `RESEARCH_PROMPT_EXT` / `RESEARCH_PROMPT_SEC` for architecture / edge cases / external comparisons / security) + 5-reviewer validation panel (the standard 3 plus 2 extra Claude Code Reviewer subagents `Code-Sec` and `Code-Arch` carrying lane-local emphasis on the unified Code Reviewer archetype — NOT new agent slugs). The synthesis must explicitly name the four diversified angles so the operator can see they were genuinely covered.
+
+All scales produce a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict (the report's lane-count headers reflect the configured scale dynamically). Tracked repo files are not modified by the Claude `Edit | Write | NotebookEdit` tool surface — scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook). Bash and external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review). `/issue` may be invoked via the Skill tool to file research-result issues.
 
 ## `/review`
 
