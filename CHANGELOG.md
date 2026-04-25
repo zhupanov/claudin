@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.4] - 2026-04-25
+
+### Removed
+
+- `/design` Step 3a "Post-Review Confirmation" and all machinery whose sole consumer was that gate. The conditional second approval pause (gated on `qa_happened` from a `$DESIGN_TMPDIR/user-qa-happened.md` sentinel touched by Steps 1c/1d/3.5, OR `dialectic_adjudicated` from a `grep -qE '^\*\*Disposition\*\*:[[:space:]]+(voted|fallback-to-synthesis)[[:space:]]*$'` over `dialectic-resolutions.md`) is gone — once ambiguity-resolution Q/A in Steps 1c/1d/3.5 completes, the run proceeds straight to Step 3b (Architecture Diagram). Steps 1c/1d/3.5 ambiguity-resolution Q/A is preserved unchanged. The `--auto` flag is retained because it still suppresses 1c/1d/3.5. User-visible flow change: every `auto_mode=true` exit from Step 3 ("all reviewers OK") and Step 3.5 ("skipped" or short-circuit) that previously routed to Step 3a now routes directly to Step 3b. `skills/design/SKILL.md` drops the `| 3a | confirmation |` Step Name Registry row, narrows the `--auto` flag-table description to "(1c, 1d, 3.5)", redirects both Step 3 and Step 3.5 auto-mode branches to Step 3b, and deletes the entire `## Step 3a — Post-Review Confirmation` section. `skills/design/references/discussion-rounds.md` rewrites its Consumer/Contract/When-to-load/Binding-convention header for three bodies (1c/1d/3.5), removes the `1c/1d/3.5/3a` inline literal from When-to-load, deletes all three `### Sentinel — record that Q/A occurred` subsections (1c/1d/3.5), redirects the Step 3.5 short-circuit to Step 3b, and deletes the Step 3a body section. `skills/design/references/plan-review.md` drops `3a` from Do-NOT-load and redirects both `auto_mode=true` exit branches (lines 70, 100) to Step 3b. `skills/design/references/flags.md` narrows the `--auto` description. `skills/design/references/sketch-prompts.md` and `skills/design/references/sketch-launch.md` drop `3a` from their Do-NOT-load enumerations. No script or test-harness changes (`scripts/test-design-structure.sh` does not pin Step-3a content; CI's `.github/workflows/ci.yaml` focus-area enum lives in plan-review prompts and is untouched). A follow-up issue tracks adding `test-design-structure.sh` structural pins against accidental Step 3a reintroduction (filed as #453, not blocking). Closes #439.
+
 ## [7.3.3] - 2026-04-25
 
 ### Fixed

@@ -4,7 +4,7 @@
 
 **Contract**: byte-preserved prompt bodies for the four non-general sketch personalities, keyed by the placeholder tokens `<ARCH_PROMPT>`, `<EDGE_PROMPT>`, `<INNOVATION_PROMPT>`, `<PRAGMATIC_PROMPT>` that `references/sketch-launch.md` substitutes at launch time. The trailing effort suffix is part of the external-launch body; Claude Agent-tool fallback invocations strip it.
 
-**When to load**: at Step 2a.2 entry, BEFORE `references/sketch-launch.md` (so the token substitutions resolve). Do NOT load during Steps 0, 1, 2a.3, 2a.4, 2a.5, 2b, 3, 3.5, 3a, 3b, 4, or 5.
+**When to load**: at Step 2a.2 entry, BEFORE `references/sketch-launch.md` (so the token substitutions resolve). Do NOT load during Steps 0, 1, 2a.3, 2a.4, 2a.5, 2b, 3, 3.5, 3b, 4, or 5.
 
 **Binding convention**: launch shell blocks in SKILL.md use the placeholder tokens `<ARCH_PROMPT>`, `<EDGE_PROMPT>`, `<INNOVATION_PROMPT>`, `<PRAGMATIC_PROMPT>` as literal substitution markers. Substitute the byte-identical prompt body from this file at launch time.
 

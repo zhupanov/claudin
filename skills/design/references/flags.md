@@ -10,7 +10,7 @@
 
 ---
 
-- `--auto`: Set a mental flag `auto_mode=true`. Default: `auto_mode=false`. When `auto_mode=true`, all interactive question checkpoints (Steps 1c, 1d, 3.5, and 3a) are skipped — the skill runs fully autonomously without user interaction. When `--quick` is set in the caller and `/design` is skipped entirely, `--auto` has no effect.
+- `--auto`: Set a mental flag `auto_mode=true`. Default: `auto_mode=false`. When `auto_mode=true`, all interactive question checkpoints (Steps 1c, 1d, and 3.5) are skipped — the skill runs fully autonomously without user interaction. When `--quick` is set in the caller and `/design` is skipped entirely, `--auto` has no effect.
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) and will be forwarded to `session-setup.sh` via `--caller-env`. If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full discovery).
 - `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"1.::design plan"` (numeric `1.`, path `design plan`), `"1."` (numeric only, backward compat). Parse into `STEP_NUM_PREFIX` (before `::`) and `STEP_PATH_PREFIX` (after `::`, or empty if `::` absent). Default: empty (standalone numbering). This is an internal orchestration flag used when `/design` is invoked from `/implement`.
