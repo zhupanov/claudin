@@ -94,13 +94,36 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/session-setup.sh --prefix claude-research --skip-p
 
 If the script exits non-zero, print the error and abort.
 
-Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`. Set `RESEARCH_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
+Parse the output for `SESSION_TMPDIR`, `CODEX_AVAILABLE`, `CURSOR_AVAILABLE`, `CODEX_HEALTHY`, `CURSOR_HEALTHY`, `CODEX_PROBE_ERROR`, `CURSOR_PROBE_ERROR`. Set `RESEARCH_TMPDIR` = `SESSION_TMPDIR`. Substitute the actual path in every command below.
 
-Set mental flags `codex_available` and `cursor_available` based on the output:
-- If `CODEX_AVAILABLE=false`: `codex_available=false`. Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
-- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Print: `**⚠ Codex installed but not responding (health check failed). Using Claude replacement.**`
-- Else: `codex_available=true`
-- Same logic for Cursor.
+Set mental flags `codex_available` and `cursor_available` based on the output, and remember each lane's pre-launch attribution status (one of `ok` / `fallback_binary_missing` / `fallback_probe_failed`) for the Step 0b lane-status init below:
+- If `CODEX_AVAILABLE=false`: `codex_available=false`. Pre-launch status = `fallback_binary_missing` (no reason). Print: `**⚠ Codex not available (binary not found). Proceeding without Codex reviewer.**`
+- Else if `CODEX_HEALTHY=false`: `codex_available=false`. Pre-launch status = `fallback_probe_failed` with reason = `CODEX_PROBE_ERROR` (sanitized). Print: `**⚠ Codex installed but not responding (health check failed: <CODEX_PROBE_ERROR>). Using Claude replacement.**` (omit the parenthetical detail when `CODEX_PROBE_ERROR` is empty).
+- Else: `codex_available=true`. Pre-launch status = `ok`.
+- Same logic for Cursor (using `CURSOR_PROBE_ERROR`).
+
+### 0b — Initialize lane-status record
+
+Write `$RESEARCH_TMPDIR/lane-status.txt` with all four external lanes' pre-launch attribution. Step 1.3 (research-phase) and Step 2 entry / Step 2.4 (validation-phase) update this file later via surgical phase-local rewrites; Step 3 reads it via `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh` to render the final-report header.
+
+Sanitize each `*_PROBE_ERROR` value before writing: strip embedded `=` and `|` characters, collapse whitespace runs to single space, trim, truncate to 80 chars. The render script applies the same rules as defense-in-depth, but writer-side sanitization keeps the KV file well-formed.
+
+Use the orchestrator-resolved pre-launch status for each lane (Step 0a determined `ok` / `fallback_binary_missing` / `fallback_probe_failed` per lane). Both Research and Validation rows initialize from the same pre-launch facts; runtime updates come later. Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
+
+The heredoc body uses a **quoted delimiter** (`<<'EOF'`) so that any residual shell metacharacters (dollar sign, backticks, backslashes, double quotes) in a substituted reason value are preserved verbatim instead of being expanded — a defense against hostile content in `*_PROBE_ERROR` from `.diag` files of external tools. The orchestrator literally substitutes the resolved per-lane status and sanitized reason text into the placeholders below before writing the command.
+
+```bash
+cat > "$RESEARCH_TMPDIR/lane-status.txt" <<'EOF'
+RESEARCH_CURSOR_STATUS=<cursor pre-launch status>
+RESEARCH_CURSOR_REASON=<cursor sanitized reason or empty>
+RESEARCH_CODEX_STATUS=<codex pre-launch status>
+RESEARCH_CODEX_REASON=<codex sanitized reason or empty>
+VALIDATION_CURSOR_STATUS=<cursor pre-launch status>
+VALIDATION_CURSOR_REASON=<cursor sanitized reason or empty>
+VALIDATION_CODEX_STATUS=<codex pre-launch status>
+VALIDATION_CODEX_REASON=<codex sanitized reason or empty>
+EOF
+```
 
 ### 0c — Record Research Context
 
@@ -136,15 +159,27 @@ Execute Step 2 per the reference file above. SKILL.md is the sole owner of Step 
 
 Print: `> **🔶 3: report**`
 
-Print the final research report under a `## Research Report` header with the following structure:
+Render the per-lane attribution headers from `$RESEARCH_TMPDIR/lane-status.txt`:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh --input "$RESEARCH_TMPDIR/lane-status.txt"
+```
+
+Parse the two output lines via prefix-strip (NOT `cut -d=`, since rendered values can contain `=` characters):
+- `RESEARCH_HEADER="${line#RESEARCH_HEADER=}"` for the line beginning with `RESEARCH_HEADER=`
+- `VALIDATION_HEADER="${line#VALIDATION_HEADER=}"` for the line beginning with `VALIDATION_HEADER=`
+
+If the helper exits non-zero (e.g., `lane-status.txt` is missing — should not happen since Step 0b always writes it), substitute the placeholder line `_Lane attribution unavailable._` for both header rows and log to terminal: `**⚠ 3: report — render-lane-status failed; lane attribution unavailable.**`.
+
+Print the final research report under a `## Research Report` header with the following structure (substituting the rendered values for `<RESEARCH_HEADER>` and `<VALIDATION_HEADER>`):
 
 ```markdown
 ## Research Report
 
 **Research question**: <RESEARCH_QUESTION>
 **Codebase context**: Branch `<CURRENT_BRANCH>`, commit `<HEAD_SHA>`
-**Research phase**: <N> agents (Cursor: ✅/❌, Codex: ✅/❌)
-**Validation phase**: <N> reviewers (Code: ✅, Cursor: ✅/❌, Codex: ✅/❌)
+**Research phase**: <RESEARCH_HEADER>
+**Validation phase**: <VALIDATION_HEADER>
 
 ### Findings Summary
 <synthesized and validated findings, organized by topic>
@@ -163,6 +198,13 @@ Print the final research report under a `## Research Report` header with the fol
 
 ### Open Questions
 <any unresolved questions or areas that need further investigation>
+```
+
+Example rendered headers (one degraded research lane, one degraded validation lane):
+
+```markdown
+**Research phase**: 3 agents (Cursor: ✅, Codex: Claude-fallback (runtime timeout))
+**Validation phase**: 3 reviewers (Code: ✅, Cursor: Claude-fallback (binary missing), Codex: ✅)
 ```
 
 If risk assessment, difficulty estimate, or feasibility verdict are not applicable to the nature of the research question (e.g., a pure "how does X work?" question), mark them as **N/A** with a brief explanation.

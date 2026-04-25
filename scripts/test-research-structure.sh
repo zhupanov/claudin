@@ -78,5 +78,21 @@ grep -Fq "<reviewer_research_question>" "$VALIDATION_MD" \
 grep -Fq "<reviewer_research_findings>" "$VALIDATION_MD" \
   || fail "references/validation-phase.md lacks '<reviewer_research_findings>' XML wrapper tag"
 
-echo "PASS: test-research-structure.sh — all 6 structural invariants hold"
+# Check 7: SKILL.md Step 3 must invoke render-lane-status.sh (the lane-attribution
+# formatter added by #421). Without this pin, a future edit could quietly remove
+# the helper invocation and the report header would silently regress to the
+# pre-#421 collapsed ✅/❌ shape (or to a hard-coded literal).
+grep -Fq "render-lane-status.sh" "$SKILL_MD" \
+  || fail "SKILL.md must reference render-lane-status.sh in Step 3 (#421 lane attribution)"
+
+# Check 8: Both phase references must mention lane-status.txt — the on-disk
+# KV record they update via surgical phase-local rewrites. Without these pins,
+# the orchestrator-side update logic could be silently dropped, leaving the
+# render helper to emit stale Step 0b values for runtime-fallback lanes.
+grep -Fq "lane-status.txt" "$RESEARCH_MD" \
+  || fail "references/research-phase.md must mention lane-status.txt (#421 RESEARCH_* slice update)"
+grep -Fq "lane-status.txt" "$VALIDATION_MD" \
+  || fail "references/validation-phase.md must mention lane-status.txt (#421 VALIDATION_* slice update + Step 2 entry propagation)"
+
+echo "PASS: test-research-structure.sh — all 8 structural invariants hold"
 exit 0

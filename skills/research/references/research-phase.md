@@ -105,6 +105,37 @@ Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Fo
 
 **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the corresponding availability flag, then **immediately launch a Claude subagent fallback via the Agent tool** (no `subagent_type`, carrying `RESEARCH_PROMPT` verbatim — same as the pre-launch fallback in Step 1.2) and wait for it before synthesis. This preserves the 3-lane invariant at synthesis time; without it, a mid-run external timeout silently reduces the synthesis input from 3 perspectives to 2.
 
+### Update lane-status.txt (RESEARCH_* slice only)
+
+After Runtime Timeout Fallback determinations are made, surgically update only the `RESEARCH_*` slice of `$RESEARCH_TMPDIR/lane-status.txt`. The `VALIDATION_*` keys must be preserved verbatim — Step 0b initialized them and Step 2 (validation-phase.md) owns subsequent updates. Do NOT rewrite the full file.
+
+For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:
+- `STATUS=TIMED_OUT` or `SENTINEL_TIMEOUT` → token `fallback_runtime_timeout`, reason empty
+- `STATUS=FAILED` or `EMPTY_OUTPUT` → token `fallback_runtime_failed`, reason = sanitized `FAILURE_REASON` (strip `=` and `|`, collapse whitespace, trim, truncate to 80 chars)
+
+If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched because pre-launch fallback already applied), no update is needed — the `RESEARCH_*` keys from Step 0b remain correct.
+
+Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `RESEARCH_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep the pre-launch token from Step 0b — `ok` / `fallback_binary_missing` / `fallback_probe_failed`).
+
+The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 0b. The orchestrator literally substitutes the resolved per-lane status and sanitized reason text into the placeholders below.
+
+```bash
+LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
+LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
+# Preserve VALIDATION_* keys verbatim.
+grep -v '^RESEARCH_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
+# Append fresh RESEARCH_* keys with literal substitutions.
+cat >> "$LANE_STATUS_TMP" <<'EOF'
+RESEARCH_CURSOR_STATUS=<cursor token>
+RESEARCH_CURSOR_REASON=<cursor sanitized reason or empty>
+RESEARCH_CODEX_STATUS=<codex token>
+RESEARCH_CODEX_REASON=<codex sanitized reason or empty>
+EOF
+mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
+```
+
+Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
+
 ## 1.4 — Synthesis
 
 Read all 3 research outputs (Claude inline + Cursor or its fallback + Codex or its fallback). Produce a synthesis that:
