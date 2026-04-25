@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass (standard or deep); --adjudicate adds 3-judge dialectic; --keep-sidecar keeps /issue-batch sidecar; --token-budget caps measurable Claude subagent tokens."
+description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep → 1/3+3/5+5 lanes (default standard); --plan adds planner pre-pass; --adjudicate adds dialectic; --keep-sidecar keeps batch; --token-budget caps tokens."
 argument-hint: "[--debug] [--plan] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
