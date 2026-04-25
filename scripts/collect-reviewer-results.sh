@@ -26,6 +26,15 @@
 #                                  monotonicity. Default OFF — preserves backward
 #                                  compatibility for callers other than /research.
 #                                  Closes #416 (Phase 3 of umbrella #413).
+#   --validation-mode              Modifier for --substantive-validation: forwards
+#                                  --validation-mode to validate-research-output.sh
+#                                  so its preset (NO_ISSUES_FOUND short-circuit + 30-
+#                                  word floor) applies. Use from /research's Step 2.4
+#                                  validation phase, where reviewer outputs are
+#                                  short numbered findings or the explicit
+#                                  NO_ISSUES_FOUND token rather than 2-3 paragraph
+#                                  prose. No effect when --substantive-validation
+#                                  is not also passed.
 #
 # Arguments:
 #   One or more output file paths (from run-external-reviewer.sh invocations).
@@ -52,6 +61,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMEOUT=""
 WRITE_HEALTH=""
 SUBSTANTIVE_VALIDATION="false"
+VALIDATION_MODE="false"
 OUTPUT_FILES=()
 
 while [[ $# -gt 0 ]]; do
@@ -62,8 +72,10 @@ while [[ $# -gt 0 ]]; do
             WRITE_HEALTH="${2:?--write-health requires a path}"; shift 2 ;;
         --substantive-validation)
             SUBSTANTIVE_VALIDATION="true"; shift ;;
+        --validation-mode)
+            VALIDATION_MODE="true"; shift ;;
         --help)
-            echo "Usage: collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] [--substantive-validation] <output-file>..." >&2
+            echo "Usage: collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] [--substantive-validation [--validation-mode]] <output-file>..." >&2
             exit 0 ;;
         -*)
             echo "collect-reviewer-results.sh: unknown option: $1" >&2; exit 1 ;;
@@ -359,6 +371,10 @@ fi
 # set_tool_unhealthy to preserve per-tool health monotonicity. Closes #416.
 if [[ "$SUBSTANTIVE_VALIDATION" == "true" ]]; then
     VALIDATOR="$SCRIPT_DIR/validate-research-output.sh"
+    VAL_ARGS=()
+    if [[ "$VALIDATION_MODE" == "true" ]]; then
+        VAL_ARGS+=(--validation-mode)
+    fi
     for j in "${!RESULTS[@]}"; do
         entry="${RESULTS[$j]}"
         # Precise field-by-field extraction. Fields 1-5 (REVIEWER_FILE, TOOL,
@@ -383,7 +399,7 @@ if [[ "$SUBSTANTIVE_VALIDATION" == "true" ]]; then
         # Run validator. Diagnostic on stdout; capture both stdout and stderr.
         # The collector runs without `set -e`, so a non-zero exit from the
         # validator does NOT abort the loop.
-        DIAG=$("$VALIDATOR" "$REVIEWER_FILE" 2>&1)
+        DIAG=$("$VALIDATOR" "${VAL_ARGS[@]}" "$REVIEWER_FILE" 2>&1)
         VAL_EXIT=$?
         if [[ "$VAL_EXIT" -ne 0 ]]; then
             # Sanitize: strip '|' (would corrupt pipe-delimited RESULTS), replace

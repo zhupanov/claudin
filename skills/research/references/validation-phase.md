@@ -165,10 +165,10 @@ COLLECT_ARGS=()
 
 **Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. The lane composition depends on `RESEARCH_SCALE`: standard mode has 3 Claude streams (the always-on Claude lane plus 2 Claude fallback lanes for the missing Cursor + Codex slots); deep mode has 5 Claude streams (the 3 always-on Claude lanes — `Code` + `Code-Sec` + `Code-Arch` — plus 2 Claude fallback lanes for the missing Cursor + Codex slots). Merge ALL Claude findings (preserving per-lane attribution: `Code` / `Code-Sec` / `Code-Arch` / `Cursor` / `Codex` for the slots that carry distinct attribution) and proceed to Finalize Validation.
 
-Otherwise, after processing Claude findings, invoke the script with only the launched paths. Pass `--substantive-validation` so the collector rejects validation-lane outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416):
+Otherwise, after processing Claude findings, invoke the script with only the launched paths. Pass `--substantive-validation --validation-mode` so the collector rejects validation-lane outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416). The `--validation-mode` modifier forwards to `scripts/validate-research-output.sh` and applies a preset tuned for validation-phase outputs: the literal `NO_ISSUES_FOUND` token (the explicit no-findings signal emitted by `scripts/render-reviewer-prompt.sh`) is accepted as substantive without further checks, and the default minimum word count is lowered from 200 to 30 (a single concise finding comfortably exceeds this floor):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation --validation-mode "${COLLECT_ARGS[@]}"
 ```
 
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.

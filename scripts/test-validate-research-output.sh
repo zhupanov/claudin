@@ -169,6 +169,50 @@ run_case "case 16: no file argument" 1
 # --- Case 17: unknown flag ---
 run_case "case 17: unknown flag" 1 --bogus-flag "$F1"
 
+# --- Case 18: --validation-mode + literal NO_ISSUES_FOUND passes (no body / no citation needed) ---
+F18="$TMPROOT/case18-noissues.txt"
+echo 'NO_ISSUES_FOUND' > "$F18"
+run_case "case 18: --validation-mode NO_ISSUES_FOUND" 0 --validation-mode "$F18"
+
+# --- Case 19: --validation-mode NO_ISSUES_FOUND with surrounding blank lines passes ---
+F19="$TMPROOT/case19-noissues-padded.txt"
+{
+    echo ''
+    echo '   NO_ISSUES_FOUND   '
+    echo ''
+    echo ''
+} > "$F19"
+run_case "case 19: --validation-mode NO_ISSUES_FOUND padded with blank lines" 0 --validation-mode "$F19"
+
+# --- Case 20: --validation-mode short cited finding (50 words + file:line) passes (30-word floor) ---
+F20="$TMPROOT/case20-validation-finding.txt"
+make_words 40 "$F20"
+echo 'See pkg/server/main.go:7 for the off-by-one.' >> "$F20"
+run_case "case 20: --validation-mode short cited finding" 0 --validation-mode "$F20"
+
+# --- Case 21: --validation-mode 10-word uncited finding fails (below 30-word floor) ---
+F21="$TMPROOT/case21-validation-too-short.txt"
+make_words 10 "$F21"
+run_case "case 21: --validation-mode 10-word too-short" 2 --validation-mode "$F21"
+
+# --- Case 22: --validation-mode 40-word uncited finding fails (no marker) ---
+F22="$TMPROOT/case22-validation-uncited.txt"
+make_words 40 "$F22"
+run_case "case 22: --validation-mode 40-word uncited" 3 --validation-mode "$F22"
+
+# --- Case 23: --validation-mode does NOT short-circuit on prose mentioning NO_ISSUES_FOUND inline ---
+F23="$TMPROOT/case23-validation-mentions-token.txt"
+make_words 40 "$F23"
+echo 'The reviewer was instructed to emit NO_ISSUES_FOUND but instead reported these issues:' >> "$F23"
+echo 'See pkg/server/main.go:7 for the off-by-one.' >> "$F23"
+run_case "case 23: --validation-mode prose mentioning token + citation passes (full validator path, not short-circuit)" 0 --validation-mode "$F23"
+
+# --- Case 24: --validation-mode + explicit --min-words override wins ---
+F24="$TMPROOT/case24-validation-override.txt"
+make_words 25 "$F24"
+echo 'See pkg/server/main.go:7 for the off-by-one.' >> "$F24"
+run_case "case 24: --validation-mode --min-words 50 (override beats preset's 30)" 2 --validation-mode --min-words 50 "$F24"
+
 echo ""
 echo "=== Summary ==="
 echo "Passed: $PASS"

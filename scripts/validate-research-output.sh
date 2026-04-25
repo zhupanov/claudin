@@ -20,6 +20,20 @@
 #          content line,
 #        - a URL (https?://...).
 #
+# Validation-mode preset (--validation-mode): for use with /research's Step
+# 2.4 validation phase, where reviewer outputs are structurally different
+# from research-phase prose (they contain the literal `NO_ISSUES_FOUND`
+# token on the happy path, or short numbered findings with file:line
+# citations). The preset:
+#   - accepts a file whose entire trimmed content equals `NO_ISSUES_FOUND`
+#     (case-sensitive) as substantive — exit 0 with no further checks,
+#   - lowers the default --min-words floor to 30 (a single concise finding
+#     comfortably exceeds this, but a junk one-liner does not),
+#   - keeps the citation requirement unchanged (validation findings must
+#     still cite file:line per the reviewer-template archetype).
+# The preset is a defaults override: explicit `--min-words N` and
+# `--no-require-citations` flags still take precedence.
+#
 # Known limitations (defense-in-depth, not authentication):
 #   - Tilde-fence variants (~~~ ... ~~~) are NOT recognized; only triple-
 #     backtick fences are.
@@ -32,7 +46,7 @@
 #     sanity gate, not a quality oracle.
 #
 # Usage:
-#   validate-research-output.sh [--min-words N] [--require-citations|--no-require-citations] <file>
+#   validate-research-output.sh [--min-words N] [--require-citations|--no-require-citations] [--validation-mode] <file>
 #
 # Exit codes:
 #   0 — substantive (no stdout output)
@@ -54,8 +68,9 @@
 # returning 1 (no match) must NOT abort the script.
 set -uo pipefail
 
-MIN_WORDS=200
+MIN_WORDS=""
 REQUIRE_CITATIONS=true
+VALIDATION_MODE=false
 INPUT=""
 
 while [[ $# -gt 0 ]]; do
@@ -66,6 +81,8 @@ while [[ $# -gt 0 ]]; do
             REQUIRE_CITATIONS=true; shift ;;
         --no-require-citations)
             REQUIRE_CITATIONS=false; shift ;;
+        --validation-mode)
+            VALIDATION_MODE=true; shift ;;
         --help)
             sed -n '/^# /,/^[^#]/p' "$0" | head -n 60
             exit 0 ;;
@@ -81,6 +98,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Apply --validation-mode defaults: lower min-words floor to 30 (a single
+# concise finding suffices) when not explicitly overridden. Citation
+# requirement is unchanged by the preset — explicit --no-require-citations
+# still wins.
+if [[ -z "$MIN_WORDS" ]]; then
+    if [[ "$VALIDATION_MODE" == "true" ]]; then
+        MIN_WORDS=30
+    else
+        MIN_WORDS=200
+    fi
+fi
+
 if [[ -z "$INPUT" ]]; then
     echo "validate-research-output.sh: file argument is required" >&2
     exit 1
@@ -89,6 +118,24 @@ fi
 if [[ ! -r "$INPUT" ]]; then
     echo "file not found: $INPUT"
     exit 4
+fi
+
+# --- 0. Validation-mode short-circuit: accept the literal NO_ISSUES_FOUND
+# token (the explicit "no findings" signal emitted by /research's Step 2.4
+# validators per scripts/render-reviewer-prompt.sh) as substantive without
+# applying word-count or citation checks. The token must be the entire
+# trimmed file content (whitespace-only lines removed top + bottom; tabs and
+# trailing whitespace stripped) — partial matches inside larger prose do NOT
+# trigger the short-circuit, since a finding that mentions "NO_ISSUES_FOUND"
+# in commentary should still be subject to word-count + citation checks.
+if [[ "$VALIDATION_MODE" == "true" ]]; then
+    # Concatenate non-blank lines after stripping per-line leading and trailing
+    # whitespace. If the result equals exactly `NO_ISSUES_FOUND`, the file is
+    # the literal token (possibly surrounded by blank lines) and is accepted.
+    TRIMMED=$(awk 'NF { gsub(/^[[:space:]]+|[[:space:]]+$/, ""); print }' "$INPUT")
+    if [[ "$TRIMMED" == "NO_ISSUES_FOUND" ]]; then
+        exit 0
+    fi
 fi
 
 # --- 1. Body word count, excluding fenced-code-block interiors ---
