@@ -58,10 +58,10 @@ All keys are optional. A missing or empty `*_STATUS` renders as `(unknown)`.
 
 ## Reason sanitization
 
-Applied inside the script after parse, before render:
+Applied inside the shared library `scripts/render-lane-status-lib.sh` (function `sanitize_reason`) after parse, before render — see `scripts/render-lane-status-lib.md` for the canonical specification:
 
-1. Collapse all whitespace runs (incl. `\n`, `\t`, `\r`) into single spaces.
-2. Strip embedded `=` and `|` characters.
+1. Strip embedded `=` and `|` characters.
+2. Collapse all whitespace runs (incl. `\n`, `\t`, `\r`) into single spaces.
 3. Trim leading/trailing whitespace.
 4. Truncate to 80 characters.
 
@@ -121,11 +121,11 @@ Two distinct error paths share this surface:
 
 ## Test harness
 
-`scripts/test-render-lane-status.sh` — offline regression harness, 9 fixtures. Wired via the Makefile `test-render-lane-status` target into `test-harnesses`. The harness MUST stay in sync with the case statement in `render_lane()` and the sanitization rules in `sanitize_reason()`. When adding a new status token, add a fixture; when changing the rendered string for an existing token, update the byte-exact assertions.
+`scripts/test-render-lane-status.sh` — offline regression harness, 10 fixture cases. Wired via the Makefile `test-render-lane-status` target into `test-harnesses`. The harness MUST stay in sync with the `render_lane()` case statement and the `sanitize_reason()` rules — both of which now live in the shared library `scripts/render-lane-status-lib.sh` (the harness reaches them via this script's source). When adding a new status token, add a fixture in BOTH this harness and `scripts/test-render-deep-lane-status.sh`; when changing the rendered string for an existing token, update the byte-exact assertions in both.
 
 ## Edit-in-sync rules
 
-- **Adding/removing/renaming a status token** → update the case statement in the shared library (`scripts/render-lane-status-lib.sh`), the canonical token table in `scripts/render-lane-status-lib.md`, both consumer contracts (this file + `scripts/render-lane-status.md`'s deep sibling at `scripts/render-deep-lane-status.md`), the orchestrator-side mapping in `skills/research/references/research-phase.md` (Step 1.3) and `validation-phase.md` (Step 2.4), and add fixtures in BOTH consumer harnesses (`scripts/test-render-lane-status.sh` AND `scripts/test-render-deep-lane-status.sh`).
+- **Adding/removing/renaming a status token** → update the case statement in the shared library (`scripts/render-lane-status-lib.sh`), the canonical token table in `scripts/render-lane-status-lib.md`, both consumer contracts (this file and `scripts/render-deep-lane-status.md`), the orchestrator-side mapping in `skills/research/references/research-phase.md` (Step 1.3) and `validation-phase.md` (Step 2.4), and add fixtures in BOTH consumer harnesses (`scripts/test-render-lane-status.sh` AND `scripts/test-render-deep-lane-status.sh`).
 - **Changing the rendered string for an existing token** → update the library's `render_lane()` case statement and the byte-exact stdout assertion in BOTH harness fixture sets.
 - **Changing the reason sanitization rules** → update the shared library's `sanitize_reason()`, the rules section in `scripts/render-lane-status-lib.md`, and the orchestrator-side prompt sanitization in SKILL.md Step 0a / `research-phase.md` Step 1.3 / `validation-phase.md` Step 2 entry, render-failure handlers (Cursor + Codex `On non-zero exit`), and Step 2.4.
 - **Changing the standard-mode lane count or the Code-lane special case** → update both `printf` lines at the bottom of `scripts/render-lane-status.sh`, the "Invariants" section above, and the assertion-count literal in the `scripts/test-research-structure.sh` success message.

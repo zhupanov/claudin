@@ -142,7 +142,9 @@ VALIDATION_CODEX_RENDERED="$(render_lane "$VALIDATION_CODEX_STATUS" "$VALIDATION
 
 # Standard-mode 3-lane shape pinned in research-phase.md and validation-phase.md
 # `### Standard` subsections (this script is used only by SKILL.md Step 3's
-# Standard branch; quick / deep emit literal headers without it — see #418).
+# Standard branch; quick emits literal headers without a helper; deep uses the
+# sibling render-deep-lane-status.sh — see #418, #451; both renderers share
+# render-lane-status-lib.sh for render_lane() and sanitize_reason()).
 printf 'RESEARCH_HEADER=3 agents (Cursor: %s, Codex: %s)\n' \
     "$RESEARCH_CURSOR_RENDERED" "$RESEARCH_CODEX_RENDERED"
 printf 'VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: %s, Codex: %s)\n' \
