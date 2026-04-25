@@ -405,6 +405,16 @@ exclude = [
   # pattern as the test-* harnesses and halt-rate-probe above.
   "scripts/eval-research.sh",
   "scripts/test-eval-set-structure.sh",
+  # scripts/test-validate-research-output.sh is the regression harness for
+  # scripts/validate-research-output.sh (the substantive-content validator
+  # added by #416 — Phase 3 of umbrella #413). The validator itself is
+  # invoked by scripts/collect-reviewer-results.sh via ${SCRIPT_DIR}/...,
+  # which is reachable through that file's structural references in
+  # skills/research/references/{research,validation}-phase.md and
+  # skills/shared/external-reviewers.md. The harness is referenced only
+  # from Makefile (test-validate-research-output target) — same Makefile-
+  # only shape as the other test-* harnesses above.
+  "scripts/test-validate-research-output.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by

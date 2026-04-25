@@ -7,16 +7,34 @@
 #
 # Usage:
 #   collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] \
-#     <output-file> [<output-file> ...]
+#     [--substantive-validation] <output-file> [<output-file> ...]
 #
 # Options:
-#   --timeout <seconds>    Timeout for wait-for-reviewers.sh (e.g., 1860)
-#   --write-health <path>  Write updated CODEX_HEALTHY/CURSOR_HEALTHY to file.
-#                          Health is monotonic per tool: any failure sets the tool
-#                          permanently unhealthy. A later successful instance does
-#                          NOT flip it back to healthy.
-#                          If the file already exists, prior health state is read
-#                          and merged monotonically (prior false is preserved).
+#   --timeout <seconds>            Timeout for wait-for-reviewers.sh (e.g., 1860)
+#   --write-health <path>          Write updated CODEX_HEALTHY/CURSOR_HEALTHY to file.
+#                                  Health is monotonic per tool: any failure sets the tool
+#                                  permanently unhealthy. A later successful instance does
+#                                  NOT flip it back to healthy.
+#                                  If the file already exists, prior health state is read
+#                                  and merged monotonically (prior false is preserved).
+#   --substantive-validation       After the existing non-empty + retry path settles,
+#                                  invoke scripts/validate-research-output.sh on each
+#                                  STATUS=OK entry. On validator failure, rewrite the
+#                                  entry as STATUS=NOT_SUBSTANTIVE | HEALTHY=false |
+#                                  FAILURE_REASON=<sanitized validator diagnostic>
+#                                  and call set_tool_unhealthy to preserve health
+#                                  monotonicity. Default OFF — preserves backward
+#                                  compatibility for callers other than /research.
+#                                  Closes #416 (Phase 3 of umbrella #413).
+#   --validation-mode              Modifier for --substantive-validation: forwards
+#                                  --validation-mode to validate-research-output.sh
+#                                  so its preset (NO_ISSUES_FOUND short-circuit + 30-
+#                                  word floor) applies. Use from /research's Step 2.4
+#                                  validation phase, where reviewer outputs are
+#                                  short numbered findings or the explicit
+#                                  NO_ISSUES_FOUND token rather than 2-3 paragraph
+#                                  prose. No effect when --substantive-validation
+#                                  is not also passed.
 #
 # Arguments:
 #   One or more output file paths (from run-external-reviewer.sh invocations).
@@ -26,7 +44,7 @@
 # Output (KEY=value blocks on stdout, one block per reviewer, separated by blank lines):
 #   REVIEWER_FILE=<output-path>
 #   TOOL=<codex|cursor|unknown>
-#   STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT>
+#   STATUS=<OK|TIMED_OUT|FAILED|EMPTY_OUTPUT|SENTINEL_TIMEOUT|NOT_SUBSTANTIVE>
 #   EXIT_CODE=<N>
 #   HEALTHY=<true|false>
 #   FAILURE_REASON=<explanation>  (non-empty when STATUS != OK; explains the cause of failure)
@@ -42,6 +60,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 TIMEOUT=""
 WRITE_HEALTH=""
+SUBSTANTIVE_VALIDATION="false"
+VALIDATION_MODE="false"
 OUTPUT_FILES=()
 
 while [[ $# -gt 0 ]]; do
@@ -50,8 +70,12 @@ while [[ $# -gt 0 ]]; do
             TIMEOUT="${2:?--timeout requires a value}"; shift 2 ;;
         --write-health)
             WRITE_HEALTH="${2:?--write-health requires a path}"; shift 2 ;;
+        --substantive-validation)
+            SUBSTANTIVE_VALIDATION="true"; shift ;;
+        --validation-mode)
+            VALIDATION_MODE="true"; shift ;;
         --help)
-            echo "Usage: collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] <output-file>..." >&2
+            echo "Usage: collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] [--substantive-validation [--validation-mode]] <output-file>..." >&2
             exit 0 ;;
         -*)
             echo "collect-reviewer-results.sh: unknown option: $1" >&2; exit 1 ;;
@@ -336,6 +360,55 @@ if [[ ${#RETRY_FILES[@]} -gt 0 ]]; then
             fi
         done
     fi
+fi
+
+# --- 3.5. Substantive-content validation (opt-in via --substantive-validation) ---
+# After section 3 (retry) every entry in RESULTS reflects its final status. For
+# each entry whose STATUS=OK, invoke validate-research-output.sh on its file
+# (REVIEWER_FILE — the retry path may have set it to a *-retry.txt). On
+# validator failure, rewrite the entry to STATUS=NOT_SUBSTANTIVE with the
+# sanitized diagnostic in FAILURE_REASON and HEALTHY=false; call
+# set_tool_unhealthy to preserve per-tool health monotonicity. Closes #416.
+if [[ "$SUBSTANTIVE_VALIDATION" == "true" ]]; then
+    VALIDATOR="$SCRIPT_DIR/validate-research-output.sh"
+    VAL_ARGS=()
+    if [[ "$VALIDATION_MODE" == "true" ]]; then
+        VAL_ARGS+=(--validation-mode)
+    fi
+    for j in "${!RESULTS[@]}"; do
+        entry="${RESULTS[$j]}"
+        # Precise field-by-field extraction. Fields 1-5 (REVIEWER_FILE, TOOL,
+        # STATUS, EXIT_CODE, HEALTHY) never contain '|' by construction (paths
+        # are tmpdir paths; tools are codex|cursor|unknown; STATUS/HEALTHY are
+        # fixed enums; EXIT_CODE is numeric). FAILURE_REASON (field 6) is the
+        # only field that may carry user content, and it's the trailing field
+        # — its content cannot collide with the field-1..5 prefixes.
+        rf_field="${entry%%|*}"             # REVIEWER_FILE=<path>
+        REVIEWER_FILE="${rf_field#REVIEWER_FILE=}"
+        rest1="${entry#*|}"                 # TOOL=<name>|...
+        tool_field="${rest1%%|*}"           # TOOL=<name>
+        ENTRY_TOOL="${tool_field#TOOL=}"
+        rest2="${rest1#*|}"                 # STATUS=<S>|...
+        status_field="${rest2%%|*}"         # STATUS=<S>
+        ENTRY_STATUS="${status_field#STATUS=}"
+
+        if [[ "$ENTRY_STATUS" != "OK" ]]; then
+            continue
+        fi
+
+        # Run validator. Diagnostic on stdout; capture both stdout and stderr.
+        # The collector runs without `set -e`, so a non-zero exit from the
+        # validator does NOT abort the loop.
+        DIAG=$("$VALIDATOR" "${VAL_ARGS[@]}" "$REVIEWER_FILE" 2>&1)
+        VAL_EXIT=$?
+        if [[ "$VAL_EXIT" -ne 0 ]]; then
+            # Sanitize: strip '|' (would corrupt pipe-delimited RESULTS), replace
+            # newlines with spaces, collapse whitespace, truncate to 200 chars.
+            DIAG_SAN=$(printf '%s' "$DIAG" | tr '|\n' '/ ' | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//' | cut -c1-200)
+            RESULTS[j]="REVIEWER_FILE=$REVIEWER_FILE|TOOL=$ENTRY_TOOL|STATUS=NOT_SUBSTANTIVE|EXIT_CODE=0|HEALTHY=false|FAILURE_REASON=$DIAG_SAN"
+            set_tool_unhealthy "$ENTRY_TOOL"
+        fi
+    done
 fi
 
 # --- 4. Emit structured results ---
