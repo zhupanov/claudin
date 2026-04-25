@@ -64,7 +64,7 @@ The naming difference is intentional: distinct stdout key vocabularies make the 
 
 After parsing the input file into per-block records, the helper sorts records by:
 
-1. **Primary key**: `Reviewer` field (lexicographic ascending; case-sensitive — `Code` < `Codex` < `Cursor`).
+1. **Primary key**: `Reviewer` field (lexicographic ascending; case-sensitive — `Code` < `Code-Arch` < `Code-Sec` < `Codex` < `Cursor`; `Code-Arch` and `Code-Sec` are the deep-mode Claude Code Reviewer subagent attributions and sort between `Code` and `Codex`).
 2. **Secondary key**: `sha256(Finding text)` (lexicographic ascending of the hex-encoded digest).
 
 The sorted order then determines the `DECISION_<N>` numbering: the first record becomes `DECISION_1`, the second `DECISION_2`, etc. **The same set of input rejections always produces a byte-identical ballot regardless of the order in which they were appended to `rejected-findings.md`** during the validation phase — this is the guarantee that allows append-time concurrency (Site A processes Claude findings immediately while Site B processes externals after parallel negotiations) without producing run-to-run nondeterminism in adjudication outcomes.

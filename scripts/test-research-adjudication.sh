@@ -20,6 +20,10 @@
 #      lines into the ballot file; caller-style `2>&1` merge still surfaces
 #      ERROR= for the existing run-research-adjudication.sh extraction
 #      (regression guard for issue #463).
+#  11. Deep-mode reviewer name stripping (issue #461) — anchored leading prefix `Code-Sec:` /
+#      `Code-Arch:` and anchored trailing suffix ` (Code-Sec)` / ` — Code-Arch` are stripped from
+#      defense bodies; mid-content occurrences are preserved. Code-Sec and Code-Arch are the
+#      deep-mode reviewer attributions introduced by /research --scale=deep.
 #
 # Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
 # locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
