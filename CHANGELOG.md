@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.7] - 2026-04-24
+
+### Changed
+
+- `skills/research/references/research-phase.md`: shared `RESEARCH_PROMPT` literal now mandates a provenance schema (Phase 1 of umbrella #413). Added clause (4) requiring every concrete claim to carry one of `file:line` / `file:line-range`, a fenced command + output snippet, or a URL; tightened the existing "Explore the codebase to ground your findings" sentence to point at clause (4). Phase 1 is schema-only — no validator change yet (Phase 3, #416). Closes #414.
+
 ## [7.0.6] - 2026-04-24
 
 ### Fixed
