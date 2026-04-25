@@ -37,7 +37,10 @@
 #   32. Bypass regression file.tsxfoo:1 → exit 3 (covers new-extension boundary)
 #   33. Happy-path .md:42 still passes → exit 0 (no regression of existing case 1)
 #   34. Prose-glued comma file.md, → exit 0 (boundary char is a real comma)
-#   35. Compound-extension file.md.bak → exit 3 (#447 documented trade-off lock-in)
+#   35. Compound-extension file.md.bak → exit 0 (substring match on .md; #447 boundary class allows `.` as boundary)
+#   36. Sentence-ending period See file.go. → exit 0 (#447 boundary class allows `.` as boundary)
+#   37. Bare-`:`-then-non-digits bypass file.md:garbage → exit 3 (#447 boundary class excludes `:`)
+#   38. Slash-suffix bypass file.md/child → exit 3 (#447 boundary class excludes `/`)
 #
 # Usage:
 #   bash scripts/test-validate-research-output.sh
@@ -296,11 +299,29 @@ make_words 250 "$F34"
 echo 'See docs/notes.md, then continue with the discussion below.' >> "$F34"
 run_case "case 34: prose-glued comma file.md, passes (real-char boundary)" 0 "$F34"
 
-# --- Case 35: compound-extension file.md.bak → exit 3 (#447 documented trade-off lock-in) ---
+# --- Case 35: compound-extension file.md.bak → exit 0 (substring match on .md; #447 boundary class allows `.`) ---
 F35="$TMPROOT/case35-compound.txt"
 make_words 250 "$F35"
 echo 'Reference: see file.md.bak in the backup directory.' >> "$F35"
-run_case "case 35: file.md.bak compound-extension rejected (#447 trade-off lock-in)" 3 "$F35"
+run_case "case 35: file.md.bak compound-extension accepted via .md substring (#447 boundary allows period)" 0 "$F35"
+
+# --- Case 36: sentence-ending period See file.go. → exit 0 (#447 boundary class allows `.`) ---
+F36="$TMPROOT/case36-sentence-period.txt"
+make_words 250 "$F36"
+echo 'Refer to scripts/foo.go.' >> "$F36"
+run_case "case 36: sentence-ending period scripts/foo.go. accepted (#447 boundary allows period)" 0 "$F36"
+
+# --- Case 37: bare-`:`-then-non-digits bypass file.md:garbage → exit 3 (#447 boundary excludes `:`) ---
+F37="$TMPROOT/case37-bypass-colon-garbage.txt"
+make_words 250 "$F37"
+echo 'Reference: file.md:garbage — bare colon followed by non-digits, fake-citation bypass attempt.' >> "$F37"
+run_case "case 37: file.md:garbage rejected (#447 boundary excludes colon so optional :line group must match digits)" 3 "$F37"
+
+# --- Case 38: slash-suffix bypass file.md/child → exit 3 (#447 boundary excludes `/`) ---
+F38="$TMPROOT/case38-bypass-slash.txt"
+make_words 250 "$F38"
+echo 'Reference: file.md/child — slash-suffix bypass attempt.' >> "$F38"
+run_case "case 38: file.md/child rejected (#447 boundary excludes slash)" 3 "$F38"
 
 echo ""
 echo "=== Summary ==="
