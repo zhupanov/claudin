@@ -131,6 +131,18 @@ suppress = [
 # contract), matching the same Makefile-only pattern as the other test-*
 # harnesses above. Both the .sh and the .md are excluded below.
 #
+# skills/fix-issue/scripts/test-fix-issue-step-order.sh is the regression
+# harness pinning the Step 1 = lock, Step 2 = setup ordering established by
+# closes #445 (fetch → lock → setup reorder, shipped in PR #468). Nine
+# assertions over skills/fix-issue/SKILL.md cover Step Name Registry rows,
+# section headings, anti-pattern #1 wording, and lock-section breadcrumb
+# literals (positive matches on `1: lock`, negative matches on stale
+# `2: lock`). The harness is referenced only from Makefile
+# (test-fix-issue-step-order target) and
+# skills/fix-issue/scripts/test-fix-issue-step-order.md (sibling contract),
+# matching the same Makefile-only pattern as the other test-* harnesses
+# above. Both the .sh and the .md are excluded below.
+#
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
 # presence in 5 orchestrator SKILL.md files (fix-issue, implement, review,
@@ -336,6 +348,7 @@ exclude = [
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
   "skills/fix-issue/scripts/test-issue-lifecycle.sh",
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.sh",
+  "skills/fix-issue/scripts/test-fix-issue-step-order.sh",
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
@@ -429,6 +442,7 @@ exclude = [
   "skills/fix-issue/scripts/parse-prose-blockers.md",
   "skills/fix-issue/scripts/issue-lifecycle.md",
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.md",
+  "skills/fix-issue/scripts/test-fix-issue-step-order.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
 ]
