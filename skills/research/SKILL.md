@@ -285,6 +285,18 @@ Example rendered headers (one degraded research lane, one degraded validation la
 **Validation phase**: 3 reviewers (Code: ✅, Cursor: Claude-fallback (binary missing), Codex: ✅)
 ```
 
+When any external research lane ran as a Claude-fallback (`N_FALLBACK >= 1` per the §1.5 banner preamble in `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md`), Step 1.5 also prepends a reduced-diversity banner under `## Research Synthesis` — visible to readers and persisted in `research-report.txt` so Step 2 reviewers see it. The banner contract is guarded by an offline regression harness (`${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.sh`, contract in sibling `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-degraded-path-banner.md`) wired into `make lint`. Example degraded-path preview (standard scale, Codex tool fell back):
+
+```markdown
+## Research Synthesis
+
+**⚠ Reduced lane diversity: 1 of 2 external research lanes ran as Claude-fallback. The model-family heterogeneity claim does not hold for this run.**
+
+[Then the usual agree / diverge / significance / architectural patterns / risks content follows...]
+```
+
+Quick mode does NOT carry this banner — it has its own `**Single-lane confidence — no validation pass.**` disclaimer that already signals the lower-assurance outcome.
+
 If risk assessment, difficulty estimate, or feasibility verdict are not applicable to the nature of the research question (e.g., a pure "how does X work?" question), mark them as **N/A** with a brief explanation.
 
 **Adjudication header**: substitute the `<ADJUDICATION_HEADER>` placeholder per `RESEARCH_ADJUDICATE`:
