@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.6] - 2026-04-24
+
+### Fixed
+
+- `skills/fix-issue/scripts/fetch-eligible-issue.sh` explicit-issue path now emits a lock-specific error (`Issue #N is locked by another /fix-issue run (last comment: IN PROGRESS)`) when the requested issue's last comment is `IN PROGRESS`, instead of the misleading `not approved` framing. Mirrors the auto-pick path's existing `IN PROGRESS` skip; behavior is unchanged (already rejected via the GO check), only the message clarity improves. Closes #410.
+
 ## [7.0.5] - 2026-04-24
 
 ### Added
