@@ -49,6 +49,8 @@ Parse stdout for:
 
 Launch all 3 judges **in parallel** (single message). Spawn order: Cursor first (slowest), then Codex, then the Claude code-reviewer subagent (fastest).
 
+**Token telemetry (adjudication judges)**: Every Claude code-reviewer subagent invocation in this phase is a measurable Agent-tool call — including (a) the always-present Claude judge, AND (b) any Cursor/Codex judge replacements (when their `judge_*_available` flag is false). After each Agent-tool judge return, parse `total_tokens` from the `<usage>` block and write a per-lane sidecar via `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write --phase adjudication --lane <slot> --tool claude --total-tokens <N|unknown> --dir "$RESEARCH_TMPDIR"`. Use stable slot names: `Code` (always-present Claude judge), `Cursor` (when Cursor judge fell back to Claude replacement), `Codex` (when Codex judge fell back to Claude replacement). When `<usage>` is missing or unparseable, pass `--total-tokens unknown`. See `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.md` for the helper contract.
+
 **Cursor judge** (if `judge_cursor_available=true`):
 
 ```bash

@@ -491,6 +491,17 @@ exclude = [
   # The harness is referenced only from Makefile (test-collect-reviewer-bash32
   # target) — same Makefile-only shape as the other test-* harnesses above.
   "scripts/test-collect-reviewer-bash32.sh",
+  # scripts/test-token-tally.sh is the offline regression harness for
+  # scripts/token-tally.sh (per-run token-cost telemetry helper for
+  # /research; closes #518). The token-tally helper is invoked from
+  # skills/research/SKILL.md (between-phase budget gates after Steps 1, 2,
+  # 2.5; Step 4 token-spend report) and from the three phase references
+  # (research-phase.md / validation-phase.md / adjudication-phase.md), so
+  # it has plenty of structural references; the harness is referenced only
+  # from Makefile (test-token-tally target) and scripts/test-token-tally.md
+  # (sibling contract), matching the same Makefile-only pattern as the other
+  # test-* harnesses above.
+  "scripts/test-token-tally.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
