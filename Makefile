@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-parse-input test-parse-args test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-parse-input test-parse-args test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-verify-skill-called test-check-bump-version test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-review-structure test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor smoke-dialectic halt-rate-probe eval-research test-eval-set-structure
 
 # CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
 # (regression harnesses). `lint` remains the local-dev convenience target
@@ -129,6 +129,23 @@ smoke-dialectic:
 # too slow and non-deterministic for CI. See docs/linting.md "Halt-rate regression harness".
 halt-rate-probe:
 	bash scripts/test-loop-improve-skill-halt-rate.sh
+
+# Opt-in /research evaluation harness (closes #419 under umbrella #413). NOT a
+# lint prerequisite — runs ~20 questions × ~30-60s each, costs real tokens.
+# Operator instrumentation for prompt-side iteration on /research. See
+# docs/linting.md "/research evaluation harness". Pass flags via ARGS=,
+# e.g.: `make eval-research ARGS="--id eval-1 --timeout 4200"`. Direct
+# `bash scripts/eval-research.sh ...` is the documented primary path.
+eval-research:
+	bash scripts/eval-research.sh $(ARGS)
+
+# Standalone offline structural test for the /research eval set + harness
+# (closes #419). NOT a `test-harnesses` prerequisite by design — the runtime
+# harness it tests is opt-in operator instrumentation explicitly carved out
+# from CI. The structural test is itself cheap (no API cost) but kept
+# standalone for symmetry. See scripts/test-eval-set-structure.md.
+test-eval-set-structure:
+	bash scripts/test-eval-set-structure.sh
 
 shellcheck:
 	pre-commit run shellcheck --all-files
