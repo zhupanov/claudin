@@ -483,6 +483,14 @@ exclude = [
   # from Makefile (test-validate-research-output target) — same Makefile-
   # only shape as the other test-* harnesses above.
   "scripts/test-validate-research-output.sh",
+  # scripts/test-collect-reviewer-bash32.sh is the regression harness for
+  # the bash 3.2 portability hazard at scripts/collect-reviewer-results.sh:402
+  # (closes #511). Three cases: static idiom grep (Linux-CI backstop), plus
+  # two dynamic exercises under /bin/bash 3.x (skip-with-loud-message on bash
+  # 4+) covering the empty-VAL_ARGS path and --validation-mode flag forwarding.
+  # The harness is referenced only from Makefile (test-collect-reviewer-bash32
+  # target) — same Makefile-only shape as the other test-* harnesses above.
+  "scripts/test-collect-reviewer-bash32.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
