@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.5] - 2026-04-25
+
+### Added
+
+- `skills/fix-issue/scripts/test-fix-issue-step-order.sh` — offline regression harness pinning the `/fix-issue` Step 1 = lock, Step 2 = setup ordering established by PR #468 (closes #445). Twelve assertions over `skills/fix-issue/SKILL.md`: nine textual literal pins (Step Name Registry rows, section headings, anti-pattern #1 wording, lock breadcrumb literals positive/negative) plus three operational ordering pins (`awk`-scoped block extraction asserting that the Step 1 block contains the `issue-lifecycle.sh ... --lock` invocation, the Step 1 block does NOT contain `session-setup.sh`, and the Step 2 block contains `session-setup.sh --prefix claude-fix-issue --skip-branch-check`). The block-scoped assertions are the load-bearing guard against a future edit that keeps headings/registry/breadcrumbs intact while moving setup back into the lock block. Sibling contract `skills/fix-issue/scripts/test-fix-issue-step-order.md` documents the assertion list and edit-in-sync rules. Wired into `make lint` via the `test-fix-issue-step-order` target under `test-harnesses`; both the `.sh` and the sibling `.md` are added to `agent-lint.toml`'s `exclude` lists, matching the same Makefile-only-reference pattern used by `test-fix-issue-bail-detection`. Co-evolved with the PR review process: 1 round of /review surfaced FINDING_1 (header-comment / accumulator-pattern accuracy) and FINDING_2 (operational ordering not pinned by literal-only assertions); both accepted by 2-1 vote and applied before merge. Closes #445 follow-up.
+
 ## [7.4.4] - 2026-04-25
 
 ### Changed
