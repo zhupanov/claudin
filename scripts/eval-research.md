@@ -124,8 +124,10 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 | `skills/research/references/eval-baseline.json` | Schema-only stub today (`entries: []`). Operator runs `bash scripts/eval-research.sh --write-baseline <file>` to populate. |
 | `scripts/test-eval-set-structure.sh` | Offline structural regression. Asserts entry count, category coverage, schema validity, and invokes `--smoke-test` for round-trip verification. |
 | `scripts/test-eval-set-structure.md` | Sibling contract for the test harness. |
-| `Makefile` | Adds `eval-research` and `test-eval-set-structure` standalone targets. NEITHER is a `test-harnesses` prerequisite. |
-| `agent-lint.toml` | Excludes both `scripts/eval-research.sh` and `scripts/test-eval-set-structure.sh` from dead-script checks (Makefile-only references). |
+| `scripts/test-eval-research-baseline-flag.sh` | Standalone offline regression harness for the `--baseline` flag handling (closes #441). PATH-stubs `claude` and `jq` so it runs without the real binaries. Exercises the three flag-state paths (no-flag / valid-ref / bad-ref). |
+| `scripts/test-eval-research-baseline-flag.md` | Sibling contract for the `--baseline` flag test harness. |
+| `Makefile` | Adds `eval-research`, `test-eval-set-structure`, and `test-eval-research-baseline-flag` standalone targets. NONE is a `test-harnesses` prerequisite. |
+| `agent-lint.toml` | Excludes `scripts/eval-research.sh`, `scripts/test-eval-set-structure.sh`, and `scripts/test-eval-research-baseline-flag.sh` from dead-script checks (all are Makefile-only references). |
 | `docs/linting.md` | Documents `eval-research` as opt-in operator-run instrumentation. |
 | `skills/improve-skill/scripts/iteration.sh` | Source of the `claude -p` subprocess pattern (stdin file + stderr sidecar + poll loop). The harness reuses the pattern but decouples numeric timeouts. |
 | `scripts/parse-skill-judge-grade.sh` | Source of the fail-closed structured-output parsing discipline. The harness's judge-output parser mirrors the exit-zero-with-status-on-stdout shape. |

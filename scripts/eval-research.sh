@@ -566,6 +566,16 @@ if [[ -n "$BASELINE_REF" ]]; then
   BASELINE_ROWS_FILE="$WORK_DIR/baseline-rows.json"
   baseline_git_err="$WORK_DIR/baseline-git-stderr.log"
   if git -C "$CLAUDE_PLUGIN_ROOT" show "${BASELINE_REF}:skills/research/references/eval-baseline.json" > "$BASELINE_ROWS_FILE" 2>"$baseline_git_err"; then
+    # Validate the schema of the cached blob. A ref where the baseline JSON has
+    # drifted (missing required keys, malformed entries) would otherwise still
+    # print the success banner and exit 0, which is the same misleading-success
+    # failure mode #441 fixed for unresolvable refs. Reuse the same validator
+    # that the local EVAL_BASELINE_FILE is checked against on line 532.
+    if ! validate_baseline_json "$BASELINE_ROWS_FILE"; then
+      printf 'eval-research: ERROR — baseline ref %s resolved but the cached JSON failed schema validation (see preceding diagnostic); aborting.\n' "$BASELINE_REF" >&2
+      rm -f "$BASELINE_ROWS_FILE" "$baseline_git_err"
+      exit 2
+    fi
     printf 'eval-research: baseline ref %s cached at %s\n' "$BASELINE_REF" "$BASELINE_ROWS_FILE"
     printf '\neval-research: --baseline: PREVIEW MODE — baseline JSON pre-fetched to %s; inline delta columns are not yet wired in this PR (a future amendment will add them).\n\n' "$BASELINE_ROWS_FILE"
     printf 'eval-research: WARNING — --baseline delta columns are not yet wired in this PR; the baseline JSON is cached at the path printed above for manual diffing or future amendment, but no inline comparison column appears in the summary table.\n' >&2
