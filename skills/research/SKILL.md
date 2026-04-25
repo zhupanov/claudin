@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Use when best-effort read-only research is needed. Scale-aware: --scale=quick|standard|deep → 1 / 3+3 / 5+5 lanes (default standard). Optional --adjudicate runs a 3-judge dialectic over rejected validation findings. Mechanical guard: Edit/Write only; Bash + externals prompt-enforced. May invoke /issue."
+description: "Use when best-effort read-only research is needed. --scale=quick|standard|deep selects 1/3+3/5+5 lanes (default standard); --adjudicate adds 3-judge dialectic over rejected findings. Mechanical guard: Edit/Write only. May invoke /issue."
 argument-hint: "[--debug] [--scale=quick|standard|deep] [--adjudicate] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
