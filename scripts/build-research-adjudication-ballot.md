@@ -30,13 +30,13 @@ Failure (stderr, fd 2): FAILED=true
 
 Failure output is written to stderr (fd 2). The Phase 3 ballot-emit step uses a brace group `{ ... } > "$OUTPUT"` that redirects only fd 1 to the ballot file; routing failures to fd 2 keeps the `FAILED=true` / `ERROR=` lines out of the ballot file and reachable by the caller. Callers that need to read `ERROR=` must merge stderr into stdout (`2>&1`), as `run-research-adjudication.sh` already does. The exit code (1 for invocation/usage errors, 2 for I/O failures) remains the primary failure signal; stderr carries the diagnostic detail.
 
-`DECISION_COUNT=0` on success indicates the input file existed but contained no parseable `### REJECTED_FINDING_<N>` blocks (or all blocks were incomplete and silently skipped). The output ballot file is created empty in that case; callers should check `DECISION_COUNT > 0` before attempting to launch judges.
+`DECISION_COUNT=0` on success indicates the input file existed but contained no parseable `### REJECTED_FINDING_<N>` blocks. The output ballot file is created empty in that case; callers should check `DECISION_COUNT > 0` before attempting to launch judges. A header-positive but content-incomplete input is no longer a `DECISION_COUNT=0` success path — it is a fail-closed exit 2 (see "Incomplete-record handling" below).
 
 ### Exit codes
 
-- `0` — Success (DECISION_COUNT may be 0).
+- `0` — Success (DECISION_COUNT may be 0 only when the input contained no `### REJECTED_FINDING_<N>` headers).
 - `1` — Invocation / usage error (missing flag, unknown argument).
-- `2` — I/O failure (input missing, output parent missing, awk failure, sha256 utility missing, or base64 decode failure indicating internal TSV corruption).
+- `2` — I/O failure (input missing, output parent missing, generic awk failure, sha256 utility missing, or base64 decode failure indicating internal TSV corruption) **OR** incomplete `### REJECTED_FINDING_<N>` block (missing one of `Reviewer`, `Finding`, or `Rejection rationale` — whitespace-only field bodies are treated as missing). The awk parser internally exits 3 on the incomplete-block path and writes a single-line sentinel to `$WORK_DIR/incomplete.error`; the shell wrapper reads the sentinel and routes through `emit_failure` so the operator sees a stable exit 2 with `FAILED=true` / `ERROR=REJECTED_FINDING_<N> is incomplete...` on stderr.
 
 ### Multi-line / tab-safe field encoding
 
@@ -49,7 +49,22 @@ These C0 control characters are reserved by the ASCII standard for record/group/
 
 ### Incomplete-record handling
 
-If a `### REJECTED_FINDING_<N>` block is missing one of `Reviewer`, `Finding`, or `Rejection rationale`, the parser emits a `WARN: REJECTED_FINDING_<N> is incomplete (missing one of Reviewer/Finding/Rejection rationale); dropping` line to stderr and continues with the next block. This is a soft-fail policy: a degraded `/research` run might produce partial captures, and dropping the partial block while warning is preferable to either crashing the pipeline or silently emitting a malformed ballot. The coordinator `scripts/run-research-adjudication.sh` separately treats `DECISION_COUNT=0` as a short-circuit (`RAN=false`), so a pathological case of "all blocks incomplete" still yields a clean skip-path rather than an empty ballot reaching the judges.
+If a `### REJECTED_FINDING_<N>` block is missing one of `Reviewer`, `Finding`, or `Rejection rationale`, the parser **fails closed**: it writes a single-line sentinel `REJECTED_FINDING_<N> is incomplete (missing one of Reviewer/Finding/Rejection rationale)` to `$WORK_DIR/incomplete.error` and exits with reserved code 3. The shell wrapper detects the non-empty sentinel file and routes through `emit_failure`, producing the stable contract on stderr:
+
+```
+FAILED=true
+ERROR=REJECTED_FINDING_<N> is incomplete (missing one of Reviewer/Finding/Rejection rationale)
+```
+
+with exit code 2.
+
+Whitespace-only field bodies are treated as missing — the parser trims `Finding` and `Rejection rationale` (in addition to the always-trimmed `Reviewer`) before the completeness check.
+
+The prior soft-drop policy is retired. Soft-dropping created a `DECISION_k → REJECTED_FINDING_<N>` mapping inconsistency between this builder and `skills/research/references/adjudication-phase.md` Step 2.5.5: the builder dropped incomplete records before numbering, but Step 2.5.5's reverse-mapping algorithm parsed all blocks (no completeness filter) and could mis-attribute a winning `DECISION_k` to the wrong rejected finding when one or more captures were degraded. Failing closed makes the bug class structurally impossible — every block reaching Step 2.5.5 is complete by builder construction. See issue #462 for the original report and dialectic-resolved design rationale.
+
+The coordinator `scripts/run-research-adjudication.sh` surfaces incomplete-block failures via its existing failure path: when the builder's `ERROR=` line matches the anchored sentinel `^REJECTED_FINDING_[0-9]+ is incomplete`, the coordinator prepends an `incomplete-input:` tag so operators can distinguish malformed-input failures from generic builder breakage at the coordinator seam.
+
+The `DECISION_COUNT=0` short-circuit at the coordinator (previously the recovery path for "all blocks incomplete") is retained only for the legitimately-empty input case — header-bearing input that produces `DECISION_COUNT=0` is now treated as a defensive hard failure indicating a parser regression, not a soft skip.
 
 ### Naming choice (BUILT/BALLOT vs ASSEMBLED/OUTPUT)
 
@@ -136,6 +151,7 @@ When editing this script:
 - Position-rotation rule order matches `skills/shared/dialectic-protocol.md` "Position-order rotation". If the protocol's rotation rule changes, update both this script and `scripts/test-research-adjudication.sh`.
 - Defense-wrapper preamble text must match the `<defense_content>` preamble pattern declared in `skills/shared/dialectic-protocol.md` Ballot Format section. Verbatim match required (the offline harness asserts this).
 - The sibling test harness `scripts/test-research-adjudication.sh` validates ballot output against fixtures; any change to ordering, rotation, or stripping must be reflected in the test harness fixtures in the same PR.
+- The fail-closed incomplete-record contract is shared between this script (the producer of the failure) and `skills/research/references/adjudication-phase.md` Step 2.5.5 (the consumer of the resulting input invariant — every parsed block is complete). Edits to either side must keep both in sync. Issue #462 is the original report and design-rationale anchor; the regression guard is the offline harness fixture asserting fail-closed exit on incomplete input.
 
 ## Test harness
 

@@ -24,9 +24,18 @@
 # to read the ERROR= line must merge stderr into stdout, e.g. `2>&1`.
 #
 # Exit codes:
-#   0 — success (DECISION_COUNT may be 0 if input file was empty after parsing)
+#   0 — success (DECISION_COUNT may be 0 only when the input contained no
+#       `### REJECTED_FINDING_<N>` headers; a header-positive but content-incomplete
+#       input is now a fail-closed exit 2 — see "Incomplete-record handling" below)
 #   1 — invocation / usage error (missing flag, empty value, missing helper)
-#   2 — I/O failure (unreadable input, unwritable output path, etc.)
+#   2 — I/O failure (unreadable input, unwritable output path, etc.) OR
+#       incomplete REJECTED_FINDING_<N> block (missing one of Reviewer/Finding/
+#       Rejection rationale; whitespace-only field bodies are treated as missing).
+#       The awk parser internally exits 3 on the incomplete-block case and writes
+#       a single-line sentinel to $WORK_DIR/incomplete.error; the shell wrapper
+#       reads that sentinel and translates to a stable exit 2 with FAILED=true /
+#       ERROR=REJECTED_FINDING_<N> is incomplete... on stderr.
+#       See sibling .md "Incomplete-record handling" for the full contract.
 #
 # The naming choice BUILT/BALLOT (vs ASSEMBLED/OUTPUT used by scripts/assemble-anchor.sh)
 # is intentional: this helper produces a complete ballot for dialectic judges, not a
@@ -141,16 +150,31 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 
 PARSED="$WORK_DIR/parsed.tsv"
 
-awk -v parsed_out="$PARSED" '
+SENTINEL="$WORK_DIR/incomplete.error"
+
+awk -v parsed_out="$PARSED" -v sentinel_path="$SENTINEL" '
 function trim(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s; }
 function flush_record() {
   if (current_n == "") return;
+  # Trim Finding and Rationale before the completeness check. Reviewer is
+  # already trimmed at the bullet-line parse site; Finding and Rationale arrive
+  # via raw substr() and may carry leading/trailing whitespace from the bullet
+  # delimiter, so a body that is only whitespace would otherwise survive the
+  # `== ""` check below. Trimming aligns the completeness predicate with the
+  # operator-visible meaning of "missing field" — see issue #462 FINDING_7.
+  finding = trim(finding);
+  rationale = trim(rationale);
   if (reviewer == "" || finding == "" || rationale == "") {
-    # Surface incomplete records on stderr so degraded runs are visible without
-    # crashing the whole pipeline. Continue to the next record.
-    print "WARN: REJECTED_FINDING_" current_n " is incomplete (missing one of Reviewer/Finding/Rejection rationale); dropping" > "/dev/stderr";
-    current_n = ""; reviewer = ""; finding = ""; rationale = ""; mode = "";
-    return;
+    # Fail closed on any incomplete REJECTED_FINDING_<N> block. Write a
+    # single-line sentinel to the workspace error file and exit with reserved
+    # code 3. The shell wrapper around this awk invocation reads the sentinel
+    # and routes through emit_failure (exit 2) so callers see a stable
+    # FAILED=true / ERROR=REJECTED_FINDING_<N> is incomplete... contract.
+    # Soft-dropping is retired because it created a DECISION_k → REJECTED_FINDING_<N>
+    # mapping inconsistency between this builder and adjudication-phase.md
+    # Step 2.5.5 — see issue #462.
+    print "REJECTED_FINDING_" current_n " is incomplete (missing one of Reviewer/Finding/Rejection rationale)" > sentinel_path;
+    exit 3;
   }
   # Encode embedded newlines/tabs to ASCII FS/GS so the TSV record is single-line
   # and tab-safe. Phase 2 reverses these substitutions.
@@ -196,7 +220,18 @@ current_n != "" {
 END {
   flush_record();
 }
-' "$INPUT" || emit_failure "awk parse failed for $INPUT" 2
+' "$INPUT" || {
+  # awk exited non-zero. Distinguish the incomplete-block fail-closed path
+  # (exit 3 + non-empty sentinel file) from a generic awk parse failure.
+  # The sentinel file is the discriminator: only the incomplete-block branch
+  # writes to it. Exit code itself is not inspected because `||` does not
+  # preserve it portably across shells.
+  if [[ -s "$SENTINEL" ]]; then
+    emit_failure "$(cat "$SENTINEL")" 2
+  else
+    emit_failure "awk parse failed for $INPUT" 2
+  fi
+}
 
 # If parsing yielded zero records, emit a valid empty ballot and exit 0.
 if [[ ! -s "$PARSED" ]]; then

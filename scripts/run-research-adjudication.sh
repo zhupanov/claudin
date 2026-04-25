@@ -130,6 +130,17 @@ if ! BUILDER_OUT="$("$BALLOT_BUILDER" --input "$REJECTED_FINDINGS" --output "$BA
   # Helper exited non-zero; surface its error and bail.
   err_line="$(printf '%s\n' "$BUILDER_OUT" | grep -E '^ERROR=' | head -1 | sed 's/^ERROR=//')"
   err_line="${err_line:-Ballot builder failed}"
+  # Narrow string guard: when the builder's ERROR= line matches the anchored
+  # incomplete-block sentinel, classify the failure with an `incomplete-input:`
+  # prefix so operators can distinguish malformed `rejected-findings.md` input
+  # from generic builder breakage at the coordinator seam. The pattern is
+  # anchored to start-of-string and case-sensitive — see issue #462 dialectic
+  # resolution DECISION_2 and FINDING_4 for the rationale. No new exit code,
+  # no new state; this is a single-pattern enrichment of the existing
+  # emit_failure path.
+  if [[ "$err_line" =~ ^REJECTED_FINDING_[0-9]+\ is\ incomplete ]]; then
+    err_line="incomplete-input: $err_line"
+  fi
   emit_failure "$err_line" 2
 fi
 
@@ -143,11 +154,17 @@ fi
 DECISION_COUNT="$(printf '%s\n' "$BUILDER_OUT" | grep -E '^DECISION_COUNT=' | head -1 | sed 's/^DECISION_COUNT=//')"
 DECISION_COUNT="${DECISION_COUNT:-0}"
 
-# If DECISION_COUNT is 0 (input had no parseable blocks even though grep matched
-# the header — could happen if all blocks were structurally incomplete), short-circuit.
+# Defensive hard-fail (issue #462 FINDING_3): if the builder reports
+# DECISION_COUNT=0 on header-positive input, that indicates a parser regression
+# rather than legitimate emptiness — Phase 1 above already short-circuited the
+# legitimately-empty case (no header, missing/empty file). The prior soft-skip
+# RAN=false for this branch handled the now-retired all-blocks-incomplete path,
+# which under the fail-closed builder contract reaches this script as a
+# non-zero builder exit instead. Keeping a hard-fail here preserves
+# defense-in-depth against a future builder change that re-introduces a path
+# where header-positive input yields a zero-decision success.
 if [[ "$DECISION_COUNT" == "0" ]]; then
-  printf 'RAN=false\nREASON=%s\n' "ballot builder produced 0 decisions (input blocks were incomplete)"
-  exit 0
+  emit_failure "ballot builder unexpectedly produced 0 decisions on header-positive input — possible parser regression" 2
 fi
 
 # Phase 4 — fresh judge re-probe.
