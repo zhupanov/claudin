@@ -508,5 +508,120 @@ if ! awk '/^## Step 4 — Cleanup/,0' "$SKILL_MD" | grep -Fq "KEEP_SIDECAR"; the
   fail "SKILL.md Step 4 must reference KEEP_SIDECAR for the preserve branch (#510)"
 fi
 
-echo "PASS: test-research-structure.sh — all 36 structural invariants hold"
+# ---------------------------------------------------------------------------
+# Checks 33-37 (#519 — lift --plan + --scale=deep restriction; support 2D
+# subq×angle coverage). These pins guard the deep-mode planner support against
+# regression: (a) the previous "is not yet supported" disable warning must NOT
+# return; (b) the new deep + RESEARCH_PLAN=true sub-branch in §1.5 Deep must
+# carry the agreed structure (subquestion-major + Per-angle highlights +
+# Cross-cutting findings); (c) the §1.4 Deep runtime-fallback prose must name
+# all four angle-prompt literals so the angle-specific rehydration contract is
+# pinned at the prose layer; (d) the §1.2 deep-mode lane-assignment table must
+# carry 5 lane columns. Section-scoped extraction follows the same pattern as
+# Checks 21b-21e to avoid whole-file false-positives.
+# ---------------------------------------------------------------------------
+
+# Check 33 (#519): the previous "is not yet supported" warning must NOT exist
+# in SKILL.md anymore. Catches accidental re-introduction of the deep-mode
+# disable rule.
+if grep -Fq "is not yet supported" "$SKILL_MD"; then
+  fail "SKILL.md must NOT contain 'is not yet supported' (#519 — the deep-mode --plan disable rule was lifted)"
+fi
+
+# Check 34 (#519): SKILL.md must contain the deep-mode entry of the resolution
+# rule. Pinning the literal 'AND `RESEARCH_SCALE=deep`: full functionality'
+# fragment anchors that line 49's deep-mode entry remains the supported path
+# (NOT the previous "is not yet supported" disable). Combined with Check 33
+# this guards both directions of the gate change.
+# shellcheck disable=SC2016
+grep -Fq 'AND `RESEARCH_SCALE=deep`: full functionality' "$SKILL_MD" \
+  || fail "SKILL.md must contain the deep-mode '\`RESEARCH_PLAN=true\` AND \`RESEARCH_SCALE=deep\`: full functionality' resolution-rule entry (#519 Check 34 — was disabled before, now supported)"
+
+# Extract the §1.5 Deep + RESEARCH_PLAN=true sub-branch from the existing
+# SECTION_15_DEEP window. Pattern: from the second `#### When `RESEARCH_PLAN=true``
+# heading inside SECTION_15_DEEP to either the next `#### ` heading or the next
+# `### ` heading. SECTION_15_DEEP itself was extracted earlier and stops at the
+# next `### ` so we cannot leak past Deep.
+SECTION_15_DEEP_PLAN_TRUE=$(echo "$SECTION_15_DEEP" | awk '
+  /^#### When `RESEARCH_PLAN=true`/{f=1; next}
+  f && /^#### /{f=0}
+  f && /^### /{f=0}
+  f
+')
+
+[[ -n "$SECTION_15_DEEP_PLAN_TRUE" ]] \
+  || fail "references/research-phase.md §1.5 Deep must contain a '#### When \`RESEARCH_PLAN=true\`' sub-branch (#519 Check 35 anchor missing)"
+
+# Check 35 (#519): the §1.5 Deep + RESEARCH_PLAN=true sub-branch must carry the
+# agreed three-section structure. Section-scoped extraction (above) means a
+# whole-file grep cannot be satisfied by the existing standard-mode
+# RESEARCH_PLAN=true branch headers. Substring matches (not line-start
+# anchored) — the prose describes the runtime sub-section names inline within
+# bullets, not as actual H3 headings of this prose document.
+echo "$SECTION_15_DEEP_PLAN_TRUE" | grep -Fq '### Subquestion' \
+  || fail "references/research-phase.md §1.5 Deep '#### When \`RESEARCH_PLAN=true\`' must mention '### Subquestion' sub-sections (#519 Check 35)"
+echo "$SECTION_15_DEEP_PLAN_TRUE" | grep -Fq '### Per-angle highlights' \
+  || fail "references/research-phase.md §1.5 Deep '#### When \`RESEARCH_PLAN=true\`' must mention '### Per-angle highlights' sub-section (#519 Check 35)"
+echo "$SECTION_15_DEEP_PLAN_TRUE" | grep -Fq '### Cross-cutting findings' \
+  || fail "references/research-phase.md §1.5 Deep '#### When \`RESEARCH_PLAN=true\`' must mention '### Cross-cutting findings' sub-section (#519 Check 35)"
+
+# Extract the §1.4 Deep section to anchor Check 36. The §1.4 section header is
+# '## 1.4 — Wait and Validate Research Outputs'; we further narrow to its
+# `### Deep` subsection.
+SECTION_14_FULL=$(awk '
+  /^## 1\.4 — Wait and Validate Research Outputs/{f=1; next}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+[[ -n "$SECTION_14_FULL" ]] \
+  || fail "references/research-phase.md must contain a '## 1.4 — Wait and Validate Research Outputs' section — Check 36 cannot anchor (#519)"
+
+SECTION_14_DEEP=$(echo "$SECTION_14_FULL" | awk '
+  /^### Deep \(RESEARCH_SCALE=deep\)/{f=1; next}
+  f && /^### /{f=0}
+  f
+')
+[[ -n "$SECTION_14_DEEP" ]] \
+  || fail "references/research-phase.md §1.4 must contain a '### Deep (RESEARCH_SCALE=deep)' subsection — Check 36 cannot anchor (#519)"
+
+# Check 36 (#519): §1.4 Deep runtime-fallback prose must explicitly name all
+# four angle-prompt literals so the angle-specific rehydration contract is
+# pinned. A generic 'RESEARCH_PROMPT' fallback would silently erase the
+# angle-diversity claim.
+echo "$SECTION_14_DEEP" | grep -Fq "RESEARCH_PROMPT_ARCH" \
+  || fail "references/research-phase.md §1.4 Deep must name 'RESEARCH_PROMPT_ARCH' for runtime-fallback rehydration (#519 Check 36)"
+echo "$SECTION_14_DEEP" | grep -Fq "RESEARCH_PROMPT_EDGE" \
+  || fail "references/research-phase.md §1.4 Deep must name 'RESEARCH_PROMPT_EDGE' for runtime-fallback rehydration (#519 Check 36)"
+echo "$SECTION_14_DEEP" | grep -Fq "RESEARCH_PROMPT_EXT" \
+  || fail "references/research-phase.md §1.4 Deep must name 'RESEARCH_PROMPT_EXT' for runtime-fallback rehydration (#519 Check 36)"
+echo "$SECTION_14_DEEP" | grep -Fq "RESEARCH_PROMPT_SEC" \
+  || fail "references/research-phase.md §1.4 Deep must name 'RESEARCH_PROMPT_SEC' for runtime-fallback rehydration (#519 Check 36)"
+
+# Check 37 (#519): the §1.2 deep-mode lane-assignment table must carry 5 lane
+# columns. Extract the §1.2 — Lane Assignment section, then narrow to the
+# '#### Deep (RESEARCH_SCALE=deep)' subsection (under §1.2.a — Compute per-lane
+# subquestions). Assert the table contains 'Lane 5 (Claude inline)' which is
+# unique to the 5-lane shape.
+SECTION_12_FULL=$(awk '
+  /^## 1\.2 — Lane Assignment/{f=1; next}
+  f && /^## /{f=0}
+  f
+' "$RESEARCH_MD")
+[[ -n "$SECTION_12_FULL" ]] \
+  || fail "references/research-phase.md must contain a '## 1.2 — Lane Assignment' section — Check 37 cannot anchor (#519)"
+
+SECTION_12_DEEP=$(echo "$SECTION_12_FULL" | awk '
+  /^#### Deep \(RESEARCH_SCALE=deep\)/{f=1; next}
+  f && /^#### /{f=0}
+  f && /^### /{f=0}
+  f && /^## /{f=0}
+  f
+')
+[[ -n "$SECTION_12_DEEP" ]] \
+  || fail "references/research-phase.md §1.2 must contain a '#### Deep (RESEARCH_SCALE=deep)' subsection — Check 37 cannot anchor (#519)"
+
+echo "$SECTION_12_DEEP" | grep -Fq "Lane 5 (Claude inline)" \
+  || fail "references/research-phase.md §1.2 Deep table must contain 'Lane 5 (Claude inline)' column (#519 Check 37 — confirms 5-lane shape)"
+
+echo "PASS: test-research-structure.sh — all 41 structural invariants hold"
 exit 0
