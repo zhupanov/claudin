@@ -124,7 +124,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 | `skills/research/references/eval-baseline.json` | Schema-only stub today (`entries: []`). Operator runs `bash scripts/eval-research.sh --write-baseline <file>` to populate. |
 | `scripts/test-eval-set-structure.sh` | Offline structural regression. Asserts entry count, category coverage, schema validity, and invokes `--smoke-test` for round-trip verification. |
 | `scripts/test-eval-set-structure.md` | Sibling contract for the test harness. |
-| `scripts/test-eval-research-baseline-flag.sh` | Standalone offline regression harness for the `--baseline` flag handling (closes #441). PATH-stubs `claude` and `jq` so it runs without the real binaries. Exercises the three flag-state paths (no-flag / valid-ref / bad-ref). |
+| `scripts/test-eval-research-baseline-flag.sh` | Standalone offline regression harness for the `--baseline` flag handling (closes #441; extended for #477). PATH-stubs `claude` and `jq` so it runs without the real binaries. Exercises the flag-state paths: no-flag, valid-ref, bad-ref, and trailing-flag-with-no-value. |
 | `scripts/test-eval-research-baseline-flag.md` | Sibling contract for the `--baseline` flag test harness. |
 | `Makefile` | Adds `eval-research`, `test-eval-set-structure`, and `test-eval-research-baseline-flag` standalone targets. NONE is a `test-harnesses` prerequisite. |
 | `agent-lint.toml` | Excludes `scripts/eval-research.sh`, `scripts/test-eval-set-structure.sh`, and `scripts/test-eval-research-baseline-flag.sh` from dead-script checks (all are Makefile-only references). |

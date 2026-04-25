@@ -175,9 +175,11 @@ fi
 # positional remained, exiting with code 1 — which collides with the
 # documented schema-validation exit code, making a malformed flag
 # indistinguishable from a real schema failure to wrappers checking $?
-# (issue #477). The fix adds a `[[ $# -lt 2 ]]` guard before each `shift 2`
-# in the parser loop so missing values yield exit 2 with a recognizable
-# stderr message — uniform across all seven value-taking flags.
+# (issue #477). The fix adds a `require_value` arity check before each
+# `shift 2` in the parser loop so missing values yield exit 2 with a
+# recognizable stderr message. The helper is applied uniformly to all
+# seven value-taking flags in eval-research.sh; this Sub-4 spot-checks
+# `--baseline` since that is the case the issue reported.
 # -----------------------------------------------------------------------
 
 echo "--- Sub-4: trailing --baseline with no value ---"
