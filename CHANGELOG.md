@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.16] - 2026-04-25
+
+### Fixed
+
+- `scripts/build-research-adjudication-ballot.sh` `emit_failure` now writes `FAILED=true` / `ERROR=<msg>` to stderr (fd 2) instead of stdout (fd 1). The two `emit_failure` calls in the Phase 3 `base64 -d` failure paths are inside the `{ ... } > "$OUTPUT"` brace group; with the former stdout output, the failure lines were redirected into the ballot file, leaving the caller (`scripts/run-research-adjudication.sh`) with no `ERROR=` line to extract via `grep -E '^ERROR='` and forcing it to fall back to a hardcoded "Ballot builder failed" message. The in-repo caller already merges streams via `2>&1`, so its existing extraction continues to work after the fix. Header docstring, `usage()` heredoc, and sibling contract `scripts/build-research-adjudication-ballot.md` updated to describe the split-stream output contract. New regression Test 10 in `scripts/test-research-adjudication.sh` asserts `ERROR=` lands on stderr (not stdout) under separated-stream capture, with a parallel assertion that caller-style `2>&1` merge still surfaces the line. Pre-existing OOS surfaced during PR #420 review; not introduced by #420 (the ballot builder was added in PR #443). Closes #463.
+
 ## [7.4.15] - 2026-04-25
 
 ### Changed
