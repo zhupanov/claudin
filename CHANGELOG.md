@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.3.3] - 2026-04-25
+
+### Fixed
+
+- `/research`'s validation-phase render-failure path now rewrites `lane-status.txt` so Step 3's final report cannot show a native pass for a lane that actually ran as a Claude fallback (closes #435). Previously, when `scripts/render-reviewer-prompt.sh` exited non-zero for a Cursor or Codex validation lane, `skills/research/references/validation-phase.md`'s "On non-zero exit" handlers flipped `cursor_available` / `codex_available` to `false` and launched a Claude Code Reviewer subagent fallback, but the `VALIDATION_<TOOL>_STATUS` keys in `$RESEARCH_TMPDIR/lane-status.txt` were never rewritten — so Step 3's `VALIDATION_HEADER` could render `Cursor: ✅` / `Codex: ✅` for a lane composed entirely of Claude output. Both render-failure handlers (Cursor ~line 77, Codex ~line 121) now surgically rewrite the `VALIDATION_*` slice (token: `fallback_runtime_failed`, sanitized REASON; collapse whitespace, strip `=` and `|`, trim, truncate to 80 chars) BEFORE launching the fallback so an abort after spawn still leaves Step 3 attribution honest, using the same quoted-heredoc / `mktemp` / atomic-`mv` pattern already established at Step 2 entry and Step 2.4. Step 2.4's "no update needed" comment is clarified to enumerate the new third path producing already-correct `VALIDATION_*` keys. Sibling contracts updated in lockstep: `scripts/render-lane-status.md` Consumers + Edit-in-sync rules now enumerate the render-failure-path rewrite as a third write site; `scripts/render-reviewer-prompt.md`'s Caller pattern note documents the lane-status rewrite as the first step on the non-zero-exit branch; `skills/research/SKILL.md` Step 0b extends its lane-status write-site enumeration. `scripts/test-render-reviewer-prompt.sh` gains two structural assertions (`VALIDATION_CURSOR_STATUS=fallback_runtime_failed` and `VALIDATION_CODEX_STATUS=fallback_runtime_failed`) so a future edit cannot silently remove the rewrite blocks. No new test harness needed — `scripts/test-render-lane-status.sh` already exercises the `fallback_runtime_failed` token. Closes #435.
+
 ## [7.3.2] - 2026-04-24
 
 ### Changed
