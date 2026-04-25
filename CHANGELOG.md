@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.11] - 2026-04-25
+
+### Fixed
+
+- `scripts/test-research-adjudication.md` — corrected the contract heading from "Scope (seven assertions)" to "Scope (nine assertions)" and added bullets describing Test 8 (multi-line Finding/rationale round-trip via the FS sentinel substitution) and Test 9 (literal-tab round-trip via the GS sentinel substitution + tr-decode). Extended the Edit-in-sync invariants subsection with FS-sentinel and GS-sentinel substitution rules so future edits to those encoders surface the matching test updates. `scripts/test-research-adjudication.sh` header (lines 5-15) — replaced the stale 7-item listing with a 9-item listing that mirrors the actual test order in the script (1: empty input; 2: deterministic ordering; 3: DECISION renumbering; 4: position rotation; 5: anchored-only attribution stripping; 6: `<defense_content>` wrapping; 7: ballot header text; 8: multi-line round-trip; 9: literal-tab round-trip). Pure documentation drift fix; no behavioral change to the harness. Pre-existing OOS surfaced during PR #420 review; not introduced by #420. Closes #457.
+
 ## [7.4.10] - 2026-04-25
 
 ### Changed

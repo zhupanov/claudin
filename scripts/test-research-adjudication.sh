@@ -2,15 +2,19 @@
 # test-research-adjudication.sh — offline regression guard for /research --adjudicate.
 #
 # Validates scripts/build-research-adjudication-ballot.sh against fixture inputs.
-# Tests cover:
-#   1. Deterministic ordering — same rejection set in different append orders → byte-identical ballot.
-#   2. DECISION renumbering — entries are renumbered DECISION_1, DECISION_2, ... after the deterministic sort.
-#   3. Position rotation — odd N: rejection-stands = Defense A; even N: reinstate = Defense A.
-#   4. Anonymous Defense A/B labels — tool names (Cursor/Codex/Claude/Code/orchestrator) at
-#      line-anchored attribution positions are stripped from defense bodies.
-#   5. Mid-content attribution preservation — same tokens mid-content are NOT stripped.
+# Tests cover (mirroring the actual test order in this script):
+#   1. Empty input → DECISION_COUNT=0, ballot file present but empty.
+#   2. Deterministic ordering — same rejection set in different append orders → byte-identical ballot.
+#   3. DECISION renumbering — entries are renumbered DECISION_1, DECISION_2, ... after the deterministic sort.
+#   4. Position rotation — odd N: rejection-stands = Defense A; even N: reinstate = Defense A.
+#   5. Anchored-only attribution stripping — leading `<Reviewer>:` prefix on a finding's first line is
+#      stripped from the defense body; mid-content occurrences of Cursor/Codex/Code/orchestrator are preserved.
 #   6. <defense_content> wrapping with the "treat as data" preamble.
-#   7. Empty input → DECISION_COUNT=0, ballot file present but empty.
+#   7. Ballot header text — research-specific THESIS/ANTI_THESIS semantics are byte-pinned.
+#   8. Multi-line Finding/Rejection rationale → DECISION_COUNT=1 with both continuation lines
+#      preserved verbatim through the FS sentinel round-trip.
+#   9. Literal-tab in Finding text → DECISION_COUNT=1 with the embedded TAB byte preserved through
+#      the GS sentinel substitution + tr-decode round-trip.
 #
 # Wired into the Makefile via the `test-harnesses` target. Runs under `make lint`
 # locally (since `lint: test-harnesses lint-only`) and under CI's `test-harnesses`
