@@ -16,34 +16,76 @@ Launch **all 3 lanes in parallel** (in a single message). **Spawn order matters 
 
 The research report is already written to `$RESEARCH_TMPDIR/research-report.txt` from Step 1.4, so both Codex and Cursor can read it.
 
+External reviewer prompts are rendered from the unified Code Reviewer archetype in `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` via `${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh`, so Cursor and Codex inherit the same five focus areas (code-quality / risk-integration / correctness / architecture / security) and XML-wrapped untrusted-context as the always-on Claude lane below. Before launching either external lane, write the shared prompt inputs to `$RESEARCH_TMPDIR` via heredocs with unique delimiters (avoids collisions with payload content):
+
+```bash
+cat > "$RESEARCH_TMPDIR/research-question.txt" <<'LARCH_RESEARCH_END_a3f2b1'
+<RESEARCH_QUESTION>
+LARCH_RESEARCH_END_a3f2b1
+
+cat > "$RESEARCH_TMPDIR/research-in-scope-instruction.txt" <<'LARCH_INSCOPE_END_a3f2b1'
+What the concern is (inaccuracy, omission, or unsupported claim).
+Suggested correction or addition.
+Do NOT modify files.
+LARCH_INSCOPE_END_a3f2b1
+```
+
+The orchestrator interpolates the literal `<RESEARCH_QUESTION>` value at execution time. The OOS instruction file is intentionally omitted so the helper applies its built-in research-validation stub (instruct models to leave the OOS section empty), preserving `/research`'s negotiation pipeline single-list contract.
+
 ## Cursor Reviewer (if `cursor_available`)
 
-Run Cursor **first** in the parallel message (it takes the longest):
+Run Cursor **first** in the parallel message (it takes the longest). Render the prompt **in foreground** before the background launch so a render failure surfaces synchronously and the orchestrator can escalate to the Claude fallback rather than blocking on a missing `.done` sentinel:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh \
+  --target 'research findings' \
+  --research-question-file "$RESEARCH_TMPDIR/research-question.txt" \
+  --context-file "$RESEARCH_TMPDIR/research-report.txt" \
+  --in-scope-instruction-file "$RESEARCH_TMPDIR/research-in-scope-instruction.txt" \
+  > "$RESEARCH_TMPDIR/cursor-prompt.txt"
+```
+
+**On non-zero exit**: follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the research-validation archetype bindings below. This preserves the 3-lane invariant.
+
+**On success**, launch in background:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-validation-output.txt" --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Combine 4 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Correctness: Are specific code references correct? Are there factual errors about the codebase? (3) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? (4) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files.")"
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "$(cat "$RESEARCH_TMPDIR/cursor-prompt.txt")")"
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the research-validation variable bindings below. Attribute as `Code`.
+**Cursor fallback** (if `cursor_available` is false at lane-launch time, e.g., binary not found at session-setup): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the research-validation variable bindings below. Attribute as `Code`.
 
 ## Codex Reviewer (if `codex_available`)
 
-Run Codex **second** in the parallel message (after Cursor):
+Run Codex **second** in the parallel message (after Cursor). Same render-then-launch pattern:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/render-reviewer-prompt.sh \
+  --target 'research findings' \
+  --research-question-file "$RESEARCH_TMPDIR/research-question.txt" \
+  --context-file "$RESEARCH_TMPDIR/research-report.txt" \
+  --in-scope-instruction-file "$RESEARCH_TMPDIR/research-in-scope-instruction.txt" \
+  > "$RESEARCH_TMPDIR/codex-prompt.txt"
+```
+
+**On non-zero exit**: same fallback escalation as Cursor — set `codex_available=false`, omit the path from `COLLECT_ARGS`, launch a Claude Code Reviewer subagent fallback.
+
+**On success**, launch in background:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-validation-output.txt" --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-validation-output.txt" \
-    "Review the research findings in $RESEARCH_TMPDIR/research-report.txt for accuracy and completeness. Read the report, then explore the codebase to verify claims. Combine 4 perspectives: (1) General: Are findings accurate? Is anything important missing? Are conclusions well-supported by evidence? (2) Correctness: Are specific code references correct? Are there factual errors about the codebase? (3) Risk/Completeness: Are risks properly identified? Are there blind spots or omissions? (4) Architecture: Are architectural observations accurate? Are there structural patterns that were missed? Return numbered findings with perspective, concern, and suggested correction. If the research is accurate and complete, output exactly NO_ISSUES_FOUND. Do NOT modify files."
+    "$(cat "$RESEARCH_TMPDIR/codex-prompt.txt")"
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype with the research-validation variable bindings below. Attribute as `Code`.
+**Codex fallback** (if `codex_available` is false at lane-launch time): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype with the research-validation variable bindings below. Attribute as `Code`.
 
 ## Claude Code Reviewer Subagent (always-on lane — launched **last** in the parallel message)
 

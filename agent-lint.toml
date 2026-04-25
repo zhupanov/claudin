@@ -299,6 +299,16 @@ suppress = [
 # Makefile (test-review-structure target) and
 # scripts/test-review-structure.md (sibling contract), matching the same
 # Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/test-render-reviewer-prompt.sh is the regression harness for
+# scripts/render-reviewer-prompt.sh (closes #417 — alignment of /research
+# Codex+Cursor validation lanes with the unified code-reviewer archetype).
+# The renderer itself is structurally referenced from skills/research/
+# references/validation-phase.md (loaded via MANDATORY directive from
+# skills/research/SKILL.md) and is therefore not excluded; the test harness
+# is referenced only from Makefile (test-render-reviewer-prompt target) and
+# scripts/test-render-reviewer-prompt.md (sibling contract), matching the
+# same Makefile-only pattern as the other test-* harnesses above.
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -339,6 +349,7 @@ exclude = [
   "scripts/test-quick-mode-docs-sync.sh",
   "scripts/test-research-structure.sh",
   "scripts/test-review-structure.sh",
+  "scripts/test-render-reviewer-prompt.sh",
   # Phase 1 of umbrella #348 (tracking-issue foundation helpers) —
   # test harness ships with no runtime consumers yet. Phase 3 is the
   # first consumer via skills/implement/SKILL.md (not in this phase).
