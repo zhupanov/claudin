@@ -92,7 +92,7 @@ For `/research --scale=quick` Phase 1, the table collapses to a single inline Cl
 📊 Agents: | Claude: ✅ 28s |
 ```
 
-For `/research --scale=deep` Phase 1, the table expands to 5 slots with stable slot labels reflecting the diversified angle assignments (`Claude` runs the baseline `RESEARCH_PROMPT`; the four external slots run `RESEARCH_PROMPT_ARCH` / `RESEARCH_PROMPT_EDGE` / `RESEARCH_PROMPT_EXT` / `RESEARCH_PROMPT_SEC` respectively):
+For `/research --scale=deep` Phase 1, the table expands to 5 slots with stable slot labels reflecting the diversified angle assignments (`Claude` runs the baseline `RESEARCH_PROMPT_BASELINE`; the four external slots run `RESEARCH_PROMPT_ARCH` / `RESEARCH_PROMPT_EDGE` / `RESEARCH_PROMPT_EXT` / `RESEARCH_PROMPT_SEC` respectively):
 
 ```
 📊 Agents: | Claude: ✅ 2m31s | Cursor-Arch: ⏳ | Cursor-Edge: ✅ 3m5s | Codex-Ext: ⏳ | Codex-Sec: ✅ 4m12s |
