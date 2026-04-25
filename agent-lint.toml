@@ -309,6 +309,17 @@ suppress = [
 # is referenced only from Makefile (test-render-reviewer-prompt target) and
 # scripts/test-render-reviewer-prompt.md (sibling contract), matching the
 # same Makefile-only pattern as the other test-* harnesses above.
+#
+# scripts/eval-research.sh is the opt-in /research evaluation harness
+# (closes #419 under umbrella #413). Referenced only from Makefile
+# (eval-research target — NOT a lint prerequisite) and
+# scripts/eval-research.md (sibling contract); matches the same
+# Makefile-only pattern as the test-* harnesses and halt-rate-probe.
+# scripts/test-eval-set-structure.sh is the offline structural regression
+# harness for the eval set + harness; referenced only from Makefile
+# (test-eval-set-structure standalone target — also NOT a lint prerequisite,
+# mirroring the runtime harness's opt-in shape) and
+# scripts/test-eval-set-structure.md (sibling contract).
 exclude = [
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
@@ -385,6 +396,13 @@ exclude = [
   # SKILL.md Step 3, but the harness is not — same Makefile-only shape as
   # the other test-* harnesses above.
   "scripts/test-render-lane-status.sh",
+  # /research evaluation harness + structural test (closes #419). Both
+  # scripts are referenced only from Makefile (eval-research target,
+  # test-eval-set-structure standalone target — neither is a lint
+  # prerequisite) and from their sibling .md contracts. Same Makefile-only
+  # pattern as the test-* harnesses and halt-rate-probe above.
+  "scripts/eval-research.sh",
+  "scripts/test-eval-set-structure.sh",
   # Skill-local sibling .md files — co-located contract docs for scripts
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
