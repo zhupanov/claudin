@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.9] - 2026-04-25
+
+### Changed
+
+- `scripts/build-research-adjudication-ballot.sh`'s `strip_attribution()` awk END block dropped the dead `prefix_re` variable assignment. Only `prefix_re_short` was ever read (applied to the first non-empty line); the unused `prefix_re` was a maintenance/clarity hazard for future regex tweaks. `prefix_re_short` and `suffix_re` remain unchanged. Pre-existing OOS surfaced during issue #420 review. Closes #458.
+
 ## [7.4.8] - 2026-04-25
 
 ### Fixed
