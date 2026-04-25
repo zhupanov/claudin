@@ -115,19 +115,22 @@ For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:
 
 If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched because pre-launch fallback already applied), no update is needed — the `RESEARCH_*` keys from Step 0b remain correct.
 
-Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `RESEARCH_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep the pre-launch token from Step 0b — `ok` / `fallback_binary_missing` / `fallback_probe_failed`):
+Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `RESEARCH_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep the pre-launch token from Step 0b — `ok` / `fallback_binary_missing` / `fallback_probe_failed`).
+
+The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 0b. The orchestrator literally substitutes the resolved per-lane status and sanitized reason text into the placeholders below.
 
 ```bash
 LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
 LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
-# Preserve VALIDATION_* keys verbatim; emit fresh RESEARCH_* keys.
+# Preserve VALIDATION_* keys verbatim.
 grep -v '^RESEARCH_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
-{
-    printf 'RESEARCH_CURSOR_STATUS=%s\n' "<cursor token>"
-    printf 'RESEARCH_CURSOR_REASON=%s\n' "<cursor sanitized reason or empty>"
-    printf 'RESEARCH_CODEX_STATUS=%s\n' "<codex token>"
-    printf 'RESEARCH_CODEX_REASON=%s\n' "<codex sanitized reason or empty>"
-} >> "$LANE_STATUS_TMP"
+# Append fresh RESEARCH_* keys with literal substitutions.
+cat >> "$LANE_STATUS_TMP" <<'EOF'
+RESEARCH_CURSOR_STATUS=<cursor token>
+RESEARCH_CURSOR_REASON=<cursor sanitized reason or empty>
+RESEARCH_CODEX_STATUS=<codex token>
+RESEARCH_CODEX_REASON=<codex sanitized reason or empty>
+EOF
 mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
 ```
 

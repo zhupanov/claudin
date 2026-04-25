@@ -18,7 +18,7 @@ bash scripts/test-render-lane-status.sh
 
 Exit 0 on all-pass; exit 1 on any failed assertion (with detailed expected/actual diff on stderr).
 
-## Fixture cases (9)
+## Fixture cases (10)
 
 1. **happy path** — all four lanes report `ok`. Asserts `RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: ✅)` and `VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: ✅)`.
 2. **all-binary-missing** — every external lane reports `fallback_binary_missing`.
@@ -26,12 +26,15 @@ Exit 0 on all-pass; exit 1 on any failed assertion (with detailed expected/actua
 4. **probe-failed with reason** — reason text is preserved (no special chars to sanitize away).
 5. **probe-failed without reason** — empty `*_REASON` value renders as bare `Claude-fallback (probe failed)` (no parenthetical).
 6. **runtime-timeout** — token renders the canonical `Claude-fallback (runtime timeout)` string.
-7. **runtime-failed with multi-character-class reason (sanitization)** — embedded `|` and `=` characters are stripped, whitespace runs are collapsed (post-strip).
+7. **runtime-failed with =/|/whitespace sanitization** — embedded `|` and `=` characters are stripped, whitespace runs are collapsed (post-strip). Reason after sanitization is 71 chars (under the 80-char cap), so this fixture does NOT exercise truncation — fixture 7b does.
    - **7b**: a reason longer than 80 characters is truncated to exactly 80.
 8. **unknown-status token** — a token like `fallback-binary-missing` (with hyphens instead of underscores) renders as `(unknown)` and emits a stderr warning containing `unknown status token <token>`.
 9. **missing-input** — a non-existent `--input` path produces exit code 2 and a stderr line containing `render-lane-status: input file missing`.
+10. **usage errors (exit 1)** — two sub-cases pinning the contract's exit-1 path:
+    - **10**: missing `--input` flag entirely → exit 1 with stderr containing `--input is required`.
+    - **10b**: unknown flag (e.g., `--bogus`) → exit 1 with stderr containing `unknown flag: --bogus`.
 
-The "9 fixture cases" count is documented as the public-surface count even though fixture 7 has a 7b sub-case for the truncation property; both 7 and 7b exercise the same status token (`fallback_runtime_failed`).
+The "10 fixture cases" count is documented as the public-surface count even though fixtures 7 and 10 each have one sub-case (7b for truncation, 10b for the unknown-flag variant of usage error).
 
 ## Wired via
 

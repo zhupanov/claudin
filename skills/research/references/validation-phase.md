@@ -20,27 +20,22 @@ For each external tool, if `cursor_available` (resp. `codex_available`) is curre
 
 If both `cursor_available` and `codex_available` are `true` at Step 2 entry, no update is needed.
 
-Otherwise, surgically update only the `VALIDATION_*` slice (preserve `RESEARCH_*` keys verbatim):
+Otherwise, surgically update only the `VALIDATION_*` slice (preserve `RESEARCH_*` keys verbatim). The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 0b. The orchestrator reads the current `RESEARCH_*` values from the file and substitutes them (or the existing `VALIDATION_*` value, when `*_available=true`) into the placeholders below before writing the command.
 
 ```bash
 LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
 LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
-# Read current RESEARCH_* values for any propagation needed below.
-RESEARCH_CURSOR_STATUS_VAL=$(grep '^RESEARCH_CURSOR_STATUS=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CURSOR_STATUS=}"; })
-RESEARCH_CURSOR_REASON_VAL=$(grep '^RESEARCH_CURSOR_REASON=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CURSOR_REASON=}"; })
-RESEARCH_CODEX_STATUS_VAL=$(grep '^RESEARCH_CODEX_STATUS=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CODEX_STATUS=}"; })
-RESEARCH_CODEX_REASON_VAL=$(grep '^RESEARCH_CODEX_REASON=' "$LANE_STATUS_FILE" | head -1 | { IFS= read -r line; printf '%s' "${line#RESEARCH_CODEX_REASON=}"; })
-# For each tool, decide the new VALIDATION_* values:
+# Decide the new VALIDATION_* values per tool:
 #   - if *_available=false: copy from RESEARCH_<TOOL>_*
 #   - if *_available=true:  keep current VALIDATION_<TOOL>_* (initialized in Step 0b)
-# Then preserve RESEARCH_* keys verbatim and emit fresh VALIDATION_* keys.
+# Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
 grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
-{
-    printf 'VALIDATION_CURSOR_STATUS=%s\n' "<cursor token>"
-    printf 'VALIDATION_CURSOR_REASON=%s\n' "<cursor reason>"
-    printf 'VALIDATION_CODEX_STATUS=%s\n' "<codex token>"
-    printf 'VALIDATION_CODEX_REASON=%s\n' "<codex reason>"
-} >> "$LANE_STATUS_TMP"
+cat >> "$LANE_STATUS_TMP" <<'EOF'
+VALIDATION_CURSOR_STATUS=<cursor token>
+VALIDATION_CURSOR_REASON=<cursor reason>
+VALIDATION_CODEX_STATUS=<codex token>
+VALIDATION_CODEX_REASON=<codex reason>
+EOF
 mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
 ```
 
@@ -177,19 +172,21 @@ Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background:
 
    If both Cursor and Codex lanes returned `STATUS=OK` (or were never launched in this phase because pre-launch fallback or research-phase propagation already applied), no update is needed — the `VALIDATION_*` keys remain correct.
 
-   Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `VALIDATION_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep their current value):
+   Otherwise, perform a read-filter-rewrite via temp + atomic `mv`. All four `VALIDATION_*` keys must be emitted on every rewrite (lanes that returned `OK`, or were never launched, keep their current value).
+
+   The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 0b.
 
    ```bash
    LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
    LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
    # Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
    grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
-   {
-       printf 'VALIDATION_CURSOR_STATUS=%s\n' "<cursor token>"
-       printf 'VALIDATION_CURSOR_REASON=%s\n' "<cursor sanitized reason or empty>"
-       printf 'VALIDATION_CODEX_STATUS=%s\n' "<codex token>"
-       printf 'VALIDATION_CODEX_REASON=%s\n' "<codex sanitized reason or empty>"
-   } >> "$LANE_STATUS_TMP"
+   cat >> "$LANE_STATUS_TMP" <<'EOF'
+   VALIDATION_CURSOR_STATUS=<cursor token>
+   VALIDATION_CURSOR_REASON=<cursor sanitized reason or empty>
+   VALIDATION_CODEX_STATUS=<codex token>
+   VALIDATION_CODEX_REASON=<codex sanitized reason or empty>
+   EOF
    mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
    ```
 

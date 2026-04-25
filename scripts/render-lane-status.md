@@ -6,7 +6,7 @@ Format the per-lane attribution record used by `/research`'s Step 3 final-report
 
 ## Invariants
 
-1. **Pure formatter** — no I/O beyond stdin/stdout/stderr. No git, no network, no temp files. Reads `--input <path>`; writes two lines to stdout; exits.
+1. **Pure formatter** — I/O is limited to the single input file path (`--input`) plus stdout/stderr (stdin is unused). No git, no network, no temp files.
 2. **3-lane count is hard-coded** — both header lines emit `3 agents` / `3 reviewers`. The 3-lane invariant is pinned in `skills/research/references/research-phase.md` and `validation-phase.md`; if the lane count ever changes, this script and those references must be updated together.
 3. **Code lane is hard-coded `✅`** — the Claude code-reviewer subagent has no fallback path (it is the always-on lane in the validation phase). This script does NOT consult the input file for the Code lane.
 4. **Status tokens are the single rendering vocabulary** — the case statement in `render_lane()` is the authoritative token list. Tokens that do not match render as `(unknown)` with a stderr warning.
@@ -36,7 +36,8 @@ All keys are optional. A missing or empty `*_STATUS` renders as `(unknown)`.
 | `fallback_probe_failed` | `Claude-fallback (probe failed: <reason>)` (parenthetical omitted when reason empty) |
 | `fallback_runtime_timeout` | `Claude-fallback (runtime timeout)` |
 | `fallback_runtime_failed` | `Claude-fallback (runtime failed: <reason>)` (parenthetical omitted when reason empty) |
-| anything else / empty | `(unknown)` (with stderr warning) |
+| `` (missing or empty) | `(unknown)` (no stderr warning) |
+| anything else, non-empty | `(unknown)` (with stderr warning) |
 
 ## Reason sanitization
 
@@ -68,11 +69,28 @@ The orchestrator parses these lines via prefix-strip (e.g., `RESEARCH_HEADER="${
 
 ## Stderr
 
+Two distinct error paths share this surface:
+
+**Usage errors (exit 1):** the `--input` flag was omitted, or an unknown flag was supplied.
+
 | Trigger | Message | Exit |
 |---------|---------|------|
-| `--input` missing | `**⚠ render-lane-status: input file missing**` | 2 |
-| `--input` unreadable | `**⚠ render-lane-status: input file unreadable**` | 2 |
-| Unknown status token | `**⚠ render-lane-status: unknown status token <token>**` | 0 (per occurrence) |
+| `--input` flag omitted | `**⚠ render-lane-status: --input is required**` | 1 |
+| Unknown flag | `**⚠ render-lane-status: unknown flag: <flag>**` | 1 |
+| `--input` flag with no value | `**⚠ render-lane-status: --input requires a value**` | 1 |
+
+**Input-file errors (exit 2):** the `--input` flag was supplied but its path is missing or unreadable.
+
+| Trigger | Message | Exit |
+|---------|---------|------|
+| Path does not exist (or is not a regular file) | `**⚠ render-lane-status: input file missing**` | 2 |
+| Path exists but is not readable | `**⚠ render-lane-status: input file unreadable**` | 2 |
+
+**Per-occurrence warnings (exit 0):** emitted while rendering and do not block exit status.
+
+| Trigger | Message | Exit |
+|---------|---------|------|
+| Unknown non-empty status token | `**⚠ render-lane-status: unknown status token <token>**` | 0 (per occurrence) |
 
 ## Consumers
 

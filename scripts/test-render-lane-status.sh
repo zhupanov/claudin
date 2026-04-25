@@ -193,17 +193,17 @@ assert_stdout_equals "F6.stdout" \
 "RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: Claude-fallback (runtime timeout))
 VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: Claude-fallback (runtime timeout))" "$STDOUT"
 
-# ---------- Fixture 7 — runtime-failed with multiline reason (sanitization must collapse) ----------
-# The orchestrator's sanitize-on-write pass should already have collapsed
-# newlines to spaces, but the script applies a second-line defense. We write
-# a file with embedded newlines using printf to verify the script's own
-# sanitization collapses them.
+# ---------- Fixture 7 — runtime-failed with =/|/whitespace sanitization ----------
+# KV is line-oriented, so the value lives on a single physical line, but it
+# contains the sanitization-relevant character classes: literal `=` and `|`,
+# plus extra whitespace runs. Verifies that strip-then-collapse produces a
+# clean rendered reason. The string after sanitization is 71 chars (under
+# the 80-char cap), so this fixture does NOT exercise truncation —
+# fixture 7b is the dedicated truncation test.
 {
     printf 'RESEARCH_CURSOR_STATUS=ok\n'
     printf 'RESEARCH_CURSOR_REASON=\n'
     printf 'RESEARCH_CODEX_STATUS=fallback_runtime_failed\n'
-    # Reason value spans one line (KV is line-oriented), but contains lots of
-    # extra whitespace and characters that should be sanitized.
     printf 'RESEARCH_CODEX_REASON=exit code 124  Process killed after exceeding timeout |||  with == many == bad chars\n'
     printf 'VALIDATION_CURSOR_STATUS=ok\n'
     printf 'VALIDATION_CURSOR_REASON=\n'
@@ -212,7 +212,7 @@ VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: Claude-fallback (r
 } > "$TMPDIR_LOCAL/f7.txt"
 run_render "$TMPDIR_LOCAL/f7.txt"
 assert_exit_equals "F7.exit" "0" "$EXIT"
-# Expected: pipes and = stripped, whitespace collapsed, truncated to 80 chars.
+# Expected: pipes and = stripped, whitespace collapsed (no truncation — under 80 chars).
 assert_stdout_equals "F7.stdout" \
 "RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: Claude-fallback (runtime failed: exit code 124 Process killed after exceeding timeout with many bad chars))
 VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: ✅)" "$STDOUT"
@@ -257,10 +257,30 @@ run_render "$TMPDIR_LOCAL/does-not-exist.txt"
 assert_exit_equals "F9.exit" "2" "$EXIT"
 assert_stderr_contains "F9.stderr" "render-lane-status: input file missing" "$STDERR"
 
+# ---------- Fixture 10 — usage error: --input flag omitted ----------
+# Calls the script with no arguments at all. The contract says exit 1 with
+# "--input is required" on stderr (per the Stderr / Exit codes tables in
+# scripts/render-lane-status.md). Without this fixture, the exit-1 path
+# would be entirely untested.
+EXIT=0
+"$SCRIPT" >"$TMPDIR_LOCAL/out" 2>"$TMPDIR_LOCAL/err" || EXIT=$?
+STDOUT="$(cat "$TMPDIR_LOCAL/out")"
+STDERR="$(cat "$TMPDIR_LOCAL/err")"
+assert_exit_equals "F10.exit" "1" "$EXIT"
+assert_stderr_contains "F10.stderr" "--input is required" "$STDERR"
+
+# ---------- Fixture 10b — usage error: unknown flag ----------
+EXIT=0
+"$SCRIPT" --bogus >"$TMPDIR_LOCAL/out" 2>"$TMPDIR_LOCAL/err" || EXIT=$?
+STDOUT="$(cat "$TMPDIR_LOCAL/out")"
+STDERR="$(cat "$TMPDIR_LOCAL/err")"
+assert_exit_equals "F10b.exit" "1" "$EXIT"
+assert_stderr_contains "F10b.stderr" "unknown flag: --bogus" "$STDERR"
+
 # ---------- Summary ----------
 TOTAL=$((PASS + FAIL))
 if [ "$FAIL" -eq 0 ]; then
-    echo "PASS: test-render-lane-status.sh — $TOTAL assertions passed across 9 fixture cases"
+    echo "PASS: test-render-lane-status.sh — $TOTAL assertions passed across 10 fixture cases"
     exit 0
 else
     echo "FAIL: test-render-lane-status.sh — $FAIL of $TOTAL assertions failed" >&2

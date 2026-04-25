@@ -29,7 +29,8 @@
 #   fallback_runtime_timeout      → Claude-fallback (runtime timeout)
 #   fallback_runtime_failed       → Claude-fallback (runtime failed: <reason>)
 #                                   (parenthetical omitted when REASON is empty)
-#   <anything else / missing>     → (unknown)  + stderr warning
+#   '' (missing or empty)         → (unknown)   (no stderr warning)
+#   <anything else, non-empty>    → (unknown)   + stderr warning
 #
 # Reason sanitization (applied after parse, before render):
 #   - collapse all whitespace runs (incl. \n, \t, \r) into single spaces
@@ -47,8 +48,15 @@
 #   2 — I/O failure (input file missing or unreadable)
 #
 # Stderr:
-#   `**⚠ render-lane-status: input file missing**`     (exit 2)
-#   `**⚠ render-lane-status: unknown status token <t>**` (per-occurrence; exit 0)
+#   Usage errors (exit 1):
+#     `**⚠ render-lane-status: --input is required**`
+#     `**⚠ render-lane-status: --input requires a value**`
+#     `**⚠ render-lane-status: unknown flag: <flag>**`
+#   Input-file errors (exit 2):
+#     `**⚠ render-lane-status: input file missing**`
+#     `**⚠ render-lane-status: input file unreadable**`
+#   Per-occurrence warnings (exit 0, per occurrence):
+#     `**⚠ render-lane-status: unknown status token <token>**`
 
 set -euo pipefail
 
