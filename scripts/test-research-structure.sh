@@ -13,6 +13,10 @@
 #  - RESEARCH_PROMPT literal appears in research-phase.md (substring pin for byte-drift detection)
 #  - reviewer XML wrapper tags (<reviewer_research_question>, <reviewer_research_findings>)
 #    appear in validation-phase.md (byte pin for prompt-injection hardening)
+#  - render-lane-status.sh + lane-status.txt pins (#421)
+#  - --scale=quick|standard|deep value-flag surface (#418): flag enum + 4 named angle
+#    prompt identifiers + literal quick-mode skip breadcrumb + abort-on-invalid + flag
+#    independence statement + ### Standard byte-drift pins on existing filename literals
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 set -euo pipefail
@@ -94,5 +98,58 @@ grep -Fq "lane-status.txt" "$RESEARCH_MD" \
 grep -Fq "lane-status.txt" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must mention lane-status.txt (#421 VALIDATION_* slice update + Step 2 entry propagation)"
 
-echo "PASS: test-research-structure.sh — all 8 structural invariants hold"
+# Check 9 (#418): SKILL.md documents the --scale=quick|standard|deep value flag.
+# Pin the literal triple so a future edit cannot silently rename or drop a value
+# from the enum. Use `-e --` so grep does not interpret the leading '--' as flags.
+grep -Fq -e "--scale=quick|standard|deep" "$SKILL_MD" \
+  || fail "SKILL.md must document the --scale=quick|standard|deep value flag (#418)"
+
+# Check 10 (#418): research-phase.md defines all four named angle prompts as
+# explicit identifiers. These are the data-bearing literals that distinguish
+# deep mode from standard mode; their absence means deep mode lost its
+# diversified-angle architecture.
+for prompt in RESEARCH_PROMPT_ARCH RESEARCH_PROMPT_EDGE RESEARCH_PROMPT_EXT RESEARCH_PROMPT_SEC; do
+  grep -Fq "$prompt" "$RESEARCH_MD" \
+    || fail "references/research-phase.md must define the named angle prompt '$prompt' (#418 deep mode)"
+done
+
+# Check 11 (#418): SKILL.md documents the exact quick-mode skip breadcrumb.
+# Pin the literal so the gate cannot silently drop or rephrase the visible
+# user signal that validation was intentionally skipped.
+grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
+  || fail "SKILL.md must contain the literal quick-mode skip breadcrumb '⏩ 2: validation — skipped (--scale=quick)' (#418)"
+
+# Check 12 (#418): SKILL.md documents abort-on-invalid-value for --scale.
+# Pin the abort message literal so a future edit cannot drop the explicit
+# rejection of malformed --scale values.
+if grep -Fq -e "Aborting" "$SKILL_MD" && grep -Fq -e "must be one of quick|standard|deep" "$SKILL_MD"; then
+  : # both literals present
+else
+  fail "SKILL.md must document abort-on-invalid for --scale (literals 'must be one of quick|standard|deep' and 'Aborting' both required) (#418)"
+fi
+
+# Check 13 (#418): SKILL.md documents that --debug and --scale are independent
+# flags (order-independence). Pin the explicit independence statement.
+# shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
+grep -Eq -e '`--debug` and `--scale` are independent' "$SKILL_MD" \
+  || fail "SKILL.md must explicitly state that '--debug' and '--scale' are independent (order-independence) (#418)"
+
+# Check 14 (#418): research-phase.md ### Standard subsection contains a stable
+# byte-drift pin (the existing standard-mode cursor research output filename
+# literal). Without this guard, an editor could change the standard branch's
+# bash block content and the harness would not catch the drift.
+grep -Fq "cursor-research-output.txt" "$RESEARCH_MD" \
+  || fail "references/research-phase.md must contain the standard-mode 'cursor-research-output.txt' filename literal (#418 byte-drift guard)"
+grep -Fq "codex-research-output.txt" "$RESEARCH_MD" \
+  || fail "references/research-phase.md must contain the standard-mode 'codex-research-output.txt' filename literal (#418 byte-drift guard)"
+
+# Check 15 (#418): validation-phase.md ### Standard byte-drift pin (existing
+# Cursor/Codex validation output filenames must remain in the file for the
+# standard validation branch).
+grep -Fq "cursor-validation-output.txt" "$VALIDATION_MD" \
+  || fail "references/validation-phase.md must contain the standard-mode 'cursor-validation-output.txt' filename literal (#418 byte-drift guard)"
+grep -Fq "codex-validation-output.txt" "$VALIDATION_MD" \
+  || fail "references/validation-phase.md must contain the standard-mode 'codex-validation-output.txt' filename literal (#418 byte-drift guard)"
+
+echo "PASS: test-research-structure.sh — all 15 structural invariants hold"
 exit 0

@@ -106,9 +106,9 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#research"><code>/research</code></a></td>
-      <td><code>[--debug] &lt;research question or topic&gt;</code></td>
+      <td><code>[--debug] [--scale=quick|standard|deep] &lt;research question or topic&gt;</code></td>
     </tr>
-    <tr><td colspan="2">Collaborative <strong>best-effort</strong> read-only research with 3 research agents and a 3-reviewer validation panel — mechanically guarded only on the Claude <code>Edit</code>/<code>Write</code>/<code>NotebookEdit</code> surface; Bash and external reviewers are prompt-enforced (see <a href="skills/research/SKILL.md">SKILL.md</a> &amp; <a href="SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review">SECURITY.md</a>).</td></tr>
+    <tr><td colspan="2">Collaborative <strong>best-effort</strong> read-only research, scale-aware: <code>--scale=standard</code> (default) runs 3 research agents + 3-reviewer validation panel (byte-equivalent to pre-#418 behavior); <code>--scale=quick</code> runs 1 inline Claude lane and skips validation entirely (fastest, single-lane confidence — lower assurance); <code>--scale=deep</code> runs 5 research lanes with diversified angle prompts (architecture / edge cases / external comparisons / security) + 5-reviewer validation panel. Mechanically guarded only on the Claude <code>Edit</code>/<code>Write</code>/<code>NotebookEdit</code> surface; Bash and external reviewers are prompt-enforced (see <a href="skills/research/SKILL.md">SKILL.md</a> &amp; <a href="SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review">SECURITY.md</a>).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#review"><code>/review</code></a></td>

@@ -72,21 +72,39 @@ Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict revi
 📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-Negotiation-Protocol skills `/loop-review` and `/research` both use a 3-lane composition (per slice in `/loop-review`; per phase in `/research` — Phase 1 research, Phase 2 validation).
+Negotiation-Protocol skills `/loop-review` and `/research` use a 3-lane composition (per slice in `/loop-review`; per phase in `/research --scale=standard`, the default — Phase 1 research, Phase 2 validation). `/research --scale=quick` uses 1 lane in Phase 1 and skips Phase 2 entirely. `/research --scale=deep` uses 5 lanes in each phase.
 
-For review-shaped lanes (`/loop-review` Step 3c and `/research` Phase 2 validation), the attribution is `Code` / `Codex` / `Cursor`:
+For review-shaped lanes (`/loop-review` Step 3c and `/research --scale=standard` Phase 2 validation), the attribution is `Code` / `Codex` / `Cursor`:
 
 ```
 📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-For `/research` Phase 1 (research rather than review), the table is labelled `Agents` and retains the slot names:
+For `/research --scale=standard` Phase 1 (research rather than review), the table is labelled `Agents` and retains the slot names:
 
 ```
 📊 Agents: | Claude: ✅ 2m31s | Cursor: ⏳ | Codex: ✅ 3m5s |
 ```
 
-When an external is unavailable in a review-shaped panel, a single Claude fallback lane appears in its slot (attributed as `Code`). When an external is unavailable in `/research` Phase 1, the Claude fallback keeps the slot name (the entry stays labelled `Cursor` or `Codex` on the status table because the fallback agent is a plain research subagent, not a `code-reviewer` subagent — it fills the same research slot).
+For `/research --scale=quick` Phase 1, the table collapses to a single inline Claude lane (Phase 2 emits a skip breadcrumb instead of a status table):
+
+```
+📊 Agents: | Claude: ✅ 28s |
+```
+
+For `/research --scale=deep` Phase 1, the table expands to 5 slots with stable slot labels reflecting the diversified angle assignments (`Claude` runs the baseline `RESEARCH_PROMPT`; the four external slots run `RESEARCH_PROMPT_ARCH` / `RESEARCH_PROMPT_EDGE` / `RESEARCH_PROMPT_EXT` / `RESEARCH_PROMPT_SEC` respectively):
+
+```
+📊 Agents: | Claude: ✅ 2m31s | Cursor-Arch: ⏳ | Cursor-Edge: ✅ 3m5s | Codex-Ext: ⏳ | Codex-Sec: ✅ 4m12s |
+```
+
+For `/research --scale=deep` Phase 2 validation, the table expands to 5 slots — the standard 3 plus 2 extra Claude code-reviewer subagents carrying lane-local emphasis on the unified Code Reviewer archetype (NOT new agent slugs):
+
+```
+📊 Reviewers: | Code: ✅ 2m31s | Code-Sec: ⏳ | Code-Arch: ✅ 3m5s | Cursor: ⏳ | Codex: ✅ 4m12s |
+```
+
+When an external is unavailable in a review-shaped panel, a single Claude fallback lane appears in its slot (attributed as `Code` in standard mode; in deep mode the `Cursor` / `Codex` slots also collapse to `Code`-attributed fallbacks while the always-on `Code` / `Code-Sec` / `Code-Arch` lanes remain). When an external is unavailable in `/research` Phase 1, the Claude fallback keeps the slot name (the entry stays labelled `Cursor` / `Cursor-Arch` / `Codex-Sec` etc. on the status table because the fallback agent is a plain research subagent, not a `code-reviewer` subagent — it fills the same research slot).
 
 `⏳` (in-progress) and `⊘` (skipped/unavailable) do not include timing.
 

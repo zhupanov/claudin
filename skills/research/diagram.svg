@@ -11,7 +11,8 @@
   </defs>
 
   <!-- Title -->
-  <text x="220" y="20" fill="#333" font-size="16" font-weight="bold">/research</text>
+  <text x="220" y="14" fill="#333" font-size="16" font-weight="bold">/research</text>
+  <text x="220" y="30" fill="#666" font-size="10">shown: --scale=standard; quick=1 lane no validation; deep=5+5 lanes</text>
 
   <!-- Step 0: Session Setup -->
   <rect x="130" y="40" width="180" height="40" rx="4" fill="#6C757D"/>
@@ -20,7 +21,7 @@
 
   <!-- Step 1: Research Agents (parallel) -->
   <rect x="85" y="110" width="270" height="40" rx="4" fill="#17A2B8" stroke="#17A2B8" stroke-width="3"/>
-  <text x="220" y="130">3 Research Agents (Claude + Cursor + Codex)</text>
+  <text x="220" y="130">1/3/5 Research Agents (scale-dependent)</text>
   <line x1="220" y1="150" x2="220" y2="180"/>
 
   <!-- Wait & Validate -->
@@ -35,7 +36,7 @@
 
   <!-- Step 2: Validation Review (parallel) -->
   <rect x="65" y="320" width="310" height="40" rx="4" fill="#17A2B8" stroke="#17A2B8" stroke-width="3"/>
-  <text x="220" y="340">Validation (Claude + Codex + Cursor)</text>
+  <text x="220" y="340">0/3/5-reviewer Validation (scale-dependent)</text>
   <line x1="220" y1="360" x2="220" y2="390"/>
 
   <!-- Negotiate & Finalize -->

@@ -185,7 +185,9 @@ RESEARCH_CODEX_RENDERED="$(render_lane "$RESEARCH_CODEX_STATUS" "$RESEARCH_CODEX
 VALIDATION_CURSOR_RENDERED="$(render_lane "$VALIDATION_CURSOR_STATUS" "$VALIDATION_CURSOR_REASON")"
 VALIDATION_CODEX_RENDERED="$(render_lane "$VALIDATION_CODEX_STATUS" "$VALIDATION_CODEX_REASON")"
 
-# 3-lane invariant pinned in research-phase.md and validation-phase.md.
+# Standard-mode 3-lane shape pinned in research-phase.md and validation-phase.md
+# `### Standard` subsections (this script is used only by SKILL.md Step 3's
+# Standard branch; quick / deep emit literal headers without it — see #418).
 printf 'RESEARCH_HEADER=3 agents (Cursor: %s, Codex: %s)\n' \
     "$RESEARCH_CURSOR_RENDERED" "$RESEARCH_CODEX_RENDERED"
 printf 'VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: %s, Codex: %s)\n' \
