@@ -152,7 +152,7 @@ Environment variables **do not propagate reliably across `Skill` invocations** �
 
 Canonical producers and consumers in the live tree:
 
-- `skills/fix-issue/SKILL.md § Step 1 — Setup` writes `$FIX_ISSUE_TMPDIR/session-env.sh` and passes it to `/implement`.
+- `skills/fix-issue/SKILL.md § Step 2 — Setup` writes `$FIX_ISSUE_TMPDIR/session-env.sh` and passes it to `/implement` (Step 1 acquires the `IN PROGRESS` lock before the tmpdir / session-env exist).
 - `skills/implement/SKILL.md § Step 0 — Session Setup` accepts `--session-env` from its parent and propagates a fresh `$IMPLEMENT_TMPDIR/session-env.sh` to `/design` and `/review` via `--session-env` on each invocation.
 - `skills/design/SKILL.md § Step 0 — Session Setup` and `skills/review/SKILL.md § Step 0 — Session Setup` both accept `--session-env` as an `--caller-env` forward.
 

@@ -4,7 +4,7 @@
 
 **Contract**: Authoritative detail for the triage checks, the not-material closure flow, the intent dimension (PR vs NON_PR) with its "default to PR only when genuinely ambiguous" rule, and the complexity dimension (SIMPLE vs HARD, evaluated only when `INTENT=PR`) with its "default to HARD when uncertain" rule. SKILL.md carries the step-level breadcrumbs, the `issue-lifecycle.sh close` / `post-issue-slack.sh` invocations, and the `Print ✅ 5: classify — INTENT=$INTENT [COMPLEXITY=$COMPLEXITY]` line; this file carries the judgment-heavy detail that would bloat the main-file knowledge delta.
 
-**When to load**: before executing Step 4 (Triage) OR Step 5 (Classify). Load once — the two step-bodies consume the same detail. **Do NOT load** in any other step — Steps 0 / 1 / 2 / 3 / 6 / 7 / 8 / 9 do not consume this content. **Do NOT load** when the Step 0 `fetch-eligible-issue.sh` call returned exit 1 (no approved issues found) or exit 2+ (error) — Steps 4 and 5 are skipped on those paths.
+**When to load**: before executing Step 4 (Triage) OR Step 5 (Classify). Load once — the two step-bodies consume the same detail. **Do NOT load** in any other step — Steps 0 / 1 / 2 / 3 / 6 / 7 / 8 / 9 do not consume this content. **Do NOT load** on any path that has already branched to Step 9 — concrete examples: Step 0 `fetch-eligible-issue.sh` exit 1 / 2+, Step 1 `LOCK_ACQUIRED=false`, Step 2 setup abort (`REPO_UNAVAILABLE=true`). Steps 4 and 5 do not run on those paths.
 
 **Sibling**: `skills/fix-issue/references/non-pr-execution.md` owns the NON_PR-path execution detail consumed by Step 6b.
 
