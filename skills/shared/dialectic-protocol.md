@@ -6,9 +6,20 @@ Shared protocol for **post-debate adjudication** of contested design decisions. 
 
 **Do not reuse `voting-protocol.md` parsers, threshold tables, or scoring rules for dialectic adjudication.** Dialectic ballots use `DECISION_N` IDs with `THESIS`/`ANTI_THESIS` tokens, not `FINDING_N` with `YES`/`NO`/`EXONERATE`. Dialectic does not compute a competition scoreboard.
 
+## Caller Binding
+
+This protocol is written in terms of a caller-bound path-prefix placeholder, **`$DIALECTIC_TMPDIR`**. Every concrete path below (e.g., `$DIALECTIC_TMPDIR/dialectic-ballot.txt`, `$DIALECTIC_TMPDIR/dialectic-resolutions.md`, `$DIALECTIC_TMPDIR/cursor-judge-output.txt`, `$DIALECTIC_TMPDIR/codex-judge-output.txt`) is the placeholder + a basename; callers substitute the placeholder with their own session-tmpdir path at prompt-construction time. **This is a prompt-construction substitution rule, not a shell-level variable export** — external CLIs (Cursor/Codex) do not expand shell variables in prompt arguments, so substitution must happen at construction time, not in the receiving CLI's environment.
+
+**Callers MUST substitute the literal `$DIALECTIC_TMPDIR` token with their own session-tmpdir path before invoking any choreography that quotes this protocol.** The two known callers today, each documenting the substitution mapping inline:
+
+- `/design` Step 2a.5: when copying protocol text into a `/design` context, the literal `$DIALECTIC_TMPDIR` token maps to `$DESIGN_TMPDIR` (which the orchestrator then substitutes to the actual session-tmpdir path). See `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md`.
+- `/research --adjudicate` Step 2.5: same substitution rule, mapping the literal `$DIALECTIC_TMPDIR` token to `$RESEARCH_TMPDIR`. See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md`.
+
+`DIALECTIC_TMPDIR` is a **directory placeholder only** — it does NOT rename skill-specific artifacts. Callers may keep distinct basenames (e.g., `/research --adjudicate` writes `research-adjudication-ballot.txt` and `adjudication-resolutions.md` instead of the design-context defaults `dialectic-ballot.txt` and `dialectic-resolutions.md`); the protocol's field schema is identical across callers.
+
 ## Overview
 
-After `/design` Step 2a.5 runs the thesis/antithesis debater fanout, an eligibility gate classifies each decision's `Disposition` (`voted` | `fallback-to-synthesis` | `bucket-skipped` | `over-cap`). For `voted` decisions, a 3-judge panel (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unhealthy) reads a single ballot containing attribution-stripped defense texts and casts one binary vote per decision. Votes are tallied per-decision with binary thresholds. Resolutions are written to `$DESIGN_TMPDIR/dialectic-resolutions.md` with a structured schema parseable by Step 2b and Step 3.5.
+After `/design` Step 2a.5 runs the thesis/antithesis debater fanout, an eligibility gate classifies each decision's `Disposition` (`voted` | `fallback-to-synthesis` | `bucket-skipped` | `over-cap`). For `voted` decisions, a 3-judge panel (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unhealthy) reads a single ballot containing attribution-stripped defense texts and casts one binary vote per decision. Votes are tallied per-decision with binary thresholds. Resolutions are written to `$DIALECTIC_TMPDIR/dialectic-resolutions.md` with a structured schema parseable by Step 2b and Step 3.5.
 
 ## Disposition Enum
 
@@ -25,7 +36,7 @@ Every decision selected by Step 2a.5 gets exactly one resolution entry with one 
 
 ## Ballot Format
 
-The ballot is a single text file at `$DESIGN_TMPDIR/dialectic-ballot.txt`, written via the **Write tool** (not heredoc/cat) so synthesis/decision content containing `"`, `$()`, backticks, or newlines does not leak through the shell.
+The ballot is a single text file at `$DIALECTIC_TMPDIR/dialectic-ballot.txt`, written via the **Write tool** (not heredoc/cat) so synthesis/decision content containing `"`, `$()`, backticks, or newlines does not leak through the shell.
 
 ```
 ## Dialectic Ballot
@@ -138,7 +149,7 @@ A tool that is installed but unhealthy (`*_HEALTHY=false`) MUST be treated as un
 One template, used for all three judge slots (external tools read the ballot from the file path; Claude subagent judges receive the ballot content inline via the Agent prompt).
 
 ```
-You are a judge on a 3-agent dialectic adjudication panel. Read the ballot from $DESIGN_TMPDIR/dialectic-ballot.txt. For each DECISION_N item, read both Defense A and Defense B, then cast exactly one binary vote: THESIS or ANTI_THESIS.
+You are a judge on a 3-agent dialectic adjudication panel. Read the ballot from $DIALECTIC_TMPDIR/dialectic-ballot.txt. For each DECISION_N item, read both Defense A and Defense B, then cast exactly one binary vote: THESIS or ANTI_THESIS.
 
 - THESIS means the side defending the synthesis's chosen option wins.
 - ANTI_THESIS means the side defending the alternative option wins.
@@ -163,7 +174,7 @@ Launch all 3 judges **in parallel** (single message). Spawn order: Cursor first 
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
-  --output "$DESIGN_TMPDIR/cursor-judge-output.txt" \
+  --output "$DIALECTIC_TMPDIR/cursor-judge-output.txt" \
   --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust \
     $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
@@ -179,11 +190,11 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex \
-  --output "$DESIGN_TMPDIR/codex-judge-output.txt" \
+  --output "$DIALECTIC_TMPDIR/codex-judge-output.txt" \
   --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" \
     $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$DESIGN_TMPDIR/codex-judge-output.txt" \
+    --output-last-message "$DIALECTIC_TMPDIR/codex-judge-output.txt" \
     "<judge prompt from template above>. Work at your maximum reasoning effort level."
 ```
 
@@ -236,7 +247,7 @@ For decisions ranked outside the top-`min(5, N)` cap: `Disposition: over-cap`, `
 
 ## Writing `dialectic-resolutions.md`
 
-Write one resolution entry per decision originally present in `contested-decisions.md` (including over-cap decisions). File is written at `$DESIGN_TMPDIR/dialectic-resolutions.md`. Format:
+Write one resolution entry per decision originally present in `contested-decisions.md` (including over-cap decisions). File is written at `$DIALECTIC_TMPDIR/dialectic-resolutions.md`. Format:
 
 ```markdown
 ### DECISION_N: <title>
