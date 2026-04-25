@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.14] - 2026-04-25
+
+### Fixed
+
+- `scripts/test-research-structure.sh` Check 12 — replaced the two-grep AND (`grep -Fq "Aborting" && grep -Fq "must be one of quick|standard|deep"`) with a single `grep -Fq` of the full composite literal `must be one of quick|standard|deep (got: foo). Aborting.`, the intended `--scale=foo` error sentence in `skills/research/SKILL.md`. The prior two-grep form succeeded if either substring appeared anywhere in the file, so an unrelated `Aborting` elsewhere could satisfy it spuriously. Failure message and the sibling contract assertion (12) in `scripts/test-research-structure.md` updated to reference the composite literal. Pre-existing OOS surfaced during PR #420 review. Closes #460.
+
 ## [7.4.13] - 2026-04-25
 
 ### Fixed
