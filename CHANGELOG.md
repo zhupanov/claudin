@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.6] - 2026-04-25
+
+### Changed
+
+- `scripts/test-design-structure.sh` now pins the Step-3a removal that landed in PR #454 with two additional structural assertions: Check 5 grep-walks the entire `skills/design/` tree (SKILL.md and `references/**`) for the residue tokens `Step 3a`, `Post-Review Confirmation`, `user-qa-happened`, `qa_happened`, `dialectic_adjudicated` and fails on any match; Check 6 verifies that `skills/design/SKILL.md`'s Step 3 ("all reviewers OK") branch and Step 3.5 auto-mode branch both forward to `Step 3b` (literal-match `or Step 3b if auto_mode=true` and `and proceed to Step 3b` respectively). The success line now reports "all 6 structural invariants hold". `scripts/test-design-structure.md` documents Checks 5 and 6 in the contract per the AGENTS.md per-script-contracts rule. No Makefile changes — the existing `test-design-structure` `make lint` target continues to wire the harness in. Closes #453.
+
 ## [7.4.5] - 2026-04-25
 
 ### Added
