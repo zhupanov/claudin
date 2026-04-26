@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.7] - 2026-04-26
+
+### Added
+
+- `skills/implement/scripts/check-review-changes.md` — sibling contract file for `skills/implement/scripts/check-review-changes.sh` per the AGENTS.md per-script-contract convention. Documents the script's purpose ("detect whether code-review step modified the working tree"), output contract (`FILES_CHANGED=true|false` to stdout, always exit 0), the unstaged/staged/untracked detection union, the known limitation that any pre-existing untracked file flips the flag, the sole call site (Step 6 of `skills/implement/SKILL.md`), read-only/idempotent invariants, and edit-in-sync rules. `agent-lint.toml` skill-local-sibling-`.md` exclude list extended to include the new file (matches the existing pattern for `skills/<name>/scripts/*.md` contracts not cited from the owning SKILL.md). Closes #652.
+
 ## [7.15.6] - 2026-04-26
 
 ### Fixed
