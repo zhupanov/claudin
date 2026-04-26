@@ -29,6 +29,7 @@
 #   ERROR=unclosed single quote at offset <N>
 #   ERROR=stray backslash at end of input
 #   ERROR=embedded newline in quoted value at offset <N>
+#   ERROR=embedded newline in unquoted value at offset <N>
 #   ERROR=embedded newline in TASK at offset <N>
 #
 # See parse-args.md for the full contract, supported quoting subset, and
@@ -81,7 +82,8 @@ skip_ws() {
 
 # Read an unquoted token starting at offset $1. Stops at the first unquoted
 # whitespace byte (space/tab/newline) or end-of-string. Backslash escapes the
-# next character (`\<c>` → literal `<c>`); errors on stray trailing backslash.
+# next non-newline byte (`\<c>` → literal `<c>`); errors on stray trailing
+# backslash and on backslash-escaped newline (`\<LF>`).
 # Sets globals: TOKEN_VALUE, TOKEN_END.
 read_unquoted_token() {
   local pos="$1"
@@ -100,7 +102,7 @@ read_unquoted_token() {
         fi
         local nc="${ARGS_STR:$pos:1}"
         if [ "$nc" = $'\n' ]; then
-          echo "ERROR=embedded newline in quoted value at offset $pos" >&2
+          echo "ERROR=embedded newline in unquoted value at offset $pos" >&2
           exit 1
         fi
         TOKEN_VALUE="${TOKEN_VALUE}${nc}"

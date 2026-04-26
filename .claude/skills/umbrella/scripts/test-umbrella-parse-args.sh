@@ -229,10 +229,14 @@ assert_error "case 23: embedded newline in TASK" \
 # 24. Backslash-escaped newline in unquoted value → error.
 #     Repro from /review FINDING_2: backslash escapes the unquoted-separator
 #     behavior of newline, letting it through into LABEL_<i>= and breaking KV.
+#     NOTE: this path uses a DISTINCT frozen template `embedded newline in
+#     unquoted value` — do NOT "dedupe" the assertion against cases 18/25,
+#     which deliberately keep `embedded newline in quoted value` for the
+#     genuinely quoted-value paths (parse-args.md frozen list).
 # shellcheck disable=SC1003
 assert_error "case 24: backslash-escaped newline in unquoted value" \
   $'--label foo\\\nbar' \
-  "embedded newline in quoted value"
+  "embedded newline in unquoted value"
 
 # 25. Backslash-escaped newline inside double-quoted value → error.
 #     Repro from /review FINDING_2: same hazard via the double-quoted reader's
