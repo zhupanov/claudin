@@ -171,6 +171,7 @@ Construct a concise feature description for `/im`:
 - Local path token (plugin mode): `${CLAUDE_PLUGIN_ROOT}`
 - Plugin path token (always): `${CLAUDE_PLUGIN_ROOT}`
 - Template: `multi-step` if `MULTI_STEP=true`, else `minimal`.
+- Feature-spec file path: `<RAW_DESC_FILE_PATH>` is the **resolved absolute path** of `$RAW_DESC_FILE` (e.g. `/tmp/create-skill-raw-desc-XXXXXX.txt`) captured at Step 1.4 — substitute the actual filesystem path here, NOT the literal variable name `$RAW_DESC_FILE`. The renderer's `--feature-spec-file` flag (#568) reads this file's content (raw passthrough — multi-line preserved) and emits it as the body's opening paragraph. Without this substitution, the implementing agent would invoke `render-skill-md.sh --feature-spec-file "$RAW_DESC_FILE"` literally and the file-existence check would fail with `ERROR=Cannot read --feature-spec-file: $RAW_DESC_FILE`.
 
 Feature description template (fill placeholders from the parsed values; note `<FRONTMATTER_DESCRIPTION>` is the validated single-line frontmatter from Step 1.5/1.6 and `<FEATURE_SPEC>` is the original raw description carried as a feature brief — these are TWO DISTINCT slots):
 
@@ -184,11 +185,14 @@ Use ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/render-skill-md.sh to writ
   render-skill-md.sh --name "<NAME>" --description "<FRONTMATTER_DESCRIPTION>" \
     --target-dir "<TARGET_DIR>" \
     --local-token "<LOCAL_TOKEN>" --plugin-token "${CLAUDE_PLUGIN_ROOT}" \
-    --multi-step <MULTI_STEP>
+    --multi-step <MULTI_STEP> \
+    --feature-spec-file "<RAW_DESC_FILE_PATH>"
 
 After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN>. The hints script is the single source of truth for the post-scaffold doc-sync checklist — execute every reminder it emits verbatim (including README Skills catalog row + the docs/configuration-and-permissions.md "Strict-permissions consumers — Skill permission entries" subsection pointer, .claude/settings.json dual-form Skill permission entries with `sort -u`, docs/workflow-lifecycle.md orchestration/delegation/standalone updates, docs/agents.md, docs/review-agents.md, AGENTS.md Canonical sources, and any additional lines the hints script prints). Include the hints output verbatim in the PR body under a "Post-scaffold sync checklist" section.
 
-When implementing the new skill's body to match the feature spec above, use <FEATURE_SPEC> as the authoritative intent (it carries the operator's full freeform description); use <FRONTMATTER_DESCRIPTION> ONLY for the YAML frontmatter `description:` field via `render-skill-md.sh --description`. On the verbatim path the two slots carry the same string; on the synthesis path <FRONTMATTER_DESCRIPTION> is a one-line `Use when…` distillation of <FEATURE_SPEC>, both validated.
+The renderer mechanically scaffolds the body from `--feature-spec-file`'s content (the raw `<FEATURE_SPEC>` written to `<RAW_DESC_FILE_PATH>` at Step 1.4); use <FRONTMATTER_DESCRIPTION> ONLY for the YAML frontmatter `description:` field via `render-skill-md.sh --description`. On the verbatim path the two slots carry the same string; on the synthesis path <FRONTMATTER_DESCRIPTION> is a one-line `Use when…` distillation of <FEATURE_SPEC>, both validated. The implementing agent then evolves the scaffolded body into the real skill — the renderer-provided opening paragraph is a starting point, not the final body.
+
+The full CLI grammar, body-vs-frontmatter contract, output-channel split (`RENDERED=` on stdout / `ERROR=` on stderr), backward-compat semantics, and edit-in-sync rules for `render-skill-md.sh` live in the sibling contract at `${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/render-skill-md.md`.
 
 MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full file) before writing any code. Section III mechanical rules A/B/C below override Section IV writing-style guidance on conflict:
   A. Content and logic live in .sh scripts — shared at ${CLAUDE_PLUGIN_ROOT}/scripts/ when reusable, private at ${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/ otherwise. Grep existing scripts/ before creating a new one.

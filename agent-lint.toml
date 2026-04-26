@@ -529,5 +529,14 @@ exclude = [
   "skills/research/scripts/test-standard-angle-prompts.md",
   "skills/research/scripts/test-classify-research-scale.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
+  # skills/create-skill/scripts/test-render-skill-md.md is the sibling contract
+  # for the render-skill-md.sh regression harness (closes #568 — added alongside
+  # render-skill-md.md to satisfy AGENTS.md "Per-script contracts live beside
+  # the script" for both the renderer AND its harness). The harness contract
+  # documents case matrix, Makefile wiring, and edit-in-sync rules; matches the
+  # same harness-sibling-not-cited-from-SKILL.md pattern as the other test-*.md
+  # entries above (test-fix-issue-bail-detection.md, test-find-lock-issue.md,
+  # etc.).
+  "skills/create-skill/scripts/test-render-skill-md.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
 ]
