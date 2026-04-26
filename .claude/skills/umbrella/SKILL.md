@@ -1,0 +1,189 @@
+---
+name: umbrella
+description: "Use when planning or breaking up a task or plan into GitHub issues — auto-classifies one-shot vs multi-piece work, delegates to /issue (batch mode plus an umbrella tracking issue), wires hard GitHub native block dependencies into an execution DAG, and back-links each child issue to the umbrella."
+argument-hint: "[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] <task description or empty to deduce from context>"
+allowed-tools: Bash, Read, Skill
+---
+
+# umbrella
+
+Plan-to-issues orchestrator. Takes a task description (or deduces it from session context), classifies it as one-shot or multi-piece, and delegates GitHub issue creation to `/issue` — adding native blocked-by dependencies to form an execution DAG and back-linking children to the umbrella when multi-piece.
+
+> **Before editing**, read `/Users/zhupanov/larch1/skills/shared/skill-design-principles.md` (full file). Section III mechanical rules A/B/C override general writing-style guidance on conflict.
+
+## Anti-patterns (with WHY)
+
+- **NEVER** call `gh api` directly with hard-coded REST paths inside this `SKILL.md`. **Why**: GitHub's issue-dependency / sub-issue API surface has shifted multiple times (REST `/dependencies/blocked_by`, the sub-issues endpoint, the GraphQL `addSubIssue` mutation). Wrap every dependency-related GitHub call in `scripts/wire-dag.sh` so the surface can be swapped without rewriting prompt prose.
+- **NEVER** add a blocking edge before verifying it does not create a cycle. **Why**: a cycle in the blocked-by graph deadlocks `/fix-issue` and any other automation that respects dependencies — and deadlocked queues fail silently. `wire-dag.sh` runs `check-cycle.sh` against the proposed edge plus all existing edges before posting.
+- **NEVER** create the umbrella issue before the children. **Why**: the umbrella body lists child numbers as a checklist (`- [ ] #N — <title>`); those numbers are unknown until `/issue --input-file` returns. A placeholder umbrella with `#TBD` references rots fast and breaks GitHub's auto-rendering of the checklist.
+- **NEVER** skip the user-visible classification verdict. **Why**: the LLM's one-shot vs multi-piece judgment is the most error-prone step in the pipeline and the cheapest to correct — silent multi-piece on a small ask spams the issue tracker; silent one-shot on a sprawling ask defeats the purpose of `/umbrella`. Always print the verdict + one-line rationale before proceeding.
+- **NEVER** bypass `/issue` with a direct `gh issue create`. **Why**: `/issue` carries semantic dedup (Phase 1 + Phase 2), OOS-template support, outbound secret redaction, and sentinel writing that must apply uniformly across the larch toolchain. A direct create diverges `/umbrella`'s outputs from the rest of the pipeline.
+
+## Flags
+
+Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. The remainder is the task description (may be empty — see Step 1).
+
+| Flag | Meaning |
+|------|---------|
+| `--label LABEL` | Repeatable. Forwarded to `/issue` for every child create AND the umbrella create. |
+| `--title-prefix PREFIX` | Prepended by `/issue` to every child title AND the umbrella title. |
+| `--repo OWNER/REPO` | Forwarded to `/issue`. Defaults to the inferred current repo. |
+| `--closed-window-days N` | Forwarded to `/issue` (closed-issue dedup window). Default 90. |
+| `--dry-run` | Forwarded to `/issue`. Multi-piece path also skips DAG wiring + back-links. |
+| `--go` | Forwarded to `/issue` for child batch AND umbrella single. Posts `GO` on every successfully-created issue (children + umbrella). Duplicates / failed creates / dry-runs never get a GO comment (per `/issue` Step 6 contract). |
+| `--debug` | Verbose mode for this skill's own helpers. |
+
+## Step 0 — Setup
+
+```bash
+/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
+```
+
+Parse stdout for: `LABELS` (newline-joined; may be empty), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `TASK` (everything after the last flag — may be empty), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5).
+
+On non-zero exit, print the `ERROR=` line and abort.
+
+## Step 1 — Resolve Task Description
+
+If `TASK` is non-empty, use it verbatim.
+
+If `TASK` is empty, deduce the task from session context — the most recent unambiguous user request (e.g., a feature spec discussed in the prior turns, a research finding, a /research output the user just acted on). Surface the deduced task to the user as a single quoted line with the prefix `Deduced task: ` so they can interrupt if you got it wrong. If the context is genuinely ambiguous (multiple plausible tasks, or none), abort with `**ERROR: /umbrella requires a task description and could not deduce one from context. Re-invoke as `/umbrella <description>`.**`
+
+## Step 2 — Classify One-Shot vs Multi-Piece
+
+Decide one of two verdicts based on the task description:
+
+- **`one-shot`** (default — bias here): a single bug fix, doc tweak, refactor confined to one component, single skill scaffold, single CI fix, single test addition. Anything that one PR can plausibly land.
+- **`multi-piece`**: spec-style descriptions naming distinct phases, sub-systems, or independent work units (e.g., "Phase 1: do X. Phase 2: do Y. Phase 3: do Z."); multi-component refactors with discrete steps that can land in separate PRs; an umbrella tracking issue that consolidates ≥2 cleanly partitionable units.
+
+Print exactly one line in this shape (machine-grep-friendly + human-readable):
+
+```
+UMBRELLA_VERDICT=<one-shot|multi-piece>
+UMBRELLA_RATIONALE=<one short sentence — under 120 chars — explaining the call>
+```
+
+Then branch: `one-shot` → Step 3A; `multi-piece` → Step 3B.
+
+## Step 3A — One-Shot Path
+
+Forward the entire `TASK` to `/issue` (single mode). Do NOT add or strip any flag the user did not pass.
+
+Invoke the Skill tool:
+
+- Try skill `"issue"` first (bare name). If no skill matches, try `"larch:issue"`.
+- args: `[--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <TASK>` — pass each captured flag verbatim; omit the flag if its parsed value is the default.
+
+Parse `/issue`'s stdout for `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`, `ISSUE_1_NUMBER`, `ISSUE_1_URL`, `ISSUE_1_TITLE`, `ISSUE_1_DUPLICATE_OF_NUMBER` / `ISSUE_1_DUPLICATE_OF_URL` (when deduplicated), `ISSUE_1_DRY_RUN` (when dry-run). Capture into the `CHILD_*` fields per Step 4 (the one-shot child is `CHILD_1`).
+
+Continue at Step 4. (No umbrella issue, no DAG, no back-links — there is only one child.)
+
+## Step 3B — Multi-Piece Path
+
+Four sub-steps run in order. Each is exactly one Bash tool call (Section III rule C). The LLM owns the decomposition; the scripts own the I/O and GitHub mechanics.
+
+### 3B.1 — Decompose and write batch-input file
+
+Decompose `TASK` into N concrete work-pieces (`N >= 2`). Each piece must be small enough to land as one PR but substantial enough to merit its own issue — bias toward pieces that are independently testable. Compose, in your reasoning, an ordered list of `(title, body, depends-on)` tuples:
+
+- `title` — one line, ≤ 80 chars, imperative ("Add X", "Fix Y", "Refactor Z").
+- `body` — markdown, the implementation contract for that piece (problem, suggested approach, acceptance criteria).
+- `depends-on` — comma-separated 1-based indices of earlier pieces this one depends on (empty if none).
+
+If decomposition produces fewer than 2 pieces, fall back to one-shot: print `UMBRELLA_VERDICT=one-shot (downgraded — decomposition produced fewer than 2 pieces)` and execute Step 3A with the original `TASK`.
+
+Render the batch-input markdown file:
+
+```bash
+/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/render-batch-input.sh --tmpdir "$UMBRELLA_TMPDIR" --pieces-file "$UMBRELLA_TMPDIR/pieces.json"
+```
+
+Write `$UMBRELLA_TMPDIR/pieces.json` (a JSON array of `{title, body, depends_on: [int,...]}` objects in pieces order) BEFORE invoking the renderer using the Write tool. The renderer emits `BATCH_INPUT_FILE=<path>`, `PIECES_TOTAL=<N>`, plus per-piece `PIECE_<i>_TITLE` and `PIECE_<i>_DEPENDS_ON` lines. On non-zero exit, print `ERROR=` and abort.
+
+### 3B.2 — Batch-create children via /issue
+
+Invoke the Skill tool:
+
+- Try skill `"issue"` first. Fall back to `"larch:issue"`.
+- args: `--input-file <BATCH_INPUT_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go]` — flags forwarded verbatim. Do NOT pass `<TASK>` (batch mode rejects a trailing description).
+
+Parse the per-item `ISSUE_<i>_NUMBER`, `ISSUE_<i>_URL`, `ISSUE_<i>_TITLE`, `ISSUE_<i>_DUPLICATE_OF_NUMBER`, `ISSUE_<i>_DUPLICATE_OF_URL`, `ISSUE_<i>_DRY_RUN`, `ISSUE_<i>_FAILED`, plus aggregate `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`.
+
+**Abort condition**: if `ISSUES_FAILED >= 1`, do NOT proceed to umbrella creation. Print `**⚠ /umbrella: /issue batch reported $ISSUES_FAILED failure(s); refusing to create a half-populated umbrella. See per-item ISSUE_<i>_* lines above.**`, populate the `CHILD_*` output fields with whatever did succeed (for partial-failure auditability), set `UMBRELLA_NUMBER` and `UMBRELLA_URL` empty, jump to Step 4.
+
+For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes but skip wiring + back-links (handled in 3B.3 / 3B.4).
+
+### 3B.3 — Compose umbrella body and create umbrella
+
+Compose a one-paragraph summary of the overall task (≤ 4 sentences, plain prose) — distinct from any individual piece body. Render the umbrella issue body:
+
+```bash
+/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "$UMBRELLA_TMPDIR/summary.txt" --children-file "$UMBRELLA_TMPDIR/children.tsv"
+```
+
+Write `$UMBRELLA_TMPDIR/summary.txt` (the summary paragraph) and `$UMBRELLA_TMPDIR/children.tsv` (one row per child: `<number>\t<title>\t<url>`, in pieces order) BEFORE invoking the renderer. The renderer emits `UMBRELLA_BODY_FILE=<path>` and `UMBRELLA_TITLE_HINT=<derived umbrella title from the first sentence of the summary>`.
+
+Then forward to `/issue` (single mode) for the umbrella itself:
+
+- Try skill `"issue"` first; fall back to `"larch:issue"`.
+- args: `--body-file <UMBRELLA_BODY_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <UMBRELLA_TITLE_HINT>` — title is the trailing description (`/issue` derives the title from the first non-empty line, which is `UMBRELLA_TITLE_HINT`).
+
+Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as `UMBRELLA_URL`), `ISSUE_1_TITLE` (capture as `UMBRELLA_TITLE`). On `ISSUE_1_FAILED=true` or empty `ISSUE_1_NUMBER`, print `**⚠ /umbrella: umbrella issue creation failed. Children remain orphan but were created — see CHILD_<i>_* output lines.**` and jump to Step 4 with `UMBRELLA_NUMBER` / `UMBRELLA_URL` empty (skipping 3B.4).
+
+### 3B.4 — Wire DAG dependencies and post back-links
+
+Skip this entire sub-step when `DRY_RUN=true` (no children actually exist on GitHub). Print `⏭️ /umbrella: dependency wiring + back-links skipped (--dry-run)` and jump to Step 4.
+
+Compose the proposed edge list from the `depends-on` field of each piece: for piece index `i` with `depends_on=[j, k, ...]`, propose edges `child[j] blocks child[i]`, `child[k] blocks child[i]`, etc. (using the resolved issue numbers from 3B.2). Write the proposed edges to `$UMBRELLA_TMPDIR/proposed-edges.tsv` (one row per edge: `<blocker-number>\t<blocked-number>`) using the Write tool.
+
+Then run the wiring + back-links coordinator:
+
+```bash
+/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/helpers.sh wire-dag --tmpdir "$UMBRELLA_TMPDIR" --umbrella "$UMBRELLA_NUMBER" --umbrella-title "$UMBRELLA_TITLE" --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
+```
+
+`wire-dag.sh` is a coordinator that, internally, (a) probes existing blocked-by edges per child via the GitHub dependency-API adapter, (b) runs `check-cycle.sh` on the union of existing + proposed edges to refuse any edge that would create a cycle, (c) adds each surviving new edge via the same adapter, and (d) posts a back-link comment (`Part of umbrella #M — <umbrella-title>`) on each child unless the GitHub-native umbrella relationship is detected as already rendering on the child page.
+
+Parse stdout for `EDGES_ADDED`, per-edge `EDGE_<j>_BLOCKER`, `EDGE_<j>_BLOCKED`, `EDGES_REJECTED_CYCLE` (count of rejected proposed edges), `EDGES_SKIPPED_EXISTING` (count of skipped already-present edges), `EDGES_SKIPPED_API_UNAVAILABLE` (count of edges skipped because the GitHub dependency API surface is not available on this repo — fail-open, do not abort), `BACKLINKS_POSTED`, `BACKLINKS_SKIPPED_NATIVE` (count of children whose native umbrella relationship was already detected). On non-zero exit, log the `ERROR=` line and continue to Step 4 — partial wiring is acceptable.
+
+## Step 4 — Emit Output
+
+```bash
+/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
+```
+
+Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The emitter validates the KV grammar (no unset values, no embedded newlines, no duplicate keys) and prints to stdout in the canonical order:
+
+```
+UMBRELLA_VERDICT=<one-shot|multi-piece>
+UMBRELLA_RATIONALE=<one-line>
+CHILDREN_CREATED=<N>
+CHILDREN_DEDUPLICATED=<N>
+CHILDREN_FAILED=<N>
+CHILD_<i>_NUMBER=<N>
+CHILD_<i>_URL=<url>
+CHILD_<i>_TITLE=<title>
+UMBRELLA_NUMBER=<N>          (only on multi-piece + success)
+UMBRELLA_URL=<url>           (only on multi-piece + success)
+EDGES_ADDED=<N>              (only on multi-piece, non-dry-run, success)
+EDGE_<j>_BLOCKER=<N>
+EDGE_<j>_BLOCKED=<M>
+BACKLINKS_POSTED=<N>         (only on multi-piece, non-dry-run, success)
+```
+
+On stderr, the emitter prints a single human summary line of the form:
+
+- one-shot: `✅ /umbrella: filed #<N> — <url>` (or `ℹ /umbrella: dedup'd to #<N> — <url>` / `**⚠ /umbrella: failed — <error>**` etc.).
+- multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`.
+- multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`.
+- multi-piece partial (children created, umbrella failed): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`.
+
+## Step 5 — Cleanup
+
+```bash
+/Users/zhupanov/larch1/scripts/cleanup-tmpdir.sh --dir "$UMBRELLA_TMPDIR"
+```
+
+## Sub-skill Invocation
+
+This skill invokes `/issue` via the Skill tool (Step 3A and Steps 3B.2 / 3B.3). See `/Users/zhupanov/larch1/skills/shared/subskill-invocation.md` for the canonical conventions. This skill is a pure delegator over `/issue` for the issue-creation half of the work — there are no post-Skill-call steps that depend on `/issue` side effects beyond parsing the stdout grammar (which is a deterministic mechanical verification per the conventions checklist). The sub-skill calls happen at known checkpoints, not buried in conditionals.
