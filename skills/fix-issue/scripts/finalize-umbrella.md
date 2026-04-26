@@ -6,15 +6,22 @@
 
 - **`finalize --issue N`** — finalize the umbrella issue if it has not already been finalized. Performs (1) idempotency probe → (2) best-effort rename to `[DONE]` → (3) post closing comment + close.
 
-## Idempotency guard (FINDING_2)
+## Idempotency guard (FINDING_2 + FINDING_3 from the umbrella-PR review panel)
 
-Before any state mutation, the helper probes three signals. ANY positive signal short-circuits with `FINALIZED=false ALREADY_FINALIZED=true REASON=<one-line>`:
+The guard probes three signals. **Only `state=CLOSED` is a strict short-circuit** that emits `FINALIZED=false ALREADY_FINALIZED=true REASON=already CLOSED`. The title-prefix and marker signals do NOT short-circuit on their own — they MUST drive a close-only retry path instead, because a prior attempt may have completed rename and/or comment-post but failed `gh issue close` (the "close-failed partial-success" window: `issue-lifecycle.sh close` posts the comment BEFORE the close call, so a transient close failure leaves rename and comment in place but the issue still OPEN). FINDING_3 from the umbrella-PR code-review panel: an aggressive short-circuit on title or marker alone leaves the umbrella stuck OPEN with no recovery path — every retry returns `ALREADY_FINALIZED=true` and skips the close call. The guard semantics:
 
-1. **State is `CLOSED`** — another runner already closed the issue, OR the issue was closed externally.
-2. **Title starts with the managed prefix `[DONE]` (followed by a space)** — managed lifecycle prefix already terminal.
-3. **Sentinel marker comment exists** — any existing comment on the issue contains the literal HTML-comment marker `<!-- larch:fix-issue:umbrella-finalized -->`. The marker is embedded in the closing comment body so future finalize attempts can detect prior runs even when state and title checks both miss (e.g., a prior run posted the comment but its `gh issue close` failed transiently and left the issue in `OPEN` state without the title prefix).
+1. **State is `CLOSED`** — strict short-circuit. Emit `FINALIZED=false ALREADY_FINALIZED=true REASON=already CLOSED` and exit 0.
+2. **State is `OPEN` AND title starts with `[DONE]` followed by a space** — partial-success signal: prior rename succeeded, but close did not complete. Skip the rename API call (do not re-rename); proceed to the close path. The runtime emits `RENAMED=false` reflecting "no rename happened in this call" — but `FINALIZED=true CLOSED=true` if the close-only retry succeeds.
+3. **State is `OPEN` AND a comment with the literal marker `<!-- larch:fix-issue:umbrella-finalized -->` already exists** — partial-success signal: prior comment-post succeeded. Skip the comment-post step (avoid double-comment under concurrency); call `gh issue close` directly via `issue-lifecycle.sh close --issue N` (no `--comment`). On success: `FINALIZED=true CLOSED=true RENAMED=<rename outcome>`. On close failure: standard `FINALIZED=false CLOSED=false ERROR=<reason>` exit 1.
 
-If the comment-stream probe itself fails (transient `gh` API blip), the helper proceeds to attempt finalization. The state+title checks already covered the common already-finalized paths; this fallback is conservative — letting a transient blip block finalization would leave a stale-open umbrella.
+These three signals are independent — an attempt may have completed any subset of (rename, comment, close), and the guard handles each combination correctly:
+
+- only rename done: skip rename → post comment + close
+- only comment done: rename → skip comment, close-only
+- rename + comment done: skip both, close-only
+- close done (state=CLOSED): strict short-circuit
+
+If the comment-stream probe itself fails (transient `gh` API blip), the helper treats the marker as absent and proceeds to attempt the full sequence. The state+title checks already cover the common already-finalized paths; this fallback is conservative — letting a transient blip block finalization would leave a stale-open umbrella.
 
 ## Sequence on the executed path
 

@@ -179,6 +179,26 @@ parse_children_from_body() {
     ' <<< "$nums"
 }
 
+# child_native_blockers — minimal blocker probe inlined into umbrella-handler
+# so pick-child can iterate past blocked children rather than aborting on the
+# first one. Mirrors find-lock-issue.sh's `native_open_blockers` exactly:
+# queries GitHub's blocked_by dependency API with --paginate + per-page jq
+# filter; emits a space-separated list of OPEN blocker issue numbers (empty
+# = no native blockers known); fail-open on API failure (returns empty +
+# exit 0). The full prose-blocker scan from find-lock-issue.sh is NOT
+# duplicated here — pick-child uses native blockers only as a cheap
+# proportionate filter, and the caller (find-lock-issue.sh handle_umbrella)
+# applies the full all_open_blockers (native + prose) once on the chosen
+# child as a final guard before locking. This keeps umbrella-handler.sh
+# focused without re-implementing the full blocker pipeline.
+child_native_blockers() {
+    local num="$1"
+    local nums
+    nums=$(gh api --paginate "repos/${REPO}/issues/${num}/dependencies/blocked_by" \
+        --jq '.[] | select(.state == "open") | .number' 2>/dev/null) || return 0
+    echo "$nums" | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+}
+
 # child_eligible — returns 0 if the child issue is eligible for dispatch; 1
 # otherwise. Sets CHILD_TITLE on eligibility-success or BLOCKING_REASON on
 # ineligibility (closed cases excluded — those are checked by the caller).
@@ -187,10 +207,13 @@ parse_children_from_body() {
 #   - state == OPEN
 #   - title does NOT start with a managed lifecycle prefix
 #   - last comment is NOT exactly "IN PROGRESS"
-# Note: blocker checks are deliberately NOT run here — the existing
-# find-lock-issue.sh helpers (`all_open_blockers`) are the source of truth.
-# The caller (find-lock-issue.sh) checks blockers AFTER this returns
-# CHILD_NUMBER, before locking.
+#   - child_native_blockers returns empty (no open native blockers)
+# Native blocker check is INSIDE child_eligible so pick-child iterates past
+# blocked children to the next ready one (FINDING_5 from the umbrella-PR
+# code-review panel). The caller still runs the full all_open_blockers
+# (native + prose) on the chosen child once before locking — this is
+# defense in depth: prose blockers are rare on /umbrella-rendered children
+# and the redundant final check costs at most one paginated comment fetch.
 child_eligible() {
     local n="$1"
     local title state
@@ -219,6 +242,16 @@ child_eligible() {
     trimmed=$(printf '%s' "$last_comment" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     if [[ "$trimmed" == "IN PROGRESS" ]]; then
         BLOCKING_REASON="child #$n is locked (last comment: IN PROGRESS)"
+        return 1
+    fi
+    # Native blocker check (FINDING_5) — pick-child must iterate past
+    # blocked children, not abort on the first one.
+    local blockers
+    blockers=$(child_native_blockers "$n")
+    if [[ -n "$blockers" ]]; then
+        local formatted
+        formatted=$(echo "$blockers" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
+        BLOCKING_REASON="child #$n is blocked by open dependencies: $formatted"
         return 1
     fi
     CHILD_TITLE="$title"

@@ -769,6 +769,29 @@ while IFS= read -r issue_row; do
 
     # Check if last comment is exactly GO (case-sensitive)
     if [ "$TRIMMED" = "GO" ]; then
+        # Auto-pick must NEVER select umbrella issues, per the design dialectic
+        # DECISION_1 (voted 2-1 ANTI_THESIS): umbrella handling is restricted to
+        # the explicit-issue path. Even when /umbrella --go posts GO on the
+        # umbrella itself, the auto-pick scan must skip it — otherwise the
+        # umbrella body text would be sent to /implement as a normal feature
+        # spec, defeating the umbrella state machine. Operators wanting umbrella
+        # children processed must explicitly invoke `/fix-issue <umbrella#>`.
+        UMBRELLA_HANDLER="$(dirname "${BASH_SOURCE[0]}")/umbrella-handler.sh"
+        if [[ -x "$UMBRELLA_HANDLER" ]]; then
+            UMBRELLA_DETECT_OUT=""
+            if UMBRELLA_DETECT_OUT=$("$UMBRELLA_HANDLER" detect --issue "$ISSUE_NUM" 2>/dev/null); then
+                IS_UMBRELLA_DETECT=$(echo "$UMBRELLA_DETECT_OUT" | awk -F= '/^IS_UMBRELLA=/ { v=$2 } END { print v }')
+                if [ "$IS_UMBRELLA_DETECT" = "true" ]; then
+                    echo "Skipping issue #$ISSUE_NUM: umbrella issue (auto-pick excludes umbrellas; use \`/fix-issue $ISSUE_NUM\` to dispatch a child)" >&2
+                    continue
+                fi
+            fi
+            # detect failure (non-zero exit) — fail-open: treat as non-umbrella
+            # and continue with the standard auto-pick flow rather than
+            # blocking the queue. The explicit-issue path's handler-missing
+            # branch is the user-facing diagnostic surface; auto-pick is best-
+            # effort.
+        fi
         BLOCKERS=$(all_open_blockers "$ISSUE_NUM")
         if [ -n "$BLOCKERS" ]; then
             # Blocked by at least one open dependency — log on stderr and keep scanning.

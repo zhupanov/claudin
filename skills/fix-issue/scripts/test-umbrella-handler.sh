@@ -257,6 +257,95 @@ assert_contains "$OUT" "CHILDREN=" "[8] prose-only body produces empty CHILDREN"
 assert_not_contains "$OUT" "CHILDREN=801" "[8] prose #N references NOT picked up"
 
 # ---------------------------------------------------------------------------
+# Fixture 9: pick-child — first eligible child happy path
+#
+# Stub note: the stub doesn't differentiate child-issue lookups from the
+# umbrella's own lookup — it always returns the per-issue-number table set
+# in the state file. So we register the umbrella body AND the child issue's
+# title/state/comments under their respective ISSUE_<N>_* vars.
+# ---------------------------------------------------------------------------
+echo "Fixture 9: pick-child — first eligible child"
+run_fixture "fixture-9"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_900_TITLE='Umbrella: foo'
+ISSUE_900_BODY=$'Umbrella tracking issue.\n\n- [ ] #901 — first child\n- [ ] #902 — second child\n'
+ISSUE_900_STATE=OPEN
+ISSUE_901_TITLE='First child'
+ISSUE_901_BODY='Body of first child'
+ISSUE_901_STATE=OPEN
+ISSUE_901_COMMENTS='[[]]'
+ISSUE_902_TITLE='Second child'
+ISSUE_902_BODY='Body of second child'
+ISSUE_902_STATE=OPEN
+ISSUE_902_COMMENTS='[[]]'
+STATE_EOF
+OUT=$("$SCRIPT" pick-child --issue 900 2>&1) || true
+assert_contains "$OUT" "CHILD_NUMBER=901" "[9] picks first eligible child"
+assert_contains "$OUT" "CHILD_TITLE=First child" "[9] emits CHILD_TITLE"
+assert_not_contains "$OUT" "ALL_CLOSED" "[9] does NOT emit ALL_CLOSED on pick path"
+
+# ---------------------------------------------------------------------------
+# Fixture 10: pick-child — skips locked child (last comment IN PROGRESS)
+# ---------------------------------------------------------------------------
+echo "Fixture 10: pick-child — skips locked child"
+run_fixture "fixture-10"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_1000_TITLE='Umbrella: foo'
+ISSUE_1000_BODY=$'Umbrella tracking issue.\n\n- [ ] #1001 — locked\n- [ ] #1002 — ready\n'
+ISSUE_1000_STATE=OPEN
+ISSUE_1001_TITLE='Locked child'
+ISSUE_1001_STATE=OPEN
+ISSUE_1001_COMMENTS='[[{"id":42,"body":"IN PROGRESS","created_at":"2024-01-01T00:00:00Z"}]]'
+ISSUE_1002_TITLE='Ready child'
+ISSUE_1002_STATE=OPEN
+ISSUE_1002_COMMENTS='[[]]'
+STATE_EOF
+OUT=$("$SCRIPT" pick-child --issue 1000 2>&1) || true
+assert_contains "$OUT" "CHILD_NUMBER=1002" "[10] skips locked child, picks next ready"
+assert_not_contains "$OUT" "CHILD_NUMBER=1001" "[10] does NOT pick the locked child"
+
+# ---------------------------------------------------------------------------
+# Fixture 11: pick-child — skips managed-prefix child
+# ---------------------------------------------------------------------------
+echo "Fixture 11: pick-child — skips managed-prefix child"
+run_fixture "fixture-11"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_1100_TITLE='Umbrella: foo'
+ISSUE_1100_BODY=$'Umbrella tracking issue.\n\n- [ ] #1101 — already in progress\n- [ ] #1102 — ready\n'
+ISSUE_1100_STATE=OPEN
+ISSUE_1101_TITLE='[IN PROGRESS] previously claimed'
+ISSUE_1101_STATE=OPEN
+ISSUE_1101_COMMENTS='[[]]'
+ISSUE_1102_TITLE='Ready child'
+ISSUE_1102_STATE=OPEN
+ISSUE_1102_COMMENTS='[[]]'
+STATE_EOF
+OUT=$("$SCRIPT" pick-child --issue 1100 2>&1) || true
+assert_contains "$OUT" "CHILD_NUMBER=1102" "[11] skips managed-prefix child, picks next ready"
+assert_not_contains "$OUT" "CHILD_NUMBER=1101" "[11] does NOT pick managed-prefix child"
+
+# ---------------------------------------------------------------------------
+# Fixture 12: pick-child — ALL_CLOSED with at least one parsed child
+# ---------------------------------------------------------------------------
+echo "Fixture 12: pick-child — ALL_CLOSED with parsed children"
+run_fixture "fixture-12"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_1200_TITLE='Umbrella: foo'
+ISSUE_1200_BODY=$'Umbrella tracking issue.\n\n- [x] #1201 — done\n- [x] #1202 — also done\n'
+ISSUE_1200_STATE=OPEN
+ISSUE_1201_TITLE='First closed child'
+ISSUE_1201_STATE=CLOSED
+ISSUE_1201_COMMENTS='[[]]'
+ISSUE_1202_TITLE='Second closed child'
+ISSUE_1202_STATE=CLOSED
+ISSUE_1202_COMMENTS='[[]]'
+STATE_EOF
+OUT=$("$SCRIPT" pick-child --issue 1200 2>&1) || true
+assert_contains "$OUT" "ALL_CLOSED=true" "[12] all parsed children CLOSED → ALL_CLOSED=true"
+assert_not_contains "$OUT" "CHILD_NUMBER=" "[12] does NOT emit CHILD_NUMBER on all-closed path"
+assert_not_contains "$OUT" "NO_ELIGIBLE_CHILD" "[12] does NOT emit NO_ELIGIBLE_CHILD when at least one child parsed and all are CLOSED"
+
+# ---------------------------------------------------------------------------
 # Fixture 13: pick-child — zero parseable children → NO_ELIGIBLE_CHILD (FINDING_3)
 # ---------------------------------------------------------------------------
 echo "Fixture 13: pick-child — zero children → NO_ELIGIBLE_CHILD (not vacuous ALL_CLOSED)"

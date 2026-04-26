@@ -196,6 +196,19 @@ cmd_comment() {
         just_posted_id=$(echo "$refresh_json" | jq --arg b "$body" --arg ts "$snapshot_ts" '
             [.[] | select(.body == $b and .created_at >= $ts)] | sort_by(.created_at) | (.[-1].id // empty)' \
             | tr -d '"')
+        # Fail closed if id capture returned empty: the post-check below
+        # excludes the runner's own comment via `(.id | tostring) != $self`,
+        # and an empty $self would never match, so the runner's own IN PROGRESS
+        # would be counted in race_count and produce a spurious duplicate-
+        # detection failure. An empty id here is unrecoverable — the post-
+        # check's exclusion semantics are not defensible — so surface the
+        # condition explicitly rather than letting the lock surface a mis-
+        # diagnosed "Duplicate IN PROGRESS" error a few lines down.
+        if [[ -z "$just_posted_id" ]]; then
+            echo "LOCK_ACQUIRED=false"
+            echo "ERROR=Failed to identify just-posted IN PROGRESS comment id for lock-no-go duplicate check"
+            exit 1
+        fi
     fi
 
     # --lock post-check: verify no duplicate lock comment

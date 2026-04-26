@@ -152,6 +152,18 @@ assert_contains() {
     fi
 }
 
+assert_not_contains() {
+    local haystack="$1" needle="$2" label="$3"
+    if [[ "$haystack" != *"$needle"* ]]; then
+        PASS=$((PASS + 1))
+        echo "  ok: $label"
+    else
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("$label (leaked: $needle)")
+        echo "  FAIL: $label (leaked $needle)" >&2
+    fi
+}
+
 echo "Running test-finalize-umbrella against $SCRIPT"
 
 # Fixture 1: success path
@@ -168,8 +180,12 @@ assert_contains "$OUT" "FINALIZED=true" "[1] FINALIZED=true on success"
 assert_contains "$OUT" "RENAMED=true" "[1] RENAMED=true"
 assert_contains "$OUT" "CLOSED=true" "[1] CLOSED=true"
 
-# Fixture 2: idempotent on marker comment present
-echo "Fixture 2: idempotent-when-marker-comment-exists"
+# Fixture 2: marker present + state=OPEN → close-only retry (FINDING_3)
+# Per the umbrella-PR code-review panel, marker presence with OPEN state
+# means a prior attempt got past comment-post but its close call failed —
+# we MUST retry the close (without re-emitting the comment) rather than
+# short-circuit. This fixture verifies the close-only retry path.
+echo "Fixture 2: marker-present + OPEN → close-only retry (no double-comment)"
 run_fixture "fixture-2"
 cat > "$STUB_STATE_FILE" <<'STATE_EOF'
 ISSUE_TITLE='Umbrella: foo'
@@ -178,21 +194,27 @@ ISSUE_BODY='Umbrella tracking issue.'
 ISSUE_COMMENTS='[[{"id":1,"body":"<!-- larch:fix-issue:umbrella-finalized -->\nAll tracked issues are closed. Marking umbrella as DONE and closing.","created_at":"2024-01-01T00:00:00Z"}]]'
 STATE_EOF
 OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
-assert_contains "$OUT" "FINALIZED=false" "[2] FINALIZED=false (idempotent)"
-assert_contains "$OUT" "ALREADY_FINALIZED=true" "[2] ALREADY_FINALIZED=true"
-assert_contains "$OUT" "marker detected" "[2] REASON identifies marker"
+assert_contains "$OUT" "FINALIZED=true" "[2] FINALIZED=true (close-only retry succeeded)"
+assert_contains "$OUT" "CLOSED=true" "[2] CLOSED=true (the close path WAS retried)"
+assert_not_contains "$OUT" "ALREADY_FINALIZED=true" "[2] does NOT short-circuit when state=OPEN even with marker present"
 
-# Fixture 3: idempotent on [DONE] prefix
-echo "Fixture 3: idempotent-when-already-DONE-prefix"
+# Fixture 3: [DONE] title + state=OPEN → close-only retry, skip rename (FINDING_3)
+# Mirrors fixture 2's invariant for the title-prefix signal: prior rename
+# succeeded (title is [DONE]) but close failed — retry close without
+# re-renaming.
+echo "Fixture 3: [DONE]-title + OPEN → close-only retry (skip rename)"
 run_fixture "fixture-3"
 {
     echo "ISSUE_TITLE='[DONE] Umbrella: foo'"
     echo "ISSUE_STATE=OPEN"
     echo "ISSUE_BODY='Umbrella tracking issue.'"
+    echo "ISSUE_COMMENTS='[[]]'"
 } > "$STUB_STATE_FILE"
 OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
-assert_contains "$OUT" "ALREADY_FINALIZED=true" "[3] ALREADY_FINALIZED=true"
-assert_contains "$OUT" "title already prefixed" "[3] REASON identifies title prefix"
+assert_contains "$OUT" "FINALIZED=true" "[3] FINALIZED=true (close path ran)"
+assert_contains "$OUT" "RENAMED=false" "[3] RENAMED=false (rename skipped, title already [DONE])"
+assert_contains "$OUT" "CLOSED=true" "[3] CLOSED=true (close path WAS retried)"
+assert_not_contains "$OUT" "ALREADY_FINALIZED=true" "[3] does NOT short-circuit when state=OPEN even with [DONE] title"
 
 # Fixture 4: idempotent on already CLOSED state
 echo "Fixture 4: idempotent-when-already-CLOSED"
