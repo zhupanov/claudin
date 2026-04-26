@@ -35,7 +35,7 @@ fi
 # Validate children.tsv: each row has exactly 3 tab-separated fields, first numeric.
 bad_row=$(awk -F'\t' 'NF != 3 || $1 !~ /^[0-9]+$/ { print NR ": " $0; exit }' "$CHILDREN_FILE")
 if [ -n "$bad_row" ]; then
-  echo "ERROR=children.tsv malformed at line $bad_row (expected '<number>\\t<title>\\t<url>')" >&2; exit 1
+  printf 'ERROR=children.tsv malformed at line %s (expected "<number><TAB><title><TAB><url>")\n' "$bad_row" >&2; exit 1
 fi
 
 OUT="$TMPDIR/umbrella-body.md"

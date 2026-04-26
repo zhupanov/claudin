@@ -47,7 +47,7 @@ On non-zero exit, print the `ERROR=` line and abort.
 
 If `TASK` is non-empty, use it verbatim.
 
-If `TASK` is empty, deduce the task from session context — the most recent unambiguous user request (e.g., a feature spec discussed in the prior turns, a research finding, a /research output the user just acted on). Surface the deduced task to the user as a single quoted line with the prefix `Deduced task: ` so they can interrupt if you got it wrong. If the context is genuinely ambiguous (multiple plausible tasks, or none), abort with `**ERROR: /umbrella requires a task description and could not deduce one from context. Re-invoke as `/umbrella <description>`.**`
+If `TASK` is empty, deduce the task from session context — the most recent unambiguous user request (e.g., a feature spec discussed in the prior turns, a research finding, a /research output the user just acted on). Surface the deduced task to the user as a single quoted line prefixed by `Deduced task:` so they can interrupt if you got it wrong. If the context is genuinely ambiguous (multiple plausible tasks, or none), abort with the error message: `/umbrella requires a task description and could not deduce one from context. Re-invoke with the description as a positional argument.`
 
 ## Step 2 — Classify One-Shot vs Multi-Piece
 
