@@ -15,18 +15,18 @@ Cursor supports `~/.cursor/cli-config.json` for model pinning and max-mode, but 
 
 Cursor also has no way to configure a non-default model via config file that overrides the CLI's own fallback; larch passes `--model` on the command line via `scripts/reviewer-model-args.sh`. The two concerns are kept in separate single-source-of-truth files.
 
-## Callers (12 wrapped launch strings in 11 files)
+## Callers (15 wrapped launch strings in 11 files)
 
-- `skills/research/references/research-phase.md` (1)
+- `skills/research/references/research-phase.md` (3 — standard-mode Cursor lane and deep-mode Cursor slots 1 and 2)
 - `skills/research/references/validation-phase.md` (1)
+- `skills/research/references/adjudication-phase.md` (1 — Cursor judge launch)
 - `skills/design/SKILL.md` (1 — plan-review Cursor reviewer)
 - `skills/design/references/sketch-launch.md` (2 — Architecture/Standards and Edge-cases/Failure-modes sketch slots)
 - `skills/design/references/dialectic-execution.md` (1 — Cursor debater launch template)
 - `skills/shared/voting-protocol.md` (1 — Cursor voter template)
 - `skills/shared/dialectic-protocol.md` (1 — Cursor judge template)
-- `skills/review/SKILL.md` (1)
+- `skills/review/SKILL.md` (2 — diff-mode and slice-mode Cursor reviewer blocks)
 - `skills/implement/SKILL.md` (1 — quick-mode Cursor reviewer; block stays inline in SKILL.md per NEVER #6 in that skill)
-- `skills/loop-review/SKILL.md` (1 — slice-review Cursor reviewer)
 - `scripts/run-negotiation-round.sh` (1 — Cursor negotiation-round branch)
 
 ## Non-callers (intentional exclusions)
