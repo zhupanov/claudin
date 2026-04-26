@@ -14,21 +14,23 @@
 
 ### 2.7.1 — Skip preconditions (input gate)
 
-If `$RESEARCH_TMPDIR/research-report.txt` does not exist OR is empty (zero bytes), skip Step 2.7 entirely. Print:
+Evaluate the two skip conditions in this order — matching `SKILL.md` Step 2.7's emission order. Each condition has a distinct downstream branch and they must not be conflated.
 
-```
-⏩ 2.7: citation-validation — skipped (no synthesis to validate) (<elapsed>)
-```
-
-The empty-synthesis path is reachable when (a) Step 1 inline-fallback synthesis failed and produced no body, (b) `BUDGET_ABORTED=true` propagated past an earlier gate, or (c) a prior step's tmpdir cleanup left an empty placeholder. None of these warrant a citation pass.
-
-If `BUDGET_ABORTED=true` (set by any of the budget gates after Steps 1, 2, or 2.5): skip Step 2.7 entirely. Print:
+**Budget-abort gate (evaluated FIRST → proceed to Step 4).** If `BUDGET_ABORTED=true` (set by any of the budget gates after Steps 1, 2, or 2.5): skip Step 2.7 entirely and proceed directly to Step 4 (Step 3 was already skipped by the abort path). Print:
 
 ```
 ⏩ 2.7: citation-validation — skipped (--token-budget aborted upstream) (<elapsed>)
 ```
 
 The shell validator does not consume measurable Claude tokens, but skipping it on a budget-aborted run preserves the "Step 3 skipped" semantics of the abort path (Step 3 is not rendered, so a sidecar splice has no consumer).
+
+**Empty-synthesis gate (evaluated SECOND → proceed to Step 3).** If `$RESEARCH_TMPDIR/research-report.txt` does not exist OR is empty (zero bytes), skip Step 2.7 entirely and proceed to Step 3. Print:
+
+```
+⏩ 2.7: citation-validation — skipped (no synthesis to validate) (<elapsed>)
+```
+
+The empty-synthesis path is reachable when (a) Step 1 inline-fallback synthesis failed and produced no body, or (b) a prior step's tmpdir cleanup left an empty placeholder. Neither warrants a citation pass. (`BUDGET_ABORTED=true` is handled by the budget-abort gate above and never reaches this branch — the two skip conditions have different downstream targets and must stay separate.)
 
 ### 2.7.2 — Invoke the validator
 
