@@ -23,7 +23,9 @@ External reviewers are launched via the `run-external-reviewer.sh` wrapper scrip
 
 - **Timeout enforcement** — Kills the process after a configurable timeout
 - **Sentinel file creation** — Writes a `.done` file containing the exit code when the process completes
-- **Output capture** — Captures stdout to a specified output file
+- **Output capture** — two patterns, opt-in per invocation:
+  - **stdout capture under `--capture-stdout`** — when the reviewer writes its results to stdout, pass `--capture-stdout` and the wrapper redirects the tool's stdout/stderr to `--output`. Cursor pattern; canonical examples at `skills/review/SKILL.md:146-148, 177-179`.
+  - **tool-managed output path** — when the reviewer takes its own output-path argument (e.g., Codex's `--output-last-message`), omit `--capture-stdout`; the wrapper does not capture stdout and the reviewer writes results directly to the file. The `--output` flag still names the expected destination so downstream readers know where to look. Codex pattern; canonical examples at `skills/review/SKILL.md:160-163, 186-190`.
 - **Elapsed time tracking** — Reports how long the review took
 
 During review and voting phases, reviewers are launched with `run_in_background: true` so they run concurrently with other work. (Negotiation rounds in `/research` and `/loop-review` run synchronously.)
