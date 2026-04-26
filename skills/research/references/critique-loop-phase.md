@@ -28,7 +28,7 @@ For each iteration `iter ∈ [1, RESEARCH_CRITIQUE_MAX]`:
 2. **Categorical Important gate** (2.8.4 below) — count in-scope `**Important**` findings. Zero → exit loop early; ≥1 → continue.
 3. **Refine pass** (2.8.5 below) — revise `research-report.txt` (atomic mktemp+mv).
 4. **Re-run citation validation** (2.8.6 below) — overwrite `citation-validation.md` in place.
-5. **Byte-equal idle-cycle guard** (2.8.7 below) — if the refine produced a byte-identical synthesis AND step 2's gate fired with zero Important findings, exit; if Important findings were present, surface a warning and continue.
+5. **Byte-equal idle-cycle guard** (2.8.7 below) — if the refine produced a byte-identical synthesis AND the most recent 2.8.4 gate-check found zero in-scope Important findings, exit; if Important findings were present, surface a warning and continue.
 6. Increment `iter`. If `iter > RESEARCH_CRITIQUE_MAX`, exit loop.
 
 On exit, SKILL.md emits one of:
@@ -68,14 +68,15 @@ Invoke a single Claude Code Reviewer subagent via the Agent tool (`subagent_type
   Identify factual gaps, unsupported leaps between claims, logical inconsistencies, missing scope coverage relative to the research question, and citation-failed-provenance claims (cross-reference the per-claim PASS/FAIL/UNKNOWN entries in the citation-validation block above). Tag each finding with severity: **Important** for real correctness, evidence, or scope-coverage issues that materially weaken the synthesis; **Nit** for minor style/clarity issues; **Latent** for pre-existing gaps surfaced but not caused by this synthesis. Output a DUAL LIST under '## In-Scope Findings' and '## Out-of-Scope Observations' headers (mirroring the existing dual-list contract in validation-phase.md). When --adjudicate ran, do NOT re-litigate findings reinstated by adjudication unless their integration created a new inconsistency. If you find no in-scope findings, output exactly NO_FURTHER_ISSUES.
   ```
 
-Slot name: `Critique-1` (iter 1) or `Critique-2` (iter 2). After the Agent return, parse `<usage>total_tokens</usage>` and write the per-lane sidecar:
+Slot name: `Critique-1` (iter 1) or `Critique-2` (iter 2). After the Agent return, parse `total_tokens` from the `<usage>` block and write the per-lane sidecar (matches the contract used by `validation-phase.md` for the existing `Code` / `Revision` lanes — flags are `--phase` / `--lane` / `--tool` / `--total-tokens` / `--dir`; pass `--total-tokens unknown` when `<usage>` is missing or unparseable):
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write \
-  --tmpdir "$RESEARCH_TMPDIR" \
   --phase validation \
   --lane "Critique-${iter}" \
-  --total "${TOTAL_TOKENS}"
+  --tool claude \
+  --total-tokens "${TOTAL_TOKENS}" \
+  --dir "$RESEARCH_TMPDIR"
 ```
 
 Note: `--phase validation` reuses the existing 3-value enum (`research|validation|adjudication`) — no new `--phase=critique-loop` value (per dialectic DECISION_4).
@@ -129,14 +130,15 @@ Invoke a Claude Agent subagent following the **same revision-subagent contract**
    ```
    Atomic mktemp+mv ensures the file is never observed half-written — same posture as Step 1.5 synthesis and Step 2 revision.
 
-Slot name: `Revision-Critique-1` (iter 1) or `Revision-Critique-2` (iter 2). After the Agent return, parse `<usage>total_tokens</usage>` and write the per-lane sidecar:
+Slot name: `Revision-Critique-1` (iter 1) or `Revision-Critique-2` (iter 2). After the Agent return, parse `total_tokens` from the `<usage>` block and write the per-lane sidecar (same flag contract as the critique-pass invocation above; pass `--total-tokens unknown` when `<usage>` is missing or unparseable):
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write \
-  --tmpdir "$RESEARCH_TMPDIR" \
   --phase validation \
   --lane "Revision-Critique-${iter}" \
-  --total "${TOTAL_TOKENS}"
+  --tool claude \
+  --total-tokens "${TOTAL_TOKENS}" \
+  --dir "$RESEARCH_TMPDIR"
 ```
 
 **Canonical slot-name list (single source of truth — referenced by SKILL.md's measurable-lanes section and by `test-research-structure.sh` Check 50)**: slot names are exactly `Critique-1`, `Critique-2`, `Revision-Critique-1`, `Revision-Critique-2` — exactly two of each because the cap is `RESEARCH_CRITIQUE_MAX=2`.
