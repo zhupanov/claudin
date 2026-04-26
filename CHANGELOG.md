@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.12.1] - 2026-04-26
+
+### Changed
+
+- `/issue` Phase 1 two-tier triage now reserves a per-item floor before applying the global 30-cap on the union CANDIDATES list, preventing early items in a batch from starving later items of Phase 2 deep-dedup coverage. Tier-1 emits structured `CAND <item> <issue> <kind:dup|dep|both> <confidence:high|medium|low>` rows; the new `skills/issue/scripts/allocate-candidates.sh` reads them via stdin heredoc and applies a deterministic two-pass selector — Pass A reserves up to `F = 0 if N>30 else min(3, floor(30/N))` slots per non-malformed item with union-credit semantics (a candidate already in the union covers every item that nominated it), Pass B fills remaining slots up to 30 by confidence-desc → issue-asc → item-asc. Output is exactly one `CANDIDATES=<comma-list>` line on stdout; all diagnostics on stderr. Bash 3.2-safe (no `declare -A`). Sibling `allocate-candidates.md` is the normative algorithm spec. New `skills/issue/scripts/test-allocate-candidates.sh` regression harness covers 23 cases / 53 assertions (floor boundary at N=10/11/15/16/30/31, partial-floor + Pass-B interaction, tie-breaks, kind=both first-class, defensive-default row drops, N>30 stderr warning, empty-stdin/N=0, stdout-shape invariant, Bash 3.2 portability guard). Wired into `make lint` via `test-allocate-candidates`; documented in `docs/linting.md`. Closes #554.
+
 ## [7.12.0] - 2026-04-26
 
 ### Added
