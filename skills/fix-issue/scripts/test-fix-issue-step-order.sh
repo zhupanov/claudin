@@ -8,7 +8,7 @@
 # this harness is a CI guard against accidental reversion of the
 # fold or stale renumbering.
 #
-# Twelve assertions against skills/fix-issue/SKILL.md (nine textual literal
+# Thirteen assertions against skills/fix-issue/SKILL.md (ten textual literal
 # pins + three operational ordering pins via awk-scoped block extraction):
 #   (1) Step Name Registry contains "| 0 | find & lock |" row.
 #   (2) Step Name Registry contains "| 1 | setup |" row.
@@ -22,6 +22,14 @@
 #  (10) Step 0 (Find and Lock) block contains the find-lock-issue.sh invocation.
 #  (11) Step 0 block does NOT contain `session-setup.sh` (operational ordering).
 #  (12) Step 1 (Setup) block contains the session-setup.sh invocation.
+#  (13) Top-of-file Anti-halt rule is broadened to cover Bash tool calls
+#       in addition to Skill calls (closes #530). The literal phrase
+#       "child Bash tool calls into the canonical" is the load-bearing
+#       broadening token — its presence proves the rule is no longer
+#       Skill-only. Without this broadening, the Step 6 → Step 7 → Step 8
+#       Bash-only chain (and the parallel Step 3 / Step 5b chains) sits
+#       outside the rule's scope, leaving the orchestrator vulnerable to
+#       the post-Bash-call halt observed in production prior to #530.
 #
 # Block extraction boundaries (assertions 10-12): `## Step 0 — Find and Lock`
 # (start, exact line match) through `## Step 1 — Setup` (end, exact line
@@ -132,9 +140,12 @@ if ! grep -qF -- 'session-setup.sh --prefix claude-fix-issue --skip-branch-check
     fail=1
 fi
 
+# (13) Anti-halt rule broadened to cover Bash tool calls (closes #530).
+assert_contains 'child Bash tool calls into the canonical' '(13) anti-halt rule covers Bash tool calls in addition to Skill calls'
+
 if [[ $fail -ne 0 ]]; then
     echo "test-fix-issue-step-order: FAILED" >&2
     exit 1
 fi
 
-echo "test-fix-issue-step-order: 12 assertions passed."
+echo "test-fix-issue-step-order: 13 assertions passed."
