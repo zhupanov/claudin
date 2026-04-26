@@ -130,7 +130,7 @@ Then forward to `/issue` (single mode) for the umbrella itself:
 - Try skill `"issue"` first; fall back to `"larch:issue"`.
 - args: `--body-file <UMBRELLA_BODY_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <UMBRELLA_TITLE_HINT>` — title is the trailing description (`/issue` derives the title from the first non-empty line, which is `UMBRELLA_TITLE_HINT`). Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0.
 
-Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as `UMBRELLA_URL`), `ISSUE_1_TITLE` (capture as `UMBRELLA_TITLE`). On `ISSUE_1_FAILED=true` or empty `ISSUE_1_NUMBER`, print `**⚠ /umbrella: umbrella issue creation failed. Children remain orphan but were created — see CHILD_<i>_* output lines.**` and jump to Step 4 with `UMBRELLA_NUMBER` / `UMBRELLA_URL` empty (skipping 3B.4).
+Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as `UMBRELLA_URL`), `ISSUE_1_TITLE` (capture as `UMBRELLA_TITLE`). On `ISSUE_1_FAILED=true` or empty `ISSUE_1_NUMBER`, capture the umbrella-creation failure as session state and jump to Step 4 with `UMBRELLA_NUMBER` / `UMBRELLA_URL` empty (skipping 3B.4). Do NOT print a warning here — Step 4 is the single emission point for the human summary line and will render the multi-piece partial shape on this path.
 
 ### 3B.4 — Wire DAG dependencies and post back-links
 
@@ -154,7 +154,7 @@ Parse stdout for `EDGES_ADDED`, per-edge `EDGE_<j>_BLOCKER`, `EDGE_<j>_BLOCKED`,
 $PWD/.claude/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
 ```
 
-Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The emitter validates the KV grammar (no unset values, no embedded newlines, no duplicate keys) and prints to stdout in the canonical order:
+Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The orchestrator owns completeness (it authored `output.kv`); the emitter validates the KV grammar (well-formed `KEY=VALUE` lines, no embedded newlines, no duplicate keys) and prints to stdout in the canonical order:
 
 ```
 UMBRELLA_VERDICT=<one-shot|multi-piece>
@@ -174,7 +174,7 @@ EDGE_<j>_BLOCKED=<M>
 BACKLINKS_POSTED=<N>         (only on multi-piece, non-dry-run, success)
 ```
 
-On stderr, the emitter prints a single human summary line of the form:
+After `emit-output` returns, the orchestrator (the LLM running this skill) MUST print exactly one human summary breadcrumb of the form below. Step 4 is the single emission point for this summary — Step 3B.3's umbrella-creation-failure path defers to Step 4 instead of printing inline. The orchestrator composes each shape using both `output.kv` values AND any session state captured from earlier sub-steps (e.g., `/issue`'s stdout for the one-shot dedup'd / failed cases — `ISSUE_1_DUPLICATE_OF_NUMBER`/`ISSUE_1_DUPLICATE_OF_URL` and the `/issue` failure context). No new fields are required in the canonical KV grammar above:
 
 - one-shot: `✅ /umbrella: filed #<N> — <url>` (or `ℹ /umbrella: dedup'd to #<N> — <url>` / `**⚠ /umbrella: failed — <error>**` etc.).
 - multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`.

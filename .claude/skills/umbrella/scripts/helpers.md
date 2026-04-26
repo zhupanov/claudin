@@ -14,7 +14,7 @@ Stdout grammar: `EDGES_ADDED=<N>`, per-edge `EDGE_<j>_BLOCKER=<N>` / `EDGE_<j>_B
 
 ## `emit-output --kv-file FILE`
 
-Validate the LLM-supplied `output.kv` (no malformed lines, no duplicate keys) and stream it to stdout. Defense-in-depth on top of the `SKILL.md` Step 4 grammar.
+Validate the LLM-supplied `output.kv` (no malformed lines, no duplicate keys) and stream it to stdout. Defense-in-depth on top of the `SKILL.md` Step 4 grammar. For `emit-output` specifically, stderr is reserved for parse/validation/usage errors only — the human summary breadcrumb is emitted by the orchestrator at SKILL.md Step 4 (single emission point), not by this script. (This scoping is local to `emit-output`; `wire-dag`'s documented stderr warning behavior above is unaffected.)
 
 ### Edit-in-sync rules
 
