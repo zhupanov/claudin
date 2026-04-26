@@ -17,6 +17,10 @@
 #                                      back to close; CLOSED=true.
 #   6. Probe-failure, close fails  — probe exits 1; close also fails; fatal with
 #                                    CLOSED=false + ERROR=Failed to close.
+#   7. Partial-success retry path  — call 1 fails (probe+close forced fail) AFTER
+#                                    posting the DONE comment; call 2 succeeds;
+#                                    combined log shows TWO comment|42|DONE lines
+#                                    (regression guard for documented behavior).
 #
 # Scope: offline, hermetic (no network, no git state change). All scratch
 # state under $TMPDIR; torn down by EXIT trap.
@@ -297,6 +301,54 @@ assert_contains "$CLOSE_STDOUT" "ERROR=Failed to close issue #42" "[f6] stdout h
 assert_contains "$CLOSE_STDERR" "WARNING: failed to probe state for issue #42" "[f6] stderr WARNING on probe failure"
 log6=$(cat "$TMPROOT/f6/gh-invocations.log")
 assert_contains "$log6" "close|42" "[f6] gh issue close attempted (fallback, though it failed)"
+
+# --- Fixture 7: Partial-success retry path --------------------------------
+# Documents the partial-success class noted in
+# skills/fix-issue/scripts/issue-lifecycle.md "Partial-success semantics":
+# the --comment (DONE) post runs BEFORE the state probe and `gh issue close`,
+# so when the close fails after the comment succeeds, a naive caller retry
+# re-posts the DONE comment. Call 1 forces the probe + close to fail (same
+# pattern as Fixture 6) — the runner sees CLOSED=false but the issue already
+# has the DONE comment posted. Call 2 is a clean retry — it posts a SECOND
+# DONE comment, then probes (now succeeds and reports OPEN — first close
+# never landed) and closes. The two run_case calls allocate separate stub
+# bins and invocation logs; we concatenate the logs to assert exactly two
+# comment|42|DONE lines, which is the regression guard the issue asks for:
+# any future change that breaks the current comment-before-probe-then-close
+# ordering (e.g., moves the comment post AFTER the close call), or that
+# adds an idempotency guard for already-posted DONE comments, will drop
+# one of the two comment|42|DONE lines and fail this fixture, forcing
+# the documented partial-success-semantics contract in
+# skills/fix-issue/scripts/issue-lifecycle.md to be updated in the same PR.
+echo ""
+echo "=== 7: Partial-success retry path (call 1 fails after comment, call 2 succeeds) ==="
+# Call 1: probe + close both fail; DONE comment is posted before the failures.
+run_case "f7a" "OPEN" "1" "1" --issue 42 --comment DONE
+assert_eq "[f7a] exit code" 1 "$RC"
+assert_contains "$CLOSE_STDOUT" "CLOSED=false" "[f7a] stdout has CLOSED=false"
+assert_contains "$CLOSE_STDOUT" "ERROR=Failed to close issue #42" "[f7a] stdout has ERROR=Failed to close"
+assert_contains "$CLOSE_STDERR" "WARNING: failed to probe state for issue #42" "[f7a] stderr WARNING on probe failure (pins probe+close-fail branch like Fixture 6)"
+log7a=$(cat "$TMPROOT/f7a/gh-invocations.log")
+assert_contains "$log7a" "comment|42|DONE" "[f7a] DONE comment WAS posted before close failed (partial-success class)"
+assert_contains "$log7a" "close|42" "[f7a] gh issue close attempted (and failed)"
+
+# Call 2: clean retry — probe succeeds, returns OPEN (first close never
+# landed), close succeeds. A SECOND DONE comment is posted because cmd_close
+# does not idempotently guard the comment post.
+run_case "f7b" "OPEN" "0" "0" --issue 42 --comment DONE
+assert_eq "[f7b] exit code" 0 "$RC"
+assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f7b] stdout has CLOSED=true"
+assert_not_contains "$CLOSE_STDOUT" "CLOSED=false" "[f7b] stdout has no CLOSED=false"
+log7b=$(cat "$TMPROOT/f7b/gh-invocations.log")
+assert_contains "$log7b" "comment|42|DONE" "[f7b] DONE comment posted on retry"
+assert_contains "$log7b" "close|42" "[f7b] gh issue close invoked on retry"
+
+# Combined-log duplicate-comment regression guard: exactly two DONE comments
+# across the two runs (one from each call) — proves the documented
+# partial-success retry behavior.
+combined_log=$(cat "$TMPROOT/f7a/gh-invocations.log" "$TMPROOT/f7b/gh-invocations.log")
+done_comment_count=$(printf '%s\n' "$combined_log" | grep -c '^comment|42|DONE$' || true)
+assert_eq "[f7] DONE comment posted exactly twice across retry sequence" 2 "$done_comment_count"
 
 # --- Summary --------------------------------------------------------------
 echo ""
