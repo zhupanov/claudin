@@ -5,7 +5,7 @@
 ## Stdout contract (success, one line per `KEY=VALUE`)
 
 - `NAME=<skill-name>` — first positional, leading `/` stripped, passed verbatim downstream (not validated here — `validate-args.sh` owns the regex and reserved-name checks).
-- `DESCRIPTION=<description>` — space-joined remainder after the first positional, verbatim.
+- `DESCRIPTION=<description>` — space-joined remainder after the first positional, verbatim. **Note**: this is the **raw verbatim remainder** as reconstructed by `"$*"` and carries no frontmatter validity guarantee. The `/create-skill` SKILL.md orchestrator's downstream Step 1.5 (`skills/create-skill/scripts/prepare-description.sh`) classifies this raw `DESCRIPTION` as either `MODE=verbatim` (used as both `FRONTMATTER_DESCRIPTION` and `FEATURE_SPEC`) or `MODE=needs-synthesis` (orchestrator distills a one-line `Use when…` frontmatter; original raw description is preserved as `FEATURE_SPEC`) or `MODE=abort` (validation failure not in the synthesis-trigger class). For multi-line raw input, SKILL.md Step 1.4 captures the full raw description from `$ARGUMENTS` to a tmpfile via the Write tool — `parse-args.sh`'s `DESCRIPTION="$*"` may flatten newlines via word-splitting on the unquoted `$ARGUMENTS` invocation in SKILL.md Step 1, so the tmpfile is the canonical raw-description survival channel for the synthesis path.
 - `PLUGIN=true|false` — whether `--plugin` was present.
 - `MULTI_STEP=true|false` — whether `--multi-step` was present.
 - `MERGE=true|false` — whether `--merge` was present. Retained for backward compatibility only; `/create-skill` already delegates to `/im` (which prepends `--merge`), so this value is NOT forwarded at delegation time.

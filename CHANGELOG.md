@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.3] - 2026-04-26
+
+### Changed
+
+- `/create-skill` now separates the validated frontmatter `description:` line from the freeform feature spec forwarded to `/im` as a brief. New Step 1.4 captures the raw user input to a tmpfile (preserving multi-line content past `parse-args.sh`'s space-joining), Step 1.5 invokes a new `skills/create-skill/scripts/prepare-description.sh` coordinator that probes `validate-args.sh` and classifies the result as `MODE=verbatim` / `MODE=needs-synthesis` / `MODE=abort`, and Step 1.6 re-validates an LLM-distilled `Use when…` one-liner when synthesis fires. Synthesis is narrow-gated: it triggers only on the validator's `Description contains newlines or control characters` and `Description length (...)` errors, with a pre-synthesis security scan that aborts on mixed inputs (synthesis-trigger class plus any banned token like XML/backtick/`$(`/heredoc, including newline-delimited boundaries). Updates `parse-args.md`, `SECURITY.md` (#549 two-concept-split bullet), `Makefile` + `agent-lint.toml` (new `scripts/test-prepare-description.sh` harness — 18 cases). Closes #549.
+
 ## [7.11.2] - 2026-04-25
 
 ### Changed
