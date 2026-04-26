@@ -58,6 +58,14 @@ for i in $(seq 0 $((PIECES_TOTAL - 1))); do
   if [ -z "$title" ]; then
     echo "ERROR=pieces.json entry $((i + 1)) is missing 'title'" >&2; exit 1
   fi
+  # Reject titles with embedded LF: `title` is later emitted as the single-line
+  # `PIECE_<i>_TITLE=$title` KV stdout line that umbrella SKILL.md Step 3B.1
+  # parses one-KV-per-line. A multi-line title would split that record and
+  # silently break the grammar. Scope is LF only — see render-batch-input.md.
+  case "$title" in *$'\n'*)
+    echo "ERROR=pieces.json entry $((i + 1)) title contains embedded newline" >&2; exit 1
+    ;;
+  esac
   if [ -z "$body" ]; then
     echo "ERROR=pieces.json entry $((i + 1)) is missing 'body'" >&2; exit 1
   fi
