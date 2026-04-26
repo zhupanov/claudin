@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.6] - 2026-04-26
+
+### Fixed
+
+- `/research --scale=quick` now layers `scripts/validate-research-output.sh` on each K=3 homogeneous Claude Agent-tool lane output after the existing non-empty check, mirroring the `--substantive-validation` gate that standard/deep modes apply via `collect-reviewer-results.sh`. Validator-failed lanes (any non-zero exit, codes 1/2/3/4) collapse into the existing empty-lane bucket: the lane file is truncated (`: > "$LANE_FILE"`) so the existing `SYNTHESIS_PROMPT_QUICK_VOTE` "omit empty/unreadable lanes" instruction naturally excludes it from synthesis without prompt or `quick-vote-state.sh` schema changes. Sanitized per-lane breadcrumb (`tr '|\n' '/ '` + 80-char cap, mirroring `collect-reviewer-results.sh`'s `FAILURE_REASON` handling) preserves operator observability. SKILL.md Step 0b summary, Step 3 Quick `LANES_SUCCEEDED == 0` literal, research-phase.md §1.5 Quick all three branch prose updates, and the operator-visible hard-fail warning string aligned to the new "empty or failed substantive validation" phrasing. `scripts/test-research-structure.sh` gains Check 52 (subsection-scoped via two-stage `awk` windowing into `## 1.4` → `### Quick (RESEARCH_SCALE=quick)`) pinning the validator invocation, the truncation mechanism, and the breadcrumb shape; PASS-message count bumps 51 → 52, and `scripts/test-research-structure.md` is updated in sync. Closes #543.
+
 ## [7.13.5] - 2026-04-26
 
 ### Fixed
