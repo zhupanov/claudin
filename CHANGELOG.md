@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.2] - 2026-04-26
+
+### Fixed
+
+- `docs/external-reviewers.md` — correct the "Timeout Handling" range from "typically 600-900 seconds" to "typically 1200 seconds for voting and 1800 seconds for code review". Production code uses `--timeout 1800` in `skills/review/SKILL.md` (4 sites) and `--timeout 1200` in `skills/shared/voting-protocol.md` (2 sites); the prior range understated real kill times by 2-3x and would mislead an operator diagnosing a "reviewer timed out" event. Closes #656.
+
 ## [7.16.1] - 2026-04-26
 
 ### Fixed
