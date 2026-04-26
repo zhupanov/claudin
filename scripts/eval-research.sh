@@ -57,7 +57,9 @@
 #       integer, regex-invalid baseline ref, baseline ref that cannot be
 #       resolved via git show, or a value-taking flag with no following
 #       value such as a trailing `--baseline`).
-#   3 — required tooling missing (claude, jq, awk).
+#   3 — required tooling missing. jq and awk are required in all modes
+#       (including --smoke-test); claude is required only when not using
+#       --smoke-test.
 #
 # Security: --baseline accepts only [0-9A-Za-z_./-]+ to avoid shell
 # injection into git show. See OOS_1 in the tracking issue for #419.
@@ -138,7 +140,10 @@ if ! [[ "$JUDGE_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( JUDGE_TIMEOUT_SECONDS < 1 
   exit 2
 fi
 
-# ---- Tooling check (skipped under --smoke-test) --------------------------
+# ---- Tooling check -------------------------------------------------------
+# awk + jq are required in all modes (jq schema-validates eval-baseline.json
+# in both smoke-test and full-run paths). claude is required only when not
+# using --smoke-test.
 require_tool() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'eval-research: required tool missing: %s\n' "$1" >&2
