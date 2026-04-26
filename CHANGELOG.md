@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.3] - 2026-04-26
+
+### Fixed
+
+- `scripts/test-implement-structure.sh` line 129 — the explanatory block comment for assertion (4) said "at least 4 occurrences" while the actual enforcement on line 135 (`(( occurrences < 5 ))`), the error message on line 136 ("expected at least 5"), and the sibling contract `scripts/test-implement-structure.md` all require at least 5. Aligned the comment to "at least 5 occurrences" so a maintainer reading only the comment sees the correct threshold. Documentation-only edit; no behavioral effect on the test. Closes #650.
+
 ## [7.15.2] - 2026-04-26
 
 ### Changed
