@@ -132,6 +132,10 @@ check_contains 'claude -p'                                     'claude -p subpro
 check_contains '--plugin-dir'                                  'claude -p --plugin-dir argument (FINDING_7)'
 # shellcheck disable=SC2016
 check_contains '"$CLAUDE_PLUGIN_ROOT"'                         'CLAUDE_PLUGIN_ROOT passed as --plugin-dir value'
+# Issue #614 (sibling to #585): non-interactive permission contract on the slim
+# helper — without this flag, an in-child tool-permission prompt would stall the
+# post-iter-cap re-judge subprocess until the 1200s watchdog fires.
+check_contains '--permission-mode bypassPermissions'           'non-interactive permission contract on slim helper (issue #614)'
 # FINDING_10: stderr MUST NOT merge into stdout (which is posted publicly).
 # shellcheck disable=SC2016
 check_contains '2> "$stderr_file"'                             'stderr redirected to separate file (FINDING_10)'
@@ -236,6 +240,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -p) shift ;;
     --plugin-dir) shift 2 ;;
+    --permission-mode) shift 2 ;;
     --*) shift ;;
     *) break ;;
   esac
