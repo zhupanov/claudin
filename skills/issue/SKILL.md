@@ -113,12 +113,64 @@ If `LIST_STATUS=ok`, the remaining stdout is TSV rows: `<number>\t<title>\t<stat
 
 For each non-malformed new item `i`, walk EVERY title in the (possibly capped) snapshot and emit per-open-row triage flags. The output of this Tier-1 pass is the union of two candidate streams:
 
-- **dup-candidates**: titles that COULD plausibly be semantic duplicates of `i` (same feature request, bug, or observation phrased differently). Both open AND closed rows participate. Up to 10 per item.
-- **dep-candidates**: titles where running `i` and the existing issue in parallel would plausibly risk merge conflicts (same files, same module surface) OR where `i` clearly requires the existing issue to land first (or vice versa). **Open rows ONLY** — closed issues cannot meaningfully block. Up to 10 per item.
+- **dup-candidates**: titles that COULD plausibly be semantic duplicates of `i` (same feature request, bug, or observation phrased differently). Both open AND closed rows participate. Up to 10 per item per stream — soft guidance to bound prompt complexity; the per-item floor + cap below is the load-bearing selection mechanism.
+- **dep-candidates**: titles where running `i` and the existing issue in parallel would plausibly risk merge conflicts (same files, same module surface) OR where `i` clearly requires the existing issue to land first (or vice versa). **Open rows ONLY** — closed issues cannot meaningfully block. Up to 10 per item per stream — same soft guidance as above.
 
 Closed-state rows in the snapshot may NEVER carry dep-candidate flags. The Tier-1 prompt MUST enforce this distinction or invalid edges will pass validation downstream.
 
-Collect the union of candidate issue numbers across all non-malformed new items into a single `CANDIDATES` list (deduplicated, capped at 30 overall to bound Phase 2 cost — same cap as pre-#546). If the snapshot is empty or no candidates look suspicious in either category, the candidate list is empty and you skip directly to Step 6 with `ITEM_<i>_VERDICT=CREATE` for every non-malformed item, with empty `ITEM_<i>_BLOCKED_BY` / `ITEM_<i>_BLOCKS` lines.
+**Per-candidate self-rated confidence (issue #554)**: each emitted dup-candidate or dep-candidate flag carries a `confidence` rating — `high`, `medium`, or `low` — reflecting how confident the LLM is in the flag. This rating is Phase-1-internal — it influences the union-selection algorithm below and is NEVER surfaced into Step 5/6 verdict grammar. Mark as `high` when the title overlap is unambiguous (same feature/bug, near-identical wording); `medium` when there is plausible overlap but ambiguity; `low` when the flag is a hedge against false negatives.
+
+### CANDIDATES selection — per-item floor + confidence-ranked spillover
+
+Build the final `CANDIDATES` list (deduplicated union, hard cap at 30 to bound Phase 2 cost — same cap as pre-#546) using a **deterministic two-pass allocator** that resolves issue #554 (the pre-#554 cap had no per-item floor, so early items in a batch could exhaust all 30 Phase 2 slots and starve later items of deep-dedup coverage).
+
+**Step A — count non-malformed items.** Set `N_NON_MALFORMED` = the count of `i` lacking `ITEM_<i>_MALFORMED=true` in the parser stdout. (Malformed items contribute zero CAND rows and must NOT inflate the denominator below.)
+
+**Step B — emit structured CAND rows.** For each non-malformed item `i`, emit one row per dup-candidate or dep-candidate flag in this exact syntax:
+
+```
+CAND <item-i> <issue-N> <kind:dup|dep|both> <confidence:high|medium|low>
+```
+
+Use `kind=both` (first-class, NOT a fallback) when a single existing issue is flagged as BOTH a plausible dup AND a plausible dep for the same new item. Emit each `(item, issue)` pair at most once per stream — the allocator dedups across streams.
+
+**Step C — invoke the allocator.** If at least one CAND row was emitted, invoke the allocator via Bash with the rows piped via stdin heredoc:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/allocate-candidates.sh --total-items "$N_NON_MALFORMED" <<'EOF'
+CAND 1 100 dup high
+CAND 1 101 dep medium
+CAND 2 100 dup low
+CAND 2 102 dep high
+CAND 3 103 dup medium
+EOF
+```
+
+The allocator applies (single normative source: `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/allocate-candidates.md`):
+
+- `F = 0` if `N_NON_MALFORMED > 30`; else `F = min(3, floor(30 / N_NON_MALFORMED))`.
+- **Pass A (floor reservation)**: process items in ascending item index; within each item, sort the item's rows by confidence-desc then issue-asc; reserve up to F coverage credits per item. Union-credit semantics — a candidate already in the union covers every item that nominated it (the second nominator's `floor_credits` increments without growing the union).
+- **Pass B (spillover)**: fill remaining slots up to 30 from leftover rows by confidence-desc → issue-asc → item-asc.
+
+Worked examples (per the formula):
+
+- N=10 → F=3 (each item reserves up to 3 slots; total ≤30; Pass B vacuous if every item emits ≥3 distinct rows).
+- N=11 → F=2 (11×2=22 floor + 8 spillover; floor reduced because 11×3=33>30).
+- N=15 → F=2 (15×2=30 exactly; Pass B vacuous).
+- N=16 → F=1 (16 floor + 14 spillover).
+- N=30 → F=1 (each item gets exactly 1 slot).
+- N=31 → F=0 (degenerate; allocator emits a stderr warning; all 30 slots awarded by global confidence ranking).
+
+**Step D — capture stdout and check exit code.** On success the allocator writes EXACTLY ONE line to stdout: `CANDIDATES=<comma-separated issue numbers, ascending>`. ALL diagnostics (dropped-row warnings, the N>30 banner) go to stderr only.
+
+- On exit 0: parse the stdout `CANDIDATES=` value and use it as the input to Step 5's `fetch-issue-details.sh --numbers` flag.
+- On non-zero exit (usage error or unexpected internal failure): emit `**⚠ /issue: allocate-candidates.sh failed (exit <N>); skipping dedup, creating all items with no dep edges.**` on stderr and **jump to Step 6** with empty CANDIDATES — do NOT abort the run. This matches the existing fail-open posture used by the `LIST_STATUS=failed` branch above.
+
+**Step E — empty-CAND short-circuit.** If Tier-1 emitted zero CAND rows (snapshot is empty, or no candidates look suspicious in either category for any item), skip the allocator invocation entirely and set `CANDIDATES=""`. Step 5 below short-circuits cleanly via its existing "if CANDIDATES is non-empty" gate, jumping to Step 6 with `ITEM_<i>_VERDICT=CREATE` for every non-malformed item, with empty `ITEM_<i>_BLOCKED_BY` / `ITEM_<i>_BLOCKS` lines.
+
+The allocator's regression coverage lives in `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-allocate-candidates.sh` (wired into `make lint` via the `test-allocate-candidates` target so the harness runs in CI on every PR — same pattern as `test-parse-input`). The harness pins the floor formula at boundary, partial-floor + Pass-B interaction, tie-breaks, union-credit semantics, `kind=both` first-class behavior, defensive-default drops, the N>30 stderr warning, empty-stdin / N=0 paths, the stdout-shape invariant, and a Bash 3.2 portability guard.
+
+Note on Phase 2 fetch drops: the per-item floor guarantees a candidate **enters** the union, NOT that its body is **successfully fetched** in Step 5. `FETCH_STATUS_<N>=failed` rows are dropped from Phase 2 reasoning per the existing contract — "floor ⇒ deep coverage" is best-effort, not a guarantee.
 
 ## Step 5 — Phase 2: Body+Comments Semantic Filter
 
