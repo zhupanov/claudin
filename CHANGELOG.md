@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.4] - 2026-04-25
+
+### Changed
+
+- `skills/implement/SKILL.md` adds a `**Skill-name fallback reminder.**` banner parallel to the existing Anti-halt banner, restating the canonical bare-name-first / fully-qualified-fallback rule (`relevant-checks` before `larch:relevant-checks`) at the call site. Fixes the `Unknown skill: larch:relevant-checks` error observed when `/implement` (running as `larch:implement`) mirrored its own namespaced invocation onto child Skill calls — `/relevant-checks` and `/bump-version` are intentionally project-local under `.claude/skills/` and do NOT exist under the `larch:` prefix, so a `larch:`-first attempt fails outright before the LLM retries with the bare name. Banner cross-references the canonical rule at `skills/shared/subskill-invocation.md` § "Bare-name-then-fully-qualified fallback".
+
 ## [7.8.3] - 2026-04-25
 
 ### Changed
