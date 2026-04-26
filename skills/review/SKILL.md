@@ -233,7 +233,7 @@ External reviewer output collection, validation, and retry are handled by the sh
 1. Collect findings from the Claude Code Reviewer subagent right away. It produces **dual-list output**: "In-Scope Findings" and "Out-of-Scope Observations". Parse both lists.
 2. **Then** collect and validate external reviewer outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 [--write-health "${SESSION_ENV_PATH}.health"] "$REVIEW_TMPDIR/cursor-output.txt" "$REVIEW_TMPDIR/codex-output.txt"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation --validation-mode [--write-health "${SESSION_ENV_PATH}.health"] "$REVIEW_TMPDIR/cursor-output.txt" "$REVIEW_TMPDIR/codex-output.txt"
    ```
    Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. External reviewers (Codex, Cursor) produce single-list output — treat their entire output as in-scope findings.
 3. Merge external reviewer in-scope findings (and any Claude fallback findings when externals were unavailable) into the Claude in-scope findings. Deduplicate in-scope findings and OOS observations separately. If the same issue appears in both lists from different reviewers, merge under the in-scope finding.

@@ -413,5 +413,26 @@ if ! [[ "$legacy_pattern" =~ ^[0-9]+$ ]] || (( legacy_pattern > 0 )); then
   fail "(14) SKILL.md still contains the legacy non-paginated 'gh api .../comments | head -1' anchor-lookup pattern (closes #654); use tracking-issue-write.sh find-anchor instead"
 fi
 
-echo "PASS: test-implement-structure.sh — all 14 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (15) Substantive-validation flag pin (#661). The Step 5 quick-mode
+#      collect-reviewer-results.sh invocation in SKILL.md must carry both
+#      --substantive-validation AND --validation-mode on the SAME line as
+#      --timeout 1860 so banner-only reviewer output (e.g., "Authentication
+#      required") is rejected as STATUS=NOT_SUBSTANTIVE rather than passing as
+#      STATUS=OK. Pipeline matches the test-review-structure.sh (13) and
+#      test-design-structure.sh (7) patterns: each filter stage threads one
+#      literal while preserving line granularity. A future edit that drops
+#      either flag, or splits the invocation across multiple lines, fails
+#      closed under `set -o pipefail`. SKILL.md only contains one
+#      collect-reviewer-results.sh invocation (the Step 5 quick-mode reviewer
+#      collector); dialectic-execution and adjudication invocations live in
+#      sibling skill references, not in this SKILL.md.
+# ---------------------------------------------------------------------------
+grep 'collect-reviewer-results.sh' "$SKILL_MD" \
+  | grep -F -- '--timeout 1860' \
+  | grep -F -- '--substantive-validation' \
+  | grep -Fq -- '--validation-mode' \
+  || fail "(15) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
+
+echo "PASS: test-implement-structure.sh — all 15 structural invariants hold"
 exit 0

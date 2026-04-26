@@ -23,18 +23,26 @@
 #                                  entry as STATUS=NOT_SUBSTANTIVE | HEALTHY=false |
 #                                  FAILURE_REASON=<sanitized validator diagnostic>
 #                                  and call set_tool_unhealthy to preserve health
-#                                  monotonicity. Default OFF — preserves backward
-#                                  compatibility for callers other than /research.
-#                                  Closes #416 (Phase 3 of umbrella #413).
+#                                  monotonicity. Default OFF — opt-in per caller.
+#                                  Currently opted in by: /research research phase
+#                                  (Standard / Deep), /research validation phase,
+#                                  /review Step 3a, /implement Step 5 quick-mode
+#                                  review, /design Step 3 plan-review.
+#                                  Closes #416 (Phase 3 of umbrella #413), #661.
 #   --validation-mode              Modifier for --substantive-validation: forwards
 #                                  --validation-mode to validate-research-output.sh
 #                                  so its preset (NO_ISSUES_FOUND short-circuit + 30-
-#                                  word floor) applies. Use from /research's Step 2.4
-#                                  validation phase, where reviewer outputs are
-#                                  short numbered findings or the explicit
-#                                  NO_ISSUES_FOUND token rather than 2-3 paragraph
-#                                  prose. No effect when --substantive-validation
-#                                  is not also passed.
+#                                  word floor) applies. Use for short reviewer-style
+#                                  outputs whose contract is "numbered findings ...
+#                                  If NO issues, output exactly NO_ISSUES_FOUND" —
+#                                  /research validation phase, /review, /implement
+#                                  Step 5 quick-mode, /design plan-review. The
+#                                  /research research phase deliberately omits this
+#                                  modifier because its outputs are 2-3-paragraph
+#                                  prose, not short findings. No effect when
+#                                  --substantive-validation is not also passed.
+#                                  See docs/external-reviewers.md Output Validation
+#                                  for the per-skill opt-in matrix.
 #
 # Arguments:
 #   One or more output file paths (from run-external-reviewer.sh invocations).

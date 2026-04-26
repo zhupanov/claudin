@@ -50,12 +50,36 @@ The wrapper script writes a `.done` sentinel file when the process completes. Th
 
 ## Output Validation
 
-After the sentinel file exists, the output is validated:
+Validation happens in two layers. The first layer (default collector behavior) always runs; the second layer (substantive-content check) is **opt-in** via collector flags.
 
-1. Read the output file
-2. Check that it is non-empty and contains substantive content (numbered findings or `NO_ISSUES_FOUND`)
-3. If empty despite exit code 0, **retry once** with a fresh invocation (output file gets a `-retry` suffix)
-4. If still empty after retry, or if the exit code is non-zero, print a warning and proceed without that reviewer's findings
+### Default collector behavior (always on)
+
+After the sentinel file exists, `scripts/collect-reviewer-results.sh` performs:
+
+1. Read the output file.
+2. Check that it is non-empty.
+3. If empty despite exit code 0, **retry once** with a fresh invocation (output file gets a `-retry` suffix).
+4. If still empty after retry, or if the exit code is non-zero, emit `STATUS=EMPTY_OUTPUT` / `STATUS=FAILED` / `STATUS=TIMED_OUT` / `STATUS=SENTINEL_TIMEOUT` and the caller falls back per its skill-specific contract (typically Runtime Timeout Fallback — see `skills/shared/external-reviewers.md`).
+
+### Opt-in substantive-content check
+
+When the collector is invoked with `--substantive-validation`, it additionally calls `scripts/validate-research-output.sh` on each `STATUS=OK` output. Validator failure is rewritten to `STATUS=NOT_SUBSTANTIVE` with `HEALTHY=false`, and the caller treats it identically to a timeout (Claude-subagent fallback). This catches outputs that pass sentinel + non-empty + retry but contain only banner text (e.g., `Authentication required`) or other non-substantive content.
+
+The optional `--validation-mode` modifier forwards `--validation-mode` to the validator, which (a) lowers the body-word floor from 200 to 30, (b) accepts the literal `NO_ISSUES_FOUND` token as substantive without further checks, and (c) keeps the citation requirement unchanged. This preset is for short reviewer-style outputs whose contract is *"numbered findings ... If NO issues, output exactly NO_ISSUES_FOUND"*.
+
+**Currently opted in by:**
+
+| Caller | Flags |
+|--------|-------|
+| `/research` research phase (Standard / Deep) | `--substantive-validation` (no `--validation-mode`; 200-word floor + citation requirement; outputs are 2-3-paragraph research prose) |
+| `/research` validation phase (Step 2.4) | `--substantive-validation --validation-mode` (30-word floor + `NO_ISSUES_FOUND` short-circuit + citation requirement; outputs are short numbered findings) |
+| `/review` Step 3a code review | `--substantive-validation --validation-mode` |
+| `/implement` Step 5 quick-mode review | `--substantive-validation --validation-mode` |
+| `/design` Step 3 plan review | `--substantive-validation --validation-mode` |
+
+The dialectic-phase (`/design` Step 2a.5 debaters and judges) and adjudication-phase (`/research --adjudicate` judges) collectors deliberately do NOT pass these flags — their output contracts (debate prose with structured tags / vote line) differ from the reviewer-style numbered-findings shape.
+
+Authoritative flag documentation lives in the `scripts/collect-reviewer-results.sh` header comment block (lines 20-37); update both this section and that header in lockstep when adding a new caller.
 
 ## Timeout Handling
 

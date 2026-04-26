@@ -624,7 +624,7 @@ Parse `DIFF_FILE`, `FILE_LIST_FILE`, `COMMIT_LOG_FILE`.
   ```
   Use `run_in_background: true` and `timeout: 1860000`. Collect via:
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 [--write-health "${SESSION_ENV_PATH}.health"] "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation --validation-mode [--write-health "${SESSION_ENV_PATH}.health"] "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt"
   ```
   Include `--write-health` only if `SESSION_ENV_PATH` is non-empty.
 
