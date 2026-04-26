@@ -27,6 +27,10 @@
 #    (#416 Phase 3 of umbrella #413, substantive content validator)
 #  - adjudication-phase.md mentions both build-research-adjudication-ballot.sh and
 #    run-research-adjudication.sh (byte pin for the ballot-builder + coordinator wiring) (#424)
+#  - validation-phase.md '## Finalize Validation' section pins (#534): the revision
+#    subagent invocation pattern + revision-raw.txt Write capture (38a), atomic
+#    rewrite of research-report.txt via mktemp + mv (38b), and the 5 body markers
+#    enumerated in REVISION_PROMPT (38c — FINDING_1's marker contract)
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 set -euo pipefail
