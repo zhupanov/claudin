@@ -69,6 +69,8 @@ Operators can audit the unmeasurable lanes via the sidecar files directly when i
 
 All three subcommands validate `--dir` is under `/tmp/` or `/private/tmp/` (matching `cleanup-tmpdir.sh:36-40`). This is defense in depth: although the orchestrator only ever passes `$RESEARCH_TMPDIR` (always under `/tmp/`), a misinvocation or future caller mistake could otherwise glob and read filenames from any user-supplied directory. Reject early with exit 1.
 
+**Symlink-parent canonicalization (issue #538)**: `validate_dir` walks `--dir` upward via `dirname` to the nearest **existing-or-symlink** ancestor (the `! -e && ! -L` loop guard catches dangling symlinks instead of walking past them), canonicalizes that ancestor with `cd … && pwd -P`, and accepts only when the canonical anchor is exactly `/tmp` (canonical) or under it. Both `/tmp` and `/private/tmp` are canonicalized at validation time when distinct (typically only on Linux) so the dual-root contract is preserved. A nearest existing ancestor that is a regular file (or symlink-to-file) is rejected — `validate_dir` does not silently take its parent. The pattern mirrors `scripts/deny-edit-write.sh`'s nearest-existing-ancestor probe with a `/tmp`-allow predicate. **Operator-visible behavior change**: a `--dir` whose ancestor resolves outside `/tmp/` now exits 1 in `report` and `check-budget` instead of emitting the "missing dir" placeholder / `BUDGET_EXCEEDED=false` success line. The tolerant missing-dir paths still apply when the ancestor is safely under `/tmp/` (the `[[ ! -d "$dir" ]]` branches in `cmd_report` and `cmd_check_budget` still fire for legitimate not-yet-created tmpdirs).
+
 ## Test harness
 
 `scripts/test-token-tally.sh` is the offline regression harness. Test cases:

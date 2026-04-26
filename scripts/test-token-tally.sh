@@ -257,6 +257,52 @@ out=$("$SCRIPT" check-budget --budget 1000 --dir "$T" 2>&1)
 assert_stdout_contains "T16: BUDGET= on missing-dir success" "BUDGET=1000" "$out"
 assert_stdout_contains "T16: success on missing-dir" "BUDGET_EXCEEDED=false" "$out"
 
+# ─── Test 17 (#538): validate_dir rejects symlink-parent escape ───
+# T17 is the only test case whose escape target lives outside /tmp/ —
+# the test must demonstrate that a symlinked parent under /tmp/ cannot
+# materialize a directory under $HOME via mkdir -p. mktemp -d under
+# $HOME gives a unique target; trap-based cleanup ensures no fixture
+# leak even if an assertion fails partway through.
+t17_run() {
+    local T_ESCAPE_DIR T_DIR T_DANGLING T_FILE rc
+    T_DIR="$(make_dir)"
+    T_ESCAPE_DIR=$(mktemp -d "${HOME}/test-token-tally-escape.XXXXXX")
+    # shellcheck disable=SC2317  # cleanup invoked via RETURN trap
+    t17_cleanup() { rm -rf "$T_DIR" "$T_ESCAPE_DIR"; }
+    trap t17_cleanup RETURN
+
+    # 17a: live symlink-parent escape (the #538 reproducer).
+    ln -s "$T_ESCAPE_DIR" "$T_DIR/link"
+    rc=0
+    "$SCRIPT" write --phase research --lane code --tool claude --total-tokens 100 --dir "$T_DIR/link/escaped" >/dev/null 2>&1 || rc=$?
+    assert_exit_code "T17a: write symlink-parent escape → exit 1" 1 "$rc"
+    if [ -d "$T_ESCAPE_DIR/escaped" ]; then
+        fail "T17a: write created escape directory at $T_ESCAPE_DIR/escaped"
+    fi
+    rc=0
+    "$SCRIPT" report --dir "$T_DIR/link/escaped" --scale standard --adjudicate false >/dev/null 2>&1 || rc=$?
+    assert_exit_code "T17a: report symlink-parent escape → exit 1" 1 "$rc"
+    rc=0
+    "$SCRIPT" check-budget --budget 1000 --dir "$T_DIR/link/escaped" >/dev/null 2>&1 || rc=$?
+    assert_exit_code "T17a: check-budget symlink-parent escape → exit 1" 1 "$rc"
+
+    # 17b: dangling-symlink case — `! -L` clause must stop the walk and
+    # surface a validator-level error (not a downstream mkdir error).
+    T_DANGLING="$T_DIR/dangling-link"
+    ln -s "/tmp/test-token-tally-nonexistent-target.$$" "$T_DANGLING"
+    rc=0
+    "$SCRIPT" write --phase research --lane code --tool claude --total-tokens 100 --dir "$T_DANGLING/escaped" >/dev/null 2>&1 || rc=$?
+    assert_exit_code "T17b: write dangling-symlink → exit 1" 1 "$rc"
+
+    # 17c: regular-file ancestor — must reject, not normalize via dirname.
+    T_FILE="$T_DIR/regular-file"
+    : > "$T_FILE"
+    rc=0
+    "$SCRIPT" write --phase research --lane code --tool claude --total-tokens 100 --dir "$T_FILE" >/dev/null 2>&1 || rc=$?
+    assert_exit_code "T17c: write regular-file ancestor → exit 1" 1 "$rc"
+}
+t17_run
+
 # ─── Summary ───
 echo
 echo "─────────────────────────────────────────"
