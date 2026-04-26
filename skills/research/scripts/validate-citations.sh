@@ -722,7 +722,14 @@ if [[ "$TIMED_OUT" == "true" ]]; then
             kill -- -$$ 2>/dev/null || true
             ;;
         Darwin*)
-            kill -- -$$ 2>/dev/null || true
+            # `set -m` (line 663) puts each backgrounded `fetch_url &` in its
+            # own process group (pgid == subshell pid), so `kill -- -$$` only
+            # signals the parent's group and leaks each subshell's curl child.
+            # Signal each subshell's pgid directly to terminate the whole
+            # subtree (subshell + curl substitution + any descendants).
+            for _kill_pid in "${CURL_PIDS[@]}"; do
+                kill -- -"$_kill_pid" 2>/dev/null || true
+            done
             ;;
     esac
     # Mark every still-missing result as UNKNOWN(timeout).
