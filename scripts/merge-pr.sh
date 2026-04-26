@@ -88,6 +88,18 @@ if [[ "$MERGE_STATE" == "BEHIND" ]]; then
     exit 0
 fi
 
+# Empty or UNKNOWN mergeStateStatus = could not determine merge state
+# (gh API/network failure on the empty path; GitHub itself unsure on UNKNOWN).
+# Routing through the admin-eligible gate below would mis-emit main_advanced
+# with a misleading "Branch mergeStateStatus is " (empty trailing) error and
+# nudge callers toward a useless rebase. Treat as the existing `error` outcome
+# so the orchestrator bails to its error-handling path.
+if [[ -z "$MERGE_STATE" ]] || [[ "$MERGE_STATE" == "UNKNOWN" ]]; then
+    MERGE_RESULT="error"
+    ERROR="could not read mergeStateStatus from gh pr view (state=\"$MERGE_STATE\")"
+    exit 0
+fi
+
 # --- Re-verify CI before attempting --admin ---
 # Use gh pr checks --json with bucket field (consistent with ci-status.sh)
 CHECKS_JSON=$(gh pr checks "$PR_NUMBER" --repo "$REPO" --json name,state,bucket,link 2>/dev/null || echo "")
@@ -126,10 +138,12 @@ if [[ "$CI_GOOD" != "true" ]]; then
     exit 0
 fi
 
-# Double-check freshness (may have changed since first check)
+# Double-check freshness (may have changed since first check).
 # CLEAN = mergeable normally; UNSTABLE = CI passed but review not approved;
 # BLOCKED = review/policy block (--admin handles this); HAS_HOOKS = has pre-receive hooks.
-# Anything else (BEHIND, DIRTY, DRAFT, UNKNOWN) = not ready.
+# BEHIND and empty/UNKNOWN are already handled above; remaining non-admin-eligible
+# states (e.g. DIRTY, DRAFT, or any future GitHub-added value) → main_advanced
+# to retry after updating the branch.
 if [[ "$MERGE_STATE" != "CLEAN" ]] && [[ "$MERGE_STATE" != "UNSTABLE" ]] && [[ "$MERGE_STATE" != "HAS_HOOKS" ]] && [[ "$MERGE_STATE" != "BLOCKED" ]]; then
     MERGE_RESULT="main_advanced"
     ERROR="Branch mergeStateStatus is $MERGE_STATE"
