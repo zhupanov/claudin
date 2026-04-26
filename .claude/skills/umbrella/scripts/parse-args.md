@@ -41,7 +41,7 @@ When `LABELS_COUNT=0`, no `LABEL_*` lines are emitted (the `LABEL_<i>` block is 
 - **Outside quotes**: backslash escapes the next character (`\<c>` → literal `<c>`). Stray trailing backslash is rejected.
 - **Whitespace separators outside quotes**: space, tab, newline.
 
-**TASK contract**: TASK is the verbatim remainder of `$ARGS_STR` from a recorded byte offset to end-of-string. Phase 1 stops at the first non-flag-looking token (or after a bare unquoted `--`); the byte offset is the first character of that next token (NOT including any preceding separator whitespace). Phase 2 slices `${ARGS_STR:offset}` and emits it AS-IS — no quote handling, no escape processing, no validation. Unbalanced quotes inside TASK are not lexer errors. Embedded multi-space runs and trailing whitespace are preserved.
+**TASK contract**: TASK is the verbatim remainder of `$ARGS_STR` from a recorded byte offset to end-of-string. Phase 1 stops at the first non-flag-looking token (or after a bare unquoted `--`); the byte offset is the first character of that next token (NOT including any preceding separator whitespace). Phase 2 slices `${ARGS_STR:offset}` and emits it AS-IS — no quote handling, no escape processing. Unbalanced quotes inside TASK are not lexer errors. Embedded multi-space runs and trailing whitespace are preserved. **One exception** — TASK MUST NOT contain a literal newline byte: a newline in TASK would, via `printf 'TASK=%s\n' "$TASK"`, produce multiple physical lines and break the documented one-KV-per-line stdout grammar (the contract this script enforces). Phase 2 scans TASK for newline bytes and rejects with `ERROR=embedded newline in TASK at offset <N>` if any are present. This is the same fail-fast rule as for embedded newlines inside quoted values during phase-1 lexing.
 
 **Frozen ERROR= templates** (the harness keys off these exact substrings):
 
@@ -56,6 +56,7 @@ ERROR=unclosed double quote at offset <N>
 ERROR=unclosed single quote at offset <N>
 ERROR=stray backslash at end of input
 ERROR=embedded newline in quoted value at offset <N>
+ERROR=embedded newline in TASK at offset <N>
 ```
 
 **Exit codes**: `0` success; `1` parse failure (one `ERROR=...` line on stderr).

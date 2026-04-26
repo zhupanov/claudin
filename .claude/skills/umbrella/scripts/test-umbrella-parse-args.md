@@ -55,3 +55,6 @@ requires updating this harness in the same PR. Add new test cases before changin
 | 20 | Quoted positional starting with `--` — phase 1 stops; TASK is verbatim. |
 | 21 | Newline as unquoted separator outside quotes. |
 | 22 | Unbalanced quote inside TASK — verbatim, lexer does NOT validate TASK. |
+| 23 | Embedded newline in TASK → ERROR (post-Phase-2 guard; would break single-line KV grammar). |
+| 24 | Backslash-escaped newline in unquoted value → ERROR (extends embedded-newline-in-quoted-value rule to outside-quote backslash escapes). |
+| 25 | Backslash-escaped newline INSIDE double-quoted value → ERROR (closes the double-quoted reader's `\\)` arm). |

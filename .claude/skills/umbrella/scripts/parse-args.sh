@@ -29,6 +29,7 @@
 #   ERROR=unclosed single quote at offset <N>
 #   ERROR=stray backslash at end of input
 #   ERROR=embedded newline in quoted value at offset <N>
+#   ERROR=embedded newline in TASK at offset <N>
 #
 # See parse-args.md for the full contract, supported quoting subset, and
 # consumer-side parsing rules.
@@ -97,7 +98,12 @@ read_unquoted_token() {
           echo "ERROR=stray backslash at end of input" >&2
           exit 1
         fi
-        TOKEN_VALUE="${TOKEN_VALUE}${ARGS_STR:$pos:1}"
+        local nc="${ARGS_STR:$pos:1}"
+        if [ "$nc" = $'\n' ]; then
+          echo "ERROR=embedded newline in quoted value at offset $pos" >&2
+          exit 1
+        fi
+        TOKEN_VALUE="${TOKEN_VALUE}${nc}"
         pos=$((pos + 1))
         ;;
       *)
@@ -160,6 +166,10 @@ read_quoted_token() {
             exit 1
           fi
           local next="${ARGS_STR:$pos:1}"
+          if [ "$next" = $'\n' ]; then
+            echo "ERROR=embedded newline in quoted value at offset $pos" >&2
+            exit 1
+          fi
           case "$next" in
             \"|\\|\$)
               TOKEN_VALUE="${TOKEN_VALUE}${next}"
@@ -298,6 +308,23 @@ if [ "$TASK_START_OFFSET" -ge 0 ]; then
 else
   TASK=""
 fi
+
+# A literal newline in TASK would, via printf 'TASK=%s\n' "$TASK", emit
+# multiple physical lines and break the documented one-KV-per-line stdout
+# grammar — the very contract this script enforces. Reject fail-fast.
+case "$TASK" in
+  *$'\n'*)
+    nl_pos=$TASK_START_OFFSET
+    while [ "$nl_pos" -lt "$ARGS_LEN" ]; do
+      if [ "${ARGS_STR:$nl_pos:1}" = $'\n' ]; then
+        break
+      fi
+      nl_pos=$((nl_pos + 1))
+    done
+    echo "ERROR=embedded newline in TASK at offset $nl_pos" >&2
+    exit 1
+    ;;
+esac
 
 # --- mktemp (only after parse success) ---
 

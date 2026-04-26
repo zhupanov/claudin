@@ -219,6 +219,30 @@ assert_stdout "case 22: unbalanced quote inside TASK (verbatim)" \
   '--debug investigate "broken' \
   "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=true\nTASK=%s' 'investigate "broken')"
 
+# 23. Embedded newline in TASK → error (would break single-line KV grammar).
+#     Repro from /review FINDING_1: --debug followed by "hello\nworld" task body
+#     emits TASK=hello + worldon-next-line + UMBRELLA_TMPDIR=... → consumer break.
+assert_error "case 23: embedded newline in TASK" \
+  $'--debug hello\nworld' \
+  "embedded newline in TASK"
+
+# 24. Backslash-escaped newline in unquoted value → error.
+#     Repro from /review FINDING_2: backslash escapes the unquoted-separator
+#     behavior of newline, letting it through into LABEL_<i>= and breaking KV.
+# shellcheck disable=SC1003
+assert_error "case 24: backslash-escaped newline in unquoted value" \
+  $'--label foo\\\nbar' \
+  "embedded newline in quoted value"
+
+# 25. Backslash-escaped newline inside double-quoted value → error.
+#     Repro from /review FINDING_2: same hazard via the double-quoted reader's
+#     \\) arm; without the post-backslash newline check, falls into the
+#     literal-pass-through default and emits a multi-line LABEL value.
+# shellcheck disable=SC1003
+assert_error "case 25: backslash-escaped newline inside double-quote" \
+  $'--label "foo\\\nbar"' \
+  "embedded newline in quoted value"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
