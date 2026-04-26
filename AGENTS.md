@@ -44,4 +44,5 @@ Plugin ships the entire repo. **Runtime surface**: `skills/`, `agents/`, `hooks/
 - Shell scripts use `set -euo pipefail` by default. Comment when `-e` is intentionally omitted.
 - Follow recent commit history style. `Bump version to X.Y.Z` is reserved for `/bump-version`.
 - Run `gh pr create` through the skill, not manually.
+- Run `gh issue create` through `/larch:issue`, not manually. Scripts under `scripts/` and `skills/*/scripts/` (e.g., `skills/improve-skill/scripts/iteration.sh`, `skills/loop-improve-skill/scripts/driver.sh`, hooks) may continue to call `gh issue create` directly — the rule targets interactive / assistant-driven issue creation only.
 - Slack env vars are optional; skills degrade gracefully when absent.
