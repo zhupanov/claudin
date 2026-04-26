@@ -563,6 +563,22 @@ Apply the Rebase Checkpoint Macro with `<step-prefix>=4.r` and `<short-name>=com
 
 ## Step 5 — Code Review
 
+### Pre-/review untracked snapshot (both modes)
+
+Capture a sorted list of currently-untracked paths to `$IMPLEMENT_TMPDIR/pre-review-untracked.txt` BEFORE either the quick-mode reviewer loop or the normal-mode `/review` invocation runs. Step 6's `check-review-changes.sh --baseline` reads this file to compute the untracked delta (review-introduced new files = current untracked − baseline) and avoid the false-positive where any pre-existing operator file flips `FILES_CHANGED=true` (issue #651).
+
+The snapshot block runs in a subshell with `set -o pipefail` so a real `git ls-files` failure propagates and triggers the cleanup branch — `|| true` alone would let a failing pipe silently produce a valid-empty snapshot file. On any failure, both the temp file AND any prior `pre-review-untracked.txt` are removed so the script's `=missing` graceful-degradation path activates rather than diffing against stale data on resume:
+
+```bash
+( set -o pipefail; \
+  git ls-files --others --exclude-standard 2>/dev/null \
+    | LC_ALL=C sort > "$IMPLEMENT_TMPDIR/pre-review-untracked.txt.tmp" \
+  && mv -f "$IMPLEMENT_TMPDIR/pre-review-untracked.txt.tmp" "$IMPLEMENT_TMPDIR/pre-review-untracked.txt" \
+) || rm -f "$IMPLEMENT_TMPDIR/pre-review-untracked.txt" "$IMPLEMENT_TMPDIR/pre-review-untracked.txt.tmp"
+```
+
+Best-effort: never abort Step 5 on snapshot failure — the missing-baseline path at Step 6 covers the degraded run and logs to `Warnings`.
+
 ### Quick mode (`quick_mode=true`)
 
 Print: `> **🔶 5: code review — quick mode (single reviewer, Cursor → Codex → Claude fallback, up to 7 rounds)**`
@@ -654,13 +670,15 @@ After review (`/review` in normal mode or the quick-mode loop), for any **in-sco
 
 ## Step 6 — Relevant Checks (second pass)
 
-Check whether Step 5 modified files (both modes):
+Check whether Step 5 modified files (both modes). Detection covers staged + unstaged + (current untracked − pre-/review snapshot, when the snapshot is present):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh
+${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh --baseline "$IMPLEMENT_TMPDIR/pre-review-untracked.txt"
 ```
 
-Parse `FILES_CHANGED`. If `FILES_CHANGED=false`: print `⏩ 6: checks (2) — skipped, no review changes (<elapsed>)` and skip Steps 6 and 7 (NOT Step 7a — Code Flow Diagram runs unconditionally). If files changed, invoke `/relevant-checks` via the Skill tool; on failure, diagnose + fix, re-invoke.
+Parse both stdout keys with key-based extraction (e.g., `awk -F= '$1=="FILES_CHANGED"{print $2}'`) — both keys are always emitted on every invocation in stable order: `FILES_CHANGED` first, `UNTRACKED_BASELINE` second. Do NOT `eval`/`source` the script's stdout. If `UNTRACKED_BASELINE=missing` (snapshot was never written or got cleaned up after a Step 5 failure), log to `Warnings` (`Step 6 — pre-/review untracked baseline missing; untracked delta not computed for this run`) and continue — `FILES_CHANGED` is still authoritative for staged + unstaged.
+
+If `FILES_CHANGED=false`: print `⏩ 6: checks (2) — skipped, no review changes (<elapsed>)` and skip Steps 6 and 7 (NOT Step 7a — Code Flow Diagram runs unconditionally). If files changed, invoke `/relevant-checks` via the Skill tool; on failure, diagnose + fix, re-invoke.
 
 ## Step 7 — Second Commit (review fixes)
 
