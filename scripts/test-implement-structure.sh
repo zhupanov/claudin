@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 10 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 13 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -16,7 +16,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Ten assertions:
+# Thirteen assertions:
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -58,6 +58,27 @@
 #      is simultaneously pinned in skills/fix-issue/SKILL.md by
 #      skills/fix-issue/scripts/test-fix-issue-bail-detection.sh. A rename of
 #      the token is therefore a dual-repo change caught by CI.
+# (11) Phase 5 (umbrella #348) rebase-rebump-subprocedure.md reference set.
+#      Sub-procedure step 6 retargeted from PR-body refresh to anchor
+#      `version-bump-reasoning` refresh:
+#      (11a) references `anchor-comment-template.md` ≥1 (Contract citation).
+#      (11b) references `tracking-issue-read.sh --sentinel` ≥1 (Step 6a).
+#      (11c) references `assemble-anchor.sh` ≥1 AND `upsert-anchor` ≥1 (Step 6d,e).
+#      (11d) zero invocation lines of `${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-read.sh`
+#            or `${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh` — scoped to
+#            invocation patterns to preserve historical/prose mentions (per
+#            design FINDING_7). A lingering invocation is a Phase 5 regression.
+# (12) Phase 5 single-source-of-truth invariant for SECTION_MARKERS:
+#      (12a) tracking-issue-write.sh must reference `anchor-section-markers.sh`
+#            (the shared source-of-truth helper).
+#      (12b) tracking-issue-write.sh must NOT contain a standalone
+#            `SECTION_MARKERS=(` declaration — any re-inline would silently
+#            diverge its ordering from assemble-anchor.sh.
+# (13) Orchestrator-judgment-bail invariant (closes #553): two byte-pinned
+#      anchor literals must be present in skills/implement/SKILL.md so future
+#      edits cannot silently delete the rule — the headline of NEVER #7 and the
+#      headline of the Step 2 "scope-lock" cue. Mirrors the byte-pin pattern of
+#      assertion (5).
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
