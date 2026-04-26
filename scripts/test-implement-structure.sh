@@ -126,7 +126,7 @@ count=$(grep -c '^## Rebase Checkpoint Macro$' "$SKILL_MD" || true)
   || fail "(3) expected exactly 1 '^## Rebase Checkpoint Macro$' heading in SKILL.md, found $count"
 
 # ---------------------------------------------------------------------------
-# (4) MANDATORY — READ ENTIRE FILE: at least 4 occurrences AND each expected
+# (4) MANDATORY — READ ENTIRE FILE: at least 5 occurrences AND each expected
 #     reference filename appears on a MANDATORY line (step-to-reference binding).
 # ---------------------------------------------------------------------------
 # Use `|| true` to keep set -e + pipefail from aborting before the fail() diagnostic
