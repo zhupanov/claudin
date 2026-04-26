@@ -314,9 +314,10 @@ assert_contains "$log6" "close|42" "[f6] gh issue close attempted (fallback, tho
 # never landed) and closes. The two run_case calls allocate separate stub
 # bins and invocation logs; we concatenate the logs to assert exactly two
 # comment|42|DONE lines, which is the regression guard the issue asks for:
-# any future change that re-orders the comment-after-probe sequence, or
-# that adds an idempotency guard for already-posted DONE comments, will
-# drop one of the two comment|42|DONE lines and fail this fixture, forcing
+# any future change that breaks the current comment-before-probe-then-close
+# ordering (e.g., moves the comment post AFTER the close call), or that
+# adds an idempotency guard for already-posted DONE comments, will drop
+# one of the two comment|42|DONE lines and fail this fixture, forcing
 # the documented partial-success-semantics contract in
 # skills/fix-issue/scripts/issue-lifecycle.md to be updated in the same PR.
 echo ""
@@ -326,6 +327,7 @@ run_case "f7a" "OPEN" "1" "1" --issue 42 --comment DONE
 assert_eq "[f7a] exit code" 1 "$RC"
 assert_contains "$CLOSE_STDOUT" "CLOSED=false" "[f7a] stdout has CLOSED=false"
 assert_contains "$CLOSE_STDOUT" "ERROR=Failed to close issue #42" "[f7a] stdout has ERROR=Failed to close"
+assert_contains "$CLOSE_STDERR" "WARNING: failed to probe state for issue #42" "[f7a] stderr WARNING on probe failure (pins probe+close-fail branch like Fixture 6)"
 log7a=$(cat "$TMPROOT/f7a/gh-invocations.log")
 assert_contains "$log7a" "comment|42|DONE" "[f7a] DONE comment WAS posted before close failed (partial-success class)"
 assert_contains "$log7a" "close|42" "[f7a] gh issue close attempted (and failed)"
