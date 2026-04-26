@@ -256,9 +256,27 @@ for (( ITER=1; ITER<=MAX_ITERATIONS; ITER++ )); do
   fi
 
   # Termination check: did /fix-issue reach Step 1 (i.e., did Step 0 lock work)?
+  # When the success sentinel is absent, /fix-issue Step 0 emits one of three
+  # distinct literals (exit 1 / 2 / 3 per /fix-issue SKILL.md Step 0). Map each
+  # to its own termination reason and preserve LOOP_TMPDIR on the non-clean
+  # paths so per-iteration artifacts remain available for inspection.
   if ! grep -F -q "$SETUP_SENTINEL" "$ITER_OUT_FILE"; then
-    breadcrumb_done "3: iteration ${ITER} — /fix-issue reported no work to do. Loop complete."
-    TERMINATION_REASON="no eligible issues (Step 0 short-circuit)"
+    if grep -F -q 'find & lock — no approved issues found' "$ITER_OUT_FILE"; then
+      breadcrumb_done "3: iteration ${ITER} — /fix-issue reported no work to do. Loop complete."
+      TERMINATION_REASON="no eligible issues (clean exhaustion)"
+    elif grep -F -q 'find & lock — error:' "$ITER_OUT_FILE"; then
+      breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 reported an error; retaining LOOP_TMPDIR for inspection. Stopping loop."
+      LOOP_PRESERVE_TMPDIR="true"
+      TERMINATION_REASON="Step 0 error (likely transient)"
+    elif grep -F -q 'find & lock — lock failed' "$ITER_OUT_FILE"; then
+      breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 lock acquisition failed; retaining LOOP_TMPDIR for inspection. Stopping loop."
+      LOOP_PRESERVE_TMPDIR="true"
+      TERMINATION_REASON="Step 0 lock failure (concurrent runner or partial-state)"
+    else
+      breadcrumb_warn "3: iteration ${ITER} — /fix-issue produced no recognized Step 0 literal; retaining LOOP_TMPDIR for inspection. Stopping loop."
+      LOOP_PRESERVE_TMPDIR="true"
+      TERMINATION_REASON="Step 0 unknown short-circuit (sentinel mismatch)"
+    fi
     break
   fi
 

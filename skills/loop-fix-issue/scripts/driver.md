@@ -57,7 +57,14 @@ Per-iteration timeout: 1800s (30 min), enforced by a polling kill loop (matches 
 `/fix-issue` Step 0 exit 0 (success) explicitly mandates printing the literal `> **🔶 0: find & lock — found and locked #<N>: <title>**` on stdout. Step 0 exits 1/2/3 (no eligible / error / lock-failed-mid-sequence) print different literals — `no approved issues found`, `error:`, `lock failed`. The driver greps the iteration's captured stdout for the fixed substring `find & lock — found and locked` (fixed-string match via `grep -F`):
 
 - **Sentinel present**: Step 0 succeeded → an issue was processed → continue to next iteration.
-- **Sentinel absent**: no work was done → break the loop with reason `"no eligible issues (Step 0 short-circuit)"`.
+- **Sentinel absent**: no work was done → break the loop. The driver dispatches on a second-tier `grep -F -q` against the same iteration stdout to choose a termination reason and decide whether to preserve `LOOP_TMPDIR` for inspection. The four sub-cases (mutually exclusive in normal `/fix-issue` Step 0 output, checked in this order):
+
+  - `find & lock — no approved issues found` (Step 0 exit 1 — clean exhaustion) → `breadcrumb_done`, reason `"no eligible issues (clean exhaustion)"`, `LOOP_PRESERVE_TMPDIR=false` (cleanup runs).
+  - `find & lock — error:` (Step 0 exit 2 — error reading candidates, e.g. `gh` API outage) → `breadcrumb_warn`, reason `"Step 0 error (likely transient)"`, `LOOP_PRESERVE_TMPDIR=true` (artifacts retained).
+  - `find & lock — lock failed` (Step 0 exit 3 — eligibility passed but lock acquisition failed; concurrent runner or partial-state per `/fix-issue` Known Limitations) → `breadcrumb_warn`, reason `"Step 0 lock failure (concurrent runner or partial-state)"`, `LOOP_PRESERVE_TMPDIR=true`.
+  - None of the above → defensive fallback. `breadcrumb_warn`, reason `"Step 0 unknown short-circuit (sentinel mismatch)"`, `LOOP_PRESERVE_TMPDIR=true`. Guards against silent regressions if `/fix-issue` Step 0 wording drifts; without it, any future Step 0 stdout change would silently degrade to a false "Loop complete" with no per-iteration artifacts.
+
+  All four sub-cases stop the loop. Exit 2 / exit 3 both indicate conditions that retrying would not resolve (`/fix-issue`'s Known Limitations require manual recovery for lock races); the difference vs. exit 1 is that the termination message and `LOOP_PRESERVE_TMPDIR` flag flag a real failure mode rather than reporting "Loop complete".
 
 Why the Step 0 success literal rather than the Step 1 setup breadcrumb: Step 0's `found and locked #<N>` line is *explicitly mandated* by `/fix-issue` SKILL.md (Step 0 success-path Print directive), whereas Step 1's `🔶 1: setup` breadcrumb is only an implicit progress-reporting convention inherited from `skills/shared/progress-reporting.md`. A model that runs Step 1's bash without emitting the breadcrumb would yield a false "no work" signal under the older sentinel and stop the loop prematurely after a successful pass; the Step 0 success literal eliminates that failure mode.
 
@@ -65,11 +72,6 @@ Other termination reasons:
 
 - **`claude -p` non-zero exit**: log a warning, set `LOOP_PRESERVE_TMPDIR=true`, break with reason `"claude -p subprocess error (exit N)"`.
 - **`--max-iterations` cap hit**: log a warning, leave `LOOP_PRESERVE_TMPDIR=false` (loop ran cleanly; cap is informational), terminate with reason `"--max-iterations cap reached"`.
-
-Note that "Step 0 short-circuit" subsumes Step 0 exit 1 (clean: no eligible issues), exit 2 (error fetching candidates), and exit 3 (lock race / partial sentinel mutation). All three are treated as "stop the loop" because:
-- Exit 1 is the clean termination path.
-- Exit 2 indicates a real error (e.g., `gh` API outage) that retrying would not fix.
-- Exit 3 indicates a concurrent runner or a partially-mutated comment stream — `/fix-issue`'s Known Limitations require manual recovery; looping would race that recovery.
 
 ## Security boundaries
 
