@@ -111,7 +111,7 @@ Invoke the Skill tool:
 
 Parse the per-item `ISSUE_<i>_NUMBER`, `ISSUE_<i>_URL`, `ISSUE_<i>_TITLE`, `ISSUE_<i>_DUPLICATE_OF_NUMBER`, `ISSUE_<i>_DUPLICATE_OF_URL`, `ISSUE_<i>_DRY_RUN`, `ISSUE_<i>_FAILED`, plus aggregate `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`.
 
-**Abort condition**: if `ISSUES_FAILED >= 1`, do NOT proceed to umbrella creation. Print `**⚠ /umbrella: /issue batch reported $ISSUES_FAILED failure(s); refusing to create a half-populated umbrella. See per-item ISSUE_<i>_* lines above.**`, populate the `CHILD_*` output fields with whatever did succeed (for partial-failure auditability), set `UMBRELLA_NUMBER` and `UMBRELLA_URL` empty, jump to Step 4.
+**Abort condition**: if `ISSUES_FAILED >= 1`, do NOT proceed to umbrella creation. Capture the children-batch-failure as session state (preserve `ISSUES_FAILED` and the count of successfully-resolved children for Step 4's summary), populate the `CHILD_*` output fields with whatever did succeed (for partial-failure auditability), and jump to Step 4 with `UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv` entirely — do NOT write them with blank values. The canonical Step 4 grammar marks these keys present only on multi-piece success, so consumers distinguish success from failure by key presence/absence; writing blank values would validate but break that contract. Skip 3B.3 and 3B.4. Do NOT print a warning here — Step 4 is the single emission point for the human summary line and will render the multi-piece children-batch-failed shape on this path.
 
 For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes but skip wiring + back-links (handled in 3B.3 / 3B.4).
 
@@ -180,6 +180,7 @@ After `emit-output` returns, the orchestrator (the LLM running this skill) MUST 
 - multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`.
 - multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`.
 - multi-piece partial (children created, umbrella failed): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`.
+- multi-piece children-batch-failed (some children failed during batch creation, umbrella never attempted): `**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`.
 
 ## Step 5 — Cleanup
 
