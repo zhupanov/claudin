@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.8] - 2026-04-26
+
+### Fixed
+
+- `scripts/merge-pr.sh` no longer mis-routes empty or `UNKNOWN` `mergeStateStatus` to `MERGE_RESULT=main_advanced` with the misleading "Branch mergeStateStatus is " (empty trailing) error. After the existing `BEHIND` check at line 85-89 and before the CI re-verify block, an early branch now treats empty `MERGE_STATE` (typically caused by `gh pr view --json mergeStateStatus` API/network/`gh` failure) and the `UNKNOWN` enum value as the existing `MERGE_RESULT=error` outcome with a clear `ERROR="could not read mergeStateStatus from gh pr view (state=...)"` string. `/implement` Step 12b's `error` branch already bails to 12d, which is the correct behavior when the merge state is unreadable — preventing the prior useless rebase loop. `scripts/merge-pr.md`'s MERGE_RESULT enum table `error` row is updated to document the new coverage; the enum itself is unchanged so no cascading edits to `skills/implement/SKILL.md` Step 12b's parse table or the script header comment. Closes #581.
+
 ## [7.13.7] - 2026-04-26
 
 ### Fixed
