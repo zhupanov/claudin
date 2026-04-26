@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.12.2] - 2026-04-26
+
+### Changed
+
+- `scripts/test-research-structure.sh` Check 50 replaced with a paragraph-scoped 16-slot enumeration (#564, supersedes the original #517 narrower whole-file check). The check extracts the `**Measurable lanes**` paragraph from `skills/research/SKILL.md` between anchor-bounded openers and asserts every canonical token-tally slot name (`planner`, `Synthesis`, `Revision`, `Code`, `Code-Sec`, `Code-Arch`, `Cursor`, `Codex`, `Cursor-Arch`, `Cursor-Edge`, `Codex-Ext`, `Codex-Sec`, `Critique-1`, `Critique-2`, `Revision-Critique-1`, `Revision-Critique-2`) appears as a backtick-quoted literal — the backtick wrap disambiguates prefix overlaps (`Code` vs `Code-Arch`); singleton boundary `grep -c \|\| true` lets a missing/renamed anchor surface via descriptive `fail` rather than a silent `set -e` abort. SKILL.md "Measurable lanes" prose updated to enumerate the 7 previously-implicit slot literals (the 4 deep-mode research-phase angle slots `Cursor-Arch` / `Cursor-Edge` / `Codex-Ext` / `Codex-Sec` were genuinely absent from the prose; `planner` / `Cursor` / `Codex` were named without backtick wrap). `references/critique-loop-phase.md` line 144 cross-reference narrowed so the four critique-loop slots remain the single source of truth for those four names while clarifying that Check 50 enforces the full 16-slot SKILL.md inventory. Sibling-contract clause appended to `scripts/test-research-structure.md` per AGENTS.md per-script-contract rule. Closes #564.
+
 ## [7.12.1] - 2026-04-26
 
 ### Changed

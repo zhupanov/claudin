@@ -141,7 +141,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write \
   --dir "$RESEARCH_TMPDIR"
 ```
 
-**Canonical slot-name list (single source of truth — referenced by SKILL.md's measurable-lanes section and by `test-research-structure.sh` Check 50)**: slot names are exactly `Critique-1`, `Critique-2`, `Revision-Critique-1`, `Revision-Critique-2` — exactly two of each because the cap is `RESEARCH_CRITIQUE_MAX=2`.
+**Canonical slot-name list (single source of truth for the four critique-loop slots)**: slot names are exactly `Critique-1`, `Critique-2`, `Revision-Critique-1`, `Revision-Critique-2` — exactly two of each because the cap is `RESEARCH_CRITIQUE_MAX=2`. These four slots are a subset of the 16-slot inventory enumerated in SKILL.md's "Measurable lanes" paragraph; `scripts/test-research-structure.sh` Check 50 enforces the full inventory paragraph-scoped (the four slots above are checked alongside the other twelve).
 
 ### 2.8.6 — Re-run citation validation
 
