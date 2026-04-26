@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.16] - 2026-04-26
+
+### Fixed
+
+- `skills/research/references/research-phase.md:553` quoted a pre-#520 literal `"1 agent (Claude inline only — single-lane confidence)"` that Step 3 no longer emits. #520 replaced single-lane quick mode with K=3 vote-merge, and Step 3 now branches on `LANES_SUCCEEDED` and emits one of three current literals (documented at `skills/research/SKILL.md` Step 0b summary and Step 3 Quick literal assignment). The prose now points at the canonical SKILL.md headers rather than copying a now-wrong byte-quoted literal. Closes #594.
+
 ## [7.13.15] - 2026-04-26
 
 ### Added
