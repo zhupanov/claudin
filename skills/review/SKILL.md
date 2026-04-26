@@ -11,7 +11,7 @@ Review code changes (default: current branch diff vs `main`; slice mode: a verba
 
 **Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
-**Flags**: Parse flags from `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, the remainder (if any) is unused, EXCEPT when `--create-issues` is set and neither `--slice` nor `--slice-file` is present — in that case the remainder (joined as a single string) is treated as the slice description (equivalent to `--slice <remainder>`), activating slice mode. See `--create-issues` below. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
+**Flags**: Parse flags from `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, the remainder (if any) is unused, EXCEPT when `--create-issues` is set and neither `--slice` nor `--slice-file` is present — in that case the remainder (joined as a single string) is treated as the slice description (equivalent to `--slice <remainder>`), activating slice mode. See `--create-issues` below. **When using the positional slice form, all named flags (e.g. `--label`, `--security-output`, `--debug`) MUST appear before the positional description.** Because the parser stops at the first non-flag token, any flag-looking token (e.g. `--label foo`) appearing AFTER the positional description is silently absorbed into the slice text rather than parsed as a flag — there is no warning. Example correct order: `/review --create-issues --label foo my slice description`. Example wrong order (silent label loss): `/review --create-issues my slice description --label foo`. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) including reviewer health state (`CODEX_HEALTHY`, `CURSOR_HEALTHY`). If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full health probe at Step 0).
@@ -27,7 +27,7 @@ Review code changes (default: current branch diff vs `main`; slice mode: a verba
 - `--slice <text>` and `--slice-file <path>` are mutually exclusive. If both are set, print `**⚠ --slice and --slice-file are mutually exclusive. Aborting.**` and exit.
 - If positional slice text is present (trailing remainder after `--create-issues`, per `--create-issues` above) AND either `--slice` or `--slice-file` is also set, print `**⚠ Positional slice text cannot be combined with --slice or --slice-file. Aborting.**` and exit.
 - **Slice mode** is active when `--slice` is set, `--slice-file` is set, OR positional slice text is present (the third form is gated on `--create-issues`, per the Flags section above). In slice mode, Step 1 replaces `gather-branch-context.sh` with a slice-resolve step (see Step 1 below), Step 2 reviewer prompts use slice-mode bodies, Step 3 skips the implement-fixes path, and Step 4 emits a `### slice-result` KV footer.
-- **Diff mode** is active when neither slice flag is set. Diff mode is the default; behavior in diff mode is unchanged from the pre-slice-mode `/review`.
+- **Diff mode** is active when slice mode is NOT active per this section (i.e., none of `--slice`, `--slice-file`, or trailing positional text after `--create-issues` is present). Diff mode is the default; behavior in diff mode is unchanged from the pre-slice-mode `/review`.
 
 ## Progress Reporting
 
@@ -75,7 +75,7 @@ This replaces individual per-reviewer completion messages in non-debug mode. Do 
 
 ## Slice Mode
 
-When `--slice <text>` or `--slice-file <path>` is set, `/review` operates in **slice mode** instead of the default diff-vs-main mode:
+When `--slice <text>` is set, `--slice-file <path>` is set, or trailing positional text follows `--create-issues` (see Mutual exclusion section above), `/review` operates in **slice mode** instead of the default diff-vs-main mode:
 
 - Step 1 (Gather Context): replaced by a **slice-resolve** step that maps the verbal description to a canonical file list at `$REVIEW_TMPDIR/slice-files.txt` via Glob/Grep/Read. The canonical list anchors OOS classification.
 - Step 2 (Launch Reviewers): reviewer prompts instruct the panel to review the canonical file list (existing code, not a diff). Reviewers may explore further via Glob/Grep/Read for context but OOS classification is anchored to the canonical list.
@@ -107,7 +107,7 @@ Set mental flags `codex_available` and `cursor_available` based on the output:
 
 ## Step 1 — Gather Context
 
-### Diff mode (no slice flag)
+### Diff mode (when slice mode is NOT active)
 
 Run the gather script to collect the diff and context:
 
@@ -117,7 +117,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/gather-branch-context.sh --output-dir "$REVIEW_TMP
 
 Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log — you will pass these to each subagent.
 
-### Slice mode (--slice or --slice-file set)
+### Slice mode (--slice, --slice-file, or trailing positional text after --create-issues)
 
 Skip `gather-branch-context.sh`. Resolve the verbal slice description to a canonical file list:
 
