@@ -10,22 +10,23 @@ This is a *structural* test (literal-substring assertions on `awk`-extracted blo
 
 ## Coverage
 
-Twelve assertions, fail-fast on first miss.
+Thirteen assertions, fail-fast on first miss.
 
 ### Step 4 block (extracted from SKILL.md)
 
 - (a1) Orchestrator-attribution: the human summary breadcrumb is printed by the orchestrator (the LLM running this skill), not by the `emit-output` helper.
 - (a2) Single-emission-point invariant: Step 4 is the only place in SKILL.md that emits the breadcrumb (Step 3B.3's umbrella-creation-failure path defers to Step 4).
-- (c1)–(c7) The seven concrete breadcrumb shape literals on disk:
-  - one-shot filed: `✅ /umbrella: filed #<N> — <url>`
-  - one-shot dedup'd: `ℹ /umbrella: dedup'd to #<N> — <url>`
-  - one-shot failed: `**⚠ /umbrella: failed — <error>**`
-  - multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`
-  - multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`
-  - multi-piece partial (children created, umbrella failed): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`
-  - multi-piece children-batch-failed (umbrella never attempted): `**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`
+- (c1)–(c7) plus (c6b) — the eight concrete breadcrumb shape literals on disk:
+  - (c1) one-shot filed: `✅ /umbrella: filed #<N> — <url>`
+  - (c2) one-shot dedup'd: `ℹ /umbrella: dedup'd to #<N> — <url>`
+  - (c3) one-shot failed: `**⚠ /umbrella: failed — <error>**`
+  - (c4) multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`
+  - (c5) multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`
+  - (c6) multi-piece partial — fallback (no `UMBRELLA_FAILURE_REASON`): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`
+  - (c6b) multi-piece partial — with `UMBRELLA_FAILURE_REASON` parenthetical: `**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**`
+  - (c7) multi-piece children-batch-failed (umbrella never attempted): `**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`
 
-  Issue #602 specifies "the four canonical shape templates" but explicitly includes "dry-run and partial-failure variants of multi-piece as documented in Step 4". On disk, Step 4 contains seven concrete breadcrumb literals (the children-batch-failed variant added after #602 was filed). The harness pins each concrete literal to guard against silent shape deletion — pinning fewer would let one variant disappear unnoticed.
+  Issue #602 specifies "the four canonical shape templates" but explicitly includes "dry-run and partial-failure variants of multi-piece as documented in Step 4". On disk, Step 4 contains eight concrete breadcrumb literals — the multi-piece partial case has dual shapes (with-reason / fallback) that #644 surfaced as both load-bearing, and the children-batch-failed variant was added after #602 was filed. The harness pins each concrete literal to guard against silent shape deletion — pinning fewer would let one variant disappear unnoticed.
 
 ### emit-output subsection (extracted from helpers.md)
 
