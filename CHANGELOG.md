@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.15] - 2026-04-26
+
+### Added
+
+- New opt-in operator script `scripts/repro-claude-p-edit-permissions.sh` plus its sibling contract `scripts/repro-claude-p-edit-permissions.md` (per the `AGENTS.md` per-script-contract rule). The script reproduces the `claude -p` Edit-permission stall observed in #566 across four variants (A=current settings + no kernel flag, B=`--permission-mode bypassPermissions`, C=`.claude/settings.json` replaced with path-qualified `Read`/`Edit`/`Write` allow rules built via `jq`, D=settings file renamed away). Variants A/B do not mutate `.claude/settings.json`; C/D mutate and a single EXIT/INT/TERM trap restores both `.claude/settings.json` and `.claude/settings.local.json` (staged aside for A/C/D), plus the edit target via `git checkout --`. Result classification combines a pinned stall-regex grep on combined stdout+stderr with a `git diff` ground-truth check on the edit target. Variant C is `EXPECTED=observational_only` (records the observed outcome, exits 0). `--smoke-test` mode runs the preflight + variant staging + cleanup round-trip without invoking `claude` for offline structural validation. New `agent-lint.toml` exclusion entry mirrors the `eval-research.sh` / `test-loop-improve-skill-halt-rate.sh` opt-in pattern. The script is opt-in operator instrumentation, NOT a CI gate. Closes #587.
+
 ## [7.13.14] - 2026-04-26
 
 ### Fixed
