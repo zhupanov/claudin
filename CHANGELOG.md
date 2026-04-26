@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.17] - 2026-04-26
+
+### Fixed
+
+- `skills/research/scripts/validate-citations.sh` — split the case arm `2??|3??)` so 3xx HEAD responses are reclassified as `UNKNOWN(redirect-not-followed)` instead of `PASS`. With `--max-redirs 0` (set as part of the SSRF guard), curl never fetches the redirect destination, so a cited URL that 301s to a removed page or to a private/internal host appeared valid in the citation ledger — silently overstating audit certainty for any redirected URL. The DOI ledger composer is special-cased in lockstep: `https://doi.org/<doi>` is a redirect resolver by design (every resolvable DOI returns a 3xx HEAD), so the DOI path interprets `UNKNOWN(redirect-not-followed)` as PASS rather than collapsing it to `UNKNOWN(doi-unresolved)` — preserving DOI ledger behavior bit-identically while correcting URL ledger behavior. Sibling docs updated in sync (`validate-citations.md` Reason vocabulary + Test harness bullet, `references/citation-validation-phase.md` Failure-modes table, `test-validate-citations.md` scenarios table). New Test 9b pins HEAD 301 → `UNKNOWN(redirect-not-followed)` and new Test 9c pins DOI HEAD 302 → PASS via the special-case; the shared fake-curl shim gains explicit `example-301.invalid → 301` and `doi.org → 302` arms. Closes #663.
+
 ## [7.16.16] - 2026-04-26
 
 ### Fixed
