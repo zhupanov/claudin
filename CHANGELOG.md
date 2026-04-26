@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.3] - 2026-04-26
+
+### Changed
+
+- `.claude/skills/umbrella/SKILL.md` Step 3B.1 fallback no longer breaks the strict `UMBRELLA_VERDICT=<one-shot|multi-piece>` token grammar declared at Step 2 (issue #570 — Cursor flagged in PR #549's `/review`). The downgrade path now emits three strict KV lines instead of a single line with a parenthetical: `UMBRELLA_VERDICT=one-shot` (preserving the line-62 token grammar), `UMBRELLA_DOWNGRADE=decomposition-lt-2` (shell-safe machine token capturing the downgrade trigger on a separate KV line), and `UMBRELLA_RATIONALE=…` (preserving the Step 2 verdict + rationale shape required by the "NEVER skip the user-visible classification verdict" anti-pattern). Step 4's canonical `output.kv` schema gains an optional `UMBRELLA_DOWNGRADE=<token>` entry so consumers reading only the final emitter output can still see the downgrade signal. Closes #570.
+
 ## [7.13.2] - 2026-04-26
 
 ### Fixed
