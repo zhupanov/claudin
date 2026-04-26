@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Adaptive auto-classify to quick|standard|deep lanes (1/3+3/5+5); --scale= overrides; --plan adds planner; --interactive pauses for review; --adjudicate adds dialectic; --keep-sidecar keeps batch; --token-budget caps tokens."
+description: "Use for read-only research; auto-classify to quick|standard|deep lanes (1/3+3/5+5); --scale= overrides; --plan adds planner; --interactive pauses; --adjudicate adds dialectic; --keep-sidecar keeps batch; --token-budget caps tokens."
 argument-hint: "[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
