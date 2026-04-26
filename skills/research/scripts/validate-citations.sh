@@ -8,7 +8,8 @@
 # writes a 3-state ledger (PASS / FAIL / UNKNOWN) sidecar markdown file.
 # Domain credibility is advisory only — never flips PASS to FAIL.
 #
-# **Fail-soft contract**: this script always exits 0. Per-claim failures are
+# **Fail-soft contract**: this script exits 0 on validation paths; exit 2 only
+# for argument/flag errors (operator or harness bug). Per-claim failures are
 # recorded in the sidecar's Status column. The Step 2.7 orchestrator parses
 # the script's last stdout line `SUMMARY=PASS=<n> FAIL=<n> UNKNOWN=<n>
 # TOTAL=<n>` to drive the completion breadcrumb and conditional advisory
@@ -32,8 +33,9 @@
 #   --max-claims N            cap on extracted claims (default 200, soft DoS guard)
 #
 # Exit code:
-#   Always 0 (fail-soft). Non-zero exits ONLY on argument-parser bugs (programmer
-#   error) — operators MUST treat any non-zero exit as a bug report.
+#   Exit 0 on validation paths (fail-soft). Exit 2 only for argument/flag
+#   errors (operator or harness bug) — operators MUST treat any non-zero exit
+#   as a bug report.
 #
 # SSRF defenses (every curl invocation):
 #   - HTTPS-only: URLs not starting with https:// are pre-rejected.
@@ -75,8 +77,8 @@
 # (preferred) or nslookup for DNS resolution.
 
 # Intentionally NOT setting -e: this validator is fail-soft. Per-claim failures
-# are recorded in the sidecar; the script always exits 0 (except on
-# argument-parser bugs, which are programmer error). Per-statement non-zero
+# are recorded in the sidecar; the script exits 0 on validation paths and exit
+# 2 only for argument/flag errors (operator or harness bug). Per-statement non-zero
 # exits are expected (grep returning 1 on no-match, kill -0 on dead PIDs, etc.)
 # and MUST NOT abort the script. A defense-in-depth EXIT trap writes a degraded
 # sidecar if the script is about to exit non-zero AND no sidecar was produced

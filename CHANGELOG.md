@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.20] - 2026-04-26
+
+### Fixed
+
+- `skills/research/scripts/validate-citations.md` and `skills/research/references/citation-validation-phase.md` — clarify the citation-validator's exit-code contract by replacing every "always exits 0 on every path"-style claim with "exits 0 on validation paths; exit 2 only for argument/flag errors — operator or harness bug." `validate-citations.sh:124,128,147,153` already exit 2 for unknown args, missing required args, invalid numeric flag values, and missing `--tmpdir`; the documentation now matches that shipped behavior. Three in-script doc surfaces in `validate-citations.sh` (header banner at line 11, `# Exit code:` block at line 35, and the `set -uo pipefail` introduction comment) are aligned to the same canonical wording for consistency. Closes #668.
+
 ## [7.16.19] - 2026-04-26
 
 ### Fixed
