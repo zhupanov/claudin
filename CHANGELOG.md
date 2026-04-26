@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.2] - 2026-04-26
+
+### Fixed
+
+- `skills/research/SKILL.md` line 56 budget-enforcement gate list updated from the stale `after Step 1, after Step 2, after Step 2.5` to the correct relocated set `after Step 1, after Step 2.5, after Step 2.8`. PR #565 / issue #517 had relocated the post-Step-2 gate to fire after Step 2.8; lines 34 (flag description), 344 (relocation note), 360 (post-Step-2.5 gate prose), and 411 (relocated post-Step-2.8 gate) already reflected the new gate set, but the prose summary on line 56 was missed in that sweep. Closes #574.
+
 ## [7.13.1] - 2026-04-26
 
 ### Changed
