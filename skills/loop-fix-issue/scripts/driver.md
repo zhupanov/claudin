@@ -25,7 +25,7 @@ driver.sh [--debug] [--max-iterations N] [--no-slack] [--no-admin-fallback]
 | 2 | `session-setup.sh` → `LOOP_TMPDIR` (with `/tmp/`-prefix + no-`..` security guards) |
 | 3 | per-iteration loop up to `--max-iterations`: write `claude -p` STDIN prompt, invoke, capture stdout, check termination sentinel |
 | 4 | final summary: total iterations run + termination reason |
-| EXIT | `cleanup-tmpdir.sh` on success; `LOOP_TMPDIR` retained on failure |
+| EXIT | `cleanup-tmpdir.sh` runs when `LOOP_PRESERVE_TMPDIR=false` (clean success, including `--max-iterations` cap-hit); `LOOP_TMPDIR` retained when `LOOP_PRESERVE_TMPDIR=true` (the four documented abnormal-exit paths — see `## Termination signal` and `## Security boundaries`) |
 
 ## Per-iteration `claude -p` invocation contract
 
@@ -81,7 +81,18 @@ Other termination reasons:
   - prompt on STDIN, not argv (avoids macOS ARG_MAX = 262144)
   - stderr redirected to `<out>.stderr` sidecar (never posted to GitHub)
 - **On `claude -p` non-zero exit**, `LOOP_PRESERVE_TMPDIR` flips `true` so the EXIT trap retains `LOOP_TMPDIR` for inspection. Per-iteration artifacts (`iter-N-out.txt`, `iter-N-out.txt.stderr`) accumulate in `LOOP_TMPDIR`.
-- **`$LOOP_TMPDIR`** cleaned via `cleanup-tmpdir.sh` in the EXIT trap on success; retained on any abnormal exit.
+- **`$LOOP_TMPDIR` retention rule**: cleaned via `cleanup-tmpdir.sh` in the EXIT trap when `LOOP_PRESERVE_TMPDIR=false`; retained when `LOOP_PRESERVE_TMPDIR=true`. The driver sets `LOOP_PRESERVE_TMPDIR=true` on exactly four documented abnormal-exit paths: claude subprocess error (`claude -p` non-zero exit), Step 0 error (`grep -F -q '0: find & lock — error:'`), Step 0 lock failure (`grep -F -q '0: find & lock — lock failed'`), and the defensive sentinel-mismatch fallback (none of the canonical Step 0 sub-sentinels match). The clean-success path and the `--max-iterations` cap-hit path both leave `LOOP_PRESERVE_TMPDIR=false`, so the tmpdir is wiped by `cleanup-tmpdir.sh` and the per-iteration sidecars go with it. On retained paths, the cleanup warning explicitly names the `iter-*-out.txt` and `iter-*-out.txt.stderr` artifact glob patterns (both rooted under `${LOOP_TMPDIR}`) so they can be located without consulting these docs.
+
+## Observability / Retention matrix
+
+There are three observability surfaces (Monitor stream, `LOG_PATH` driver log, per-iteration sidecars) with distinct contents and retention rules. This matrix is byte-faithful to `driver.sh` and is the canonical contract; SKILL.md's "What the Monitor stream shows vs. what the log file holds vs. where child output lives" subsection mirrors it for operator-facing presentation. Keep them in sync.
+
+| Surface | Contents | Retention |
+|---------|----------|-----------|
+| Monitor stream (live) | Driver-emitted lines from the parent process's stdout/stderr that match the breadcrumb regex `^(✅\|> \*\*🔶\|\*\*⚠)`. Driver-originated non-breadcrumb lines (e.g., the `LOOP_TMPDIR=` line in `cleanup_on_exit`) are in `LOG_PATH` but NOT on Monitor. Child `/fix-issue` breadcrumb-shaped lines live in the per-iteration sidecars (see below) and never reach driver stdout, so they never reach Monitor. | Live only; the Monitor tool tails `LOG_PATH` and applies the regex filter at display time — the filter does not persist anywhere. |
+| `LOG_PATH` (driver stdout+stderr capture from the SKILL.md Step-3 outer `> "<LOG_PATH>" 2>&1` redirect) | Driver-emitted output: every breadcrumb (`🔶` / `✅` / `⚠`); the unconditional `LOOP_TMPDIR=…` line printed at the top of `cleanup_on_exit`; the final summary line; any `printf` to stderr from the argv parser, preflight checks, or the `session-setup.sh` capture path. Does **NOT** contain raw `/fix-issue` subprocess stdout/stderr — those are redirected by `invoke_claude_p_skill` into the per-iteration sidecars. | `/tmp/loop-fix-issue-driver-…log` — retained on `/tmp` post-run. The path lives outside `LOOP_TMPDIR` on purpose so the EXIT-trap cleanup does not wipe it mid-tail. |
+| `$LOOP_TMPDIR/iter-N-out.txt` | Per-iteration `claude -p /fix-issue` stdout, raw and unredacted, exactly one file per iteration. Termination-detection grep reads this file (not driver stdout). | Wiped by `cleanup-tmpdir.sh` when `LOOP_PRESERVE_TMPDIR=false` (clean success and `--max-iterations` cap-hit). Retained when `LOOP_PRESERVE_TMPDIR=true` (the four documented abnormal-exit paths). On retained paths, the cleanup warning names the artifact glob patterns. |
+| `$LOOP_TMPDIR/iter-N-out.txt.stderr` | Per-iteration `claude -p /fix-issue` stderr, raw and unredacted. Includes any `claude-iter-N: TIMED OUT after Xs` line — appended by the watcher subshell via `>> "$stderr_file"` when the per-iteration timeout (1800s) expires and the watcher kills the subprocess. The timeout-watcher line lives **only** here; it does NOT bubble up to driver stderr. | Same retention rule as the stdout sidecar. |
 
 ## Test-only override
 
@@ -94,3 +105,4 @@ This contract documents `driver.sh`. When editing the script, update both files 
 - Argv grammar / new flags → update `## Invocation` and `## Topology`.
 - Termination logic / sentinel literal → update `## Termination signal`.
 - Subprocess invocation contract / new env vars → update `## Per-iteration claude -p invocation contract` + `## Security boundaries` + (if test-only) `## Test-only override`.
+- Observability surfaces / retention rules / what each artifact contains → update `## Observability / Retention matrix` here AND `skills/loop-fix-issue/SKILL.md`'s "What the Monitor stream shows vs. what the log file holds vs. where child output lives" subsection. The matrix is the canonical contract; the SKILL.md subsection is the operator-facing mirror — they must remain semantically consistent.
