@@ -991,13 +991,63 @@ grep -Fq "exceeded after Step 2 (" "$SKILL_MD" \
 grep -Fq "2.8: critique loop — skipped (--scale=quick)" "$SKILL_MD" \
   || fail "SKILL.md Step 2.8 must carry the quick-mode skip breadcrumb literal '2.8: critique loop — skipped (--scale=quick)' (#517 Check 49)"
 
-# Check 50 (#517): SKILL.md measurable-lanes section must enumerate the new
-# critique-loop slot families. Per dialectic DECISION_4 these are recorded under
-# the existing 'validation' phase enum (no new --phase value).
-grep -Fq "Critique-1" "$SKILL_MD" \
-  || fail "SKILL.md must enumerate the 'Critique-1' slot name in the measurable-lanes section (#517 Check 50)"
-grep -Fq "Revision-Critique-1" "$SKILL_MD" \
-  || fail "SKILL.md must enumerate the 'Revision-Critique-1' slot name in the measurable-lanes section (#517 Check 50)"
+# Check 50 (#564, supersedes #517 Check 50): SKILL.md "Measurable lanes" paragraph
+# must enumerate every canonical token-tally slot name written by /research code
+# paths via `token-tally.sh write --lane <slot>`. Paragraph-scoped (anchor-bounded
+# by **Measurable lanes** opener and **Unmeasurable lanes** terminator) so future
+# drift in unrelated SKILL.md sections cannot silently satisfy the assertion.
+# Slot literals are checked as backtick-quoted forms (`<slot>`) to disambiguate
+# prefix overlaps (e.g., `Code` substring of `Code-Arch`).
+#
+# Canonical slot names live in:
+#   - skills/research/references/research-phase.md    (planner, Cursor, Codex,
+#                                                       Cursor-Arch, Cursor-Edge,
+#                                                       Codex-Ext, Codex-Sec, Synthesis)
+#   - skills/research/references/validation-phase.md  (Code, Code-Sec, Code-Arch,
+#                                                       Cursor, Codex, Revision)
+#   - skills/research/references/adjudication-phase.md (Code, Cursor, Codex — judges)
+#   - skills/research/references/critique-loop-phase.md (Critique-1, Critique-2,
+#                                                       Revision-Critique-1,
+#                                                       Revision-Critique-2)
+# When a new measurable lane is added in code paths, update both the SKILL.md
+# "Measurable lanes" paragraph AND the canonical_slots array below.
+MEASURABLE_OPEN_LINES=$(grep -c '^\*\*Measurable lanes\*\*' "$SKILL_MD" || true)
+[[ "$MEASURABLE_OPEN_LINES" == "1" ]] \
+  || fail "SKILL.md must contain exactly one '**Measurable lanes**' opener line; found $MEASURABLE_OPEN_LINES (#564 Check 50)"
+UNMEASURABLE_OPEN_LINES=$(grep -c '^\*\*Unmeasurable lanes\*\*' "$SKILL_MD" || true)
+[[ "$UNMEASURABLE_OPEN_LINES" == "1" ]] \
+  || fail "SKILL.md must contain exactly one '**Unmeasurable lanes**' terminator line; found $UNMEASURABLE_OPEN_LINES (#564 Check 50)"
+
+MEASURABLE_LANES_PARAGRAPH=$(awk '
+  /^\*\*Measurable lanes\*\*/ { in_block=1 }
+  in_block && /^\*\*Unmeasurable lanes\*\*/ { exit }
+  in_block { print }
+' "$SKILL_MD")
+[[ -n "$MEASURABLE_LANES_PARAGRAPH" ]] \
+  || fail "SKILL.md 'Measurable lanes' paragraph extraction yielded empty content (#564 Check 50)"
+
+canonical_slots=(
+  planner
+  Synthesis
+  Revision
+  Code
+  Code-Sec
+  Code-Arch
+  Cursor
+  Codex
+  Cursor-Arch
+  Cursor-Edge
+  Codex-Ext
+  Codex-Sec
+  Critique-1
+  Critique-2
+  Revision-Critique-1
+  Revision-Critique-2
+)
+for slot in "${canonical_slots[@]}"; do
+  grep -Fq "\`$slot\`" <<<"$MEASURABLE_LANES_PARAGRAPH" \
+    || fail "SKILL.md 'Measurable lanes' paragraph must enumerate canonical slot \`$slot\` (backtick-quoted) (#564 Check 50)"
+done
 
 # Check 51 (#517): the new critique-loop-phase.md must carry namespaced XML
 # wrapper tag literals for the critique CONTEXT_BLOCK (FINDING_3 from plan
