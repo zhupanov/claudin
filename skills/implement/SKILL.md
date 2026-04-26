@@ -270,13 +270,18 @@ FIND_OUT=$(${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh find-anchor --i
 **Parse `FAILED=true` FIRST**, before checking `ANCHOR_COMMENT_ID=`. The multi-anchor branch and the gh-failure branch both emit `FAILED=true` + `ERROR=<msg>` and do NOT emit `ANCHOR_COMMENT_ID=`; the success branches emit only `ANCHOR_COMMENT_ID=<id-or-empty>` and do NOT emit `FAILED=true`. Checking `FAILED=true` first prevents misclassifying a multi-anchor failure as "no anchor" (which would route into the seed-plant path and corrupt the canonical state — closes #654).
 
 - If `FIND_OUT` contains `FAILED=true`: parse `ERROR=` (multi-anchor case starts with "multiple anchor comments found (ids: ...)"; gh-failure case carries the redacted gh stderr). Print `**⚠ 0.5: tracking issue — find-anchor failed: $ERROR. Aborting.**` and skip to Step 18.
-- Else if `ANCHOR_COMMENT_ID=` line has a non-empty value (`ANCHOR_ID` set): existing anchor present. Fetch its body to hydrate local fragments before any upsert:
+- Else, extract `ANCHOR_ID` from the `ANCHOR_COMMENT_ID=` line of `$FIND_OUT`:
+  ```bash
+  ANCHOR_ID=$(printf '%s\n' "$FIND_OUT" | grep -E '^ANCHOR_COMMENT_ID=' | sed 's/^ANCHOR_COMMENT_ID=//')
+  ```
+  `ANCHOR_ID` is the canonical name used by the next two sub-branches and by the hydration `gh api ... /comments/$ANCHOR_ID` call below. The value is empty when `find-anchor` reported zero anchors and non-empty when it reported one anchor.
+- If `ANCHOR_ID` is non-empty (existing anchor present): fetch its body to hydrate local fragments before any upsert:
   ```bash
   mkdir -p "$IMPLEMENT_TMPDIR/anchor-hydrate" "$IMPLEMENT_TMPDIR/anchor-sections"
   gh api "/repos/$REPO/issues/comments/$ANCHOR_ID" --jq '.body' > "$IMPLEMENT_TMPDIR/anchor-hydrate/anchor-body.md"
   ```
   Run the inline awk section-extraction loop (matching `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs) over `anchor-body.md`, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. Do NOT call `upsert-anchor` at this point — future fragment writes will update sections in place without clobbering hydrated content.
-- Else (`ANCHOR_COMMENT_ID=` line value is empty): no existing anchor. Compose a seed body via `scripts/assemble-anchor.sh` (passing an empty or partially-populated `$IMPLEMENT_TMPDIR/anchor-sections/` — the helper emits the anchor first-line marker, a seed-only visible placeholder line so the comment renders non-empty in GitHub's UI, and 8 empty section-marker pairs when no fragments exist yet; see `scripts/assemble-anchor.md` "Seed-only visible placeholder"), then plant the anchor:
+- Else (`ANCHOR_ID` empty — no existing anchor): compose a seed body via `scripts/assemble-anchor.sh` (passing an empty or partially-populated `$IMPLEMENT_TMPDIR/anchor-sections/` — the helper emits the anchor first-line marker, a seed-only visible placeholder line so the comment renders non-empty in GitHub's UI, and 8 empty section-marker pairs when no fragments exist yet; see `scripts/assemble-anchor.md` "Seed-only visible placeholder"), then plant the anchor:
   ```bash
   mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"
   ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
@@ -321,8 +326,13 @@ FIND_OUT=$(${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh find-anchor --i
 
 **Parse `FAILED=true` FIRST**, same as Branch 2 (multi-anchor and gh-failure cases emit `FAILED=true` + `ERROR=`; success cases emit only `ANCHOR_COMMENT_ID=<id-or-empty>`). On any `FAILED=true`, print `**⚠ 0.5: tracking issue — find-anchor failed: $ERROR. Aborting.**` and skip to Step 18.
 
-- Else if `ANCHOR_COMMENT_ID=` line has a non-empty value (`ANCHOR_ID` set): fetch its body and hydrate local fragments (same as Branch 2 — direct `gh api /repos/.../issues/comments/$ANCHOR_ID` + awk section-extraction). Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. No upsert.
-- Else (`ANCHOR_COMMENT_ID=` line value is empty): plant a fresh seed anchor using the shared helper (`mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"` then `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" --issue "$RECOVERED_N" --output "$IMPLEMENT_TMPDIR/anchor-seed.md"`, then `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"`). Parse `ANCHOR_COMMENT_ID` from stdout.
+Otherwise, extract `ANCHOR_ID` from the `ANCHOR_COMMENT_ID=` line of `$FIND_OUT`:
+```bash
+ANCHOR_ID=$(printf '%s\n' "$FIND_OUT" | grep -E '^ANCHOR_COMMENT_ID=' | sed 's/^ANCHOR_COMMENT_ID=//')
+```
+
+- If `ANCHOR_ID` is non-empty (existing anchor): fetch its body and hydrate local fragments (same as Branch 2 — direct `gh api /repos/.../issues/comments/$ANCHOR_ID` + awk section-extraction). Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. No upsert.
+- Else (`ANCHOR_ID` empty — no existing anchor): plant a fresh seed anchor using the shared helper (`mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"` then `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" --issue "$RECOVERED_N" --output "$IMPLEMENT_TMPDIR/anchor-seed.md"`, then `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"`). Parse `ANCHOR_COMMENT_ID` from stdout.
 
 On either sub-branch, **rename the recovered issue to `[IN PROGRESS]`** so the title reflects the active run (matches Branch 2 / Branch 4):
 
