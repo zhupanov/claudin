@@ -753,7 +753,7 @@ Write `$RESEARCH_TMPDIR/research-report.txt` with the same content (research que
 
 All K=3 lanes returned empty content or failed substantive-content validation (timeout, model error, zero-length output, or thin/uncited research per Step 1.4 Quick's substantive gate). The research phase has materially failed; there is no surviving lane to synthesize from.
 
-Print an operator-visible error: `**⚠ Quick K-vote hard-failed — all 3 of 3 lanes returned empty; research phase has no findings.**`
+Print an operator-visible error: `**⚠ Quick K-vote hard-failed — all 3 of 3 lanes returned empty or failed substantive validation; research phase has no findings.**`
 
 Write `$RESEARCH_TMPDIR/research-report.txt` with a minimal stub:
 1. The original research question.
