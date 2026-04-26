@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Skill
 
 Plan-to-issues orchestrator. Takes a task description (or deduces it from session context), classifies it as one-shot or multi-piece, and delegates GitHub issue creation to `/issue` — adding native blocked-by dependencies to form an execution DAG and back-linking children to the umbrella when multi-piece.
 
-> **Before editing**, read `/Users/zhupanov/larch1/skills/shared/skill-design-principles.md` (full file). Section III mechanical rules A/B/C override general writing-style guidance on conflict.
+> **Before editing**, read `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md` (full file). Section III mechanical rules A/B/C override general writing-style guidance on conflict.
 
 ## Anti-patterns (with WHY)
 
@@ -36,7 +36,7 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 ## Step 0 — Setup
 
 ```bash
-/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
+$PWD/.claude/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
 ```
 
 Parse stdout for: `LABELS` (newline-joined; may be empty), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `TASK` (everything after the last flag — may be empty), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5).
@@ -95,7 +95,7 @@ If decomposition produces fewer than 2 pieces, fall back to one-shot: print `UMB
 Render the batch-input markdown file:
 
 ```bash
-/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/render-batch-input.sh --tmpdir "$UMBRELLA_TMPDIR" --pieces-file "$UMBRELLA_TMPDIR/pieces.json"
+$PWD/.claude/skills/umbrella/scripts/render-batch-input.sh --tmpdir "$UMBRELLA_TMPDIR" --pieces-file "$UMBRELLA_TMPDIR/pieces.json"
 ```
 
 Write `$UMBRELLA_TMPDIR/pieces.json` (a JSON array of `{title, body, depends_on: [int,...]}` objects in pieces order) BEFORE invoking the renderer using the Write tool. The renderer emits `BATCH_INPUT_FILE=<path>`, `PIECES_TOTAL=<N>`, plus per-piece `PIECE_<i>_TITLE` and `PIECE_<i>_DEPENDS_ON` lines. On non-zero exit, print `ERROR=` and abort.
@@ -118,7 +118,7 @@ For each successfully-resolved item (created OR deduplicated to an existing issu
 Compose a one-paragraph summary of the overall task (≤ 4 sentences, plain prose) — distinct from any individual piece body. Render the umbrella issue body:
 
 ```bash
-/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "$UMBRELLA_TMPDIR/summary.txt" --children-file "$UMBRELLA_TMPDIR/children.tsv"
+$PWD/.claude/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "$UMBRELLA_TMPDIR/summary.txt" --children-file "$UMBRELLA_TMPDIR/children.tsv"
 ```
 
 Write `$UMBRELLA_TMPDIR/summary.txt` (the summary paragraph) and `$UMBRELLA_TMPDIR/children.tsv` (one row per child: `<number>\t<title>\t<url>`, in pieces order) BEFORE invoking the renderer. The renderer emits `UMBRELLA_BODY_FILE=<path>` and `UMBRELLA_TITLE_HINT=<derived umbrella title from the first sentence of the summary>`.
@@ -139,7 +139,7 @@ Compose the proposed edge list from the `depends-on` field of each piece: for pi
 Then run the wiring + back-links coordinator:
 
 ```bash
-/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/helpers.sh wire-dag --tmpdir "$UMBRELLA_TMPDIR" --umbrella "$UMBRELLA_NUMBER" --umbrella-title "$UMBRELLA_TITLE" --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
+$PWD/.claude/skills/umbrella/scripts/helpers.sh wire-dag --tmpdir "$UMBRELLA_TMPDIR" --umbrella "$UMBRELLA_NUMBER" --umbrella-title "$UMBRELLA_TITLE" --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
 ```
 
 `wire-dag.sh` is a coordinator that, internally, (a) probes existing blocked-by edges per child via the GitHub dependency-API adapter, (b) runs `check-cycle.sh` on the union of existing + proposed edges to refuse any edge that would create a cycle, (c) adds each surviving new edge via the same adapter, and (d) posts a back-link comment (`Part of umbrella #M — <umbrella-title>`) on each child unless the GitHub-native umbrella relationship is detected as already rendering on the child page.
@@ -149,7 +149,7 @@ Parse stdout for `EDGES_ADDED`, per-edge `EDGE_<j>_BLOCKER`, `EDGE_<j>_BLOCKED`,
 ## Step 4 — Emit Output
 
 ```bash
-/Users/zhupanov/larch5/.claude/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
+$PWD/.claude/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
 ```
 
 Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The emitter validates the KV grammar (no unset values, no embedded newlines, no duplicate keys) and prints to stdout in the canonical order:
@@ -181,12 +181,12 @@ On stderr, the emitter prints a single human summary line of the form:
 ## Step 5 — Cleanup
 
 ```bash
-/Users/zhupanov/larch1/scripts/cleanup-tmpdir.sh --dir "$UMBRELLA_TMPDIR"
+${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$UMBRELLA_TMPDIR"
 ```
 
 ## Sub-skill Invocation
 
-This skill invokes `/issue` via the Skill tool (Step 3A and Steps 3B.2 / 3B.3). See `/Users/zhupanov/larch1/skills/shared/subskill-invocation.md` for the canonical conventions. This skill is a pure delegator over `/issue` for the issue-creation half of the work — there are no post-Skill-call steps that depend on `/issue` side effects beyond parsing the stdout grammar (which is a deterministic mechanical verification per the conventions checklist). The sub-skill calls happen at known checkpoints, not buried in conditionals.
+This skill invokes `/issue` via the Skill tool (Step 3A and Steps 3B.2 / 3B.3). See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` for the canonical conventions. This skill is a pure delegator over `/issue` for the issue-creation half of the work — there are no post-Skill-call steps that depend on `/issue` side effects beyond parsing the stdout grammar (which is a deterministic mechanical verification per the conventions checklist). The sub-skill calls happen at known checkpoints, not buried in conditionals.
 
 ## Script contracts
 
