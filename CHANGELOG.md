@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.7] - 2026-04-26
+
+### Added
+
+- New structural regression harness `.claude/skills/umbrella/scripts/test-umbrella-emit-output-contract.sh` (plus sibling contract `.md`) pinning the `/umbrella` SKILL.md Step 4 (Emit Output) prose contract — closes the gap surfaced as out-of-scope during the `/implement` run for #571. The harness mirrors the `test-fix-issue-bail-detection.sh` pattern (awk-bounded extraction + literal-substring assertions, fail-fast) and runs 12 assertions against two awk-extracted blocks: the SKILL.md Step 4 block (orchestrator-attribution sentence + single-emission-point invariant + the seven concrete canonical breadcrumb shape literals — one-shot filed/dedup'd/failed; multi-piece success/dry-run/partial/children-batch-failed) and the `helpers.md` `emit-output` subsection (`stderr` reserved for parse/validation errors, breadcrumb emitted by orchestrator not by `helpers.sh`, explicit `wire-dag` carve-out preserving its independent stderr-warning behavior). The harness is structural — it does NOT exercise `helpers.sh emit-output` at runtime (which remains exercised indirectly via SKILL.md integration; `test-helpers.sh` continues to scope `emit-output` out per its sibling contract). Wired into `make lint` via a dedicated `test-umbrella-emit-output-contract` Makefile target alongside `.PHONY` + `test-harnesses` updates; documented under the Makefile Targets table in `docs/linting.md`; cross-linked from the `.claude/skills/umbrella/SKILL.md` Script contracts inventory and the refreshed "Out of scope" line in `.claude/skills/umbrella/scripts/test-helpers.md`. Two adjacent doc-precision fixes were applied during code review: SKILL.md's stale "wire into `make lint` as a follow-up issue" line for `test-helpers.sh` was updated to reflect that `test-umbrella-helpers` is already a `make lint` prerequisite, and the new `make test-umbrella-emit-output-contract` target was added to `docs/linting.md`'s Makefile Targets table to match the established one-row-per-harness convention. Closes #602.
+
 ## [7.14.6] - 2026-04-26
 
 ### Fixed
