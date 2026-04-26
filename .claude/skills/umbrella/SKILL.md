@@ -130,7 +130,7 @@ Then forward to `/issue` (single mode) for the umbrella itself:
 - Try skill `"issue"` first; fall back to `"larch:issue"`.
 - args: `--body-file <UMBRELLA_BODY_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <UMBRELLA_TITLE_HINT>` — title is the trailing description (`/issue` derives the title from the first non-empty line, which is `UMBRELLA_TITLE_HINT`). Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0.
 
-Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as `UMBRELLA_URL`), `ISSUE_1_TITLE` (capture as `UMBRELLA_TITLE`). On `ISSUE_1_FAILED=true` or empty `ISSUE_1_NUMBER`, capture the umbrella-creation failure as session state and jump to Step 4 with `UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv` entirely — do NOT write them with blank values. The canonical Step 4 grammar marks these keys present only on multi-piece success, so consumers distinguish success from failure by key presence/absence; writing blank values would validate but break that contract. Skip 3B.4. Do NOT print a warning here — Step 4 is the single emission point for the human summary line and will render the multi-piece partial shape on this path.
+Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as `UMBRELLA_URL`), `ISSUE_1_TITLE` (capture as `UMBRELLA_TITLE`). On `ISSUE_1_FAILED=true` or empty `ISSUE_1_NUMBER`, capture the umbrella-creation failure: derive a sanitized one-line `UMBRELLA_FAILURE_REASON` value from `/issue`'s available failure signals (concatenate the `ISSUE_1_FAILED` reason if present, the `ERROR=` line if present, and a short tail of `/issue`'s stdout/stderr). Sanitize the value: strip control characters, replace newlines and tabs with single spaces, collapse internal whitespace runs to one space, redact secrets / internal hostnames / PII (paralleling other compose-time sanitization in this repo), and trim to ~200 characters. Then jump to Step 4 with `UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv` entirely — do NOT write them with blank values. The canonical Step 4 grammar marks these keys present only on multi-piece success, so consumers distinguish success from failure by key presence/absence; writing blank values would validate but break that contract. Carry `UMBRELLA_FAILURE_REASON` through to Step 4's `output.kv` as the optional KV line (see the optional schema entry); when no failure signal can be extracted, omit `UMBRELLA_FAILURE_REASON` rather than writing a blank value. Skip 3B.4. Do NOT print a warning here — Step 4 is the single emission point for the human summary line and will render the multi-piece partial shape on this path.
 
 ### 3B.4 — Wire DAG dependencies and post back-links
 
@@ -168,18 +168,19 @@ CHILD_<i>_URL=<url>
 CHILD_<i>_TITLE=<title>
 UMBRELLA_NUMBER=<N>          (only on multi-piece + success)
 UMBRELLA_URL=<url>           (only on multi-piece + success)
+UMBRELLA_FAILURE_REASON=<text>   (only on multi-piece partial — children created, umbrella creation failed; sanitized one-line value, ≤200 chars; omitted when no failure signal could be extracted)
 EDGES_ADDED=<N>              (only on multi-piece, non-dry-run, success)
 EDGE_<j>_BLOCKER=<N>
 EDGE_<j>_BLOCKED=<M>
 BACKLINKS_POSTED=<N>         (only on multi-piece, non-dry-run, success)
 ```
 
-After `emit-output` returns, the orchestrator (the LLM running this skill) MUST print exactly one human summary breadcrumb of the form below. Step 4 is the single emission point for this summary — Step 3B.3's umbrella-creation-failure path defers to Step 4 instead of printing inline. The orchestrator composes each shape using both `output.kv` values AND any session state captured from earlier sub-steps (e.g., `/issue`'s stdout for the one-shot dedup'd / failed cases — `ISSUE_1_DUPLICATE_OF_NUMBER`/`ISSUE_1_DUPLICATE_OF_URL` and the `/issue` failure context). No new fields are required in the canonical KV grammar above:
+After `emit-output` returns, the orchestrator (the LLM running this skill) MUST print exactly one human summary breadcrumb of the form below. Step 4 is the single emission point for this summary — Step 3B.3's umbrella-creation-failure path defers to Step 4 instead of printing inline. The orchestrator composes each shape using both `output.kv` values AND any session state captured from earlier sub-steps (e.g., `/issue`'s stdout for the one-shot dedup'd / failed cases — `ISSUE_1_DUPLICATE_OF_NUMBER`/`ISSUE_1_DUPLICATE_OF_URL` and the `/issue` failure context). The multi-piece partial template interpolates the optional `UMBRELLA_FAILURE_REASON` KV value (added to the canonical grammar above for this purpose); other shapes use `output.kv` values and earlier-step session state without requiring new fields:
 
 - one-shot: `✅ /umbrella: filed #<N> — <url>` (or `ℹ /umbrella: dedup'd to #<N> — <url>` / `**⚠ /umbrella: failed — <error>**` etc.).
 - multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`.
 - multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`.
-- multi-piece partial (children created, umbrella failed): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`.
+- multi-piece partial (children created, umbrella failed): when `UMBRELLA_FAILURE_REASON` is present in `output.kv`, render `**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**`; when omitted (no failure signal could be extracted), fall back to `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`.
 - multi-piece children-batch-failed (some children failed during batch creation, umbrella never attempted): `**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`.
 
 ## Step 5 — Cleanup
