@@ -20,7 +20,7 @@ Emits `MERGE_RESULT=...` and `ERROR=...` on stdout via an EXIT trap. Exits 0 unc
 | `ci_not_ready` | Standard merge failed; re-verification did not find all checks passing. Caller should poll CI. |
 | `admin_failed` | `--admin` retry was attempted but failed. Hard error. |
 | `policy_denied` | Standard merge was rejected; CI re-verified green + branch fresh (admin-eligible); `--no-admin-fallback` is set so `--admin` was NOT invoked. Caller should bail to manual reviewer-approval flow. |
-| `error` | Catch-all unexpected failure. |
+| `error` | Catch-all unexpected failure. Also covers the case where `gh pr view --json mergeStateStatus` returns empty (API/network/`gh` failure) or `UNKNOWN` — the script cannot determine merge state, so it short-circuits with `error` rather than mis-routing to `main_advanced`. |
 
 ## --no-admin-fallback
 
