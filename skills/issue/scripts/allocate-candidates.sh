@@ -119,7 +119,6 @@ ROWS_FILE="$TMPDIR_LOCAL/rows.tsv"
 : > "$ROWS_FILE"
 
 # Read every line from stdin; tolerate empty stdin (no-op).
-DROPPED=0
 while IFS= read -r line || [[ -n "$line" ]]; do
     # Trim trailing CR (defensive against CRLF input).
     line="${line%$'\r'}"
@@ -142,7 +141,6 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     if (( ${#TOK[@]} < 4 )); then
         # Need at least item + issue + kind. Confidence is optional (defaults to low).
         echo "**⚠ /issue: dropped malformed CAND row (too few fields): $line**" >&2
-        DROPPED=$((DROPPED + 1))
         continue
     fi
 
@@ -154,19 +152,16 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     # Validate item index: numeric, 1..N_TOTAL inclusive.
     if ! [[ "$ITEM" =~ ^[0-9]+$ ]]; then
         echo "**⚠ /issue: dropped malformed CAND row (non-numeric item index): $line**" >&2
-        DROPPED=$((DROPPED + 1))
         continue
     fi
     if (( ITEM < 1 || ITEM > N_TOTAL )); then
         echo "**⚠ /issue: dropped malformed CAND row (item index $ITEM out of range 1..$N_TOTAL): $line**" >&2
-        DROPPED=$((DROPPED + 1))
         continue
     fi
 
     # Validate issue number: positive integer.
     if ! [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]]; then
         echo "**⚠ /issue: dropped malformed CAND row (non-numeric or non-positive issue number): $line**" >&2
-        DROPPED=$((DROPPED + 1))
         continue
     fi
 
@@ -218,6 +213,7 @@ done
 # string for cheap membership tests (Bash 3.2 — no associative arrays).
 UNION_LIST=""    # space-separated issue numbers
 UNION_PRESENT=":"  # ":<issue>:<issue>:" for `case`-based membership test
+UNION_SIZE=0     # cached count — kept in sync with UNION_LIST in union_add
 
 union_contains() {
     case "$UNION_PRESENT" in
@@ -229,6 +225,7 @@ union_contains() {
 union_add() {
     UNION_LIST="${UNION_LIST}${UNION_LIST:+ }$1"
     UNION_PRESENT="${UNION_PRESENT}$1:"
+    UNION_SIZE=$(( UNION_SIZE + 1 ))
 }
 
 # Build a list of all (item, issue) tuples for "every item that nominated this
@@ -260,8 +257,7 @@ if (( F > 0 )); then
                 continue
             fi
             # Cap on union size: never exceed CAP (30).
-            CUR_LEN=$(echo "$UNION_LIST" | wc -w | tr -d ' ')
-            if (( CUR_LEN >= CAP )); then
+            if (( UNION_SIZE >= CAP )); then
                 break 2  # break out of both inner while and outer for
             fi
             union_add "$CR_ISSUE"
@@ -279,8 +275,7 @@ fi
 # ----------------------------------------------------------------------
 # Collect leftover rows (whose issue is NOT yet in union); sort by
 # conf-rank desc → issue asc → item asc; add to union until |union|=CAP.
-CUR_LEN=$(echo "$UNION_LIST" | wc -w | tr -d ' ')
-if (( CUR_LEN < CAP )); then
+if (( UNION_SIZE < CAP )); then
     LEFTOVER_FILE="$TMPDIR_LOCAL/leftover.tsv"
     : > "$LEFTOVER_FILE"
     while IFS=$'\t' read -r LR_RANK LR_ITEM LR_ISSUE LR_KIND; do
@@ -294,8 +289,7 @@ if (( CUR_LEN < CAP )); then
         SORTED_LEFTOVER="$TMPDIR_LOCAL/leftover_sorted.tsv"
         sort -t$'\t' -k1,1nr -k3,3n -k2,2n "$LEFTOVER_FILE" > "$SORTED_LEFTOVER"
         while IFS=$'\t' read -r _LR_RANK _LR_ITEM LR_ISSUE _LR_KIND; do
-            CUR_LEN=$(echo "$UNION_LIST" | wc -w | tr -d ' ')
-            (( CUR_LEN >= CAP )) && break
+            (( UNION_SIZE >= CAP )) && break
             if ! union_contains "$LR_ISSUE"; then
                 union_add "$LR_ISSUE"
             fi

@@ -118,13 +118,14 @@ assert_eq "T2 CANDIDATES" "CANDIDATES=$expected_sorted" "$RUN_STDOUT"
 #   Pass A consumes 5 slots; Pass B fills 25 from leftover.
 # ----------------------------------------------------------------------
 echo "Test 3: N=10, F=3, partial floor consumption"
-# Items 1-5 each emit 1 high-conf row (issues 100, 200, ..., 500).
-# Items 6-10 each emit 6 medium-conf rows (issues 600-605, 700-705, ..., 1000-1005).
-# Pass A: items 1-5 use 1 slot each (5). Items 6-10 use 3 slots each = 15. Total 20 in Pass A.
-# Wait: F=3 for N=10, but items 1-5 only have 1 row each → floor_credits[i]=1. Items 6-10 have 6 rows, take first 3 → floor_credits[i]=3.
-# So Pass A: 5 items × 1 + 5 items × 3 = 5 + 15 = 20.
-# Pass B: 30 - 20 = 10 leftover slots; items 6-10 each have 3 leftover medium rows = 15 leftover total.
-# Pass B sorts by conf desc (all medium) then issue asc — fills first 10. Issues 603,604,605,703,704,705,803,804,805,903 (10 of 15).
+# Items 1-5 each emit 1 medium-conf row (issues 100, 200, 300, 400, 500).
+# Items 6-10 each emit 6 medium-conf rows (issues 600-605, 700-705, 800-805, 900-905, 1000-1005).
+# F=3 for N=10. Pass A: items 1-5 contribute 1 slot each (only 1 row available) =  5 slots.
+#                Items 6-10 each take 3 floor slots (lowest issue numbers within item, by conf desc → issue asc) = 15 slots.
+#                Pass A total = 20.
+# Pass B: 30 - 20 = 10 free slots. Leftover after Pass A = 15 medium rows from items 6-10
+#         (3 per item: e.g., 603/604/605 from item 6). Sort by conf-desc → issue-asc → item-asc;
+#         all medium so issue-asc dominates: 603, 604, 605, 703, 704, 705, 803, 804, 805, 903 fills 10 slots.
 INPUT_T3=""
 for i in 1 2 3 4 5; do
     INPUT_T3="${INPUT_T3}CAND $i $((i*100)) dup high
