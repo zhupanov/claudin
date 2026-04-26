@@ -144,6 +144,14 @@ assert_malformed_json "trailing comma" '[{"title":"a","body":"b","depends_on":[]
 # Malformed JSON: completely garbage payload.
 assert_malformed_json "garbage payload" 'not-json-at-all {{{'
 
+# Valid JSON of wrong top-level type (object): the type-assert guard must catch
+# this before the per-entry loop crashes with a raw jq: error (which would
+# break the same contract this harness pins).
+assert_malformed_json "top-level object" '{"a":{"title":"x","body":"y","depends_on":[]},"b":{"title":"x","body":"y","depends_on":[]}}'
+
+# Valid JSON of wrong top-level type (string): another type-mismatch case.
+assert_malformed_json "top-level string" '"not-an-array"'
+
 # Valid JSON but too few entries (< 2): exercises the pre-existing path.
 assert_too_few_entries "single entry" '[{"title":"a","body":"b","depends_on":[]}]'
 
