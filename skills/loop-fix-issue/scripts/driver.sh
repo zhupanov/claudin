@@ -59,8 +59,9 @@
 # only references the env-var name (assertion K) and does not exercise the
 # override at runtime. Documented in skills/loop-fix-issue/scripts/driver.md
 # as test-only; SECURITY.md registration is deferred until Tier-2 stub-shim
-# coverage lands (mirrors the LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE precedent at
-# SECURITY.md line 97). Never set in production.
+# coverage lands (mirrors the LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE precedent
+# under SECURITY.md "## /loop-review subprocess invocation"). Never set in
+# production.
 
 set -euo pipefail
 
