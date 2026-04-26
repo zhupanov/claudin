@@ -480,6 +480,15 @@ exclude = [
   # pattern as the test-* harnesses and halt-rate-probe above.
   "scripts/eval-research.sh",
   "scripts/test-eval-set-structure.sh",
+  # scripts/repro-claude-p-edit-permissions.sh is the opt-in operator
+  # reproducer for the `claude -p` Edit-permission stall (closes #587;
+  # validates kernel fix #585 plus the settings audit derived from #566).
+  # Referenced only from its sibling .md contract — no Makefile target,
+  # no SKILL.md reference, no CI wiring (depends on a real authenticated
+  # `claude` binary, costs API tokens, timing-sensitive). Same opt-in
+  # operator-instrumentation shape as eval-research.sh and
+  # test-loop-improve-skill-halt-rate.sh.
+  "scripts/repro-claude-p-edit-permissions.sh",
   # scripts/test-eval-research-baseline-flag.sh is the standalone offline
   # regression harness for the --baseline flag handling in
   # scripts/eval-research.sh (closes #441). Same Makefile-only shape as
