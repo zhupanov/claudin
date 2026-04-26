@@ -29,7 +29,24 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # Validate JSON shape and count.
-PIECES_TOTAL=$(jq 'length' "$PIECES_FILE")
+# Guard the first jq call: pieces.json is untrusted LLM output, and a parse
+# failure here would otherwise leak the raw `jq: parse error...` line and exit
+# with jq's own exit code, breaking the documented "ERROR=... + exit 1" grammar
+# that downstream consumers rely on.
+JQ_PARSE_ERR="$TMPDIR/.render-batch-input-jq-stderr"
+PIECES_TOTAL=$(jq 'length' "$PIECES_FILE" 2>"$JQ_PARSE_ERR") || {
+  reason=$(head -n 1 "$JQ_PARSE_ERR" 2>/dev/null | sed -e 's/^jq: //' -e 's/[[:cntrl:]]//g')
+  rm -f "$JQ_PARSE_ERR"
+  echo "ERROR=invalid pieces.json: ${reason:-jq parse failed}" >&2; exit 1
+}
+rm -f "$JQ_PARSE_ERR"
+# Type assertion: pieces.json must be a JSON array. Without this, a top-level
+# object with ≥2 keys passes the `length >= 2` check then crashes the per-entry
+# loop below with a raw `jq:` error and jq's exit code, breaking the contract.
+PIECES_TYPE=$(jq -r 'type' "$PIECES_FILE" 2>/dev/null || true)
+if [ "$PIECES_TYPE" != "array" ]; then
+  echo "ERROR=invalid pieces.json: top-level value must be a JSON array, got ${PIECES_TYPE:-unknown}" >&2; exit 1
+fi
 if [ "$PIECES_TOTAL" -lt 2 ]; then
   echo "ERROR=pieces.json must contain at least 2 entries; got $PIECES_TOTAL" >&2; exit 1
 fi
