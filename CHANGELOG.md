@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.1] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-batch-input.md` line 19 — the edit-in-sync rule referenced the consuming `/issue` parser as `/Users/zhupanov/larch1/skills/issue/scripts/parse-input.sh`, a machine-local absolute path that does not exist on any clone other than the original author's. Replace with the repo-relative form `skills/issue/scripts/parse-input.sh` so contributors following the rule on any machine resolve to the actual shipped parser. Documentation-only change; no behavioral effect. Closes #643.
+
 ## [7.15.0] - 2026-04-26
 
 ### Added
