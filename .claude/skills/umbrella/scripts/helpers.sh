@@ -17,9 +17,12 @@
 #               BACKLINKS_POSTED, BACKLINKS_SKIPPED_NATIVE.
 #
 #   emit-output  --kv-file FILE
-#       Validate the LLM-supplied KV file (no embedded newlines in values, no duplicate keys,
-#       no unset values) and stream it to stdout. The validator is a defense-in-depth layer
-#       on top of the SKILL.md grammar — any malformed line aborts non-zero with ERROR=…
+#       Validate the LLM-supplied KV file (well-formed KEY=VALUE lines, no embedded newlines
+#       in values, no duplicate keys) and stream it to stdout. The validator is a
+#       defense-in-depth layer on top of the SKILL.md Step 4 grammar — any malformed line
+#       aborts non-zero with ERROR=… Stderr is reserved for parse/validation/usage errors
+#       only; the human summary breadcrumb is emitted by the orchestrator at SKILL.md
+#       Step 4, not by this subcommand.
 
 set -euo pipefail
 
