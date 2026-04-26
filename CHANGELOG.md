@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.1] - 2026-04-26
+
+### Fixed
+
+- `scripts/cursor-wrap-prompt.md` — align the Callers registry with the actual `cursor-wrap-prompt.sh` invocations across the codebase. The registry undercounted call sites in three places and listed one stale entry, weakening the auditor invariant the registry exists for ("auditors can verify every Cursor invocation routes through the max-mode wrapper"): `skills/review/SKILL.md` corrected from `(1)` to `(2 — diff-mode and slice-mode Cursor reviewer blocks)` (the original code-review finding); `skills/research/references/research-phase.md` corrected from `(1)` to `(3 — standard-mode Cursor lane and deep-mode Cursor slots 1 and 2)`; new bullet added for `skills/research/references/adjudication-phase.md (1 — Cursor judge launch)`; stale `skills/loop-review/SKILL.md` entry removed (the file no longer invokes the wrapper). Header total updated from `12 wrapped launch strings in 11 files` to `15 wrapped launch strings in 11 files`. Closes #655.
+
 ## [7.16.0] - 2026-04-26
 
 ### Added
