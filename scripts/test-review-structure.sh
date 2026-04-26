@@ -258,5 +258,21 @@ grep -Fq '**⚠ --create-issues requires a slice description (--slice <text>, --
 grep -Fq '**⚠ Positional slice text cannot be combined with --slice or --slice-file. Aborting.**' "$SKILL_MD" \
   || fail "(12) SKILL.md is missing the verbatim positional-vs-slice-flag mutual-exclusion abort message — the contract introduced by PR #638 has regressed"
 
-echo "PASS: test-review-structure.sh — all 12 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (13) Substantive-validation flag pin (#661). The Step 3a collect-reviewer-results.sh
+#      invocation in SKILL.md must carry both --substantive-validation AND
+#      --validation-mode on the SAME line as --timeout 1860, so banner-only
+#      reviewer output (e.g., "Authentication required") is rejected as
+#      STATUS=NOT_SUBSTANTIVE rather than passing as STATUS=OK. Pipeline matches
+#      the (10) pattern: each filter stage threads one literal while preserving
+#      line granularity. A future edit that drops either flag, or splits the
+#      invocation across multiple lines, fails closed under `set -o pipefail`.
+# ---------------------------------------------------------------------------
+grep 'collect-reviewer-results.sh' "$SKILL_MD" \
+  | grep -F -- '--timeout 1860' \
+  | grep -F -- '--substantive-validation' \
+  | grep -Fq -- '--validation-mode' \
+  || fail "(13) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
+
+echo "PASS: test-review-structure.sh — all 13 structural invariants hold"
 exit 0

@@ -96,5 +96,20 @@ grep -qF 'or Step 3b if `auto_mode=true`' "$SKILL_MD" \
 grep -qF 'and proceed to Step 3b' "$SKILL_MD" \
   || fail "SKILL.md Step 3.5 auto-mode branch must 'proceed to Step 3b' (issue #453: Step-3a removal residue pin)"
 
-echo "PASS: test-design-structure.sh — all 6 structural invariants hold"
+# Check 7 (#661): plan-review.md collect-reviewer-results.sh invocation must carry
+# both --substantive-validation AND --validation-mode on the SAME line as --timeout
+# 1860 so banner-only reviewer output is rejected as STATUS=NOT_SUBSTANTIVE rather
+# than passing as STATUS=OK. Pipeline matches the test-review-structure.sh (13)
+# pattern: each filter stage threads one literal while preserving line granularity.
+# A future edit that drops either flag, or splits the invocation across multiple
+# lines, fails closed under `set -o pipefail`.
+PLAN_REVIEW_MD="$REPO_ROOT/skills/design/references/plan-review.md"
+[[ -f "$PLAN_REVIEW_MD" ]] || fail "plan-review.md missing: $PLAN_REVIEW_MD"
+grep 'collect-reviewer-results.sh' "$PLAN_REVIEW_MD" \
+  | grep -F -- '--timeout 1860' \
+  | grep -F -- '--substantive-validation' \
+  | grep -Fq -- '--validation-mode' \
+  || fail "(7) no single plan-review.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
+
+echo "PASS: test-design-structure.sh — all 7 structural invariants hold"
 exit 0

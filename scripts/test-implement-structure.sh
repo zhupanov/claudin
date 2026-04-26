@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 14 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 15 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -16,7 +16,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Thirteen assertions:
+# Fifteen assertions:
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -92,6 +92,17 @@
 #      future edit reverting either branch to the buggy pattern would
 #      regress #654 silently against the unit-test harness alone — this
 #      assertion is the structural pin.
+# (15) Substantive-validation flag pin (closes #661): the Step 5 quick-mode
+#      collect-reviewer-results.sh invocation in SKILL.md must carry both
+#      --substantive-validation AND --validation-mode on the same line as
+#      --timeout 1860 so banner-only reviewer output (e.g., "Authentication
+#      required") is rejected as STATUS=NOT_SUBSTANTIVE rather than passing
+#      as STATUS=OK. SKILL.md only contains the Step 5 quick-mode
+#      collect-reviewer-results.sh invocation (the dialectic-execution and
+#      adjudication invocations live in sibling skill references, not in
+#      this SKILL.md), so the assertion is unambiguous. A future edit that
+#      drops either flag, or splits the invocation across lines, fails
+#      closed under `set -o pipefail`.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
@@ -413,5 +424,26 @@ if ! [[ "$legacy_pattern" =~ ^[0-9]+$ ]] || (( legacy_pattern > 0 )); then
   fail "(14) SKILL.md still contains the legacy non-paginated 'gh api .../comments | head -1' anchor-lookup pattern (closes #654); use tracking-issue-write.sh find-anchor instead"
 fi
 
-echo "PASS: test-implement-structure.sh — all 14 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (15) Substantive-validation flag pin (#661). The Step 5 quick-mode
+#      collect-reviewer-results.sh invocation in SKILL.md must carry both
+#      --substantive-validation AND --validation-mode on the SAME line as
+#      --timeout 1860 so banner-only reviewer output (e.g., "Authentication
+#      required") is rejected as STATUS=NOT_SUBSTANTIVE rather than passing as
+#      STATUS=OK. Pipeline matches the test-review-structure.sh (13) and
+#      test-design-structure.sh (7) patterns: each filter stage threads one
+#      literal while preserving line granularity. A future edit that drops
+#      either flag, or splits the invocation across multiple lines, fails
+#      closed under `set -o pipefail`. SKILL.md only contains one
+#      collect-reviewer-results.sh invocation (the Step 5 quick-mode reviewer
+#      collector); dialectic-execution and adjudication invocations live in
+#      sibling skill references, not in this SKILL.md.
+# ---------------------------------------------------------------------------
+grep 'collect-reviewer-results.sh' "$SKILL_MD" \
+  | grep -F -- '--timeout 1860' \
+  | grep -F -- '--substantive-validation' \
+  | grep -Fq -- '--validation-mode' \
+  || fail "(15) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
+
+echo "PASS: test-implement-structure.sh — all 15 structural invariants hold"
 exit 0
