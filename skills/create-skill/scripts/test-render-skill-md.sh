@@ -255,7 +255,7 @@ if missing_file_out="$(bash "$RENDER_SCRIPT" \
     --local-token "$LOCAL_TOKEN" \
     --plugin-token "$PLUGIN_TOKEN" \
     --multi-step false \
-    --feature-spec-file "${TMPROOT}/does-not-exist-$(date +%s%N).txt" 2>&1)"; then
+    --feature-spec-file "${TMPROOT}/does-not-exist-${RANDOM}-${RANDOM}.txt" 2>&1)"; then
   echo "FAIL: render-skill-md.sh accepted missing --feature-spec-file (should reject)" >&2
   printf '%s\n' "$missing_file_out" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
