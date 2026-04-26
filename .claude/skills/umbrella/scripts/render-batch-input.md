@@ -18,4 +18,4 @@ PIECE_<i>_DEPENDS_ON=<csv-of-ints> # may be empty
 
 **Edit-in-sync rules**: any change to the `pieces.json` schema OR the markdown output shape OR stdout grammar requires a same-PR update to `SKILL.md` Step 3B.1 (which writes `pieces.json` and parses the stdout) and `/issue`'s batch-mode parser at `skills/issue/scripts/parse-input.sh` (which consumes the markdown).
 
-**Test coverage**: covered by integration via `SKILL.md` end-to-end runs. JSON-shape validation is dense enough that bad input is caught at the script boundary rather than leaking into `/issue`.
+**Test coverage**: the malformed-`pieces.json` gatekeeper contract (parse failure → stable `ERROR=invalid pieces.json: <reason>` stderr line + exit 1, not raw `jq:` error + jq's exit code) is pinned by `test-render-batch-input.sh` (sibling `test-render-batch-input.md`), wired into `make lint` via the `test-umbrella-render-batch-input` Makefile target. Per-entry shape validation (`title` / `body` / `depends_on`) is covered by integration via `SKILL.md` end-to-end runs — JSON-shape validation is dense enough that bad input is caught at the script boundary rather than leaking into `/issue`.
