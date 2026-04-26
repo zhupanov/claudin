@@ -294,15 +294,34 @@ if echo "$ERR_CONTENT" | grep -qiE 'unknown flag|unknown option|flag provided bu
             exit 2
         fi
         ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
-        # Best-effort id lookup. Failure here surfaces ISSUE_FAILED so the
-        # caller cleans up the just-created orphan via cleanup-failed-issue.sh
-        # (per issue #546 fail-closed contract: an issue without an id we can
-        # use for dep-wiring is functionally orphaned for /issue's purposes).
+        # rollback_orphan — best-effort `gh issue close` on the just-created
+        # issue when the post-create id lookup fails on the old-gh fallback
+        # path. Without this, an id-lookup transient leaves the issue open on
+        # GitHub even though /issue reports failure (issue #546 plan-review
+        # FINDING_2 / code-review FINDING_2). Failure to close is logged on
+        # stderr (redacted) but does not change the exit path — the operator
+        # still sees ISSUE_FAILED=true.
+        rollback_orphan() {
+            local rollback_err
+            rollback_err=$(mktemp)
+            if gh issue close --repo "$REPO" "$ISSUE_NUM" --reason "not planned" >/dev/null 2>"$rollback_err"; then
+                echo "ROLLBACK: closed orphan issue #$ISSUE_NUM after id-lookup failure" >&2
+            else
+                local rb_redacted rb_flat
+                rb_redacted=$(redact "$(cat "$rollback_err")") || rb_redacted="(redaction-helper failed)"
+                rb_flat=$(echo "$rb_redacted" | tr '\n' ' ' | head -c 300)
+                echo "ROLLBACK_FAILED: could not close orphan issue #$ISSUE_NUM ($URL_LINE): $rb_flat. Manually close." >&2
+            fi
+            rm -f "$rollback_err"
+        }
+        # Best-effort id lookup. Failure rolls back the just-created orphan
+        # via rollback_orphan() (above) before emitting ISSUE_FAILED=true.
         if ISSUE_ID=$(gh api "/repos/$REPO/issues/$ISSUE_NUM" --jq '.id' 2>"$ERR_TMP"); then
             if [[ -z "$ISSUE_ID" || ! "$ISSUE_ID" =~ ^[0-9]+$ ]]; then
                 ID_ERR=$(cat "$ERR_TMP")
                 REDACTED_ERR=$(redact "$ID_ERR") || emit_redaction_failure
                 ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
+                rollback_orphan
                 echo "ISSUE_FAILED=true"
                 echo "ISSUE_ERROR=id-lookup returned non-numeric id for #$ISSUE_NUM (output: $ERR_FLAT)"
                 exit 2
@@ -316,6 +335,7 @@ if echo "$ERR_CONTENT" | grep -qiE 'unknown flag|unknown option|flag provided bu
             ID_ERR=$(cat "$ERR_TMP")
             REDACTED_ERR=$(redact "$ID_ERR") || emit_redaction_failure
             ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
+            rollback_orphan
             echo "ISSUE_FAILED=true"
             echo "ISSUE_ERROR=id-lookup failed for #$ISSUE_NUM after create: $ERR_FLAT"
             exit 2

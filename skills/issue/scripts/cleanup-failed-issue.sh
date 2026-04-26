@@ -40,7 +40,16 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --issue-number) ISSUE="${2:?--issue-number requires a value}"; shift 2 ;;
         --repo) REPO="${2:?--repo requires a value}"; shift 2 ;;
-        *) echo "Unknown option: $1" >&2; usage; exit 0 ;;
+        # Unknown options exit 0 (per the always-best-effort contract) but MUST
+        # still emit the CLOSED=false machine-readable contract on stdout so
+        # callers parsing `CLOSED=` can distinguish "close not attempted due to
+        # bad invocation" from absent output. Without this, SKILL.md Step 6's
+        # orphan-recovery branch would silently fall through on a typo'd flag.
+        *) echo "Unknown option: $1" >&2; usage
+           echo "CLOSED=false"
+           echo "ISSUE=${ISSUE:-unknown}"
+           echo "ERROR=unknown option: $1"
+           exit 0 ;;
     esac
 done
 
