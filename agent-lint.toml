@@ -397,6 +397,16 @@ exclude = [
   "skills/fix-issue/scripts/test-find-lock-issue.sh",
   "skills/fix-issue/scripts/test-umbrella-handler.sh",
   "skills/fix-issue/scripts/test-finalize-umbrella.sh",
+  # skills/implement/scripts/test-check-review-changes.sh is the offline
+  # regression harness for skills/implement/scripts/check-review-changes.sh
+  # (closes #651 — fixes the false-positive where any pre-existing untracked
+  # file flipped FILES_CHANGED=true). Seven cases pin the regression behavior
+  # plus the empty-vs-missing baseline-state distinction. The harness is
+  # referenced only from Makefile (test-check-review-changes target) and
+  # skills/implement/scripts/test-check-review-changes.md (sibling contract),
+  # matching the same Makefile-only pattern as the other test-* harnesses
+  # above. Both the .sh and the .md are excluded.
+  "skills/implement/scripts/test-check-review-changes.sh",
   # skills/research/scripts/test-standard-angle-prompts.sh is the structural
   # regression guard for the /research --scale=standard per-lane angle-prompt
   # mapping introduced by #508 (extending deep-mode angle prompts to standard
@@ -595,6 +605,7 @@ exclude = [
   # etc.).
   "skills/create-skill/scripts/test-render-skill-md.md",
   "skills/implement/scripts/check-review-changes.md",
+  "skills/implement/scripts/test-check-review-changes.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
   # scripts/test-alias-target-resolution.md and scripts/test-alias-structure.md
   # are the sibling contracts for the two alias-rework regression harnesses
