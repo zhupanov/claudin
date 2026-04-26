@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.21] - 2026-04-26
+
+### Fixed
+
+- `docs/linting.md` row for `make test-umbrella-emit-output-contract` (line 66) — counts and breadcrumb-shape parenthetical were stale relative to the on-disk harness `.claude/skills/umbrella/scripts/test-umbrella-emit-output-contract.sh` (drift introduced in commit 9be8d96 / Fix #644 which added the c6b assertion). Update `12 literal-substring assertions` → `13 literal-substring assertions` (a1, a2, c1-c5, c6, c6b, c7, b1, b2, b3) and `the seven canonical breadcrumb shape templates` → `the eight canonical breadcrumb shape literals` (matching the harness comment "on disk these expand to eight concrete breadcrumb literals"). Split the parenthetical breadcrumb-shape list `multi-piece success/dry-run/partial/children-batch-failed` → `multi-piece success/dry-run/partial-fallback/partial-with-reason/children-batch-failed` to reflect the c6 + c6b split (fallback vs UMBRELLA_FAILURE_REASON-parenthetical variants). Closes #686.
+
 ## [7.16.20] - 2026-04-26
 
 ### Fixed
