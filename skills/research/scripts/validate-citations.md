@@ -75,6 +75,7 @@ network calls.
 | Reason token | Status | Meaning |
 |---|---|---|
 | `non-https` | FAIL | URL did not start with `https://` |
+| `curl-unavailable` | UNKNOWN | `curl` binary not found on PATH |
 | `ssrf-private-host` | FAIL | URL host literal matched RFC1918 / IPv6 link-local / RFC6598 / loopback |
 | `ssrf-private-resolved` | FAIL | DNS resolved to a private IP (any answer in a multi-answer set) |
 | `head-not-found` | FAIL | HEAD returned 404 / 410 |
