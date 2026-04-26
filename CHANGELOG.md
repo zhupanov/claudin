@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.13] - 2026-04-26
+
+### Added
+
+- New `## claude -p permission propagation` section in `docs/configuration-and-permissions.md` documenting empirical findings from auditing how `.claude/settings.json` propagates to non-interactive `claude -p` subprocesses spawned by `invoke_claude_p` in `skills/improve-skill/scripts/iteration.sh` (and the indirect path via `skills/loop-improve-skill/scripts/driver.sh` → `iteration.sh`). The audit was tested against Claude Code CLI version 2.1.119 and answers all five investigation questions from issue #586 with concrete evidence: bare `Edit`/`Write` allow rules ARE honored, `defaultMode: bypassPermissions` IS in effect for `-p` runs, project settings ARE loaded via the working directory established by the parent's `cd "$REPO_ROOT"`, and user-level `~/.claude/settings.json` does not silently override project allows. The umbrella stall in #566 is therefore not caused by missing or insufficient on-disk permissions — the kernel-side fix tracked in #585 remains the decisive remedy. The new section also includes a forward-compatible manual reproducer recipe (writing logs to a private `$HOME` path), evidence-handling guidance (do NOT paste raw debug logs into PRs/issues), and known limitations (cd-fallback edge case, version drift, no automated CI guard). No change to `.claude/settings.json` — empirical audit confirmed the existing settings are sufficient. Closes #586.
+
 ## [7.13.12] - 2026-04-26
 
 ### Fixed
