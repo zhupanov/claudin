@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.0] - 2026-04-26
+
+### Changed
+
+- `/alias` now auto-detects Claude plugin source repos (two-file predicate `.claude-plugin/plugin.json` AND `skills/implement/SKILL.md` at the git repo root, matching `validate-args.sh:133`) and routes the generated alias to `skills/<name>/SKILL.md` (exported plugin skill) when the predicate matches; outside plugin repos the default stays `.claude/skills/<name>/SKILL.md` (dev-only). New `--private` flag forces `.claude/skills/<name>/` even inside a plugin repo (escape hatch); in non-plugin repos `--private` is a no-op. Target-directory resolution is extracted into `skills/alias/scripts/resolve-target.sh` (3-0 dialectic decision over inline bash) so SKILL.md Steps 2/3/4 thread a single `$TARGET_DIR` value computed once at Step 2 by a non-eval line-by-line allowlist parser, eliminating the silent path-split failure class. Two CI-wired test harnesses lock the contract: `scripts/test-alias-target-resolution.sh` exercises the helper across six cases of `(plugin-detect × --private × git-state)` plus arity and validation guards; `scripts/test-alias-structure.sh` pins SKILL.md prompt-side contracts so a future edit cannot silently re-introduce hardcoded paths in Steps 2/3/4. Backfills the AGENTS.md-required sibling `skills/alias/scripts/generate-alias.md` contract doc. Updates README, `docs/skills.md`, `docs/workflow-lifecycle.md` for the new arg signature and routing behavior, and `docs/linting.md` for the new make targets. Closes #597.
+
 ## [7.13.18] - 2026-04-26
 
 ### Fixed
