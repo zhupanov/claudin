@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.18] - 2026-04-26
+
+### Changed
+
+- `scripts/eval-research.md` and `scripts/eval-research.sh` — refresh the `--scale` flag's documentation across both surfaces. The `.md` flag table row at line 30 previously claimed `/research` did not yet accept `--scale` and pointed at issue #418 as a future landing point; #418 has since closed and the harness already builds `/larch:research --scale=$SCALE` directly (`scripts/eval-research.sh:331`), with `skills/research/SKILL.md:31` documenting `--scale=quick|standard|deep` as a manual override of the adaptive scale classifier (#513). Rewrite the row to describe current behavior — forwarded to `/larch:research`, manually overrides the adaptive scale classifier, and recorded in produced JSON's top-level `scale` field only when `--write-baseline` is used. Align the matching `eval-research.sh` header comment block (lines 19-25) so both surfaces describe the flag identically (canonical "adaptive scale classification" vocabulary from `skills/research/SKILL.md`). Closes #667.
+
 ## [7.16.17] - 2026-04-26
 
 ### Fixed
