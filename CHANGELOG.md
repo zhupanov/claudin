@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.10.3] - 2026-04-25
+
+### Changed
+
+- `skills/implement/SKILL.md` adds a 7th NEVER rule and a positive cue near Step 2 forbidding orchestrator-judgment bail mid-run on subjective scope or capacity concerns. Only three non-error halt paths between Step 1 and Step 17 are sanctioned: (a) Step 12d under one of its three documented judgment conditions; (b) explicit user halt via a fresh interactive turn; (c) hard tool failure. The rule explicitly carves out the mechanical 12d routes (Rebase + Re-bump sub-procedure hard-bail, conflict-resolution abort, merge-pr.sh errors) so scripted control flow into 12d is not affected. New structural assertion (13) in `scripts/test-implement-structure.sh` byte-pins the two anchor headlines (NEVER #7 + Step 2 cue) so future edits cannot silently delete the invariant; sibling contract `scripts/test-implement-structure.md` updated from twelve to thirteen assertions. Closes #553.
+
 ## [7.10.2] - 2026-04-25
 
 ### Added
