@@ -258,30 +258,44 @@ ERR_TMP=$(mktemp)
 # call that would introduce an orphan-failure mode (issue #546 plan-review
 # FINDING_8: an issue exists on GitHub but a transient lookup-failure would
 # mark /issue as failed, causing reruns to duplicate).
+USE_FALLBACK=false
 if ISSUE_JSON=$(gh "${GH_ARGS[@]}" --json id,number,url 2>"$ERR_TMP"); then
-    ISSUE_NUM=$(echo "$ISSUE_JSON" | jq -r '.number // empty')
-    ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url // empty')
-    ISSUE_ID=$(echo "$ISSUE_JSON" | jq -r '.id // empty')
-    if [[ -z "$ISSUE_NUM" || -z "$ISSUE_URL" || -z "$ISSUE_ID" ]]; then
-        REDACTED_OUTPUT=$(redact "$ISSUE_JSON") || emit_redaction_failure
-        REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
-        echo "ISSUE_FAILED=true"
-        echo "ISSUE_ERROR=gh issue create returned incomplete JSON (output: $REDACTED_OUTPUT_FLAT)"
-        exit 2
+    # Validate that the output parses as JSON with the expected fields. If
+    # not (older gh ignored --json, or a stubbed `gh` returns plain text),
+    # fall through to the fallback path which extracts via URL-line +
+    # gh-api-id-lookup. This makes the helper robust to both genuinely-old
+    # gh CLI versions AND test-harness stubs that don't implement --json.
+    if echo "$ISSUE_JSON" | jq -e 'has("number") and has("url") and has("id")' >/dev/null 2>&1; then
+        ISSUE_NUM=$(echo "$ISSUE_JSON" | jq -r '.number')
+        ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url')
+        ISSUE_ID=$(echo "$ISSUE_JSON" | jq -r '.id')
+        if [[ -z "$ISSUE_NUM" || -z "$ISSUE_URL" || -z "$ISSUE_ID" ]]; then
+            REDACTED_OUTPUT=$(redact "$ISSUE_JSON") || emit_redaction_failure
+            REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
+            echo "ISSUE_FAILED=true"
+            echo "ISSUE_ERROR=gh issue create returned JSON with empty field(s) (output: $REDACTED_OUTPUT_FLAT)"
+            exit 2
+        fi
+        echo "ISSUE_NUMBER=$ISSUE_NUM"
+        echo "ISSUE_URL=$ISSUE_URL"
+        echo "ISSUE_ID=$ISSUE_ID"
+        echo "ISSUE_TITLE=$FINAL_TITLE"
+        exit 0
     fi
-    echo "ISSUE_NUMBER=$ISSUE_NUM"
-    echo "ISSUE_URL=$ISSUE_URL"
-    echo "ISSUE_ID=$ISSUE_ID"
-    echo "ISSUE_TITLE=$FINAL_TITLE"
-    exit 0
+    # JSON-parse-failure path: the success-coded output isn't valid JSON.
+    # Treat as if --json wasn't honored and use the fallback. ISSUE_JSON
+    # here might be a plain URL line from an older gh or a test stub.
+    USE_FALLBACK=true
+    : >"$ERR_TMP"
 fi
-# `gh issue create --json` failed. Two possibilities: (a) the gh CLI version
-# does not support `--json` on `issue create` (older versions), in which case
-# stderr will mention an unrecognized flag; (b) genuine API failure. Detect
-# (a) and fall back to plain `gh issue create` + a follow-up `gh api ...
-# --jq .id` lookup. (b) flows to the redacted-error emission below.
+# `gh issue create --json` failed. Three possibilities: (a) the gh CLI
+# version does not support `--json` on `issue create` (older versions), in
+# which case stderr will mention an unrecognized flag; (b) genuine API
+# failure (any other stderr); (c) USE_FALLBACK=true above (success-but-non-JSON).
+# Detect (a) or (c) and fall back to plain `gh issue create` + a follow-up
+# `gh api ... --jq .id` lookup. (b) flows to the redacted-error emission below.
 ERR_CONTENT=$(cat "$ERR_TMP")
-if echo "$ERR_CONTENT" | grep -qiE 'unknown flag|unknown option|flag provided but not defined' && echo "$ERR_CONTENT" | grep -qE -- '--json'; then
+if [[ "$USE_FALLBACK" == "true" ]] || (echo "$ERR_CONTENT" | grep -qiE 'unknown flag|unknown option|flag provided but not defined' && echo "$ERR_CONTENT" | grep -qE -- '--json'); then
     # Fallback path for older gh: plain create, then id lookup.
     : >"$ERR_TMP"
     if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
