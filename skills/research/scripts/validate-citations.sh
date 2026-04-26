@@ -127,6 +127,29 @@ done
 
 [[ -n "$REPORT" ]] || { echo "validate-citations.sh: --report is required" >&2; exit 2; }
 [[ -n "$OUTPUT" ]] || { echo "validate-citations.sh: --output is required" >&2; exit 2; }
+
+# FINDING_5: validate optional numeric flags as positive integers. Without
+# this, `--max-claims foo` would abort the script under `set -u` mid-run with
+# no sidecar produced, violating the fail-soft contract. Rejecting at parse
+# time is the only fail-soft posture (the EXIT trap can still write a
+# degraded sidecar if OUTPUT is set, but a typo deserves a precise diagnostic
+# on stderr too).
+__vc_check_positive_int() {
+    local name="$1" value="$2"
+    if [[ ! "$value" =~ ^[0-9]+$ ]] || [[ "$value" -le 0 ]]; then
+        echo "validate-citations.sh: $name must be a positive integer (got: $value)" >&2
+        # Write a degraded sidecar pre-emptively so Step 3 splice still has a
+        # consumer file, then exit 2 (programmer/operator error). The EXIT
+        # trap will not run for exit 2 with no sidecar (sidecar exists by then).
+        if [[ -n "${OUTPUT:-}" ]]; then
+            printf '## Citation Validation\n\n**Validator**: validate-citations.sh v1\n**Status**: invalid argument (%s=%s); sidecar is degraded\n' "$name" "$value" > "$OUTPUT" 2>/dev/null || true
+        fi
+        exit 2
+    fi
+}
+__vc_check_positive_int "--budget-seconds" "$BUDGET_SECONDS"
+__vc_check_positive_int "--per-fetch-timeout" "$PER_FETCH_TIMEOUT"
+__vc_check_positive_int "--max-claims" "$MAX_CLAIMS"
 [[ -n "$TMPDIR" ]] || { echo "validate-citations.sh: --tmpdir is required" >&2; exit 2; }
 
 # ---------- helpers ----------
@@ -162,9 +185,20 @@ sanitize_excerpt() {
 }
 
 # Hostname pre-rejection for RFC1918, IPv6 link-local, RFC6598 literal hosts.
-# Returns 0 = host allowed; non-zero = pre-rejected.
+# Returns 0 = host IS pre-rejected (blocked); non-zero = host is allowed.
+# (FINDING_2 fix — comment was inverted in the initial version. The function
+# name and semantics match: a `host_pre_rejected` returning 0 means YES, the
+# host is pre-rejected.)
 host_pre_rejected() {
     local host="$1"
+    # Strip surrounding brackets from IPv6 literal hosts (FINDING_1):
+    # `[::1]` → `::1`, `[fe80::1]` → `fe80::1`. Without this, the host
+    # extraction at the call site (which strips at the first `:`) leaves
+    # `[` or `[fc00`, which matches no case below — IPv6 literal SSRF
+    # bypasses the entire pre-rejection layer.
+    if [[ "$host" == \[*\] ]]; then
+        host="${host:1:${#host}-2}"
+    fi
     case "$host" in
         # IPv4 literals: RFC1918 (10/8, 172.16-31/12, 192.168/16), loopback,
         # link-local (169.254), RFC6598 shared-CGN (100.64-127), test-net.
@@ -176,25 +210,39 @@ host_pre_rejected() {
         172.2[0-9].*|172.3[01].*) return 0 ;;
         100.6[4-9].*|100.[7-9][0-9].*|100.1[01][0-9].*|100.12[0-7].*) return 0 ;;
         0.*) return 0 ;;
-        # IPv6 link-local fe80:: and unique-local fc00::/7
-        fe80::*|fc??:*|fd??:*) return 0 ;;
+        # IPv6 loopback, link-local fe80::, unique-local fc00::/7 (fc??:* + fd??:*).
         ::1) return 0 ;;
+        fe80::*|fe80:*) return 0 ;;
+        fc??::*|fc??:*) return 0 ;;
+        fd??::*|fd??:*) return 0 ;;
+        # IPv6 unspecified.
+        ::|::0) return 0 ;;
         # Loopback hostnames
         localhost|localhost.localdomain|*.localhost) return 0 ;;
     esac
     return 1
 }
 
-# IPv4 private-range check on a resolved IP literal.
+# Private-range check on a resolved IP literal (IPv4 or IPv6).
 # Returns 0 = ip is private; non-zero = ip is public.
-ipv4_private() {
+# (FINDING_3 fix — was previously named `ipv4_private` and only checked v4
+# patterns, allowing AAAA records resolving to fc00::/fe80::/::1 to bypass
+# the SSRF-block path.)
+is_private_ip() {
     local ip="$1"
     case "$ip" in
+        # IPv4 private ranges.
         10.*|127.*|169.254.*|192.168.*) return 0 ;;
         172.16.*|172.17.*|172.18.*|172.19.*) return 0 ;;
         172.2[0-9].*|172.3[01].*) return 0 ;;
         100.6[4-9].*|100.[7-9][0-9].*|100.1[01][0-9].*|100.12[0-7].*) return 0 ;;
         0.*) return 0 ;;
+        # IPv6 loopback, link-local, unique-local, unspecified.
+        ::1) return 0 ;;
+        ::|::0) return 0 ;;
+        fe80::*|fe80:*) return 0 ;;
+        fc??::*|fc??:*) return 0 ;;
+        fd??::*|fd??:*) return 0 ;;
     esac
     return 1
 }
@@ -218,14 +266,21 @@ resolve_host() {
         printf '%s' "${ips# }"
         return 0
     fi
+    # FINDING_3: resolve BOTH A and AAAA records and union them. The previous
+    # code only resolved A records, leaving AAAA-only hostnames (or hostnames
+    # with mixed records where AAAA points to a private v6 address) able to
+    # slip past the private-range check.
     if command -v host >/dev/null 2>&1; then
-        host -t A -W 5 "$host" 2>/dev/null \
-            | awk '/has address/ {print $NF}' \
-            | tr '\n' ' ' \
-            | sed 's/ *$//'
+        {
+            host -t A -W 5 "$host" 2>/dev/null \
+                | awk '/has address/ {print $NF}'
+            host -t AAAA -W 5 "$host" 2>/dev/null \
+                | awk '/has IPv6 address/ {print $NF}'
+        } | tr '\n' ' ' | sed 's/ *$//'
         return 0
     fi
     if command -v nslookup >/dev/null 2>&1; then
+        # nslookup output is messy; extract literal addresses (v4 + v6).
         nslookup -timeout=5 "$host" 2>/dev/null \
             | awk '/^Address: / && NR > 2 {print $2}' \
             | tr '\n' ' ' \
@@ -293,14 +348,28 @@ fetch_url() {
         return 0
     fi
 
+    # Curl absent → emit the contract-promised reason (FINDING_6).
+    if [[ "${__VC_CURL_MISSING:-false}" == "true" ]]; then
+        printf 'STATUS=UNKNOWN(curl-unavailable)\n' > "$out"
+        return 0
+    fi
+
     # Extract host. Strip scheme, then take everything before the first `/`,
-    # `?`, `#`, or `:` (port).
+    # `?`, `#`. Then handle IPv6 bracket-literal hosts vs IPv4/hostname: a
+    # bracket-literal preserves all colons inside the brackets (FINDING_1),
+    # while a non-bracket host strips at the first `:` (port separator).
     local hostport host
     hostport="${url#https://}"
     hostport="${hostport%%/*}"
     hostport="${hostport%%\?*}"
     hostport="${hostport%%#*}"
-    host="${hostport%%:*}"
+    if [[ "$hostport" == \[*\]* ]]; then
+        # Bracketed IPv6: take through the closing `]`, drop the brackets.
+        host="${hostport#\[}"
+        host="${host%%\]*}"
+    else
+        host="${hostport%%:*}"
+    fi
 
     if host_pre_rejected "$host"; then
         printf 'STATUS=FAIL(ssrf-private-host)\n' > "$out"
@@ -316,7 +385,7 @@ fetch_url() {
         first_public_ip=""
     else
         for ip in $ips; do
-            if ipv4_private "$ip"; then
+            if is_private_ip "$ip"; then
                 printf 'STATUS=FAIL(ssrf-private-resolved)\n' > "$out"
                 return 0
             fi
@@ -490,6 +559,16 @@ fi
 RESULT_DIR="$TMPDIR/citation-fetches"
 mkdir -p "$RESULT_DIR" 2>/dev/null || true
 
+# FINDING_6 fix: pre-flight curl check. Without this, a missing curl produces
+# per-URL `UNKNOWN(network-error)` rows (curl exit 127 in fetch_url, mapped
+# to network-error), but the contract docs promise `UNKNOWN(curl-unavailable)`.
+# When curl is missing, every URL+DOI claim cannot be fetched, so set a flag
+# that the fetch loop honors.
+__VC_CURL_MISSING=false
+if ! command -v "${__VC_FAKE_CURL:-curl}" >/dev/null 2>&1; then
+    __VC_CURL_MISSING=true
+fi
+
 # Synthesis stats (line/byte counts for the sidecar header).
 SYNTH_BYTES=$(wc -c < "$REPORT" 2>/dev/null | tr -d ' ' || echo 0)
 SYNTH_LINES=$(wc -l < "$REPORT" 2>/dev/null | tr -d ' ' || echo 0)
@@ -509,10 +588,29 @@ TOTAL_RAW=0
 CLAIMS_TRUNCATED=false
 if [[ "$TOTAL_RAW" -gt "$MAX_CLAIMS" ]]; then
     CLAIMS_TRUNCATED=true
-    # Distribute the cap evenly-ish across the three buckets.
-    URLS=$(printf '%s\n' "$URLS"      | head -n "$MAX_CLAIMS")
-    DOIS=$(printf '%s\n' "$DOIS"      | head -n "$MAX_CLAIMS")
-    FILELINES=$(printf '%s\n' "$FILELINES" | head -n "$MAX_CLAIMS")
+    # FINDING_4 fix: enforce ONE combined cap across URL+DOI+file-line buckets,
+    # not three independent caps (the previous per-bucket head allowed up to
+    # 3*MAX_CLAIMS to slip through). Drain in stable order URL → DOI →
+    # file-line so the soft DoS guard is actually bounded by MAX_CLAIMS.
+    REMAINING=$MAX_CLAIMS
+    if [[ -n "$URLS" ]]; then
+        TAKE=$(( REMAINING < $(printf '%s\n' "$URLS" | grep -c .) ? REMAINING : $(printf '%s\n' "$URLS" | grep -c .) ))
+        URLS=$(printf '%s\n' "$URLS" | head -n "$TAKE")
+        REMAINING=$(( REMAINING - TAKE ))
+    fi
+    if [[ -n "$DOIS" && "$REMAINING" -gt 0 ]]; then
+        TAKE=$(( REMAINING < $(printf '%s\n' "$DOIS" | grep -c .) ? REMAINING : $(printf '%s\n' "$DOIS" | grep -c .) ))
+        DOIS=$(printf '%s\n' "$DOIS" | head -n "$TAKE")
+        REMAINING=$(( REMAINING - TAKE ))
+    elif [[ "$REMAINING" -le 0 ]]; then
+        DOIS=""
+    fi
+    if [[ -n "$FILELINES" && "$REMAINING" -gt 0 ]]; then
+        TAKE=$(( REMAINING < $(printf '%s\n' "$FILELINES" | grep -c .) ? REMAINING : $(printf '%s\n' "$FILELINES" | grep -c .) ))
+        FILELINES=$(printf '%s\n' "$FILELINES" | head -n "$TAKE")
+    elif [[ "$REMAINING" -le 0 ]]; then
+        FILELINES=""
+    fi
 fi
 
 # Empty-report path: synthesis exists but has no extractable claims.

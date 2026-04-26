@@ -284,6 +284,41 @@ __VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example.com=8.8.8.8' \
 DUP_ROWS=$(grep -c 'https://example.com/dup-page' "$WORK/c17/cv.md" || echo 0)
 assert "Test 17: deduplicated URL appears in exactly one row" "[[ \"$DUP_ROWS\" == 1 ]]"
 
+# ---------- Test 18: numeric-flag validation (FINDING_5) ----------
+echo "=== Test 18: malformed --max-claims rejected with degraded sidecar ==="
+mkdir -p "$WORK/c18"
+cat > "$WORK/c18/report.txt" <<'REPORT'
+See https://example.com/page.
+REPORT
+set +e
+"$VALIDATOR" --report "$WORK/c18/report.txt" --output "$WORK/c18/cv.md" --tmpdir "$WORK/c18" --max-claims foo >/dev/null 2>&1
+RC=$?
+set -e
+assert "Test 18: exit non-zero (programmer error, not fail-soft)" "[[ \"$RC\" -eq 2 ]]"
+assert "Test 18: degraded sidecar still written" "[[ -s \"$WORK/c18/cv.md\" ]]"
+assert "Test 18: degraded sidecar mentions invalid arg" "grep -F 'invalid argument' \"$WORK/c18/cv.md\""
+
+# ---------- Test 19: --max-claims combined cap (FINDING_4) ----------
+echo "=== Test 19: --max-claims is a combined cap, not per-bucket ==="
+mkdir -p "$WORK/c19"
+{
+    for i in 1 2 3 4 5; do
+        echo "URL $i: https://example.com/page-$i"
+    done
+    for i in 1 2 3 4 5; do
+        echo "DOI $i: 10.1234/foo-$i"
+    done
+    for i in 1 2 3 4 5; do
+        echo "File $i: README.md:$i"
+    done
+} > "$WORK/c19/report.txt"
+__VC_FAKE_CURL="$FAKE_CURL" __VC_LAST_ARGV="$ARGV_LOG" \
+__VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example.com=8.8.8.8;doi.org=8.8.8.8' \
+    "$VALIDATOR" --report "$WORK/c19/report.txt" --output "$WORK/c19/cv.md" --tmpdir "$WORK/c19" --max-claims 6 >/dev/null 2>&1
+# 5+5+5 = 15 raw claims, cap=6 → exactly 6 ledger rows total (in stable URL→DOI→file order).
+LEDGER_ROWS=$(grep -c '^| `' "$WORK/c19/cv.md" || echo 0)
+assert "Test 19: combined cap yields exactly --max-claims rows (got $LEDGER_ROWS)" "[[ \"$LEDGER_ROWS\" == 6 ]]"
+
 # ---------- Summary ----------
 echo "=== Summary ==="
 echo "Passed: $PASS"

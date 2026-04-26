@@ -59,7 +59,7 @@ The sidecar is an operator-readable Markdown document. The single source of trut
 
 | Claim | Type | Status | Reason | Cited by |
 |---|---|---|---|---|
-| `<excerpt>` | url | PASS |  | claim-1, claim-7 |
+| `<excerpt>` | url | PASS |  |  |
 | `<excerpt>` | doi | UNKNOWN | head-not-supported |  |
 | `<excerpt>` | file-line | FAIL | line-out-of-range |  |
 
@@ -73,7 +73,7 @@ The sidecar is an operator-readable Markdown document. The single source of trut
 </details>
 ```
 
-`Status` is one of `PASS` / `FAIL` / `UNKNOWN`. `Reason` is empty on `PASS` and a short token on `FAIL` / `UNKNOWN` per `validate-citations.md` § Reason vocabulary. URL and DOI claims are deduplicated — a single fetch produces one ledger row, with the `Cited by` column listing every claim reference (`claim-<N>` matching the synthesis-walk index) — this preserves the 1:1 fetch-to-row contract while keeping multi-claim provenance discoverable.
+`Status` is one of `PASS` / `FAIL` / `UNKNOWN`. `Reason` is empty on `PASS` and a short token on `FAIL` / `UNKNOWN` per `validate-citations.md` § Reason vocabulary. URL and DOI claims are deduplicated — a single fetch produces one ledger row. The `Cited by` column is reserved for a future enhancement that will list every claim-index reference (`claim-<N>` matching the synthesis-walk index); v1 of the validator emits an empty `Cited by` cell while preserving the 1:1 fetch-to-row contract. Operators inspecting the sidecar can grep the synthesis directly for now.
 
 ### 2.7.4 — Idempotency rerun
 

@@ -197,8 +197,6 @@ fixture inputs with stubbed curl and stubbed DNS. Verified scenarios:
 - Idempotency rerun (sidecar overwrite, byte-identical output).
 - URL dedup (one fetch + one ledger row).
 - Empty report (header + placeholder body, exit 0).
-- Budget exhaustion via stub-curl hang (Linux: `setsid` branch; macOS:
-  `set -m` + `kill -- -<pgid>` branch).
 - Fake-curl argv MUST / MUST-NOT split assertions.
 - Env `http_proxy=http://attacker.invalid/` set → `--noproxy '*'`
   blocks.
