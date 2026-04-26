@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.3] - 2026-04-26
+
+### Fixed
+
+- `skills/review/diagram.svg` — correct the "Launch Reviewers" rect label from `Reviewers (2 Claude + 2 Codex + Cursor)` to `Reviewers (1 Claude + 1 Codex + 1 Cursor)` so the rendered diagram matches the documented 3-reviewer panel topology used by `/review` (`skills/review/SKILL.md:10`, `docs/external-reviewers.md:12`, `docs/review-agents.md:92`). The previous label implied a 5-reviewer panel that never existed in the implementation. Closes #657.
+
 ## [7.16.2] - 2026-04-26
 
 ### Fixed
