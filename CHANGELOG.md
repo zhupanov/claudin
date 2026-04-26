@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.4] - 2026-04-26
+
+### Fixed
+
+- `skills/review/references/voting.md` — qualify the "Zero accepted in-scope findings" parenthetical on line 27 so it correctly distinguishes diff-mode and slice-mode OOS routing. The prior text ("OOS items accepted for issue filing are processed separately by `/implement`.") read as an unconditional rule on first encounter, but the same file's "Slice mode" bullet (further down) specifies that under `--create-issues` slice-mode runs, `/review` Step 4b files OOS findings inline via `/issue` and bypasses the `/implement` Step 9a.1 pipeline entirely. Round-1 readers hit the misleading parenthetical before reaching the qualifying bullet. The new wording names the routing explicitly per mode and points to the bullets by stable label rather than by line number. Closes #658.
+
 ## [7.16.3] - 2026-04-26
 
 ### Fixed
