@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.14] - 2026-04-26
+
+### Fixed
+
+- `skills/research/scripts/validate-citations.sh` — on macOS (Darwin), `set -m` (job-control mode) puts each backgrounded `fetch_url` subshell in its own process group, so the budget-exhaustion `kill -- -$$` only signaled the parent's group and leaked every subshell's curl child past the deadline. Replace the Darwin handler with a per-`CURL_PIDS` loop running `kill -- -<pid>` against each recorded subshell pgid, terminating the whole subtree (subshell + curl substitution + descendants) together. The original `kill -- -$$` is intentionally NOT retained as a Darwin fallback: with `set -m` active, `$$`'s group contains the validator itself, so signaling it would kill the script before it writes the per-claim `UNKNOWN(timeout)` rows and the sidecar (verified empirically: exit 143, sidecar absent, fail-soft contract broken). When `set -m` silently fails the script now emits a stderr `WARNING:` line so operators know orphan-curl cleanup is degraded. New Test 20 (Darwin-only) in `test-validate-citations.sh` runs the validator against a hanging fake-curl shim with `--budget-seconds 1` and pins the regression class: validator exited 0, sidecar produced with `UNKNOWN | timeout` rows for the hung URLs, no surviving fake-curl PIDs after the kill loop. Linux is unaffected (the `setsid` re-exec keeps curl children in the script's session, where a single `kill -- -$$` still works). Sibling docs updated in sync (`validate-citations.md`, `test-validate-citations.md`, `references/citation-validation-phase.md`). Closes #662.
+
 ## [7.16.13] - 2026-04-26
 
 ### Fixed
