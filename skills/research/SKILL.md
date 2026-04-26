@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Use for best-effort read-only research. --scale=quick|standard|deep → 1/3+3/5+5 lanes; --plan adds planner pre-pass; --interactive pauses for operator review; --adjudicate adds dialectic; --keep-sidecar keeps batch; --token-budget caps tokens."
+description: "Adaptive auto-classify to quick|standard|deep lanes (1/3+3/5+5); --scale= overrides; --plan adds planner; --interactive pauses for review; --adjudicate adds dialectic; --keep-sidecar keeps batch; --token-budget caps tokens."
 argument-hint: "[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
@@ -14,7 +14,7 @@ hooks:
 
 # Research Skill
 
-Collaborative best-effort read-only-repo research task with a scale-aware lane shape selected by `--scale=quick|standard|deep` (default `standard`). `quick` runs 1 Claude inline lane (carrying `RESEARCH_PROMPT_BASELINE`) and skips Step 2 (the validation panel) entirely, while the final report still renders a `**Validation phase**: 0 reviewers (...)` placeholder line so the report shape is uniform across scales (single-lane confidence — fastest, lowest assurance). `standard` runs 3 research agents (Cursor + Codex + Claude inline) **angle-differentiated per lane** (Cursor → architecture, Codex → edge cases by default or external comparisons when `external_evidence_mode=true`, Claude inline → security) and a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). `deep` runs 5 research lanes (Claude inline running baseline `RESEARCH_PROMPT_BASELINE`, plus 2 Cursor and 2 Codex slots carrying four diversified angle prompts — architecture / edge cases / external comparisons / security) and a 5-reviewer validation panel (the standard 3 plus 2 extra Claude Code Reviewer subagents with `Code-Sec` / `Code-Arch` lane-local emphasis on the unified Code Reviewer archetype — NOT new agent slugs). Claude Code Reviewer subagent fallbacks preserve the configured lane count when Cursor or Codex is unavailable in standard or deep mode. Produces a structured research report; tracked repo files are not modified by Claude's `Edit | Write | NotebookEdit` tool surface (mechanically enforced by the skill-scoped PreToolUse hook permitting only canonical `/tmp`), while Bash and the external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see the Read-only-repo contract below. May invoke `/issue` via the Skill tool to file research-result issues.
+Collaborative best-effort read-only-repo research task with a scale-aware lane shape. **Adaptive scaling is the default**: a deterministic shell classifier (`skills/research/scripts/classify-research-scale.sh`) inspects `RESEARCH_QUESTION` at Step 0.5 and picks `quick|standard|deep` automatically; the operator may override via `--scale=quick|standard|deep` (e.g., for CI/eval determinism). On any classifier failure, `RESEARCH_SCALE` falls back to `standard` with a visible warning. `quick` runs 1 Claude inline lane (carrying `RESEARCH_PROMPT_BASELINE`) and skips Step 2 (the validation panel) entirely, while the final report still renders a `**Validation phase**: 0 reviewers (...)` placeholder line so the report shape is uniform across scales (single-lane confidence — fastest, lowest assurance). `standard` runs 3 research agents (Cursor + Codex + Claude inline) **angle-differentiated per lane** (Cursor → architecture, Codex → edge cases by default or external comparisons when `external_evidence_mode=true`, Claude inline → security) and a 3-reviewer validation panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). `deep` runs 5 research lanes (Claude inline running baseline `RESEARCH_PROMPT_BASELINE`, plus 2 Cursor and 2 Codex slots carrying four diversified angle prompts — architecture / edge cases / external comparisons / security) and a 5-reviewer validation panel (the standard 3 plus 2 extra Claude Code Reviewer subagents with `Code-Sec` / `Code-Arch` lane-local emphasis on the unified Code Reviewer archetype — NOT new agent slugs). Claude Code Reviewer subagent fallbacks preserve the configured lane count when Cursor or Codex is unavailable in standard or deep mode. Produces a structured research report; tracked repo files are not modified by Claude's `Edit | Write | NotebookEdit` tool surface (mechanically enforced by the skill-scoped PreToolUse hook permitting only canonical `/tmp`), while Bash and the external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see the Read-only-repo contract below. May invoke `/issue` via the Skill tool to file research-result issues.
 
 **Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/issue`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
@@ -28,10 +28,22 @@ Flags are independent — the presence of one flag must not influence the defaul
 - `--debug` (boolean): Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--plan` (boolean): Set a mental flag `RESEARCH_PLAN=true`. Enables an optional planner pre-pass before the lane fan-out: a single Claude Agent subagent decomposes `RESEARCH_QUESTION` into 2–4 focused subquestions, each lane researches its assigned subquestion(s), and synthesis is organized by subquestion. Default: `RESEARCH_PLAN=false` (byte-equivalent to pre-#420 behavior). See "Planner pre-pass — scale interaction" below for the `--scale` cross-effect; the planner is bounded (2–4 subquestions, no recursion) and falls back cleanly to single-question mode on any planner failure.
 - `--interactive` (boolean): Set a mental flag `RESEARCH_PLAN_INTERACTIVE=true`. Requires `--plan`; pauses after the planner pre-pass (Step 1.1) so the operator can review the 2–4 proposed subquestions before fan-out. Operator types Enter (proceed), `edit` (revise via `$EDITOR` or stdin fallback), or `abort` (exit cleanly). Hard-fails before any planner work when stdin is not a TTY. Deep mode confirms only the subquestion list — the per-lane subq×angle pairing stays mechanical (Step 1.2 unchanged). Default: `RESEARCH_PLAN_INTERACTIVE=false` (byte-equivalent to pre-#522 behavior). See "Planner pre-pass — scale interaction" below for the resolution rule (interaction with `--plan` and `--scale`).
-- `--scale=quick|standard|deep` (value): Set a mental flag `RESEARCH_SCALE` to the explicitly-provided value. Default: `RESEARCH_SCALE=standard`. Selects the lane shape (1 / 3+3 / 5+5) for the research and validation phases — see "Scale matrix" below. Reject malformed forms with explicit error and abort: `--scale=foo` (unknown value) → print `**⚠ /research: --scale must be one of quick|standard|deep (got: foo). Aborting.**` and exit; `--scale` without `=value` → print `**⚠ /research: --scale requires a value (quick|standard|deep). Aborting.**` and exit; `--scale=` (empty value) → same error as missing value.
+- `--scale=quick|standard|deep` (value, manual override): When the flag is present with a valid value, set a mental flag `RESEARCH_SCALE` to the explicitly-provided value AND set `SCALE_SOURCE=override`. The classifier at Step 0.5 is skipped entirely on this path. When the flag is **omitted**, leave `RESEARCH_SCALE` empty for resolution at Step 0.5 (the adaptive classifier's output becomes the resolved value with `SCALE_SOURCE=auto`, or `standard` with `SCALE_SOURCE=fallback` on classifier failure). Default (omitted): `RESEARCH_SCALE=` (empty — signals classify). Selects the lane shape (1 / 3+3 / 5+5) for the research and validation phases — see "Scale matrix" below. Reject malformed forms with explicit error and abort: `--scale=foo` (unknown value) → print `**⚠ /research: --scale must be one of quick|standard|deep (got: foo). Aborting.**` and exit; `--scale` without `=value` → print `**⚠ /research: --scale requires a value (quick|standard|deep). Aborting.**` and exit; `--scale=` (empty value) → same error as missing value (preserved deliberately — explicit empty-value form is operator error, never a signal to classify; only **fully omitting** `--scale` triggers classification).
 - `--adjudicate` (boolean): Set a mental flag `RESEARCH_ADJUDICATE=true`. When set, runs a 3-judge dialectic adjudication after Step 2's Finalize Validation over every reviewer finding the orchestrator rejected during validation merge/dedup — see Step 2.5 below. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding"; majority binds. Default: `RESEARCH_ADJUDICATE=false` (Step 2.5 short-circuits with `⏩` and behavior is unchanged from prior versions). The `(finding, rejection_rationale)` capture in Step 2 runs unconditionally (regardless of this flag), but writes only to tmpdir scratch — when the flag is off, no extra LLM work, no external-tool launches, and no additional user-visible output is produced. Composes cleanly with `--scale=quick` (which skips Step 2 entirely): when both are set, Step 2.5 short-circuits with `⏩ no rejections to adjudicate (--scale=quick skipped Step 2)` since `rejected-findings.md` is never written.
 - `--keep-sidecar` AND `--keep-sidecar=<PATH>` (boolean + value form, NO positional value): Set a mental flag `KEEP_SIDECAR=true`. Set a second mental flag `KEEP_SIDECAR_PATH` per the form variant: bare `--keep-sidecar` → `KEEP_SIDECAR_PATH=` (empty); `--keep-sidecar=<PATH>` → `KEEP_SIDECAR_PATH=<PATH>` (the literal path text after `=`). Step 4 reads `KEEP_SIDECAR_PATH` and falls back to `./research-findings-batch.md` only when it is empty (#510 review FINDING_6 — without an explicit `KEEP_SIDECAR_PATH` binding, the explicit-path form would silently fall back to the default). Step 4 cleanup preserves a `/issue`-batch markdown sidecar of the findings (one `### <title>` block per finding, parseable by `skills/issue/scripts/parse-input.sh`) past the tmpdir cleanup. Default: `KEEP_SIDECAR=false`; the sidecar is generated under `$RESEARCH_TMPDIR` at Step 3 and wiped at Step 4. **Form variants**: bare `--keep-sidecar` preserves to `./research-findings-batch.md`; `--keep-sidecar=<PATH>` preserves to `<PATH>` (must be writable; must NOT resolve under `$RESEARCH_TMPDIR`). Reject malformed forms with explicit error and abort: `--keep-sidecar=` (empty value) → print `**⚠ /research: --keep-sidecar=<path> requires a non-empty value. Aborting.**` and exit; `--keep-sidecar <some-path>` (positional value, NO `=`) → the parser stops at the first non-flag token per the existing flag-grammar contract, so `<some-path>` becomes the start of `RESEARCH_QUESTION` — operators wanting an explicit path MUST use `--keep-sidecar=<PATH>`. **Read-only-repo contract**: this is an opt-in workspace write via Bash `cp` (the prompt-only constrained tier — see "Read-only-repo contract" below); the operator opts in by using the flag. Operators should review the sidecar (and apply redaction if needed) before filing — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane. See `${CLAUDE_PLUGIN_ROOT}/SECURITY.md` § [External reviewer write surface in /research and /loop-review](../../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review) and `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.md` for the helper contract and known limitations.
 - `--token-budget=<positive integer>` (value): Set a mental flag `RESEARCH_TOKEN_BUDGET` to the explicit numeric value. Default: `RESEARCH_TOKEN_BUDGET=` (empty — no budget enforcement). When set, between-phase budget gates run after Step 1, Step 2, and Step 2.5 — see "Token telemetry and budget enforcement" below. The budget governs **measurable Claude subagent tokens only** (lanes whose `Agent`-tool return carries `<usage>total_tokens: N</usage>`); Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from the cap. Reject malformed forms with explicit error and abort: `--token-budget=foo` (non-integer) → print `**⚠ /research: --token-budget must be a positive integer (got: foo). Aborting.**` and exit; `--token-budget=` (empty value) → print `**⚠ /research: --token-budget=<N> requires a value. Aborting.**` and exit; `--token-budget=0` or negative → print `**⚠ /research: --token-budget must be > 0 (got: <val>). Aborting.**` and exit. See GitHub issue #518 for the umbrella feature.
+
+## Empty-question preflight
+
+After flag parsing completes, validate that `RESEARCH_QUESTION` is non-empty AND not whitespace-only **before any subsequent step** (in particular before Step 0.5 classification and before any heredoc that interpolates `RESEARCH_QUESTION` into a prompt). On empty / whitespace-only `RESEARCH_QUESTION`, print `**⚠ /research: research question is required. Aborting.**` and exit. This abort runs before Step 0 setup so no tmpdir is created on the empty-question path; subsequent steps assume `RESEARCH_QUESTION` is non-empty.
+
+## Adaptive scale classification
+
+Adaptive scaling is the default behavior. When `--scale=` is omitted, Step 0.5 invokes `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/classify-research-scale.sh` with `RESEARCH_QUESTION` as input and resolves `RESEARCH_SCALE` automatically. The classifier is a deterministic shell heuristic — no LLM call — so it costs zero measurable tokens and is reproducible across CI and laptops. Rule set is in three stages with **asymmetric conservatism**: `quick` requires conjunction of multiple positive signals AND no `deep` trigger; `deep` fires on any single trigger; ambiguity → `standard`. Per the design dialectic on issue #513 DECISION_1, this posture deliberately biases auto-classification away from silently downgrading a broad question to a single-lane run; the `--scale=` operator override is the explicit escape hatch when the heuristic mis-classifies.
+
+On any classifier failure (empty input, bad path, missing arg), the orchestrator falls back to `RESEARCH_SCALE=standard` with `SCALE_SOURCE=fallback` and a visible warning. The fallback bucket is `standard` (not `quick` or `deep`) because `standard` is the safest middle option — it preserves the multi-lane validation phase while not over-provisioning a deep run.
+
+See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` Step 0.5 (Adaptive Scale Classification) for the body and `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/classify-research-scale.md` for the classifier contract (rules, stdout schema, exit codes).
 
 ## Token telemetry and budget enforcement
 
@@ -39,7 +51,7 @@ Step 4 always renders a `## Token Spend` section (immediately before `cleanup-tm
 
 **Measurable lanes** (sidecar-writing): the planner subagent (Step 1.1.a, when `--plan`); pre-launch and runtime-timeout Cursor/Codex fallback subagents in research and validation phases; the always-on Claude `Code` subagent in validation; the deep-mode `Code-Sec` and `Code-Arch` subagents in validation; the always-on Claude judge subagent and any judge replacements in adjudication; the **synthesis subagent** at Step 1.5 (Standard `RESEARCH_PLAN=false`, Standard `RESEARCH_PLAN=true`, Deep `RESEARCH_PLAN=false`, Deep `RESEARCH_PLAN=true`); and the **revision subagent** at Step 2 Finalize Validation (when accepted findings exist). Both #507 subagents emit `<usage>` blocks like other Agent-tool returns; the orchestrator parses `total_tokens` and writes per-lane sidecars via `token-tally.sh write` after each Agent return — slot names: `Synthesis` (for the synthesis subagent at Step 1.5; same slot name across all four non-quick branches since the prompt content is the only differentiator) and `Revision` (for the revision subagent at Step 2 Finalize Validation). Inline-fallback synthesis (when the structural validator fails) is unmeasurable — same posture as Claude inline.
 
-**Unmeasurable lanes** (no sidecar): Claude inline (the orchestrator's own activity — no self-introspection); external Cursor/Codex lanes that successfully ran (their runners do not expose token counts).
+**Unmeasurable lanes** (no sidecar): Claude inline (the orchestrator's own activity — no self-introspection); external Cursor/Codex lanes that successfully ran (their runners do not expose token counts); the **classifier** at Step 0.5, which is a deterministic shell script (`classify-research-scale.sh`) — no Agent-tool subagent, no `<usage>` block, no sidecar — keeps `--token-budget` honest by construction (the classifier costs zero measurable tokens).
 
 **Budget enforcement** runs **between phases only**: after Step 1, after Step 2, after Step 2.5. On overage, the run aborts before the next phase starts, sets `BUDGET_ABORTED=true`, skips Step 3 entirely (no `## Research Report` rendered), and proceeds to Step 4 to render the partial token report and clean up. The completion line carries the `(aborted: budget exceeded)` suffix. `TOTAL_TOKENS=unknown` sidecars contribute zero to the budget sum (a parser-broken `<usage>` block does not silently fail open — the unknown count is surfaced explicitly in the start-of-run notice and the budget-overage message).
 
@@ -59,9 +71,10 @@ Standard mode keeps the same 3+3 lane count and launch order it has always had; 
 
 ## Planner pre-pass — scale interaction
 
-`--plan` is supported with `--scale=standard` (the default 3-lane shape) and `--scale=deep` (the 5-lane shape with named angle prompts). With `--scale=quick` (single lane, no fan-out), downgrade `--plan` to `false` with a visible warning at the start of Step 1 — do NOT silently ignore the flag, and do NOT reject the run. Resolution rule (applied before Step 1 begins):
+`--plan` is supported with `RESEARCH_SCALE=standard` (the 3-lane shape) and `RESEARCH_SCALE=deep` (the 5-lane shape with named angle prompts). With `RESEARCH_SCALE=quick` (single lane, no fan-out), downgrade `--plan` to `false` with a visible warning at the start of Step 1 — do NOT silently ignore the flag, and do NOT reject the run. **Resolution rule applied AFTER Step 0.5** (so `RESEARCH_SCALE` and `SCALE_SOURCE` are both already resolved by the classifier or by the operator override) and BEFORE Step 1 begins. The warning text branches on `SCALE_SOURCE` so the operator never sees a warning citing a flag they did not type:
 
-- `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=quick`: print `**⚠ /research: --plan is not applicable to --scale=quick (single lane → no decomposition benefit). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
+- `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=quick` AND `SCALE_SOURCE=override`: print `**⚠ /research: --plan is not applicable to --scale=quick (single lane → no decomposition benefit). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
+- `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=quick` AND `SCALE_SOURCE` ∈ {`auto`, `fallback`}: print `**⚠ /research: --plan is not applicable when adaptive scaling auto-routes to quick (single lane → no decomposition benefit). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
 - `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=standard`: full functionality — Step 1.1 (planner pre-pass) and Step 1.2 (lane assignment) execute, the 3 lanes run with per-lane subquestion suffixes appended to each lane's angle base prompt (Cursor → `RESEARCH_PROMPT_ARCH`; Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`; Claude inline → `RESEARCH_PROMPT_SEC`), Step 1.5 organizes the synthesis by subquestion. See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` for the procedure. Step 1.1 invokes `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/run-research-planner.sh` (contract in sibling `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/run-research-planner.md`); the script's offline regression harness is `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-run-research-planner.sh` (contract in sibling `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/test-run-research-planner.md`), wired into `make lint`.
 - `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=deep`: full functionality — Step 1.1 (planner pre-pass) and Step 1.2 (lane assignment) execute, the 5 deep-mode lanes run with per-lane subquestion suffixes appended to their respective angle base prompts (`RESEARCH_PROMPT_ARCH` / `_EDGE` / `_EXT` / `_SEC` for the 4 external slots; baseline `RESEARCH_PROMPT_BASELINE` for the Claude-inline integrator lane), Step 1.5 organizes the synthesis subquestion-major with a Per-angle highlights sub-section that names the 4 angles by name and a Cross-cutting findings sub-section. See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/research-phase.md` for the procedure (the deep-mode assignment table uses a balanced partial matrix ring rotation; lane k ∈ {1..4} gets `s_{((k-1) mod N)+1}, s_{(k mod N)+1}`; Claude-inline lane 5 unions all subquestions).
 - `RESEARCH_PLAN=false` (any scale): default path — no planner, no per-lane suffix, no per-subquestion synthesis. Byte-equivalent to pre-#420 behavior.
@@ -152,6 +165,7 @@ Step Name Registry:
 | Step | Short Name |
 |------|------------|
 | 0 | setup |
+| 0.5 | classify-scale |
 | 1 | research |
 | 1.1 | planner |
 | 1.1.c | interactive-review |
@@ -161,7 +175,7 @@ Step Name Registry:
 | 3 | report |
 | 4 | cleanup |
 
-(Step 1.1 and 1.2 are sub-steps of Step 1 that execute only when `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN=true`. Step 1.1.c additionally requires `RESEARCH_PLAN_INTERACTIVE=true`. They are skipped on every other path — single-lane quick mode has no fan-out to assign subquestions to.)
+(Step 0.5 runs unconditionally on every `/research` invocation — it skips the classifier with a one-line `⏩ manual override` breadcrumb when `--scale=` is set, and otherwise invokes the deterministic shell classifier to resolve `RESEARCH_SCALE`. Step 1.1 and 1.2 are sub-steps of Step 1 that execute only when `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN=true`. Step 1.1.c additionally requires `RESEARCH_PLAN_INTERACTIVE=true`. They are skipped on every other path — single-lane quick mode has no fan-out to assign subquestions to.)
 
 ### Verbosity Control
 
@@ -204,6 +218,49 @@ Set mental flags `codex_available` and `cursor_available` based on the output, a
 - Else if `CODEX_HEALTHY=false`: `codex_available=false`. Pre-launch status = `fallback_probe_failed` with reason = `CODEX_PROBE_ERROR` (sanitized). Print: `**⚠ Codex installed but not responding (health check failed: <CODEX_PROBE_ERROR>). Using Claude replacement.**` (omit the parenthetical detail when `CODEX_PROBE_ERROR` is empty).
 - Else: `codex_available=true`. Pre-launch status = `ok`.
 - Same logic for Cursor (using `CURSOR_PROBE_ERROR`).
+
+### 0.5 — Adaptive Scale Classification
+
+Print: `> **🔶 0.5: classify-scale**`
+
+Runs unconditionally on every `/research` invocation. Resolves `RESEARCH_SCALE` to one of `quick|standard|deep` and records `SCALE_SOURCE` ∈ {`override`, `auto`, `fallback`} for downstream warning-text branching. **Must complete before Step 0b** (which skips when `RESEARCH_SCALE=quick`) and before the token-budget start-of-run notice (same skip predicate). With Step 0.5 placed between Step 0a and Step 0b, both downstream consumers see `RESEARCH_SCALE` resolved to a valid bucket value (never empty).
+
+**Skip-on-override branch**:
+
+If `RESEARCH_SCALE` is already non-empty (operator passed `--scale=value` at flag parsing): set `SCALE_SOURCE=override`. Print:
+
+```
+⏩ 0.5: classify-scale — manual override --scale=$RESEARCH_SCALE (<elapsed>)
+```
+
+Proceed to Step 0b. Do NOT invoke the classifier script.
+
+**Auto-classify branch**:
+
+If `RESEARCH_SCALE` is empty: write `RESEARCH_QUESTION` to `$RESEARCH_TMPDIR/classifier-question.txt` (use `printf '%s' "$RESEARCH_QUESTION" > "$RESEARCH_TMPDIR/classifier-question.txt"` so trailing newlines and shell metacharacters are preserved verbatim). Then invoke the classifier:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/classify-research-scale.sh \
+  --question "$RESEARCH_TMPDIR/classifier-question.txt"
+```
+
+Capture stdout. The script writes ONLY machine output to stdout (`SCALE=<bucket>` + `REASON=<token>` on success; `REASON=<token>` on failure) and human diagnostics to stderr. See `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/classify-research-scale.md` for the full contract.
+
+**On exit 0** (success): parse `SCALE=<bucket>` from stdout via prefix-strip, save as `RESEARCH_SCALE`. Parse `REASON=<token>` for the breadcrumb. Set `SCALE_SOURCE=auto`. Print:
+
+```
+✅ 0.5: classify-scale — auto-classified as $RESEARCH_SCALE (reason: $REASON) (<elapsed>)
+```
+
+Proceed to Step 0b.
+
+**On non-zero exit** (validation failure): parse `REASON=<token>` from stdout via prefix-strip. Set `RESEARCH_SCALE=standard` (the safest middle option — preserves multi-lane validation, never silently downgrades broad questions to single-lane). Set `SCALE_SOURCE=fallback`. Print:
+
+```
+**⚠ 0.5: classify-scale — fallback to standard ($REASON). (<elapsed>)**
+```
+
+Proceed to Step 0b. The fallback is deliberate: a classifier failure must NEVER block a research run.
 
 ### 0b — Initialize lane-status record
 
