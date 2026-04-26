@@ -10,7 +10,9 @@
 # Assertions:
 #   A) frontmatter `allowed-tools` line contains both `Bash` and `Monitor` tokens.
 #   B) SKILL.md body declares LOOP_FIX_ISSUE_DRIVER_LOG_FILE env-overridable
-#      default AND the /tmp/+/private/tmp/ case-arm validation (security boundary).
+#      default AND the /tmp/+/private/tmp/ case-arm validation AND the `..`
+#      path-component guard (security boundary; parity with driver.sh's
+#      LOOP_TMPDIR `..` guard pinned by Assertion E in the sibling driver harness).
 #   C) SKILL.md body surfaces the log path: at least one '📄 Full driver log:'
 #      pre-launch line AND at least one '📄 Full driver log (retained):'
 #      completion line.
@@ -70,6 +72,11 @@ if ! grep -qF '/tmp/*|/private/tmp/*' "$SKILL_MD"; then
   fail "B: SKILL.md missing '/tmp/*|/private/tmp/*' case-arm validation"
 else
   pass "B: SKILL.md contains /tmp/+/private/tmp/ validation"
+fi
+if ! grep -qF '*/..|*/../*' "$SKILL_MD"; then
+  fail "B: SKILL.md missing '..' path-component guard in log-path validation"
+else
+  pass "B: SKILL.md contains '..' path-component guard"
 fi
 
 # --- Assertion C: log-path visibility ---
