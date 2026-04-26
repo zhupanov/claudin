@@ -81,6 +81,14 @@ Run exactly one iteration of the iterative skill-improvement pipeline against an
 
 Create one or more GitHub issues with LLM-based semantic duplicate detection. Two modes: single (free-form description) and batch (`--input-file`). 2-phase dedup against open + recently-closed issues (default 90-day window). `/implement` Step 9a.1 calls this skill in batch mode to file OOS issues. `--go` posts a final `GO` comment on each newly-created issue so it becomes eligible for `/fix-issue` automation; works in both single and batch modes (duplicates, failed creates, and dry-run items never receive a GO comment). In single mode, if the sole item resolves to a duplicate, `--go` errors out; in batch mode, per-item duplicates are simply skipped for the GO comment.
 
+## `/loop-fix-issue`
+
+**Arguments**: `[--debug] [--max-iterations N] [--no-slack]`
+
+**Source**: [`skills/loop-fix-issue/SKILL.md`](../skills/loop-fix-issue/SKILL.md)
+
+Repeatedly invoke `/fix-issue` (one approved GitHub issue per iteration) until the open backlog is empty. `/fix-issue` is a single-iteration design; this skill is the caller responsible for repeated execution. Thin SKILL.md delegates to `${CLAUDE_PLUGIN_ROOT}/skills/loop-fix-issue/scripts/driver.sh`, which loops `claude -p /fix-issue` per iteration with a `--max-iterations` safety cap (default 50). Termination signal: absence of the fixed substring `find & lock — found and locked` in the iteration's captured stdout — `/fix-issue` Step 0 exit 0 mandates printing that literal on the success path; exits 1/2/3 (no eligible / error / lock-failed-mid-sequence) print different literals. `--no-slack` is forwarded to each `/fix-issue` invocation. Halt class eliminated by construction: each per-iteration `/fix-issue` runs as its own `claude -p` subprocess.
+
 ## `/loop-improve-skill`
 
 **Arguments**: `[--no-slack] <skill-name>`
