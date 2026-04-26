@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.12] - 2026-04-26
+
+### Fixed
+
+- `skills/research/SKILL.md:350` and three failure-recovery sites in `skills/research/references/adjudication-phase.md` (`RAN=false` branch, pre-launch coordinator failure, ballot-builder failure) said "proceed to Step 3" / "return to Step 3" / "Step 3 proceeds" from Step 2.5 (adjudication) skip/exit paths, but the Step Name Registry places Step 2.7 (citation validation) and Step 2.8 (critique loop) between Step 2.5 and Step 3 — literally proceeding to Step 3 silently skipped both phases on every adjudication-skipped run. All four sites now route to Step 2.7 (the next numbered step after Step 2.5). Closes #590.
+
 ## [7.13.11] - 2026-04-26
 
 ### Fixed
