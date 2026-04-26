@@ -44,6 +44,7 @@ RESEARCH_MD="$REFS_DIR/research-phase.md"
 VALIDATION_MD="$REFS_DIR/validation-phase.md"
 ADJUDICATION_MD="$REFS_DIR/adjudication-phase.md"
 CITATION_MD="$REFS_DIR/citation-validation-phase.md"
+CRITIQUE_LOOP_MD="$REFS_DIR/critique-loop-phase.md"
 
 fail() {
   echo "FAIL: $1" >&2
@@ -53,11 +54,12 @@ fail() {
 # Check 1: SKILL.md exists.
 [[ -f "$SKILL_MD" ]] || fail "SKILL.md missing: $SKILL_MD"
 
-# Check 2: All four reference files exist.
+# Check 2: All five reference files exist.
 [[ -f "$RESEARCH_MD" ]]      || fail "references/research-phase.md missing: $RESEARCH_MD"
 [[ -f "$VALIDATION_MD" ]]    || fail "references/validation-phase.md missing: $VALIDATION_MD"
 [[ -f "$ADJUDICATION_MD" ]]  || fail "references/adjudication-phase.md missing: $ADJUDICATION_MD"
 [[ -f "$CITATION_MD" ]]      || fail "references/citation-validation-phase.md missing: $CITATION_MD"
+[[ -f "$CRITIQUE_LOOP_MD" ]] || fail "references/critique-loop-phase.md missing: $CRITIQUE_LOOP_MD"
 
 # Check 3: Each reference file is named on a MANDATORY — READ ENTIRE FILE line in SKILL.md
 #          AND that same line carries reciprocal 'Do NOT load <each-other>' guards naming
@@ -113,14 +115,15 @@ check_mandatory_topology() {
     for other in "${others[@]}"; do
         other_re=$(printf '%s' "$other" | sed 's/\./\\./g')
         printf '%s\n' "$line" | grep -qE "Do NOT load.*$other_re" \
-          || fail "SKILL.md MANDATORY line for '$target' must also contain a 'Do NOT load $other' clause on the same line (4-reference symmetric topology)"
+          || fail "SKILL.md MANDATORY line for '$target' must also contain a 'Do NOT load $other' clause on the same line (5-reference symmetric topology — #517)"
     done
 }
 
-check_mandatory_topology "research-phase.md"          "validation-phase.md"          "adjudication-phase.md"        "citation-validation-phase.md"
-check_mandatory_topology "validation-phase.md"        "research-phase.md"            "adjudication-phase.md"        "citation-validation-phase.md"
-check_mandatory_topology "adjudication-phase.md"      "research-phase.md"            "validation-phase.md"          "citation-validation-phase.md"
-check_mandatory_topology "citation-validation-phase.md" "research-phase.md"          "validation-phase.md"          "adjudication-phase.md"
+check_mandatory_topology "research-phase.md"            "validation-phase.md"   "adjudication-phase.md" "citation-validation-phase.md" "critique-loop-phase.md"
+check_mandatory_topology "validation-phase.md"          "research-phase.md"     "adjudication-phase.md" "citation-validation-phase.md" "critique-loop-phase.md"
+check_mandatory_topology "adjudication-phase.md"        "research-phase.md"     "validation-phase.md"   "citation-validation-phase.md" "critique-loop-phase.md"
+check_mandatory_topology "citation-validation-phase.md" "research-phase.md"     "validation-phase.md"   "adjudication-phase.md"        "critique-loop-phase.md"
+check_mandatory_topology "critique-loop-phase.md"       "research-phase.md"     "validation-phase.md"   "adjudication-phase.md"        "citation-validation-phase.md"
 
 # Check 4: Each references/*.md opens with the Consumer / Contract / When-to-load header
 #          triplet in the first 20 lines. The sibling contract says "opens with" — enforce that
@@ -134,7 +137,7 @@ contract_header_patterns=(
   '^\*\*Contract\*\*:'
   '^\*\*When to load\*\*:'
 )
-for ref_path in "$RESEARCH_MD" "$VALIDATION_MD" "$ADJUDICATION_MD" "$CITATION_MD"; do
+for ref_path in "$RESEARCH_MD" "$VALIDATION_MD" "$ADJUDICATION_MD" "$CITATION_MD" "$CRITIQUE_LOOP_MD"; do
   for pattern in "${contract_header_patterns[@]}"; do
     head -n 20 "$ref_path" | grep -Eq "$pattern" \
       || fail "references/$(basename "$ref_path") must open with anchored header matching '$pattern' in the first 20 lines"
@@ -957,5 +960,57 @@ grep -Eq '^[[:space:]]*exit[[:space:]]+[0-9]' "$FILELINELIB_SCRIPT" \
 grep -Fq 'file-line-regex-lib.sh' "$REPO_ROOT/scripts/validate-research-output.sh" \
   || fail "scripts/validate-research-output.sh must source scripts/file-line-regex-lib.sh (#516 Check 45)"
 
-echo "PASS: test-research-structure.sh — all 45 structural invariants hold"
+# Check 46 (#517): Step 2.8 — Critique Loop section header present in SKILL.md.
+grep -Fq "## Step 2.8 — Critique Loop" "$SKILL_MD" \
+  || fail "SKILL.md must contain a '## Step 2.8 — Critique Loop' section header (#517 Check 46)"
+
+# Check 47 (#517): SKILL.md Step 2.8 must register the new step in the Step Name
+# Registry table with short name 'critique loop'.
+grep -Fq "| 2.8 | critique loop |" "$SKILL_MD" \
+  || fail "SKILL.md Step Name Registry must list '2.8 | critique loop' row (#517 Check 47)"
+
+# Check 48 (#517): the post-Step-2 budget gate is RELOCATED to fire after Step 2.8
+# (single gate, count critique tokens under existing 'validation' phase enum per
+# dialectic DECISION_4). The relocated abort message must read 'Aborting before
+# Step 3' and must NOT carry the stale 'Aborting before Step 2.5' literal at the
+# relocated site. Pin both the new literal AND the absence of the old literal in
+# any 'after Step 2.8' context.
+grep -Fq "exceeded after Step 2.8" "$SKILL_MD" \
+  || fail "SKILL.md must contain the relocated post-Step-2.8 budget-gate abort message literal 'exceeded after Step 2.8' (#517 Check 48)"
+grep -Fq "Aborting before Step 3" "$SKILL_MD" \
+  || fail "SKILL.md must contain the relocated post-Step-2.8 abort message literal 'Aborting before Step 3' (#517 Check 48)"
+# The old gate's abort message (post-Step-2 → Step 2.5) must NOT survive the
+# relocation. Failing this assertion means the relocation was incomplete — both
+# the old and new gates were left in place.
+grep -Fq "exceeded after Step 2 (" "$SKILL_MD" \
+  && fail "SKILL.md must NOT carry the stale post-Step-2 abort message 'exceeded after Step 2 (' after relocation to post-Step-2.8 (#517 Check 48)"
+
+# Check 49 (#517): SKILL.md Step 2.8 must carry a quick-mode skip directive.
+# Quick scale skips Step 2.8 entirely (no validation findings to feed the
+# critique pass — per /design Round 1 user decision).
+grep -Fq "2.8: critique loop — skipped (--scale=quick)" "$SKILL_MD" \
+  || fail "SKILL.md Step 2.8 must carry the quick-mode skip breadcrumb literal '2.8: critique loop — skipped (--scale=quick)' (#517 Check 49)"
+
+# Check 50 (#517): SKILL.md measurable-lanes section must enumerate the new
+# critique-loop slot families. Per dialectic DECISION_4 these are recorded under
+# the existing 'validation' phase enum (no new --phase value).
+grep -Fq "Critique-1" "$SKILL_MD" \
+  || fail "SKILL.md must enumerate the 'Critique-1' slot name in the measurable-lanes section (#517 Check 50)"
+grep -Fq "Revision-Critique-1" "$SKILL_MD" \
+  || fail "SKILL.md must enumerate the 'Revision-Critique-1' slot name in the measurable-lanes section (#517 Check 50)"
+
+# Check 51 (#517): the new critique-loop-phase.md must carry namespaced XML
+# wrapper tag literals for the critique CONTEXT_BLOCK (FINDING_3 from plan
+# review; mirrors the namespacing convention pinned by Check 6 for
+# validation-phase.md). Using bare tag names like '<citation_validation>' would
+# invite content-driven prompt-injection (a synthesis or sidecar containing a
+# literal closing tag could terminate the block early).
+grep -Fq "<reviewer_citation_validation>" "$CRITIQUE_LOOP_MD" \
+  || fail "references/critique-loop-phase.md must carry the namespaced '<reviewer_citation_validation>' XML wrapper tag literal (#517 Check 51)"
+grep -Fq "<reviewer_adjudication_resolutions>" "$CRITIQUE_LOOP_MD" \
+  || fail "references/critique-loop-phase.md must carry the namespaced '<reviewer_adjudication_resolutions>' XML wrapper tag literal (#517 Check 51)"
+grep -Fq "<reviewer_critique_findings>" "$CRITIQUE_LOOP_MD" \
+  || fail "references/critique-loop-phase.md must carry the namespaced '<reviewer_critique_findings>' XML wrapper tag literal (#517 Check 51)"
+
+echo "PASS: test-research-structure.sh — all 51 structural invariants hold"
 exit 0
