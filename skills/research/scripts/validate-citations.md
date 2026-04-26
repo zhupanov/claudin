@@ -151,14 +151,26 @@ Two consecutive runs against an unchanged `--report` produce a byte-identical
 When the overall `--budget-seconds` elapses, in-flight curl HEAD fetches
 must be terminated cleanly. OS-specific:
 
-- **Linux**: `setsid` puts curl children in their own session. The script
-  self-execs into a new session if not already a session leader (idempotency
-  guard: `__VC_SETSID_DONE=1` env var prevents infinite recursion).
-- **macOS**: `set -m` enables job control so the parent has its own process
-  group; `kill -- -<pgid>` per the parent's PID terminates the group.
+- **Linux**: when `setsid` is available, `setsid` puts curl children in
+  the script's session. The script self-execs into a new session if not
+  already a session leader (idempotency guard: `__VC_SETSID_DONE=1` env
+  var prevents infinite recursion). A single `kill -- -$$` then signals
+  every descendant. When `setsid` is unavailable, the re-exec is skipped
+  and the timeout `kill -- -$$` may signal the script's own group — a
+  pre-existing degraded path that #662 did not change.
+- **macOS**: `set -m` (job control) places each backgrounded `fetch_url`
+  subshell in its own process group with `pgid == $!`. The script records
+  every `$!` in `CURL_PIDS` and on timeout runs `kill -- -<pid>` for each
+  recorded PID, terminating the subshell + its curl substitution + any
+  descendants together. `kill -- -$$` is **intentionally not** used as a
+  fallback on this branch: with `set -m` active, `$$`'s process group
+  contains the validator itself, so signaling it would kill the script
+  before it writes the per-claim `UNKNOWN(timeout)` rows and the sidecar
+  — i.e. exit 143, sidecar absent, fail-soft contract broken.
 
-The test harness asserts both branches via a stub-curl fixture that hangs
-deliberately past the budget.
+The test harness asserts the macOS branch via Test 20 (Darwin-only) using
+a stub-curl fixture that hangs deliberately past the budget; the Linux
+`setsid` branch is exercised end-to-end by the existing CI pipeline.
 
 ## Test seams (NOT operator flags)
 
@@ -206,3 +218,7 @@ fixture inputs with stubbed curl and stubbed DNS. Verified scenarios:
 - Realpath escape (`..`-traversal + symlink-escape) →
   `out-of-tree-path-after-realpath` / `broken-symlink`.
 - HEAD 403/405/501 → `head-not-supported`.
+- Darwin budget-exhaustion no-orphan-curl (Test 20, Darwin-only): a hanging
+  fake-curl fixture is run with `--budget-seconds 1`; after the kill loop
+  no fake-curl PID survives. Linux runners skip this assertion and rely on
+  CI to exercise the `setsid` branch end-to-end.

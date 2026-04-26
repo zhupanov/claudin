@@ -45,7 +45,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.sh \
 
 The script writes the sidecar to the path passed via `--output` and exits 0 on every path (fail-soft contract). On any internal error (curl missing, git rev-parse failure, etc.), the script writes a minimally-formed sidecar that explains the degraded path and still exits 0 — Step 3's splice consumer must always have a sidecar to read.
 
-See `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.md` for the full contract (argv, exit codes, sidecar schema, SSRF defenses, regex tiers, idempotency rerun semantics, budget-exhaustion process-group kill via `setsid`/`set -m`).
+See `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.md` for the full contract (argv, exit codes, sidecar schema, SSRF defenses, regex tiers, idempotency rerun semantics, budget-exhaustion process-group kill — Linux `setsid` + single `kill -- -$$`, macOS `set -m` + per-background `kill -- -<pid>` with no `kill -- -$$` fallback because that would self-signal the validator).
 
 ### 2.7.3 — Sidecar schema
 
@@ -148,7 +148,7 @@ The `UNKNOWN` bucket is deliberately broad: every transient or environment-depen
 
 ### Process-group kill semantics for budget exhaustion
 
-When the overall validator budget elapses (`--budget-seconds`, default 300), in-flight curl HEAD fetches MUST be terminated cleanly — orphaned curl processes can outlive the validator and skew network telemetry. Linux supports `setsid` directly (the script self-execs into a new session if not already a session leader); macOS `setsid` is non-portable, so the script falls back to `set -m` (job control) plus `kill -- -<pgid>`. The OS detection branch lives in `validate-citations.sh`; the test harness (`test-validate-citations.sh`) asserts the correct branch is taken on each platform via a stub-curl fixture that hangs deliberately past the budget.
+When the overall validator budget elapses (`--budget-seconds`, default 300), in-flight curl HEAD fetches MUST be terminated cleanly — orphaned curl processes can outlive the validator and skew network telemetry. Linux supports `setsid` directly (the script self-execs into a new session if not already a session leader, then a single `kill -- -$$` sweeps every descendant). macOS `setsid` is non-portable, so the script enables `set -m` (job control) which places each backgrounded `fetch_url` subshell in its own process group; on timeout the script signals each recorded `$!` via `kill -- -<pid>` (terminating the subshell + curl substitution + descendants together). `kill -- -$$` is **not** used as a Darwin fallback: with `set -m` active, `$$`'s process group still contains the validator itself, so signaling it would kill the script before it writes the per-claim `UNKNOWN(timeout)` rows and the sidecar — exit 143, sidecar absent, fail-soft contract broken. The OS detection branch lives in `validate-citations.sh`; the macOS path is asserted by Test 20 in `test-validate-citations.sh` (Darwin-only — Linux runners print a skip note and rely on the existing CI pipeline to exercise the `setsid` branch end-to-end).
 
 ### Curl-flag MUST / MUST-NOT contract
 

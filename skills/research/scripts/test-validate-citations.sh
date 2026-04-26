@@ -349,15 +349,17 @@ esac
 FAKEEOF
         chmod +x "$FAKE_CURL_PIDREC"
         START=$(date +%s)
+        set +e
         __VC_FAKE_CURL="$FAKE_CURL_PIDREC" __VC_LAST_ARGV="$ARGV_LOG" \
         __VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example-hang.invalid=8.8.8.8' \
             "$VALIDATOR" --report "$WORK/c20/report.txt" --output "$WORK/c20/cv.md" \
-                         --tmpdir "$WORK/c20" --budget-seconds 1 >/dev/null 2>&1 || true
+                         --tmpdir "$WORK/c20" --budget-seconds 1 >/dev/null 2>&1
+        VALIDATOR_RC=$?
+        set -e
         END=$(date +%s)
         ELAPSED=$((END - START))
-        # Bug behavior: validator returns at budget (~1s) but orphan curl shims
-        # keep sleeping for ~60s. Wait briefly for kill signals to land, then
-        # check for survivors. Allow generous wall-clock slack for shared CI.
+        # Wait briefly for any in-flight kill signals to land before scanning
+        # for survivors. Bug behavior leaves ~60s sleeps running.
         sleep 2
         ORPHAN_COUNT=0
         for pf in "$PIDS_DIR"/*.pid; do
@@ -368,7 +370,17 @@ FAKEEOF
                 ORPHAN_COUNT=$((ORPHAN_COUNT + 1))
             fi
         done
+        # Bug-#662 leak behavior is ~60s (the fake-curl sleep); ceiling 15s
+        # filters that out while leaving slack for slow / shared CI.
         assert "Test 20: validator returned within budget + slack (got ${ELAPSED}s)" "[[ \"$ELAPSED\" -le 15 ]]"
+        # Fail-soft contract: validator MUST exit 0 even on budget timeout.
+        # Catches the regression class where the kill path signals $$'s
+        # process group and SIGTERMs the validator itself (exit 143, no
+        # sidecar).
+        assert "Test 20: validator exited 0 (fail-soft contract on timeout)" "[[ \"$VALIDATOR_RC\" -eq 0 ]]"
+        assert "Test 20: sidecar produced" "[[ -s \"$WORK/c20/cv.md\" ]]"
+        assert "Test 20: sidecar has UNKNOWN | timeout for hung URL #1" "grep -F 'https://example-hang.invalid/page1' \"$WORK/c20/cv.md\" | grep -F 'UNKNOWN' | grep -Fq 'timeout'"
+        assert "Test 20: sidecar has UNKNOWN | timeout for hung URL #2" "grep -F 'https://example-hang.invalid/page2' \"$WORK/c20/cv.md\" | grep -F 'UNKNOWN' | grep -Fq 'timeout'"
         assert "Test 20: no orphan fake-curl processes after budget-kill (got $ORPHAN_COUNT)" "[[ \"$ORPHAN_COUNT\" == 0 ]]"
         ;;
     *)
