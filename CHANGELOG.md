@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.10] - 2026-04-26
+
+### Changed
+
+- `AGENTS.md` "Conventions" section gains a parallel rule mandating that interactive / assistant-driven `gh issue create` calls flow through `/larch:issue` (mirroring the existing `gh pr create` rule). The rule prevents the heredoc-quoting failure mode documented in #588's "Symptom" section (markdown bodies with backticks and inline code blocks crash the bash parser when passed via `gh issue create --body "$(cat <<'EOF' ... EOF)"`); `/larch:issue` composes a body file and runs `gh ... --body-file`, sidestepping shell quoting. The new bullet carves out scripts under `scripts/` and `skills/*/scripts/` (e.g., `skills/improve-skill/scripts/iteration.sh`, `skills/loop-improve-skill/scripts/driver.sh`, hooks) which own their body composition and don't share the failure mode. Closes #588.
+
 ## [7.13.9] - 2026-04-26
 
 ### Fixed
