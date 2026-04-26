@@ -2,7 +2,7 @@
 name: create-skill
 description: "Use when scaffolding a new larch skill (new SKILL.md). Validates name and description, then delegates to /im --quick --auto which runs render-skill-md.sh and auto-merges. Default: .claude/skills/; --plugin: skills/."
 argument-hint: "[--plugin] [--multi-step] [--merge] [--debug] [--no-slack] <skill-name> <description>  (--merge is a backward-compat no-op; /im auto-merges)"
-allowed-tools: Bash, Skill
+allowed-tools: Bash, Skill, Write
 ---
 
 # Create Skill

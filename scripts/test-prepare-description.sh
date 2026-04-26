@@ -174,6 +174,56 @@ else
   ((pass_count++)) || true
 fi
 
+# --- Test 15: missing both --description and --description-file --------------
+# (FINDING_3 from /review code-review voting — closes contract gap on the
+# fifth internal-error path documented in prepare-description.md).
+set +e
+err=$("$PREPARE" --name myskill 2>&1)
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  ((fail_count++)) || true
+  echo "FAIL: t15 expected non-zero exit on missing description input, got 0" >&2
+elif [[ "$err" != *"Missing description input"* ]]; then
+  ((fail_count++)) || true
+  echo "FAIL: t15 expected 'Missing description input' error; got: $err" >&2
+else
+  ((pass_count++)) || true
+fi
+
+# --- Test 16: cross-trigger — multi-line AND length>1024, no banned tokens ---
+# (FINDING_4 from /review code-review voting — pins behavior when both
+# synthesis-trigger classes are eligible. validate-args.sh's check order
+# fires the LENGTH check first; prepare-description.sh classifies as
+# REASON=length-exceeds-cap, NOT newlines-or-control-chars.)
+descfile="$TMPDIR_TEST/desc-t16.txt"
+{
+  for _ in $(seq 1 15); do
+    printf 'Use when handling repetitive batched workloads carefully and gracefully across multiple lines.\n'
+  done
+} > "$descfile"
+out=$("$PREPARE" --name myskill --description-file "$descfile")
+check "t16 MODE=needs-synthesis (newline+length cross)" "$(echo "$out" | grep '^MODE=')" "MODE=needs-synthesis"
+check "t16 REASON=length-exceeds-cap (length wins)" "$(echo "$out" | grep '^REASON=')" "REASON=length-exceeds-cap"
+
+# --- Test 17: F9 mixed-input — newline-delimited heredoc token --------------
+# (FINDING_2 from /review code-review voting — pins the F9 fix for tokens at
+# line boundaries. The validator's newline error fires first; F9 must catch
+# the heredoc token even when delimited by newlines, not just spaces.)
+descfile="$TMPDIR_TEST/desc-t17.txt"
+printf 'Use when handling batched workloads.\nEOF\nMore context here.' > "$descfile"
+out=$("$PREPARE" --name myskill --description-file "$descfile")
+check "t17 MODE=abort (mixed newline+heredoc-token)" "$(echo "$out" | grep '^MODE=')" "MODE=abort"
+check_contains "t17 ERROR mentions heredoc token" \
+  "$(echo "$out" | grep '^ERROR=')" "heredoc/frontmatter token 'EOF'"
+
+# --- Test 18: F9 mixed-input — newline-delimited frontmatter fence ---------
+# (FINDING_2 — same fix, --- token at line boundary.)
+descfile="$TMPDIR_TEST/desc-t18.txt"
+printf 'First paragraph.\n---\nSecond paragraph.' > "$descfile"
+out=$("$PREPARE" --name myskill --description-file "$descfile")
+check "t18 MODE=abort (mixed newline+---)" "$(echo "$out" | grep '^MODE=')" "MODE=abort"
+
 echo
 echo "test-prepare-description.sh: $pass_count passed, $fail_count failed"
 [[ $fail_count -eq 0 ]]

@@ -113,8 +113,14 @@ contains_banned_token() {
     echo "command substitution \$("
     return 0
   fi
+  # Detect standalone heredoc/frontmatter tokens at any whitespace boundary
+  # (space OR newline). validate-args.sh's own heredoc check is space-only and
+  # never reaches multi-line input (its newline check fires first), so the
+  # multi-line case is the F9 scan's responsibility. The grep -E uses
+  # [[:space:]] character classes to match either space or newline as the
+  # boundary delimiter on each side.
   for bad in 'EOF' 'HEREDOC' '---'; do
-    if [[ "$s" == "$bad" ]] || [[ "$s" == *" $bad "* ]] || [[ "$s" == "$bad "* ]] || [[ "$s" == *" $bad" ]]; then
+    if printf '%s' "$s" | grep -qE "(^|[[:space:]])${bad}([[:space:]]|$)"; then
       echo "heredoc/frontmatter token '$bad'"
       return 0
     fi
