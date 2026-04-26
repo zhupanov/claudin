@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green merge, Slack issue announce. Triggers: 'ship X', 'land PR', 'merge this'. See /research, /design, /im (merge), /imaq (auto-merge)."
-argument-hint: "[--quick] [--auto] [--merge | --draft] [--no-slack] [--debug] [--session-env <path>] [--issue <N>] <feature description>"
+argument-hint: "[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--debug] [--session-env <path>] [--issue <N>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
@@ -41,7 +41,7 @@ Each rule states WHY; per-site reminders reference by anchor name.
 
 6. **NEVER move the Step 5 quick-mode Cursor/Codex reviewer prompts (containing the five focus-area enum literals `code-quality` / `risk-integration` / `correctness` / `architecture` / `security`) out of `SKILL.md`.** **Why**: `.github/workflows/ci.yaml` inspects `skills/implement/SKILL.md` for the unquoted focus-area enum. **How to apply**: keep the two Bash blocks for quick-mode Cursor and Codex inline in Step 5; do not move them to a reference file unless the CI workflow's file list is extended in the same PR.
 
-7. **NEVER bail mid-run on orchestrator-judgment "scope" or "capacity" concerns without a mechanical justification.** **Why**: `/implement` is designed for long autonomous runs end-to-end. Subjective "this feels like a lot of remaining work" judgments are NOT valid bail reasons. The only sanctioned non-error halt paths between Step 1 and Step 17 are: (a) Step 12d under one of its three documented judgment conditions (3 fix iterations attempted without progress; failure fundamentally incompatible with codebase or CI; fix would require reverting the core feature); (b) explicit user halt mid-run via a fresh interactive turn; (c) hard tool failure (context overflow, persistent CI infrastructure outage, gh auth revocation). **How to apply**: this rule does not forbid the mechanical 12d routes already encoded as control flow (Rebase + Re-bump sub-procedure hard-bail, conflict-resolution abort, merge-pr.sh errors) — those land in 12d via documented sub-procedures, not via orchestrator judgment. At every step boundary between Step 1 and Step 17, the orchestrator continues according to the next explicit control-flow directive (sequential by default unless this file specifies a non-sequential redirect). If the orchestrator finds itself drafting an `AskUserQuestion` to halt or relitigate scope post Step 1, or composing a "let me check in before continuing" message that is not triggered by one of conditions (a)-(c) above, it MUST instead continue execution and log the concern as a `Warnings` entry in `$IMPLEMENT_TMPDIR/execution-issues.md` (which Step 11 publishes to the tracking issue's anchor).
+7. **NEVER bail mid-run on orchestrator-judgment "scope" or "capacity" concerns without a mechanical justification.** **Why**: `/implement` is designed for long autonomous runs end-to-end. Subjective "this feels like a lot of remaining work" judgments are NOT valid bail reasons. The only sanctioned non-error halt paths between Step 1 and Step 17 are: (a) Step 12d under one of its three documented judgment conditions (3 fix iterations attempted without progress; failure fundamentally incompatible with codebase or CI; fix would require reverting the core feature); (b) explicit user halt mid-run via a fresh interactive turn; (c) hard tool failure (context overflow, persistent CI infrastructure outage, gh auth revocation). **How to apply**: this rule does not forbid the mechanical 12d routes already encoded as control flow (Rebase + Re-bump sub-procedure hard-bail, conflict-resolution abort, merge-pr.sh results that require Step 12d — `admin_failed`, `error`, `policy_denied`) — those land in 12d via documented sub-procedures, not via orchestrator judgment. At every step boundary between Step 1 and Step 17, the orchestrator continues according to the next explicit control-flow directive (sequential by default unless this file specifies a non-sequential redirect). If the orchestrator finds itself drafting an `AskUserQuestion` to halt or relitigate scope post Step 1, or composing a "let me check in before continuing" message that is not triggered by one of conditions (a)-(c) above, it MUST instead continue execution and log the concern as a `Warnings` entry in `$IMPLEMENT_TMPDIR/execution-issues.md` (which Step 11 publishes to the tracking issue's anchor).
 
 The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
@@ -52,6 +52,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 - `--merge`: `merge=true`. Steps 12–15 run (CI+rebase+merge loop, local cleanup, main verification). Otherwise those steps are skipped — PR is created and workflow stops after initial CI wait, rejected findings, final report, Slack issue announce, temp cleanup. **Mutually exclusive with `--draft`.**
 - `--draft`: `draft=true`. Step 9b creates the PR in draft state (`create-pr.sh --draft`); Step 14 is skipped so the local branch stays. `draft=true` implies `merge=false`. **Mutually exclusive with `--merge`.** If both are present, print `**⚠ --draft and --merge are mutually exclusive. Aborting.**` and exit without Step 0.
 - `--no-slack`: `slack_enabled=false`. Default: `slack_enabled=true`. When `slack_enabled=true` (default), Step 16a posts a single Slack message about the tracking issue near the end of the run (gated on `slack_available=true` — i.e. `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` set — and on having a resolved `ISSUE_NUMBER`). When `slack_enabled=false`, Step 16a skips the Slack API call regardless of environment configuration. Independent of all other flags.
+- `--no-admin-fallback`: `no_admin_fallback=true`. Default: `no_admin_fallback=false`. When `true`, forwarded into Step 12b's `merge-pr.sh` invocation; the script then emits `MERGE_RESULT=policy_denied` instead of retrying with `--admin` once the admin-eligible gate (CI good + branch fresh) is reached, and Step 12b bails to Step 12d. Default behavior is unchanged (the `--admin` retry fires as before). Applies to ALL admin-eligible `mergeStateStatus` values (`CLEAN`, `UNSTABLE`, `HAS_HOOKS`, `BLOCKED`) — not just review-required denials. Independent of all other flags (in particular: no special coupling with `--auto`).
 - `--no-merge`: **Deprecated** no-op. On encounter, print `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
 - `--debug`: `debug_mode=true`. Controls output verbosity (see Verbosity Control). Forwarded to `/design` (Step 1) and `/review` (Step 5).
 - `--session-env <path>`: sets `SESSION_ENV_PATH`. Forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. Empty = standalone invocation (full discovery).
@@ -906,17 +907,32 @@ After any non-merge / non-bail / non-rebase action, re-invoke `ci-wait.sh` with 
 CI passed and branch up-to-date with main:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/merge-pr.sh --pr <PR-NUMBER> --repo $REPO
+${CLAUDE_PLUGIN_ROOT}/scripts/merge-pr.sh --pr <PR-NUMBER> --repo $REPO [--no-admin-fallback if no_admin_fallback=true]
 ```
+
+Append `--no-admin-fallback` to the invocation only when `no_admin_fallback=true` (parsed from the top-level flag). Default behavior is unchanged.
 
 Parse `MERGE_RESULT` and `ERROR`:
 - **`merged`**: print `✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true` (consumed by Step 16a's outcome state machine). **Title-prefix lifecycle terminal transition**: if `$ISSUE_NUMBER` set AND `repo_unavailable=false`, call `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state done` (applies to both fresh-created and adopted issues). Best-effort (log to `Tool Failures` on failure; do not abort the run — the merge has already succeeded). Set `DONE_RENAME_APPLIED=true` on any return. Continue.
-- **`admin_merged`**: print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true`. Apply the same terminal rename-to-done as the `merged` branch (same guards; same `DONE_RENAME_APPLIED=true` on return). Continue.
+- **`admin_merged`**: print `**⚠ Merged with --admin (review overridden).** ✅ 12: CI+merge loop — PR #<NUMBER> merged! (<elapsed>)`. Set `pr_closed=true`. Apply the same terminal rename-to-done as the `merged` branch (same guards; same `DONE_RENAME_APPLIED=true` on return). **Then** post a best-effort PR comment recording the bypass:
+  ```bash
+  gh pr comment <PR-NUMBER> --repo $REPO --body "$ADMIN_AUDIT_COMMENT_BODY"
+  ```
+  where `$ADMIN_AUDIT_COMMENT_BODY` is the literal text:
+  ```
+  ⚠ Branch protection denied the standard merge; this PR was merged using `gh pr merge --admin` after re-verifying CI was green and the branch was up-to-date with main.
+
+  To require reviewer approval going forward, run /implement (or /im, /imaq, /fix-issue) with the `--no-admin-fallback` flag — that will bail to Step 12d on policy denial instead of overriding.
+
+  Posted by /implement Step 12b (larch /implement audit log).
+  ```
+  Best-effort: on non-zero exit, log to `Tool Failures` and continue. The merge has already succeeded; do not abort the run for an audit-comment failure. Continue.
 - **`main_advanced`**: back to **12a** (next iteration detects behind and rebases). Do NOT rename the tracking issue — the PR is not yet merged.
 - **`ci_not_ready`**: back to **12a** (CI may need more time or a rerun). Do NOT rename.
+- **`policy_denied`**: bail (12d) with `ERROR` (the script sets `ERROR="branch protection denied merge; --no-admin-fallback set"`, which Step 12d adopts verbatim as `FINAL_BAIL_REASON`). **Do NOT set `pr_closed=true`** — the PR was NOT merged. Do NOT rename (12d sets `STALL_TRACKING=true`, and Step 18's stalled rename handles the title transition; no merge-path `[DONE]` rename in 12b).
 - **`admin_failed`** / **`error`**: bail (12d) with `ERROR`. Do NOT rename (12d sets `STALL_TRACKING=true`).
 
-**CRITICAL: The `--admin` safety invariant is enforced inside `merge-pr.sh` — it re-verifies CI and branch freshness before attempting `--admin`. See the script's header for the full invariant. This is the canonical `--admin` implementation.**
+**CRITICAL: The `--admin` safety invariant is enforced inside `merge-pr.sh` — it re-verifies CI and branch freshness before attempting `--admin` (or before emitting `policy_denied` when `--no-admin-fallback` is set). See the script's header and `scripts/merge-pr.md` for the full invariant. This is the canonical `--admin` implementation.**
 
 Save expected commit title for Step 15: `<PR_TITLE> (#<PR_NUMBER>)`.
 
@@ -939,10 +955,10 @@ Use `FAILED_RUN_ID` from `ci-status.sh`. If empty, identify manually via `${CLAU
 
 ### 12d — Bail Out
 
-Bail if any: 3 fix iterations attempted without progress; failure fundamentally incompatible with codebase or CI; fix would require reverting the core feature. When bailing: if a rebase is in progress (exit 1 from `rebase-push.sh`), run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh` first; clearly explain what failed, what was attempted, and suggest manual steps. **Do NOT skip Steps 14, 16, 16a, 17, 18** when bailing — still clean up, print the review report, and post the Slack issue announcement. **Skip Step 15** since the PR was not merged.
+Bail if any: 3 fix iterations attempted without progress; failure fundamentally incompatible with codebase or CI; fix would require reverting the core feature; `merge-pr.sh` returned `policy_denied` (the `--no-admin-fallback` opt-out was set and branch protection denied the merge). When bailing: if a rebase is in progress (exit 1 from `rebase-push.sh`), run `${CLAUDE_PLUGIN_ROOT}/scripts/git-rebase-abort.sh` first; clearly explain what failed, what was attempted, and suggest manual steps. **Do NOT skip Steps 14, 16, 16a, 17, 18** when bailing — still clean up, print the review report, and post the Slack issue announcement. **Skip Step 15** since the PR was not merged.
 
 **Before proceeding to Step 14**, persist the bail reason + user-input signal into parent scope so Step 16a's outcome state machine can read them:
-- Set `FINAL_BAIL_REASON` = the `BAIL_REASON` value from the `ci-wait.sh` output that triggered the bail (or the caller-synthesized reason if the bail came from the Rebase + Re-bump Sub-procedure, a conflict, or fix-attempt exhaustion). Leave `BAIL_NEEDS_USER_INPUT` alone if it was already set by the Conflict Resolution Procedure Phase 2 under `auto_mode=true`; otherwise it stays `false`.
+- Set `FINAL_BAIL_REASON` = the `BAIL_REASON` value from the `ci-wait.sh` output that triggered the bail (or the caller-synthesized reason if the bail came from the Rebase + Re-bump Sub-procedure, a conflict, or fix-attempt exhaustion, or the `merge-pr.sh` `policy_denied` result — in which case `FINAL_BAIL_REASON` is the literal `ERROR` string from the script: `"branch protection denied merge; --no-admin-fallback set"`). Leave `BAIL_NEEDS_USER_INPUT` alone if it was already set by the Conflict Resolution Procedure Phase 2 under `auto_mode=true`; otherwise it stays `false`.
 - Set `STALL_TRACKING=true` — signals Step 18 to rename the tracking issue's title from `[IN PROGRESS]` to `[STALLED]` (see Step 18 "Title-prefix lifecycle terminal transition").
 
 ## Step 14 — Local Cleanup

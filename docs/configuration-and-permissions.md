@@ -54,6 +54,10 @@ When `/implement --merge` encounters a PR that passes CI but cannot be merged du
 
 These checks are re-verified immediately before the `--admin` attempt — the script does not rely on cached state. See `scripts/merge-pr.sh` for the implementation.
 
+**Audit trail when `--admin` fires.** When the `--admin` retry actually executes, `/implement` Step 12b posts a best-effort comment on the merged PR explaining that branch protection denied the standard merge and `--admin` was used to override. The comment is informational; if posting it fails (e.g., token cannot comment), the failure is logged to `Tool Failures` and the merge stays merged. The existing stderr `**⚠ Merged with --admin (review overridden).**` warning in the run output is also retained.
+
+**Opt out: `--no-admin-fallback`.** Pass `--no-admin-fallback` to `/implement` (or to `/im`, `/imaq`, `/fix-issue` — they forward through) to require branch-protection policies to actually deny the merge. With this flag set, `merge-pr.sh` returns `MERGE_RESULT=policy_denied` instead of retrying with `--admin` once the admin-eligible gate (CI good + branch fresh) is reached, and `/implement` bails to Step 12d with `FINAL_BAIL_REASON="branch protection denied merge; --no-admin-fallback set"`. The opt-out applies to all admin-eligible `mergeStateStatus` values (`CLEAN`, `UNSTABLE`, `HAS_HOOKS`, `BLOCKED`) — not just review-required denials. Default behavior is unchanged when the flag is not set. See `scripts/merge-pr.md` for the script-level contract.
+
 ## Environment Variables
 
 Larch uses environment variables for Slack integration and external reviewer model configuration. All are optional — when not set, Slack-related features are skipped with warnings, and external reviewers use their default models.

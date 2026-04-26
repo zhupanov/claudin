@@ -1,7 +1,7 @@
 ---
 name: fix-issue
 description: "Use when fixing open GitHub issues. Processes one approved issue per invocation: skips issues with open blockers, triages, classifies intent, then either delegates to /implement or follows the issue's instructions inline for research/review tasks."
-argument-hint: "[--debug] [--no-slack] [--issue <number-or-url>] [<number-or-url>]"
+argument-hint: "[--debug] [--no-slack] [--no-admin-fallback] [--issue <number-or-url>] [<number-or-url>]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 ---
 
@@ -17,8 +17,9 @@ Process one approved GitHub issue per invocation. Fetches open issues with a `GO
 
 - `--debug`: Set `debug_mode=true`. Forward `--debug` to `/implement` in Step 5. Default: `debug_mode=false`.
 - `--no-slack`: Set `slack_enabled=false`. Forward `--no-slack` to `/implement` in Step 5a. Default: `slack_enabled=true`. When `slack_enabled=true` (default), the delegated `/implement` run posts to Slack (Step 16a) when Slack env vars are configured; the `NON_PR` path's Step 7 Slack announcement also posts via the shared `scripts/post-issue-slack.sh`. When `slack_enabled=false` (user passed `--no-slack`), no Slack calls are made on either path.
+- `--no-admin-fallback`: Set `no_admin_fallback=true`. Forward `--no-admin-fallback` to `/implement` in Step 5a (both SIMPLE and HARD bullets). Default: `no_admin_fallback=false`. When `true`, the delegated `/implement` run instructs `merge-pr.sh` to emit `MERGE_RESULT=policy_denied` instead of retrying with `--admin` once the admin-eligible gate (CI good + branch fresh) is reached, and the run bails to Step 12d with a documented reason. See `skills/implement/SKILL.md` `--no-admin-fallback` for the full semantics. Default behavior unchanged.
 - `--issue <number-or-url>`: **Deprecated** — recognized for backward compatibility. Prefer passing the issue number or URL as a positional argument (e.g., `/fix-issue 42`). When this flag is encountered, print: `**ℹ '--issue' is deprecated; pass the issue number or URL as a positional argument instead (e.g., /fix-issue 42).**`
-- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping all flags defined above (`--debug`, `--no-slack`, `--issue`), treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 0 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 0 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
+- **Positional argument** (after flag stripping): If any non-flag text remains in `$ARGUMENTS` after stripping all flags defined above (`--debug`, `--no-slack`, `--no-admin-fallback`, `--issue`), treat it as the issue number or URL. Set `ISSUE_ARG` to this value. When set, Step 0 targets this specific issue instead of scanning for the oldest eligible one. Accepts a bare issue number (e.g., `42`) or a full GitHub issue URL (e.g., `https://github.com/owner/repo/issues/42`). The issue must be open, have `GO` as its last comment, and have no currently-open blocking dependencies (see Step 0 for the degradation note when the dependency endpoint is unavailable). Default: empty (auto-pick mode). If both `--issue` and a positional argument are provided, print: `**⚠ Both --issue and a positional argument were provided. Using the positional argument.**` and use the positional argument.
 
 ## Mindset
 
@@ -183,8 +184,8 @@ Compose the feature description from the issue content: use the issue title as t
 
 Invoke `/implement` via the Skill tool. Forwarding `--issue $ISSUE_NUMBER` makes `/implement` adopt the queue issue as its tracking issue (Phase 3 Branch 2 adoption), so the two skills converge on the same tracking issue and `/fix-issue` avoids a duplicate tracking-issue on its path:
 
-- **SIMPLE**: `/implement --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--no-slack if !slack_enabled] [--debug if debug_mode] <feature description>`
-- **HARD**: `/implement --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--no-slack if !slack_enabled] [--debug if debug_mode] <feature description>`
+- **SIMPLE**: `/implement --quick --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--no-slack if !slack_enabled] [--no-admin-fallback if no_admin_fallback] [--debug if debug_mode] <feature description>`
+- **HARD**: `/implement --merge --session-env $FIX_ISSUE_TMPDIR/session-env.sh --issue $ISSUE_NUMBER [--no-slack if !slack_enabled] [--no-admin-fallback if no_admin_fallback] [--debug if debug_mode] <feature description>`
 
 After `/implement` completes, capture the PR URL and PR number from its output. Save as `PR_URL` and `PR_NUMBER`.
 

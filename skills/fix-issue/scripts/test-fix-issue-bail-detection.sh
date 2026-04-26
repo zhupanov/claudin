@@ -9,9 +9,11 @@
 # conformance test. Runtime enforcement is the LLM-level orchestration of
 # Step 5a per the prose contract.
 #
-# Six assertions against the extracted Step 5a block:
+# Eight assertions against the extracted Step 5a block:
 #   (a1) SIMPLE bullet forwards "--issue $ISSUE_NUMBER".
 #   (a2) HARD bullet forwards "--issue $ISSUE_NUMBER".
+#   (a3) SIMPLE bullet forwards "--no-admin-fallback" (issue #559 — branch-protection bypass safety flag).
+#   (a4) HARD bullet forwards "--no-admin-fallback" (issue #559 — branch-protection bypass safety flag).
 #   (b)  Literal token "IMPLEMENT_BAIL_REASON=adopted-issue-closed" present.
 #   (c)  Warning prefix "/implement bailed: issue #" present.
 #   (d)  Specific directive "Do NOT call `issue-lifecycle.sh close`" present
@@ -100,6 +102,12 @@ echo "Running test-fix-issue-bail-detection against $SKILL_MD"
 # (a) --issue $ISSUE_NUMBER appears in both the SIMPLE and HARD /implement invocation bullets.
 assert_bullet_contains "a1: SIMPLE bullet forwards --issue \$ISSUE_NUMBER" '- **SIMPLE**' '--issue $ISSUE_NUMBER'
 assert_bullet_contains "a2: HARD bullet forwards --issue \$ISSUE_NUMBER"   '- **HARD**'   '--issue $ISSUE_NUMBER'
+
+# (a3, a4) --no-admin-fallback forwarding — branch-protection bypass safety flag (issue #559).
+# Without this guard, a future refactor could silently strip the forward, leaving
+# /fix-issue --no-admin-fallback callers exposed to the silent --admin override.
+assert_bullet_contains "a3: SIMPLE bullet forwards --no-admin-fallback" '- **SIMPLE**' '--no-admin-fallback'
+assert_bullet_contains "a4: HARD bullet forwards --no-admin-fallback"   '- **HARD**'   '--no-admin-fallback'
 
 # (b) Bail-token literal present.
 assert_contains "b: IMPLEMENT_BAIL_REASON=adopted-issue-closed literal" 'IMPLEMENT_BAIL_REASON=adopted-issue-closed'
