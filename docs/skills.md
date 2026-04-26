@@ -165,3 +165,11 @@ Code review current branch changes with a 3-reviewer panel (1 Claude Code Review
 **Source**: [`skills/simplify-skill/SKILL.md`](../skills/simplify-skill/SKILL.md)
 
 Refactor an existing larch skill for stronger adherence to `skills/shared/skill-design-principles.md` and to reduce SKILL.md token footprint. Resolves the target skill directory (plugin tree first, then consumer `.claude/skills/`), enumerates every `.md` file under it (excluding `scripts/` and `tests/`), does NOT follow sub-skills invoked via the `Skill` tool, and delegates the refactor to `/im` with a pinned behavior-preserving feature description that requires a `## Token budget` section in the PR body. `--no-slack` forwards to `/im` (and thence to `/implement`) so the refactor run does NOT post a Slack announcement. Example: `/simplify-skill implement`.
+
+## `/skill-evolver`
+
+**Arguments**: `[--debug] <skill-name>`
+
+**Source**: [`skills/skill-evolver/SKILL.md`](../skills/skill-evolver/SKILL.md)
+
+Evolve an existing larch skill by researching concrete improvements and filing them as a multi-piece umbrella issue. Validates `<skill-name>` against `^[a-z][a-z0-9-]*$` and resolves it to `skills/<name>/SKILL.md` (plugin tree) or `.claude/skills/<name>/SKILL.md` (project-local fallback); aborts cleanly if the target does not exist. Then invokes `/research --scale=deep` with a templated prompt that asks the lane fan-out (5 research lanes + 5 validation lanes) to produce concrete actionable improvements with citations — repo-local sibling-skill comparisons via `file:line` references and reputable external sources (Anthropic / OpenAI / DeepMind / ≥500-star OSS) via URLs. If the research lane surfaces ≥1 actionable improvement, distills the findings into a multi-piece task description and invokes `/umbrella` with `--label evolved-by:skill-evolver --label skill:<name>` and `--title-prefix "[skill-evolver:<name>] "` so the umbrella + children are tagged for later filtering. Zero improvements → clean exit, no umbrella created. The skill itself does NOT modify the target skill's files — implementation lands later via `/fix-issue` (per child) or `/improve-skill` (judge-design-implement loop) or `/loop-improve-skill` (multi-round). Example: `/skill-evolver design`.

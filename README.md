@@ -128,6 +128,12 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><code>[--debug] [--no-slack] &lt;skill-name&gt;</code></td>
     </tr>
     <tr><td colspan="2">Refactor a skill for stronger adherence to design principles and reduced SKILL.md footprint.</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#skill-evolver"><code>/skill-evolver</code></a></td>
+      <td><code>[--debug] &lt;skill-name&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Evolve an existing larch skill: validate and locate the target, run <code>/research --scale=deep</code> against repo-local sibling skills + reputable external sources (Anthropic / OpenAI / DeepMind / ≥500-star OSS) for concrete actionable improvements with citations, then if findings emerge invoke <code>/umbrella</code> to file a tracking issue plus one child per improvement (tagged <code>evolved-by:skill-evolver</code> + <code>skill:&lt;name&gt;</code>). Research-and-file-issues only — does not modify the target skill's files; implementation lands later via <code>/fix-issue</code>, <code>/improve-skill</code>, or <code>/loop-improve-skill</code>.</td></tr>
   </tbody>
 </table>
 
