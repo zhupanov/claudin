@@ -3,7 +3,9 @@
 #
 # Attempts a squash merge. On failure, checks if the branch is behind
 # main or if CI is not ready. If CI is confirmed passing and the branch
-# is up-to-date, retries with --admin to override review requirements.
+# is up-to-date, retries with --admin to override review requirements
+# unless --no-admin-fallback is set, in which case the script returns
+# MERGE_RESULT=policy_denied without invoking --admin.
 #
 # CRITICAL: The --admin flag overrides ALL branch protection rules
 # including review requirements. It is ONLY used after confirming:
@@ -13,10 +15,17 @@
 # See skills/implement/SKILL.md Step 12b for usage documentation.
 #
 # Usage:
-#   merge-pr.sh --pr NUMBER --repo OWNER/REPO
+#   merge-pr.sh --pr NUMBER --repo OWNER/REPO [--no-admin-fallback]
+#
+# --no-admin-fallback: opts out of the --admin retry. When set, the
+#   script reaches the same admin-eligible gate (CI good + branch fresh)
+#   but emits MERGE_RESULT=policy_denied instead of invoking
+#   `gh pr merge --squash --admin`. This applies to ALL admin-eligible
+#   mergeStateStatus values (CLEAN, UNSTABLE, HAS_HOOKS, BLOCKED) — not
+#   just review-required denials.
 #
 # Outputs (key=value to stdout, always emitted via EXIT trap):
-#   MERGE_RESULT=merged|admin_merged|main_advanced|ci_not_ready|admin_failed|error
+#   MERGE_RESULT=merged|admin_merged|main_advanced|ci_not_ready|admin_failed|policy_denied|error
 #   ERROR=<message>    (empty string when no error)
 #
 # Exit codes:
@@ -25,15 +34,17 @@
 
 set -uo pipefail
 
-usage() { echo "Usage: merge-pr.sh --pr NUMBER --repo OWNER/REPO" >&2; }
+usage() { echo "Usage: merge-pr.sh --pr NUMBER --repo OWNER/REPO [--no-admin-fallback]" >&2; }
 
 # --- Parse arguments (before installing EXIT trap) ---
 PR_NUMBER=""
 REPO=""
+NO_ADMIN_FALLBACK=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --pr) PR_NUMBER="${2:?--pr requires a value}"; shift 2 ;;
         --repo) REPO="${2:?--repo requires a value}"; shift 2 ;;
+        --no-admin-fallback) NO_ADMIN_FALLBACK=true; shift ;;
         --help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
@@ -125,7 +136,13 @@ if [[ "$MERGE_STATE" != "CLEAN" ]] && [[ "$MERGE_STATE" != "UNSTABLE" ]] && [[ "
     exit 0
 fi
 
-# --- All checks passed — retry with --admin ---
+# --- All checks passed — retry with --admin (unless --no-admin-fallback) ---
+if [[ "$NO_ADMIN_FALLBACK" == "true" ]]; then
+    MERGE_RESULT="policy_denied"
+    ERROR="branch protection denied merge; --no-admin-fallback set"
+    exit 0
+fi
+
 echo "ℹ CI is green and branch is fresh. Retrying with --admin..." >&2
 ADMIN_OUTPUT=$(gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --admin 2>&1)
 ADMIN_EXIT=$?

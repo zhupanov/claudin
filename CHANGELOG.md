@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.12.0] - 2026-04-26
+
+### Added
+
+- `--no-admin-fallback` opt-out flag for `/implement`, `/fix-issue`, and `/loop-fix-issue` (which forwards through to per-iteration `/fix-issue` invocations). When set, `scripts/merge-pr.sh` returns a new `MERGE_RESULT=policy_denied` instead of retrying with `gh pr merge --admin` once the admin-eligible gate (CI good + branch fresh) is reached, and `/implement` bails to Step 12d with `FINAL_BAIL_REASON="branch protection denied merge; --no-admin-fallback set"`. Default behavior is unchanged for backward compatibility — the silent `--admin` retry still fires by default. When `--admin` does fire (default path), `/implement` Step 12b posts a best-effort PR comment recording the bypass for audit visibility (the existing stderr warning is retained). New sibling contract `scripts/merge-pr.md` per AGENTS.md per-script-contracts rule. New harness assertions a3/a4 in `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` pin `--no-admin-fallback` forwarding in both SIMPLE and HARD `/implement` invocation bullets. `/im` and `/imaq` are unchanged — they auto-forward `$ARGUMENTS` verbatim. Closes #559.
+
 ## [7.11.4] - 2026-04-26
 
 ### Changed
