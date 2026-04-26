@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.4] - 2026-04-26
+
+### Fixed
+
+- `skills/loop-fix-issue/scripts/driver.sh` no longer conflates the three `/fix-issue` Step-0 sentinel-absent outcomes. The loop now dispatches on four distinct sub-sentinels — clean exhaustion, Step-0 error, Step-0 lock failure, and a defensive unknown-mismatch fallback — each with its own termination reason and `LOOP_PRESERVE_TMPDIR` retention. Sub-sentinels are anchored on the literal `0: find & lock —` step prefix so user-data-bearing `$ERROR` text in one branch cannot trigger another branch's keyword. Sibling contract `driver.md` `## Termination signal` updated in sync (AGENTS.md per-script-contract rule). Closes #582.
+
 ## [7.13.3] - 2026-04-26
 
 ### Changed
