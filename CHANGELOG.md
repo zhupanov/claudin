@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.10.1] - 2026-04-25
+
+### Fixed
+
+- `scripts/token-tally.sh` `validate_dir` now canonicalizes the nearest existing-or-symlink ancestor of `--dir` before any subcommand body runs, replacing the prior `[[ -d "$d" ]]`-gated canonicalization that allowed `cmd_write`'s `mkdir -p` to materialize directories outside `/tmp/` via a symlinked parent. The walk uses `! -e && ! -L` so dangling symlinks are caught at validation rather than letting `cd` (or downstream `mkdir -p`) fail with an opaque error; a regular-file ancestor is rejected explicitly rather than silently normalized via `dirname`. Both `/tmp` and `/private/tmp` are canonicalized when distinct so the dual-root contract is preserved on hosts where `/tmp` is not a symlink to `/private/tmp`. Pattern mirrors `scripts/deny-edit-write.sh`'s nearest-existing-ancestor probe with a `/tmp`-allow predicate. New `scripts/test-token-tally.sh` T17 adds 5 assertions across three sub-cases (live-symlink escape — the verified reproducer; dangling-symlink; regular-file ancestor) and uses `/var/tmp` as the primary escape-target location with a `$HOME` fallback so the harness stays portable in restricted CI sandboxes. Operator-visible: `--dir` whose ancestor escapes `/tmp/` now exits 1 in `report` and `check-budget` instead of emitting the "missing dir" placeholder; the tolerant missing-dir paths still apply when the ancestor is safely under `/tmp/`. Closes #538.
+
 ## [7.10.0] - 2026-04-25
 
 ### Added
