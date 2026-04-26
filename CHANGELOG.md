@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.4] - 2026-04-26
+
+### Changed
+
+- `skills/fix-issue/scripts/test-issue-lifecycle.sh` — adds Fixture 7 covering the `cmd_close` partial-success retry path documented in `skills/fix-issue/scripts/issue-lifecycle.md` "Partial-success semantics". Two `run_case` calls: the first forces probe + close to fail (asserting the DONE comment was posted before the failures, and that the probe-failure WARNING fires on stderr); the second is a clean retry. A combined-log `grep -c` assertion pins exactly two `comment|42|DONE` lines across the retry sequence — the regression guard for the documented duplicate-comment retry behavior. Top-of-file Fixtures comment block extended; total assertion count 43→50. Closes #642.
+
 ## [7.15.3] - 2026-04-26
 
 ### Fixed
