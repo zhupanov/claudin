@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.2] - 2026-04-26
+
+### Changed
+
+- `.claude/skills/umbrella/scripts/test-umbrella-emit-output-contract.sh` — adds a `c6b` structural assertion pinning the `(<UMBRELLA_FAILURE_REASON>)`-parenthetical variant of the multi-piece partial breadcrumb literal. SKILL.md Step 4 documents two on-disk shapes for the same partial case (with-reason / fallback); the existing `c6` assertion only pinned the fallback, so a future edit could remove or reword only the parenthetical variant unnoticed. Sibling `test-umbrella-emit-output-contract.md` updated in lock-step (assertion count 12→13, coverage table now lists eight concrete literals split as c1–c5, c6, c6b, c7, supporting prose and Edit-in-sync rules aligned). Closes #644.
+
 ## [7.15.1] - 2026-04-26
 
 ### Fixed

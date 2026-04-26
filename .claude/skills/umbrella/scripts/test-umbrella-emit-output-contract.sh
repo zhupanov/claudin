@@ -112,8 +112,10 @@ assert_contains "a2: single-emission-point invariant" \
 # (c*) The canonical breadcrumb shape templates remain present in SKILL.md
 # Step 4. The issue spec lists four conceptual templates (one-shot success /
 # dedup / failed; multi-piece success — including dry-run and partial-failure
-# variants); on disk these expand to seven concrete breadcrumb literals.
-# Pinning each concrete literal guards against silent shape deletion.
+# variants); on disk these expand to eight concrete breadcrumb literals
+# (c6 and c6b are two literals for one conceptual partial case — fallback and
+# UMBRELLA_FAILURE_REASON-parenthetical respectively). Pinning each concrete
+# literal guards against silent shape deletion.
 assert_contains "c1: one-shot filed" \
     '✅ /umbrella: filed #<N> — <url>' \
     "$STEP4_BLOCK"
@@ -129,8 +131,16 @@ assert_contains "c4: multi-piece success" \
 assert_contains "c5: multi-piece dry-run" \
     'ℹ /umbrella: dry-run — would file umbrella with <N> children' \
     "$STEP4_BLOCK"
-assert_contains "c6: multi-piece partial (children created, umbrella failed)" \
+assert_contains "c6: multi-piece partial — fallback (no UMBRELLA_FAILURE_REASON)" \
     '**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**' \
+    "$STEP4_BLOCK"
+# (c6b) The parenthetical variant of the multi-piece partial breadcrumb, rendered
+# when emit-output's `output.kv` carries `UMBRELLA_FAILURE_REASON`. SKILL.md Step 4
+# documents both shapes for the same partial case (with-reason / fallback). The
+# fallback is pinned by c6; without c6b, a future edit could remove or reword
+# only the parenthetical variant unnoticed.
+assert_contains "c6b: multi-piece partial — with UMBRELLA_FAILURE_REASON parenthetical" \
+    '**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**' \
     "$STEP4_BLOCK"
 assert_contains "c7: multi-piece children-batch-failed (umbrella never attempted)" \
     '**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**' \
