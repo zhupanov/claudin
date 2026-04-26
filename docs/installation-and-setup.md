@@ -50,6 +50,7 @@ claude plugin install larch@larch-local
 ```
 - Install claude code: `curl -fsSL https://claude.ai/install.sh | bash`
 - Run `claude` and verify the above settings
+- **Minimum `claude` CLI version**: a build that supports `--permission-mode bypassPermissions` is required. Every `claude -p` child launched by `skills/improve-skill/scripts/iteration.sh::invoke_claude_p` carries that flag (issue #585) so an in-child tool-permission prompt cannot stall the non-interactive subprocess until the 3600s watchdog fires. The shared kernel covers both `/improve-skill` (standalone) and `/loop-improve-skill` (loop body, per-iteration). Note: `/loop-improve-skill`'s driver carries its own slim `invoke_claude_p` for the Step 5a post-iter-cap re-judge that does NOT yet carry this flag — see SECURITY.md `## Trust Model` for the carve-out and the OOS follow-up issue. Older `claude` binaries that do not recognize the flag fail-fast (subprocess returns non-zero; existing `dump_subprocess_diagnostics` captures stderr); the kernel will not silently degrade. Verify with `claude --permission-mode bypassPermissions --version` if uncertain.
 
 ### Codex
 - Via web UI of your Codex org, create your own API key

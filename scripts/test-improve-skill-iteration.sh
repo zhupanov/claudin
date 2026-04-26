@@ -82,6 +82,11 @@ check_contains 'claude -p'                                     'claude -p subpro
 check_contains '--plugin-dir'                                  'claude -p --plugin-dir argument (FINDING_7)'
 # shellcheck disable=SC2016
 check_contains '"$CLAUDE_PLUGIN_ROOT"'                         'CLAUDE_PLUGIN_ROOT passed as --plugin-dir value'
+# Issue #585: non-interactive permission contract on every claude -p child so
+# that an in-child tool-permission prompt cannot stall invoke_claude_p until
+# the 3600s timeout fires. Both tokens must appear adjacent on the executable
+# argv line; Tier-2 fixtures below additionally assert the constructed argv.
+check_contains '--permission-mode bypassPermissions'           'non-interactive permission contract for claude -p children (issue #585)'
 # FINDING_7: fully-qualified slash-command names for larch-shipped children.
 check_contains '/larch:design'                                 'fully-qualified /larch:design invocation'
 check_contains '/larch:im'                                     'fully-qualified /larch:im invocation'
@@ -236,16 +241,23 @@ IBODY
   chmod +x "$fixture_tmp/judge-body.sh" "$fixture_tmp/design-body.sh" "$fixture_tmp/im-body.sh"
 
   # Stub claude (FINDING_9 contract: prompt on stdin).
+  # Issue #585: log argv (excluding --version) so the post-invocation assertion
+  # below can verify the kernel constructs --permission-mode bypassPermissions.
+  # --permission-mode must be parsed as a 2-arg flag like --plugin-dir, else
+  # `bypassPermissions` would be mistaken for the positional prompt and break
+  # FINDING_9's stdin path.
   cat > "$stub_dir/claude" <<CLAUDE_EOF
 #!/usr/bin/env bash
 if [[ "\$1" == "--version" ]]; then
   echo "claude stub 0.0.0"
   exit 0
 fi
+printf '%s\n' "\$*" >> "$fixture_tmp/claude-argv.log"
 while [[ \$# -gt 0 ]]; do
   case "\$1" in
     -p) shift ;;
     --plugin-dir) shift 2 ;;
+    --permission-mode) shift 2 ;;
     --*) shift ;;
     *) break ;;
   esac
@@ -301,6 +313,21 @@ CLAUDE_EOF
     pass "fixture [$name]: KV footer delimiter emitted"
   else
     fail "fixture [$name]: missing '### iteration-result' KV footer delimiter"
+  fi
+
+  # Issue #585: every claude -p child invocation constructed by
+  # invoke_claude_p must carry the non-interactive permission contract.
+  # The stub appends each non-`--version` invocation's argv to claude-argv.log
+  # before its shift loop; assert at least one logged argv contains the pair.
+  if [[ -f "$fixture_tmp/claude-argv.log" ]] && \
+     grep -Fq -- '--permission-mode bypassPermissions' "$fixture_tmp/claude-argv.log"; then
+    pass "fixture [$name]: claude -p argv carried --permission-mode bypassPermissions (issue #585)"
+  else
+    fail "fixture [$name]: claude -p argv missing --permission-mode bypassPermissions (issue #585)"
+    if [[ -f "$fixture_tmp/claude-argv.log" ]]; then
+      echo "    === claude-argv.log ===" >&2
+      cat "$fixture_tmp/claude-argv.log" >&2 || true
+    fi
   fi
 
   rm -rf "$fixture_tmp" 2>/dev/null || true
