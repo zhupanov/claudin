@@ -48,9 +48,11 @@
 #   - $LOOP_TMPDIR cleaned via EXIT trap on success; retained on any abnormal
 #     exit so operators can inspect per-slice artifacts.
 #
-# LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE is an advisory env var used ONLY by
-# scripts/test-loop-review-driver.sh Tier-2 fixtures to redirect `claude -p`
-# invocations at a stub shim. Documented in SECURITY.md as test-only;
+# LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE is an advisory env var reserved for
+# forthcoming Tier-2 stub-shim integration tests in
+# scripts/test-loop-review-driver.sh; the shipped Tier-1 structural test only
+# references the env-var name (assertion J) and does not exercise the
+# override at runtime. Documented in SECURITY.md as test-only;
 # never set in production.
 
 set -euo pipefail
