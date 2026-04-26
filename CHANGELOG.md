@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.6] - 2026-04-26
+
+### Fixed
+
+- `SECURITY.md` line 97, `skills/loop-review/scripts/driver.md` line 71, and `skills/loop-review/scripts/driver.sh` lines 51-54 each described `LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE` as "used exclusively / ONLY by `scripts/test-loop-review-driver.sh` Tier-2 fixtures", but the shipped test script's lines 5-10 explicitly state it is the Tier-1 structural test only and that Tier-2 stub-shim integration tests using the override are tracked as a focused follow-up — the Tier-1 test only references the env-var name in assertion J without exercising the override at runtime. Rephrase all three sites to say the env var is reserved for forthcoming Tier-2 stub-shim integration tests in `scripts/test-loop-review-driver.sh`, keeping the production-safety warnings ("Never set this env var in production"; same-user arbitrary-executable risk) intact. Doc-only alignment; no fixtures added; env-var name unchanged. Closes #627.
+
 ## [7.14.5] - 2026-04-26
 
 ### Fixed
