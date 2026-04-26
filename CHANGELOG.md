@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.10] - 2026-04-26
+
+### Fixed
+
+- `skills/loop-fix-issue/scripts/driver.sh` header comment block (lines 54-56 on `main`) claimed `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` was "Documented in SECURITY.md as test-only", but `SECURITY.md` only documents the parallel `LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE` (under `## /loop-review subprocess invocation`); no entry exists for `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE`. The sibling `skills/loop-fix-issue/scripts/driver.md:99` already correctly defers SECURITY.md registration to Tier-2 stub-shim work. Apply option (b) from the issue: rephrase the comment block to point readers at `driver.md` and explicitly defer SECURITY.md registration to Tier-2, mirroring the wording structure used by the post-#633 loop-review-side `driver.sh` comment block; cross-reference uses a section-heading anchor (`## /loop-review subprocess invocation`) rather than a fragile line number. Comment-only change; no behavioral effect; assertion K of `scripts/test-loop-fix-issue-driver.sh` (which greps for the env-var name token) continues to pass. Closes #632.
+
 ## [7.14.9] - 2026-04-26
 
 ### Fixed
