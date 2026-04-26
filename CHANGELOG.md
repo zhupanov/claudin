@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.2] - 2026-04-25
+
+### Changed
+
+- `scripts/test-research-structure.sh` Check 13 replaces a brittle 5-flag literal substring pin with a structural completeness check that derives the expected "independent" flag set from `skills/research/SKILL.md`'s flag-bullet block (canonicalizing value forms like `--scale=quick|standard|deep` to `--scale` and compound bullets like `--keep-sidecar` AND `--keep-sidecar=<PATH>` to `--keep-sidecar`) and asserts set-equality with the backticked `--<name>` tokens on the line beginning `Flags are independent`. Bullets whose body contains the literal case-sensitive substring `cross-effect` are classified as coupled and exempted (today only `--plan`, whose bullet documents a `--scale` cross-effect). Two distinct failure modes name the specific flag(s): `MISSING` (independent flag absent from the line) and `STALE` (flag listed on the line but not present as an independent bullet). All `sort`/`comm` invocations use `LC_ALL=C` for deterministic cross-platform behavior. The previous pin would silently pass on any new flag added to the bullet block but not the independence statement (a pattern that affected #418, #424, #510, #518). `scripts/test-research-structure.md` is updated to document the new contract: section anchors, the `cross-effect` sentinel, the canonical-token rule, the single-line independence-statement requirement, and the limited-fence-awareness contract. Closes #531.
+
 ## [7.9.1] - 2026-04-25
 
 ### Changed
