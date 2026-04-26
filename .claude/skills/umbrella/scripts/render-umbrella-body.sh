@@ -25,6 +25,9 @@ done
 if [ -z "$TMPDIR" ] || [ ! -d "$TMPDIR" ]; then
   echo "ERROR=--tmpdir is required and must exist" >&2; exit 1
 fi
+if [ ! -w "$TMPDIR" ]; then
+  echo "ERROR=tmpdir not writable: $TMPDIR" >&2; exit 1
+fi
 if [ -z "$SUMMARY_FILE" ] || [ ! -s "$SUMMARY_FILE" ]; then
   echo "ERROR=--summary-file is required and must be non-empty" >&2; exit 1
 fi
@@ -63,7 +66,12 @@ TITLE_HINT=$(awk '
   }
 ' "$SUMMARY_FILE")
 
-# Compose body.
+# Compose body via mktemp partial → -s verify → mv (atomic rename). The grouped
+# redirect below stays standalone (no trailing `||`) — bash suppresses errexit
+# inside a compound on the left of `||`, which would re-mask inner failures.
+OUT_TMP=$(mktemp "$TMPDIR/umbrella-body.md.XXXXXX") || {
+  echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
+}
 {
   printf 'Umbrella tracking issue.\n\n'
   printf '## Summary\n\n'
@@ -71,7 +79,20 @@ TITLE_HINT=$(awk '
   printf '\n\n## Children\n\n'
   awk -F'\t' '{ printf "- [ ] #%s — %s\n", $1, $2 }' "$CHILDREN_FILE"
   printf '\n'
-} > "$OUT"
+} > "$OUT_TMP"
+if [ ! -s "$OUT_TMP" ]; then
+  echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
+fi
+# Reject pre-existing non-regular $OUT (e.g., a directory). On BSD/macOS,
+# `mv source dir/` succeeds by moving the source INTO the directory and
+# returns 0, which would otherwise re-introduce failure-as-success masking
+# (the same #645 bug class on a different surface).
+if [ -e "$OUT" ] && [ ! -f "$OUT" ]; then
+  echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
+fi
+mv "$OUT_TMP" "$OUT" || {
+  echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
+}
 
 printf 'UMBRELLA_BODY_FILE=%s\n' "$OUT"
 printf 'UMBRELLA_TITLE_HINT=%s\n' "$TITLE_HINT"

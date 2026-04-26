@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.7] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-umbrella-body.sh` — fix failure-as-success masking on the body-write path (#645). Add a `[ -w "$TMPDIR" ]` writability preflight emitting the documented `ERROR=tmpdir not writable: <path>` stderr line; replace the grouped redirect with a checked write + atomic rename via an unpredictable `mktemp` partial → `[ -s ]` verify → `mv` into place; reject pre-existing non-regular `$OUT` (defends against the BSD `mv source dir/` silent-nesting class on macOS, caught during code review by Codex); emit `UMBRELLA_BODY_FILE=` / `UMBRELLA_TITLE_HINT=` ONLY past the `mv` gate. Critical bash-gotcha avoided: the grouped redirect remains standalone (no trailing `||`) so `set -e` aborts on inner `cat`/`awk` failure — bash suppresses errexit inside a compound on the left of `||`, which would have re-introduced the very masking this PR fixes. New runtime conformance harness `test-render-umbrella-body.sh` (23 assertions across 6 cases) wired into `make lint` via the `test-render-umbrella-body` Makefile target and documented in `docs/linting.md`. Sibling `render-umbrella-body.md` enumerates the canonical `ERROR=` taxonomy and the umbrella `SKILL.md ## Script contracts` section adds the new harness bullet. Closes #645.
+
 ## [7.16.6] - 2026-04-26
 
 ### Fixed
