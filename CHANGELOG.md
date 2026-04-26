@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.18] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/SKILL.md` Step 3B.2 children-batch-failure abort path now mirrors Step 3B.3's umbrella-failure pattern: capture the failure as session state, omit `UMBRELLA_NUMBER` and `UMBRELLA_URL` from `output.kv` entirely (do NOT write them with blank values), skip 3B.3 / 3B.4, and defer the human summary to Step 4 (the single emission point). A fifth Step 4 human-summary shape — `multi-piece children-batch-failed` — distinguishes the new state ("children batch had failures, umbrella never attempted") from the existing `multi-piece partial` shape ("children created, umbrella failed"). Closes #610.
+
 ## [7.13.17] - 2026-04-26
 
 ### Fixed
