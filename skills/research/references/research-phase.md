@@ -83,8 +83,9 @@ nl -ba "$RESEARCH_TMPDIR/subquestions.txt"
 echo
 printf "[Enter] proceed  /  edit  /  abort: "
 IFS= read -r CHOICE || CHOICE="abort"
-# Case-fold via ${var,,} (Bash 4+; matches the project's existing Bash-4 conventions)
-case "${CHOICE,,}" in
+# Case-fold via tr — Bash 3.2-safe (macOS /bin/bash does not support ${var,,}).
+CHOICE_LC=$(printf '%s' "$CHOICE" | tr '[:upper:]' '[:lower:]')
+case "$CHOICE_LC" in
   "")
     # Enter — proceed to Step 1.2 unchanged.
     echo "✅ 1.1.c: interactive-review — operator confirmed planner subquestions"
@@ -107,7 +108,7 @@ case "${CHOICE,,}" in
 esac
 ```
 
-**Edit subroutine** (entered when `${CHOICE,,}` is `edit`). The orchestrator runs the loop body up to twice in total (initial edit + one bounded retry on validation failure). Track a counter `EDIT_ATTEMPT` initialized to 0; the loop increments it at entry and aborts when it reaches 2 on a failed re-validation.
+**Edit subroutine** (entered when `$CHOICE_LC` is `edit`). The orchestrator runs the loop body up to twice in total (initial edit + one bounded retry on validation failure). Track a counter `EDIT_ATTEMPT` initialized to 0; the loop increments it at entry and aborts when it reaches 2 on a failed re-validation.
 
 ```bash
 EDIT_ATTEMPT=0
@@ -126,13 +127,17 @@ while :; do
     # $EDITOR is intentionally UNQUOTED so Bash word-splits its value through the operator's shell;
     # the trust model matches the operator's interactive shell (the variable is operator-controlled).
     cp "$RESEARCH_TMPDIR/subquestions-edit.txt" "$RESEARCH_TMPDIR/subquestions-edit.bak"
-    if ! $EDITOR "$RESEARCH_TMPDIR/subquestions-edit.txt"; then
-      EDITOR_STATUS=$?
+    # Run the editor and capture its actual exit status (NOT the negated `if !` form,
+    # which would yield $?=0 inside the `then` branch and mask the real status).
+    $EDITOR "$RESEARCH_TMPDIR/subquestions-edit.txt"
+    EDITOR_STATUS=$?
+    if [[ "$EDITOR_STATUS" -ne 0 ]]; then
       echo "**⚠ /research: \$EDITOR exited non-zero (status=$EDITOR_STATUS). Restoring pre-edit state.**"
       cp "$RESEARCH_TMPDIR/subquestions-edit.bak" "$RESEARCH_TMPDIR/subquestions-edit.txt"
       printf "[edit again | abort]: "
       IFS= read -r RECHOICE || RECHOICE="abort"
-      case "${RECHOICE,,}" in
+      RECHOICE_LC=$(printf '%s' "$RECHOICE" | tr '[:upper:]' '[:lower:]')
+      case "$RECHOICE_LC" in
         edit*) continue ;;
         *)
           echo "**⚠ /research: aborted after \$EDITOR failure.**"
@@ -176,7 +181,8 @@ while :; do
 
   printf "[edit again | abort]: "
   IFS= read -r RECHOICE || RECHOICE="abort"
-  case "${RECHOICE,,}" in
+  RECHOICE_LC=$(printf '%s' "$RECHOICE" | tr '[:upper:]' '[:lower:]')
+  case "$RECHOICE_LC" in
     edit*) continue ;;
     *)
       echo "**⚠ /research: aborted after validation failure.**"
