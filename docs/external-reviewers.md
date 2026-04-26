@@ -79,7 +79,7 @@ The optional `--validation-mode` modifier forwards `--validation-mode` to the va
 
 The dialectic-phase (`/design` Step 2a.5 debaters and judges) and adjudication-phase (`/research --adjudicate` judges) collectors deliberately do NOT pass these flags — their output contracts (debate prose with structured tags / vote line) differ from the reviewer-style numbered-findings shape.
 
-Authoritative flag documentation lives in the `scripts/collect-reviewer-results.sh` header comment block (lines 20-37); update both this section and that header in lockstep when adding a new caller.
+Authoritative flag documentation lives in the `--substantive-validation` / `--validation-mode` stanza of the `scripts/collect-reviewer-results.sh` header comment block; update both this section and that header in lockstep when adding a new caller.
 
 ## Timeout Handling
 

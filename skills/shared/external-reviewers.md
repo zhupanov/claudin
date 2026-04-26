@@ -70,7 +70,7 @@ Parse each reviewer's `STATUS`, `REVIEWER_FILE`, and `FAILURE_REASON`:
 
 **Important**: Do NOT read output files before calling `collect-reviewer-results.sh`. Cursor buffers all stdout until exit — its output file is empty until the process finishes. The collection script handles all sentinel polling and validation internally.
 
-**Substantive-content validation is opt-in.** The default collector behavior described above is sentinel + non-empty + retry. Substantive-content classification (`STATUS=NOT_SUBSTANTIVE`) only runs when callers pass `--substantive-validation` (and optionally `--validation-mode` for short reviewer-style outputs). See `scripts/collect-reviewer-results.sh:20-37` for the authoritative flag documentation and `docs/external-reviewers.md` Output Validation for the per-skill opt-in matrix.
+**Substantive-content validation is opt-in.** The default collector behavior described above is sentinel + non-empty + retry. Substantive-content classification (`STATUS=NOT_SUBSTANTIVE`) only runs when callers pass `--substantive-validation` (and optionally `--validation-mode` for short reviewer-style outputs). See the `--substantive-validation` / `--validation-mode` stanza of the `scripts/collect-reviewer-results.sh` header for the authoritative flag documentation and `docs/external-reviewers.md` Output Validation for the per-skill opt-in matrix.
 
 ## Negotiation Protocol
 
