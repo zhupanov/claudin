@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.16] - 2026-04-26
+
+### Fixed
+
+- `skills/review/SKILL.md` — pin slice-mode external-reviewer dual-list contract (closes #659). External slice-mode reviewers (Cursor line 179, Codex line 190) now emit dual-list output with `### In-Scope Findings` / `### Out-of-Scope Observations` section headers (matching the Claude reviewer's existing dual-list contract from `skills/shared/reviewer-templates.md:191,197`). Step 3a item 2 (line 238) becomes mode-conditional with three-way fail-open rules (one missing header → empty section; both absent + `NO_ISSUES_FOUND` → reviewer reported nothing; both absent + not `NO_ISSUES_FOUND` → entire body in-scope, preserving backward compatibility); diff mode keeps single-list. Step 3a item 3 (line 239) adds symmetric merge for external OOS observations. Step 3a item 1 (line 233) wording aligned to canonical `###` headings. `NO_ISSUES_FOUND` sentinel emission tightened to "neither in-scope findings nor out-of-scope observations" so OOS-only findings cannot be silently dropped. Coordinated narrowing edits to `skills/shared/voting-protocol.md:221`, `docs/voting-process.md:107`, and `docs/review-agents.md:83` scope the prior blanket "externals produce single-list, no OOS" claims to diff mode. New structural assertions (14)/(15)/(16)/(17) in `scripts/test-review-structure.sh` (and `scripts/test-review-structure.md`) pin both halves of the contract. PASS line bumped to "all 17 structural invariants hold". Closes #659.
+
 ## [7.16.15] - 2026-04-26
 
 ### Changed
