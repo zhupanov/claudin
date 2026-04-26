@@ -594,6 +594,7 @@ exclude = [
   # entries above (test-fix-issue-bail-detection.md, test-find-lock-issue.md,
   # etc.).
   "skills/create-skill/scripts/test-render-skill-md.md",
+  "skills/implement/scripts/check-review-changes.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
   # scripts/test-alias-target-resolution.md and scripts/test-alias-structure.md
   # are the sibling contracts for the two alias-rework regression harnesses
