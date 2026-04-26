@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.4] - 2026-04-26
+
+### Changed
+
+- `/research` Step 2.8 critique loop now emits a per-iteration citation-revalidation breadcrumb of the form `✅ 2.8 [iter <iter>]: citation-revalidation — <pass> PASS, <fail> FAIL, <unknown> UNKNOWN (<total> claims) (<elapsed>)` after each in-loop re-run of `validate-citations.sh`. Mirrors Step 2.7's completion-breadcrumb shape but namespaces under `2.8 [iter <iter>]` so each in-loop revalidation result is operator-visible without colliding with the original Step 2.7 output. Updates `skills/research/references/critique-loop-phase.md` Section 2.8.6 (replaces the prior "the re-run is silent" deferral) and `skills/research/SKILL.md` Step 2.8 inventory + ownership prose to point at the canonical breadcrumb template in the reference. Closes #563.
+
 ## [7.11.3] - 2026-04-26
 
 ### Changed
