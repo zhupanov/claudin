@@ -112,8 +112,10 @@ assert_contains "a2: single-emission-point invariant" \
 # (c*) The canonical breadcrumb shape templates remain present in SKILL.md
 # Step 4. The issue spec lists four conceptual templates (one-shot success /
 # dedup / failed; multi-piece success — including dry-run and partial-failure
-# variants); on disk these expand to seven concrete breadcrumb literals.
-# Pinning each concrete literal guards against silent shape deletion.
+# variants); on disk these expand to eight concrete breadcrumb literals
+# (c6 and c6b are two literals for one conceptual partial case — fallback and
+# UMBRELLA_FAILURE_REASON-parenthetical respectively). Pinning each concrete
+# literal guards against silent shape deletion.
 assert_contains "c1: one-shot filed" \
     '✅ /umbrella: filed #<N> — <url>' \
     "$STEP4_BLOCK"

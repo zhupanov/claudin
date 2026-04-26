@@ -47,7 +47,7 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 
 ## Edit-in-sync rules
 
-- Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the seven canonical breadcrumb shape literals) requires a same-PR update to the corresponding assertion literal in this harness.
+- Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the eight concrete literals — c1–c7 plus c6b) requires a same-PR update to the corresponding assertion literal in this harness.
 - Any change to helpers.md `emit-output` subsection (stderr discipline sentence, the orchestrator-emits-breadcrumb sentence, or the wire-dag carve-out) requires the same.
 - Renaming or renumbering Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
 - Adding a new canonical breadcrumb shape to SKILL.md Step 4: add a corresponding `(c<N>)` assertion here.
