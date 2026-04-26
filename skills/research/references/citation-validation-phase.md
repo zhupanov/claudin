@@ -162,7 +162,9 @@ A small allow-list of widely-recognized reputable hosts (e.g., `*.wikipedia.org`
 
 ```
 2.7 entry breadcrumb (SKILL.md)
-  → § 2.7.1 input gate (skip if empty/budget-aborted)
+  → § 2.7.1 input gates (evaluated in order):
+      1. budget-abort gate → skip 2.7 → Step 4 (Step 3 was already skipped)
+      2. empty-synthesis gate → skip 2.7 → Step 3
     → § 2.7.2 validator invocation (always exits 0)
     → § 2.7.5 completion line + conditional advisory warnings
   → Step 3 splice (§ 2.7.6) appends sidecar to research-report-final.md
