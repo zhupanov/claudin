@@ -4,7 +4,7 @@ Regression harness for `helpers.sh check-cycle` (pure logic, no network). Self-c
 
 **Run manually**: `bash .claude/skills/umbrella/scripts/test-helpers.sh`.
 
-**Wire into `make lint`**: add a `test-umbrella-helpers` target alongside the existing `test-*` harnesses (mirroring `test-parse-input`, `test-redact-secrets`, `test-sentinel-write`, etc.).
+**Wired into `make lint`**: the top-level `Makefile` defines a `test-umbrella-helpers` target that runs this harness; it is a dep of `test-harnesses` (and therefore `lint`), so CI's `test-harnesses` job catches any regression.
 
 **Coverage**:
 
