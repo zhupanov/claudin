@@ -27,6 +27,7 @@ the sidecar body contains the expected `Status` / `Reason` tokens.
 | Git-root-unavailable | non-git cwd → `UNKNOWN(git-root-unavailable)` |
 | DOI syntax | malformed `10.123/...` (3 digits) → not extracted (regex tier) |
 | URL dedup | duplicate URL appears in exactly one ledger row |
+| Darwin budget exhaustion (Test 20, Darwin-only) | hung fake-curl + `--budget-seconds 1` → exit 0, sidecar present with `UNKNOWN`/`timeout` rows for hung URLs, no surviving fake-curl PIDs after kill loop. Linux runners skip and rely on the existing CI pipeline to exercise the `setsid` branch end-to-end. |
 
 ## Test seams (env vars exercised by the harness)
 

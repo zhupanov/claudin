@@ -319,6 +319,75 @@ __VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example.com=8.8.8.8;doi.org=8.8.8.8' \
 LEDGER_ROWS=$(grep -c '^| `' "$WORK/c19/cv.md" || echo 0)
 assert "Test 19: combined cap yields exactly --max-claims rows (got $LEDGER_ROWS)" "[[ \"$LEDGER_ROWS\" == 6 ]]"
 
+# ---------- Test 20: Darwin budget-exhaustion kills background curl (#662) ----------
+echo "=== Test 20: Darwin budget-exhaustion no-orphan-curl ==="
+case "$(uname -s 2>/dev/null)" in
+    Darwin*)
+        mkdir -p "$WORK/c20"
+        cat > "$WORK/c20/report.txt" <<'REPORT'
+See https://example-hang.invalid/page1 and https://example-hang.invalid/page2.
+REPORT
+        # PID-recording fake curl: records its own PID to a per-invocation file
+        # at start, removes it on clean exit. After the validator returns, any
+        # surviving .pid file whose process is still alive is an orphan.
+        PIDS_DIR="$WORK/c20/pids"
+        mkdir -p "$PIDS_DIR"
+        FAKE_CURL_PIDREC="$WORK/c20/fake-curl-pidrec"
+        cat > "$FAKE_CURL_PIDREC" <<FAKEEOF
+#!/usr/bin/env bash
+PIDS_DIR="$PIDS_DIR"
+echo "\$\$" > "\$PIDS_DIR/\$\$.pid"
+trap 'rm -f "\$PIDS_DIR/\$\$.pid"' EXIT
+url=""
+for a in "\$@"; do
+    case "\$a" in http://*|https://*) url="\$a" ;; esac
+done
+case "\$url" in
+    *example-hang.invalid*) sleep 60; printf '200'; exit 0 ;;
+    *) printf '200'; exit 0 ;;
+esac
+FAKEEOF
+        chmod +x "$FAKE_CURL_PIDREC"
+        START=$(date +%s)
+        set +e
+        __VC_FAKE_CURL="$FAKE_CURL_PIDREC" __VC_LAST_ARGV="$ARGV_LOG" \
+        __VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example-hang.invalid=8.8.8.8' \
+            "$VALIDATOR" --report "$WORK/c20/report.txt" --output "$WORK/c20/cv.md" \
+                         --tmpdir "$WORK/c20" --budget-seconds 1 >/dev/null 2>&1
+        VALIDATOR_RC=$?
+        set -e
+        END=$(date +%s)
+        ELAPSED=$((END - START))
+        # Wait briefly for any in-flight kill signals to land before scanning
+        # for survivors. Bug behavior leaves ~60s sleeps running.
+        sleep 2
+        ORPHAN_COUNT=0
+        for pf in "$PIDS_DIR"/*.pid; do
+            [[ -e "$pf" ]] || continue
+            opid=$(cat "$pf" 2>/dev/null || echo "")
+            [[ -z "$opid" ]] && continue
+            if kill -0 "$opid" 2>/dev/null; then
+                ORPHAN_COUNT=$((ORPHAN_COUNT + 1))
+            fi
+        done
+        # Bug-#662 leak behavior is ~60s (the fake-curl sleep); ceiling 15s
+        # filters that out while leaving slack for slow / shared CI.
+        assert "Test 20: validator returned within budget + slack (got ${ELAPSED}s)" "[[ \"$ELAPSED\" -le 15 ]]"
+        # Fail-soft contract: validator MUST exit 0 even on budget timeout.
+        # Catches the regression class where the kill path signals $$'s
+        # process group and SIGTERMs the validator itself (exit 143, no
+        # sidecar).
+        assert "Test 20: validator exited 0 (fail-soft contract on timeout)" "[[ \"$VALIDATOR_RC\" -eq 0 ]]"
+        assert "Test 20: sidecar produced" "[[ -s \"$WORK/c20/cv.md\" ]]"
+        assert "Test 20: sidecar has UNKNOWN | timeout for hung URL #1" "grep -F 'https://example-hang.invalid/page1' \"$WORK/c20/cv.md\" | grep -F 'UNKNOWN' | grep -Fq 'timeout'"
+        assert "Test 20: sidecar has UNKNOWN | timeout for hung URL #2" "grep -F 'https://example-hang.invalid/page2' \"$WORK/c20/cv.md\" | grep -F 'UNKNOWN' | grep -Fq 'timeout'"
+        assert "Test 20: no orphan fake-curl processes after budget-kill (got $ORPHAN_COUNT)" "[[ \"$ORPHAN_COUNT\" == 0 ]]"
+        ;;
+    *)
+        note "skip: Darwin-only (Linux uses setsid; kill -- -\$\$ already covers children)"
+        ;;
+esac
+
 # ---------- Summary ----------
 echo "=== Summary ==="
 echo "Passed: $PASS"

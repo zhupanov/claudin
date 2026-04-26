@@ -58,8 +58,16 @@
 # concern (research-report-final.md prelude lines).
 #
 # Process-group kill on budget exhaustion:
-#   Linux: setsid puts curl children in their own session.
-#   macOS: set -m + kill -- -<pgid> per the parent's process group.
+#   Linux: setsid puts curl children in the script's session, so a single
+#     kill -- -$$ signals every descendant.
+#   macOS: set -m places each backgrounded fetch_url subshell in its own
+#     process group (pgid == $!). The script records every $! in CURL_PIDS
+#     and on timeout runs kill -- -<pid> for each one, terminating the
+#     subshell + its curl substitution + any descendants together.
+#     `kill -- -$$` is intentionally NOT a fallback on this branch: it
+#     would also signal the validator itself (which lives in $$'s group),
+#     producing exit 143 with no sidecar and breaking the fail-soft
+#     contract.
 #   Either path ensures orphaned curl processes do not outlive the budget.
 #
 # Portability: bash 3.2 (macOS default) and bash 5+ (Ubuntu CI). Uses awk
@@ -658,9 +666,21 @@ case "$(uname -s 2>/dev/null)" in
         fi
         ;;
     Darwin*)
-        # Enable job control so the parent has its own process group; the
-        # `kill -- -<pgid>` fallback below uses $$.
+        # Enable job control so each `fetch_url &` subshell becomes a
+        # process group leader. The budget-exhaustion handler iterates
+        # CURL_PIDS and runs `kill -- -<pid>` per recorded subshell PID
+        # to terminate each subshell + its curl substitution. If `set -m`
+        # silently fails (rare on macOS bash 3.2+), background subshells
+        # share $$'s process group and per-PGID kills cannot reach their
+        # curl children — emit a warning so operators know orphan
+        # cleanup is degraded; we cannot fall back to `kill -- -$$`
+        # because that would also signal the validator itself and break
+        # the fail-soft contract.
         set -m 2>/dev/null || true
+        case "$-" in
+            *m*) : ;;  # job control active — normal path
+            *)   printf 'WARNING: validate-citations.sh: set -m failed; budget-exhaustion kill cannot guarantee orphan-curl cleanup\n' >&2 ;;
+        esac
         ;;
 esac
 
@@ -722,7 +742,19 @@ if [[ "$TIMED_OUT" == "true" ]]; then
             kill -- -$$ 2>/dev/null || true
             ;;
         Darwin*)
-            kill -- -$$ 2>/dev/null || true
+            # The earlier Darwin case stanza enables `set -m`, which puts
+            # each backgrounded `fetch_url &` in its own process group
+            # (pgid == subshell pid), so `kill -- -$$` would only signal
+            # the parent's group and leak each subshell's curl child.
+            # `kill -- -$$` is intentionally NOT used as a fallback here:
+            # when `set -m` did take effect, $$'s group contains the
+            # validator itself, and signaling it kills the script before
+            # it can write the per-claim UNKNOWN(timeout) rows and the
+            # sidecar — i.e. it breaks the fail-soft contract (script
+            # must exit 0 with a consumable sidecar).
+            for _kill_pid in "${CURL_PIDS[@]}"; do
+                kill -- -"$_kill_pid" 2>/dev/null || true
+            done
             ;;
     esac
     # Mark every still-missing result as UNKNOWN(timeout).
