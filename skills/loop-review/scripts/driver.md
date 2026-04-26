@@ -68,7 +68,7 @@ Mirrors `### iteration-result` from `skills/improve-skill/scripts/iteration.sh`.
 
 ## Test-only override
 
-`LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE=<path>` redirects `claude -p` invocations at a stub shim. Used ONLY by `scripts/test-loop-review-driver.sh` Tier-2 fixtures. Documented in SECURITY.md as test-only; never set in production. Same-user arbitrary-executable risk if set in a production environment.
+`LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE=<path>` redirects `claude -p` invocations at a stub shim. Reserved for forthcoming Tier-2 stub-shim integration tests in `scripts/test-loop-review-driver.sh`; the shipped Tier-1 structural test only references the env-var name (assertion J) and does not exercise the override at runtime. Tier-2 fixture coverage remains a tracked focused follow-up. Documented in SECURITY.md as test-only; never set in production. Same-user arbitrary-executable risk if set in a production environment.
 
 ## Removed behaviors (from prior `/loop-review` implementation)
 
