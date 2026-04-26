@@ -90,7 +90,7 @@ Decompose `TASK` into N concrete work-pieces (`N >= 2`). Each piece must be smal
 - `body` — markdown, the implementation contract for that piece (problem, suggested approach, acceptance criteria).
 - `depends-on` — comma-separated 1-based indices of earlier pieces this one depends on (empty if none).
 
-If decomposition produces fewer than 2 pieces, fall back to one-shot: print `UMBRELLA_VERDICT=one-shot (downgraded — decomposition produced fewer than 2 pieces)` and execute Step 3A with the original `TASK`.
+If decomposition produces fewer than 2 pieces, fall back to one-shot: print two strict KV lines — `UMBRELLA_VERDICT=one-shot` (preserving the line-62 token grammar) and `UMBRELLA_DOWNGRADE=decomposition<2` (carrying the downgrade reason on a separate machine-grep-friendly line) — and execute Step 3A with the original `TASK`.
 
 Render the batch-input markdown file:
 
