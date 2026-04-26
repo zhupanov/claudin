@@ -108,3 +108,7 @@ There are three observability surfaces. Each carries a different kind of content
 ### If Monitor is unavailable (older runtime)
 
 If the Claude runtime does not expose the Monitor tool, the background Bash launch still runs and the task-completion notification still fires. Only the live stream is lost. To inspect driver progress in that case, run `tail -f <LOG_PATH>` in a separate shell using the path printed in Step 2.
+
+## Verification
+
+The driver's structural contract is regression-guarded by `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-fix-issue-driver.sh`. The SKILL.md contract (frontmatter `allowed-tools`, log-path visibility, filter-regex parity with `driver.sh` breadcrumb helpers) is regression-guarded by `${CLAUDE_PLUGIN_ROOT}/scripts/test-loop-fix-issue-skill-md.sh`. Both are wired into `make lint`.

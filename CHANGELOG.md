@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.4] - 2026-04-26
+
+### Added
+
+- New Tier-1 structural regression harness pair for `/loop-fix-issue` mirroring the `/loop-review` precedent: `scripts/test-loop-fix-issue-driver.sh` (20 assertions over `skills/loop-fix-issue/scripts/driver.sh` — `set -euo pipefail`, three-up `CLAUDE_PLUGIN_ROOT` derivation tolerated through the `if [[ -z … ]]` guard, `cleanup_on_exit` EXIT trap, the `if [[ ]]` form of `LOOP_TMPDIR`'s `/tmp/*|/private/tmp/*` prefix guard plus the `..` path-component guard, `invoke_claude_p_skill` definition with FINDING_7/9/10 contracts, the live `SETUP_SENTINEL='find & lock — found and locked'` assignment, all four Step-0 sub-sentinels including the defensive `no recognized Step 0 literal` fallback, an exact count of four `LOOP_PRESERVE_TMPDIR="true"` abnormal-exit assignments plus the default-`false` initialization, the `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` token, and the live `printf '/fix-issue%s\n'` prompt-construction line tied to `fix-issue-prompt.txt`) and `scripts/test-loop-fix-issue-skill-md.sh` (12 assertions mirroring `test-loop-review-skill-md`'s A-F shape: `allowed-tools: Bash, Monitor` frontmatter, `LOOP_FIX_ISSUE_DRIVER_LOG_FILE` env-overridable default with `/tmp/*|/private/tmp/*` validation, the `📄 Full driver log:` and `📄 Full driver log (retained):` log-path visibility lines, `run_in_background: true` AND `persistent: true` Monitor directives, the byte-verbatim filter regex, and breadcrumb-prefix parity with `driver.sh`'s three `printf` helpers). Both harnesses ship with sibling `.md` contract files per the AGENTS.md "Per-script contracts live beside the script" rule, are wired into `make lint` via `.PHONY`, the `test-harnesses` aggregate, and two explicit recipe targets adjacent to the existing `test-loop-review-*` entries, and are documented under the Makefile Targets table in `docs/linting.md`. `skills/loop-fix-issue/SKILL.md` gains a `## Verification` section pointing at both new harnesses (parallels `skills/loop-review/SKILL.md`); `skills/loop-fix-issue/scripts/driver.md`'s `## Test-only override` paragraph is rewritten to drop the "harness is a future addition" line and reflect that a Tier-1 harness now exists, while flagging that override-driven Tier-2 coverage remains future work. Closes #609.
+
 ## [7.14.3] - 2026-04-26
 
 ### Fixed

@@ -96,7 +96,7 @@ There are three observability surfaces (Monitor stream, `LOG_PATH` driver log, p
 
 ## Test-only override
 
-`LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE=<path>` redirects `claude -p` invocations at a stub shim. Reserved for tests; no harness using it is wired into `make lint` yet (harness is a future addition). Same-user arbitrary-executable risk if set in a production environment — when the first harness using this override lands, document it in `SECURITY.md` alongside `LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE` (the analogous override for `loop-review/scripts/driver.sh`).
+`LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE=<path>` redirects `claude -p` invocations at a stub shim. Reserved for tests; the Tier-1 structural harness `scripts/test-loop-fix-issue-driver.sh` (wired into `make lint`) greps for the override token but does not exercise it. Tier-2 stub-shim integration coverage that actually invokes the override remains future work; when the first such harness lands, document the override in `SECURITY.md` alongside `LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE` (the analogous override for `loop-review/scripts/driver.sh`). Same-user arbitrary-executable risk if set in a production environment.
 
 ## Edit-in-sync
 
