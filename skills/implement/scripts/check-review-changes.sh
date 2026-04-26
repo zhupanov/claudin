@@ -26,23 +26,48 @@
 #   check-review-changes.sh [--baseline <path>]
 #
 # Exit codes:
-#   0 — always
+#   0 — always (including bad CLI input — see Parse-error policy below).
+#
+# Parse-error policy: on unknown flag or --baseline-without-path, emit an
+# informational ERROR=... line on stderr and degrade to the missing-baseline
+# path on stdout. The always-2-keys, exit-0 contract is preserved so callers
+# (notably skills/implement/SKILL.md Step 6) parse stdout uniformly.
+#
+# Best-effort git probing: git diff and git ls-files are run with
+# 2>/dev/null || echo "", so transient git errors degrade to "no changes
+# detected on that source" rather than aborting. The script does NOT emit a
+# separate health key — empty output and "git failed" are observationally
+# indistinguishable on stdout. See check-review-changes.md for the full
+# graceful-degradation philosophy.
 
 set -euo pipefail
 
 BASELINE=""
+PARSE_ERROR=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --baseline)
+            if [[ $# -lt 2 ]]; then
+                PARSE_ERROR="--baseline requires a path argument"
+                break
+            fi
             BASELINE="$2"
             shift 2
             ;;
         *)
-            echo "ERROR=Unknown argument: $1" >&2
-            exit 1
+            PARSE_ERROR="Unknown argument: $1"
+            break
             ;;
     esac
 done
+
+# Parse errors degrade to the missing-baseline path so the always-emit-2-keys,
+# exit-0 stdout contract holds even on bad CLI input. The ERROR= line on stderr
+# is informational only — callers parse stdout, not stderr or exit code.
+if [[ -n "$PARSE_ERROR" ]]; then
+    echo "ERROR=$PARSE_ERROR" >&2
+    BASELINE=""
+fi
 
 UNSTAGED=$(git diff --name-only 2>/dev/null || echo "")
 STAGED=$(git diff --name-only --cached 2>/dev/null || echo "")

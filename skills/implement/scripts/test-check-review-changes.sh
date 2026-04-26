@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # test-check-review-changes.sh — Offline regression harness for check-review-changes.sh.
 #
-# Pins seven cases that together cover the issue #651 regression
-# (pre-existing untracked → false positive) plus the empty-vs-missing
-# baseline-state distinction:
+# Pins eight cases that together cover the issue #651 regression
+# (pre-existing untracked → false positive), the empty-vs-missing
+# baseline-state distinction, and the echo "" -> comm -> sed safety net
+# inside the SUT:
 #   (a) clean tree, no baseline → FILES_CHANGED=false UNTRACKED_BASELINE=missing
 #   (b) pre-existing untracked + matching baseline →
 #       FILES_CHANGED=false UNTRACKED_BASELINE=present (THE regression case)
@@ -17,6 +18,9 @@
 #   (g) zero-byte readable baseline + non-empty current untracked →
 #       FILES_CHANGED=true UNTRACKED_BASELINE=present (empty-vs-missing
 #       distinction — readable empty file is present, not missing)
+#   (h) non-empty baseline + empty current untracked →
+#       FILES_CHANGED=false UNTRACKED_BASELINE=present (pins the
+#       echo "" -> comm -> sed '/^$/d' safety net for empty CURRENT)
 #
 # Usage:
 #   bash skills/implement/scripts/test-check-review-changes.sh
@@ -141,8 +145,21 @@ BL_G="$SBX_G/baseline.txt"
 run_case "(g) zero-byte readable baseline + non-empty current untracked" \
     "true" "present" "$SBX_G" "$BL_G"
 
+# Case (h): non-empty baseline + empty current untracked. Exercises the
+# echo "" -> comm -> sed '/^$/d' safety net path inside the SUT (when
+# CURRENT is empty, echo "" emits one blank line that sed must strip).
+# A regression that removes the trailing sed filter would yield a phantom
+# delta entry and flip FILES_CHANGED to true incorrectly.
+SBX_H=$(mkrepo)
+( cd "$SBX_H" && touch ephemeral.txt )
+BL_H="$SBX_H/baseline.txt"
+( cd "$SBX_H" && git ls-files --others --exclude-standard | LC_ALL=C sort > "$BL_H" )
+( cd "$SBX_H" && rm ephemeral.txt )
+run_case "(h) non-empty baseline + empty current untracked (sed safety net)" \
+    "false" "present" "$SBX_H" "$BL_H"
+
 # Cleanup sandboxes.
-rm -rf "$SBX_A" "$SBX_B" "$SBX_C" "$SBX_D" "$SBX_E" "$SBX_F" "$SBX_G"
+rm -rf "$SBX_A" "$SBX_B" "$SBX_C" "$SBX_D" "$SBX_E" "$SBX_F" "$SBX_G" "$SBX_H"
 
 echo ""
 echo "RESULTS: $PASS passed, $FAIL failed"

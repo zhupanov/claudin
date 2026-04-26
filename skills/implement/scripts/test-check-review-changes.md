@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Offline regression harness for `skills/implement/scripts/check-review-changes.sh`. Pins the post-fix behavior for issue #651 (the false-positive scenario where ANY pre-existing untracked file flipped `FILES_CHANGED=true`) plus the empty-vs-missing baseline-state distinction introduced by the fix.
+Offline regression harness for `skills/implement/scripts/check-review-changes.sh`. Pins the post-fix behavior for issue #651 (the false-positive scenario where ANY pre-existing untracked file flipped `FILES_CHANGED=true`), the empty-vs-missing baseline-state distinction introduced by the fix, and the `echo ""` → `comm` → `sed` safety-net path for the empty-`CURRENT` case.
 
 ## Test cases
 
@@ -17,6 +17,7 @@ Each case sets up an isolated `git init` sandbox via `mktemp -d`, optionally wri
 | (e) | unstaged modification (with empty baseline) | `FILES_CHANGED=true UNTRACKED_BASELINE=present` | unstaged-only path is unchanged |
 | (f) | pre-existing untracked, NO `--baseline` flag | `FILES_CHANGED=false UNTRACKED_BASELINE=missing` | **deliberate behavior change** — see callout below |
 | (g) | zero-byte readable baseline + new untracked file | `FILES_CHANGED=true UNTRACKED_BASELINE=present` | empty-vs-missing distinction (readable zero-byte = present, delta = current) |
+| (h) | non-empty baseline + empty current untracked (file removed after snapshot) | `FILES_CHANGED=false UNTRACKED_BASELINE=present` | exercises the `echo ""` → `comm` → `sed '/^$/d'` safety net inside the SUT — pins the empty-`CURRENT` path that would otherwise yield a phantom delta entry if the trailing `sed` filter were removed |
 
 ## Case (f) is a deliberate behavior change — do NOT "fix" it
 

@@ -17,7 +17,9 @@ Consumers MUST parse with key-based extraction (e.g., `grep -E '^FILES_CHANGED='
 
 **Stdin**: none.
 
-**Exit codes**: always `0`. Detection failure (e.g., transient `git` error) is encoded in the keys, not in exit status.
+**Exit codes**: always `0`, including on bad CLI input (unknown flag, `--baseline` with no path). On parse errors the script emits an informational `ERROR=…` line on stderr and degrades to the missing-baseline path on stdout (`FILES_CHANGED=false UNTRACKED_BASELINE=missing` if no other detection source fires). Callers MUST parse stdout, not stderr or exit code.
+
+**Best-effort git probing**: `git diff --name-only`, `git diff --name-only --cached`, and `git ls-files --others --exclude-standard` are all run with `2>/dev/null || echo ""` so transient git errors degrade to "no changes detected on that source" rather than aborting the script. The script does NOT emit a separate health key for git state — empty output and "git failed" are observationally indistinguishable on stdout. This is intentional graceful degradation matching the missing-baseline philosophy: a degraded run reports a conservative `FILES_CHANGED=false` rather than blocking Step 6, and the operator's tracked-changes flow (commit / push) surfaces any genuine git breakage downstream.
 
 ## Detection sources
 
