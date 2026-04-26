@@ -45,22 +45,49 @@
 #
 # Output (KEY=value lines on stdout):
 #   ELIGIBLE=true|false
-#   ISSUE_NUMBER=<N>          (when ELIGIBLE=true)
-#   ISSUE_TITLE=<title>       (when ELIGIBLE=true)
-#   LOCK_ACQUIRED=true|false  (true on exit 0; false on exit 3 — lock-fail)
+#   ISSUE_NUMBER=<N>          (when ELIGIBLE=true; on the umbrella-dispatch
+#                              path, this is the CHOSEN CHILD's number)
+#   ISSUE_TITLE=<title>       (when ELIGIBLE=true; the chosen child's title
+#                              on the umbrella-dispatch path)
+#   LOCK_ACQUIRED=true|false  (true on exit 0; false on exit 3 — lock-fail —
+#                              and false on exit 4 — umbrella complete, no
+#                              lock attempted)
 #   RENAMED=true|false        (when LOCK_ACQUIRED=true; false = idempotent
 #                              no-op OR rename API failure; rename errors
 #                              additionally surfaced on stderr)
-#   ERROR=<message>           (when ELIGIBLE=false and exit 2, or when exit 3)
+#   ERROR=<message>           (when ELIGIBLE=false and exit 2, or when exit 3,
+#                              or when exit 5 — no eligible umbrella child)
+#
+#   Umbrella-only keys (FINDING_1 from the umbrella-PR plan review — emitted
+#   ONLY when the umbrella detector returned IS_UMBRELLA=true):
+#   IS_UMBRELLA=true          (only on umbrella paths — exit 0 dispatch,
+#                              exit 3 child-lock-fail, exit 4 complete,
+#                              exit 5 no-eligible-child)
+#   UMBRELLA_NUMBER=<U>       (the umbrella issue number; ALWAYS absent on
+#                              non-umbrella paths and on auto-pick exits)
+#   UMBRELLA_TITLE=<title>    (umbrella's title, when IS_UMBRELLA=true)
+#   UMBRELLA_ACTION           (one of: dispatched | complete | no-eligible-
+#                              child — describes the umbrella outcome)
 #
 # Exit codes:
-#   0 — eligible issue found, comment lock acquired (rename may have failed
-#       best-effort — RENAMED=false signals this on stdout)
+#   0 — eligible issue found, comment lock acquired. On umbrella paths,
+#       UMBRELLA_ACTION=dispatched and ISSUE_NUMBER refers to the chosen
+#       child (rename may have failed best-effort — RENAMED=false signals).
 #   1 — no eligible issues (auto-pick mode only)
-#   2 — error: gh CLI failure, or explicit issue not eligible
+#   2 — error: gh CLI failure, or explicit issue not eligible (or umbrella
+#       blocked by open dependencies)
 #   3 — eligible issue found but comment lock could not be acquired
 #       (concurrent runner won the race, or GO sentinel changed between
-#       eligibility scan and lock attempt)
+#       eligibility scan and lock attempt; on umbrella paths, the failure
+#       is on the chosen child and ERROR carries umbrella context)
+#   4 — umbrella complete: all parsed children are CLOSED. SKILL.md Step 0
+#       invokes finalize-umbrella.sh on this path. ELIGIBLE=true with
+#       LOCK_ACQUIRED=false (no lock; finalization is a different state
+#       transition).
+#   5 — umbrella detected but has no eligible child (some children open but
+#       all blocked / locked / managed-prefixed, OR zero parseable children
+#       found in the umbrella body — FINDING_3). ELIGIBLE=false, ERROR
+#       carries the blocking reason.
 #
 # Stdout contract policy: delegate stdout (issue-lifecycle.sh, tracking-
 # issue-write.sh) is captured into local shell variables and parsed
@@ -68,6 +95,29 @@
 # declared above. Auxiliary delegate keys (COMMENTED, FAILED, NEW_TITLE,
 # etc.) are filtered out so the SKILL.md parser sees a clean unified
 # contract.
+#
+# Umbrella support (explicit-issue path only — auto-pick mode never selects
+# umbrellas, per the design dialectic's DECISION_1):
+#   When the explicit issue is detected as an umbrella (body literal
+#   "Umbrella tracking issue." OR title prefix "Umbrella:" / "Umbrella —"),
+#   delegate to umbrella-handler.sh to either:
+#     - dispatch to the next-eligible child (pick-child returns CHILD_NUMBER),
+#       lock the CHILD using --lock-no-go (no GO required), rename the CHILD
+#       to [IN PROGRESS]. Emit IS_UMBRELLA=true UMBRELLA_NUMBER=<U>
+#       UMBRELLA_TITLE=<T> UMBRELLA_ACTION=dispatched alongside the existing
+#       ISSUE_NUMBER (= child) keys. Exit 0.
+#     - finalize the umbrella when all parsed children are CLOSED
+#       (pick-child returns ALL_CLOSED=true). Emit IS_UMBRELLA=true
+#       UMBRELLA_NUMBER=<U> UMBRELLA_TITLE=<T> UMBRELLA_ACTION=complete.
+#       Exit 4. SKILL.md Step 0 invokes finalize-umbrella.sh.
+#     - report no-eligible-child (pick-child returns NO_ELIGIBLE_CHILD).
+#       Emit IS_UMBRELLA=true UMBRELLA_NUMBER=<U> UMBRELLA_ACTION=
+#       no-eligible-child + ERROR=<reason>. Exit 5.
+#   On child lock failure, emit exit 3 with ERROR carrying the umbrella
+#   context ("Failed to lock chosen child #C of umbrella #U: <reason>").
+#   UMBRELLA_NUMBER is emitted ONLY when an umbrella was detected — absent
+#   on the normal (non-umbrella) explicit-issue exit-0 path AND on auto-pick
+#   exits, per FINDING_1 from the umbrella-PR plan review.
 
 set -euo pipefail
 
@@ -371,6 +421,167 @@ lock_and_rename_then_emit() {
 }
 
 # ---------------------------------------------------------------------------
+# lock_no_go_and_rename_then_emit_for_child <child-num> <child-title>
+#                                           <umbrella-num> <umbrella-title>
+#
+# Umbrella child-dispatch lock path. Same shape as
+# lock_and_rename_then_emit (above), but uses issue-lifecycle.sh comment
+# --lock-no-go (no GO requirement) and emits the unified contract WITH
+# umbrella-context keys (IS_UMBRELLA, UMBRELLA_NUMBER, UMBRELLA_TITLE,
+# UMBRELLA_ACTION=dispatched).
+#
+# On child lock failure, exits 3 with an ERROR string that names BOTH the
+# child and the umbrella so SKILL.md Step 0's exit-3 branch can present a
+# clear error to the operator.
+# ---------------------------------------------------------------------------
+lock_no_go_and_rename_then_emit_for_child() {
+    local child_num="$1"
+    local child_title="$2"
+    local umbrella_num="$3"
+    local umbrella_title="$4"
+    local script_dir lock_script rename_script
+    script_dir="$(dirname "${BASH_SOURCE[0]}")"
+    lock_script="${script_dir}/issue-lifecycle.sh"
+    rename_script="${script_dir}/../../../scripts/tracking-issue-write.sh"
+
+    # ---- Lock without GO ----
+    local lock_out lock_exit=0
+    lock_out=$("$lock_script" comment --issue "$child_num" --body "IN PROGRESS" --lock-no-go 2>&1) || lock_exit=$?
+
+    local lock_acquired lock_error
+    lock_acquired=$(echo "$lock_out" | awk -F= '/^LOCK_ACQUIRED=/ { v=$2 } END { print v }')
+    lock_error=$(echo "$lock_out" | awk -F= '/^ERROR=/ { sub(/^ERROR=/, "", $0); v=$0 } END { print v }')
+
+    if [ "$lock_acquired" != "true" ] || [ "$lock_exit" -ne 0 ]; then
+        echo "ELIGIBLE=true"
+        echo "IS_UMBRELLA=true"
+        echo "UMBRELLA_NUMBER=$umbrella_num"
+        echo "UMBRELLA_TITLE=$umbrella_title"
+        echo "ISSUE_NUMBER=$child_num"
+        echo "ISSUE_TITLE=$child_title"
+        echo "LOCK_ACQUIRED=false"
+        if [ -n "$lock_error" ]; then
+            echo "ERROR=Failed to lock chosen child #$child_num of umbrella #$umbrella_num: $lock_error"
+        else
+            echo "ERROR=Failed to lock chosen child #$child_num of umbrella #$umbrella_num (issue-lifecycle.sh exit $lock_exit)"
+        fi
+        exit 3
+    fi
+
+    # ---- Rename the child to [IN PROGRESS] (best-effort) ----
+    local rename_out rename_exit=0 renamed=false rename_error=""
+    rename_out=$("$rename_script" rename --issue "$child_num" --state in-progress 2>&1) || rename_exit=$?
+    local rename_failed
+    renamed=$(echo "$rename_out" | awk -F= '/^RENAMED=/ { v=$2 } END { print v }')
+    rename_failed=$(echo "$rename_out" | awk -F= '/^FAILED=/ { v=$2 } END { print v }')
+    rename_error=$(echo "$rename_out" | awk -F= '/^ERROR=/ { sub(/^ERROR=/, "", $0); v=$0 } END { print v }')
+    if [ "$rename_exit" -ne 0 ] || [ "$rename_failed" = "true" ]; then
+        if [ -n "$rename_error" ]; then
+            echo "WARNING: title rename failed for child #$child_num (umbrella #$umbrella_num): $rename_error" >&2
+        else
+            echo "WARNING: title rename failed for child #$child_num (umbrella #$umbrella_num) (tracking-issue-write.sh exit $rename_exit)" >&2
+        fi
+        renamed="false"
+    fi
+    if [ -z "$renamed" ]; then
+        renamed="false"
+    fi
+
+    # ---- Emit unified contract ----
+    echo "ELIGIBLE=true"
+    echo "IS_UMBRELLA=true"
+    echo "UMBRELLA_NUMBER=$umbrella_num"
+    echo "UMBRELLA_TITLE=$umbrella_title"
+    echo "UMBRELLA_ACTION=dispatched"
+    echo "ISSUE_NUMBER=$child_num"
+    echo "ISSUE_TITLE=$child_title"
+    echo "LOCK_ACQUIRED=true"
+    echo "RENAMED=$renamed"
+    exit 0
+}
+
+# ---------------------------------------------------------------------------
+# handle_umbrella <umbrella-num> <umbrella-title>
+#
+# Invoked from the explicit-issue path AFTER the umbrella detector has
+# returned IS_UMBRELLA=true. Calls umbrella-handler.sh pick-child and
+# branches on the outcome:
+#   - CHILD_NUMBER → lock_no_go_and_rename_then_emit_for_child (terminal)
+#   - ALL_CLOSED   → emit exit-4 contract (SKILL.md finalizes umbrella)
+#   - NO_ELIGIBLE_CHILD → emit exit-5 contract
+# ---------------------------------------------------------------------------
+handle_umbrella() {
+    local umbrella_num="$1"
+    local umbrella_title="$2"
+    local script_dir handler_script
+    script_dir="$(dirname "${BASH_SOURCE[0]}")"
+    handler_script="${script_dir}/umbrella-handler.sh"
+
+    local pick_out pick_exit=0
+    pick_out=$("$handler_script" pick-child --issue "$umbrella_num" 2>&1) || pick_exit=$?
+    if [ "$pick_exit" -ne 0 ]; then
+        local err
+        err=$(echo "$pick_out" | awk -F= '/^ERROR=/ { sub(/^ERROR=/, "", $0); v=$0 } END { print v }')
+        echo "ELIGIBLE=false"
+        echo "IS_UMBRELLA=true"
+        echo "UMBRELLA_NUMBER=$umbrella_num"
+        echo "ERROR=Failed to pick child for umbrella #$umbrella_num: ${err:-pick-child failed}"
+        exit 2
+    fi
+    local child_number child_title all_closed no_eligible blocking_reason
+    child_number=$(echo "$pick_out" | awk -F= '/^CHILD_NUMBER=/ { v=$2 } END { print v }')
+    child_title=$(echo "$pick_out" | awk -F= '/^CHILD_TITLE=/ { sub(/^CHILD_TITLE=/, "", $0); v=$0 } END { print v }')
+    all_closed=$(echo "$pick_out" | awk -F= '/^ALL_CLOSED=/ { v=$2 } END { print v }')
+    no_eligible=$(echo "$pick_out" | awk -F= '/^NO_ELIGIBLE_CHILD=/ { v=$2 } END { print v }')
+    blocking_reason=$(echo "$pick_out" | awk -F= '/^BLOCKING_REASON=/ { sub(/^BLOCKING_REASON=/, "", $0); v=$0 } END { print v }')
+
+    if [ -n "$child_number" ]; then
+        # Before locking the child, run the same blocker check we would for
+        # any explicit issue. all_open_blockers is fail-open on API errors
+        # (see its docstring above), so a blocker check that returns empty
+        # could mean either "no blockers" or "API blip" — same posture as
+        # the existing explicit-issue path uses for non-umbrella issues.
+        local child_blockers
+        child_blockers=$(all_open_blockers "$child_number")
+        if [ -n "$child_blockers" ]; then
+            local formatted
+            formatted=$(echo "$child_blockers" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
+            echo "ELIGIBLE=false"
+            echo "IS_UMBRELLA=true"
+            echo "UMBRELLA_NUMBER=$umbrella_num"
+            echo "UMBRELLA_ACTION=no-eligible-child"
+            echo "ERROR=Umbrella #$umbrella_num child #$child_number is blocked by open dependencies: $formatted"
+            exit 5
+        fi
+        lock_no_go_and_rename_then_emit_for_child "$child_number" "$child_title" "$umbrella_num" "$umbrella_title"
+        # terminal — exits 0 or 3
+    fi
+    if [ "$all_closed" = "true" ]; then
+        echo "ELIGIBLE=true"
+        echo "IS_UMBRELLA=true"
+        echo "UMBRELLA_NUMBER=$umbrella_num"
+        echo "UMBRELLA_TITLE=$umbrella_title"
+        echo "UMBRELLA_ACTION=complete"
+        echo "LOCK_ACQUIRED=false"
+        exit 4
+    fi
+    if [ "$no_eligible" = "true" ]; then
+        echo "ELIGIBLE=false"
+        echo "IS_UMBRELLA=true"
+        echo "UMBRELLA_NUMBER=$umbrella_num"
+        echo "UMBRELLA_ACTION=no-eligible-child"
+        echo "ERROR=Umbrella #$umbrella_num has no eligible child: ${blocking_reason:-no blocking reason given}"
+        exit 5
+    fi
+    # Defensive: pick-child should always emit one of the three outcomes.
+    echo "ELIGIBLE=false"
+    echo "IS_UMBRELLA=true"
+    echo "UMBRELLA_NUMBER=$umbrella_num"
+    echo "ERROR=umbrella-handler.sh pick-child returned no recognized outcome"
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
 # Explicit issue mode (--issue provided)
 # ---------------------------------------------------------------------------
 if [[ -n "$ISSUE_ARG" ]]; then
@@ -424,6 +635,36 @@ if [[ -n "$ISSUE_ARG" ]]; then
         echo "ELIGIBLE=false"
         echo "ERROR=Issue #$ISSUE_NUM has a managed lifecycle title prefix ([IN PROGRESS] / [DONE] / [STALLED]); not a fix-issue candidate"
         exit 2
+    fi
+
+    # Umbrella detection (explicit-issue path only — auto-pick mode never
+    # runs this; per the design dialectic's DECISION_1, auto-pick keeps its
+    # GO-tail invariant). Detection runs BEFORE the GO-tail check so umbrella
+    # issues do NOT need a GO comment. The umbrella's body literal AND/OR
+    # title prefix is the approval signal — children inherit approval from the
+    # umbrella's existence.
+    UMBRELLA_HANDLER="$(dirname "${BASH_SOURCE[0]}")/umbrella-handler.sh"
+    if [[ -x "$UMBRELLA_HANDLER" ]]; then
+        UMBRELLA_DETECT_OUT=""
+        if UMBRELLA_DETECT_OUT=$("$UMBRELLA_HANDLER" detect --issue "$ISSUE_NUM" 2>&1); then
+            IS_UMBRELLA_DETECT=$(echo "$UMBRELLA_DETECT_OUT" | awk -F= '/^IS_UMBRELLA=/ { v=$2 } END { print v }')
+            if [ "$IS_UMBRELLA_DETECT" = "true" ]; then
+                # Apply the umbrella's own blocker check (parallel to non-
+                # umbrella behavior — an umbrella that is itself blocked by
+                # an open issue should not dispatch).
+                BLOCKERS=$(all_open_blockers "$ISSUE_NUM")
+                if [ -n "$BLOCKERS" ]; then
+                    FORMATTED=$(echo "$BLOCKERS" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
+                    echo "ELIGIBLE=false"
+                    echo "IS_UMBRELLA=true"
+                    echo "UMBRELLA_NUMBER=$ISSUE_NUM"
+                    echo "ERROR=Umbrella #$ISSUE_NUM is blocked by open dependencies: $FORMATTED"
+                    exit 2
+                fi
+                handle_umbrella "$ISSUE_NUM" "$ISSUE_TITLE"
+                # terminal — exits 0/3/4/5
+            fi
+        fi
     fi
 
     # Verify last comment is GO.

@@ -1,0 +1,383 @@
+#!/usr/bin/env bash
+# umbrella-handler.sh — Detect umbrella issues, enumerate their children, pick
+# the next eligible child for /fix-issue dispatch.
+#
+# Invoked by skills/fix-issue/scripts/find-lock-issue.sh in the explicit-issue
+# path (auto-pick mode never selects umbrellas — DECISION_1 from the design
+# dialectic). The handler owns three decisions:
+#   1. Is this issue an umbrella?
+#   2. What are its children, in body order?
+#   3. Which child is next-eligible for /fix-issue to lock and process?
+#
+# Subcommands:
+#   detect       --issue N
+#   list-children --issue N
+#   pick-child   --issue N
+#
+# Detection (FINDING_13 — body primary, title fallback):
+#   1. Body literal "Umbrella tracking issue." (anywhere in body) — primary
+#      signal. /umbrella-rendered umbrellas always emit this literal as the
+#      first paragraph (see .claude/skills/umbrella/scripts/render-umbrella-body.sh).
+#   2. Title prefix "Umbrella:" or "Umbrella —" (case-sensitive, anchored at
+#      start) — fallback for hand-authored umbrellas like #348 whose body is
+#      free-form prose with the marker missing. Tool-created umbrellas may also
+#      derive titles that happen to start with the prefix; this is harmless.
+#
+# Child enumeration grammar (DECISION_3 — task-list checklist only):
+#   Only matches markdown task-list items with a same-repo `#N` reference:
+#     ^[[:space:]]*- \[[ x]\] .*#([0-9]+)
+#   Captures both /umbrella-rendered children ("- [ ] #N — title") and
+#   hand-authored operator checklists ("- [ ] /fix-issue executes #N" as in
+#   #348). Same-repo only — the regex requires `#<digits>` not preceded by `/`,
+#   so `owner/repo#150` is NOT matched. Self-references (the umbrella's own
+#   number) are filtered out so an umbrella that mentions itself in its body
+#   cannot create a self-deadlock. Children are deduplicated, preserving
+#   first-occurrence body order.
+#
+# pick-child eligibility (no GO required on children — children inherit
+# approval from the umbrella's own existence as the approval signal):
+#   - issue is OPEN
+#   - title does not start with a managed lifecycle prefix
+#     ([IN PROGRESS] / [DONE] / [STALLED])
+#   - last comment is NOT exactly "IN PROGRESS" (not locked by a concurrent
+#     /fix-issue runner)
+#   - all_open_blockers is empty (delegated to find-lock-issue.sh's helpers via
+#     the caller — pick-child does NOT re-run blocker queries; the caller
+#     verifies eligibility by checking ENGAGED state via gh, then locks)
+#
+# pick-child outcomes (one of three on stdout):
+#   CHILD_NUMBER=<C>
+#   CHILD_TITLE=<T>            ← first eligible child; caller proceeds to lock
+#
+#   ALL_CLOSED=true             ← every parsed child is CLOSED; caller
+#                                 finalizes umbrella (FINDING_3: requires
+#                                 AT LEAST ONE child parsed)
+#
+#   NO_ELIGIBLE_CHILD=true
+#   BLOCKING_REASON=<one-line>  ← children exist but none are pickable, OR
+#                                 zero parseable children found (FINDING_3
+#                                 — explicitly NOT vacuous-truth ALL_CLOSED)
+#
+# All subcommands fail-closed: gh CLI errors propagate to non-zero exit with
+# ERROR= on stdout. Detection alone (`detect`) is fail-closed too — if `gh`
+# can't fetch the issue, we cannot decide and must surface the failure to the
+# caller (find-lock-issue.sh already exits 2 on its own gh failures).
+#
+# Exit codes:
+#   0 — success (subcommand-specific stdout)
+#   1 — gh API error or other internal failure
+#   2 — usage error
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Resolve repo identity (shared across subcommands)
+# ---------------------------------------------------------------------------
+REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || {
+    echo "ERROR=Failed to resolve repository name"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# is_umbrella_body — return 0 if the body contains the literal
+# "Umbrella tracking issue." emitted by /umbrella's render-umbrella-body.sh.
+# The check is case-sensitive: "umbrella tracking issue" (lowercase) does NOT
+# match. Whitespace-tolerant on either side of the literal — the literal is
+# expected on its own paragraph.
+is_umbrella_body() {
+    local body="$1"
+    case "$body" in
+        *"Umbrella tracking issue."*) return 0 ;;
+        *)                            return 1 ;;
+    esac
+}
+
+# is_umbrella_title — return 0 if the title starts with "Umbrella: " or
+# "Umbrella — " (case-sensitive, anchored at start). The trailing space-or-
+# em-dash distinguishes the marker prefix from a leading word like
+# "Umbrellas" or "Umbrella-Like".
+is_umbrella_title() {
+    local title="$1"
+    case "$title" in
+        'Umbrella: '*) return 0 ;;
+        'Umbrella — '*) return 0 ;;
+        *)             return 1 ;;
+    esac
+}
+
+# has_managed_prefix — same shape as find-lock-issue.sh's helper. Returns 0
+# if the title starts with [IN PROGRESS] / [DONE] / [STALLED] followed by a
+# single space.
+has_managed_prefix() {
+    local t="$1"
+    case "$t" in
+        '[IN PROGRESS] '*) return 0 ;;
+        '[DONE] '*)        return 0 ;;
+        '[STALLED] '*)     return 0 ;;
+        *)                 return 1 ;;
+    esac
+}
+
+# fetch_issue_basics — fetches title and body for a single issue in one gh
+# call. Sets shell variables ISSUE_TITLE and ISSUE_BODY on success. Returns
+# non-zero on gh failure (caller surfaces ERROR=). State is not consumed by
+# any current caller (umbrella detection happens BEFORE the explicit-issue
+# OPEN check in find-lock-issue.sh, so the umbrella's own state has already
+# been verified by the time `detect` is invoked). If a future caller needs
+# state, fetch it explicitly via gh issue view --json state in that caller.
+fetch_issue_basics() {
+    local n="$1"
+    local json
+    json=$(gh issue view "$n" --json title,body --jq '{title, body}' 2>/dev/null) || return 1
+    ISSUE_TITLE=$(printf '%s' "$json" | jq -r '.title // ""')
+    ISSUE_BODY=$(printf '%s' "$json" | jq -r '.body // ""')
+}
+
+# parse_children_from_body — given an umbrella body (stdin) and the umbrella's
+# own issue number ($1), emit one child issue number per line in body-order
+# first-occurrence dedup. Same-repo only: the grep pattern requires the `#`
+# to appear after whitespace or `(` (so "owner/repo#150" — where `/` precedes
+# `#` — does not match). Self-references are filtered.
+#
+# DECISION_3 grammar: only markdown task-list items
+#   ^[[:space:]]*- \[[ x]\] .*#([0-9]+)
+parse_children_from_body() {
+    local self_num="$1"
+    local body
+    body=$(cat)
+    # Step 1: keep only task-list lines.
+    # GNU grep on Linux/macOS supports -E. The pattern is:
+    #   start-of-line + optional whitespace + "- [" + (space|x|X) + "] "
+    local task_lines
+    task_lines=$({ printf '%s\n' "$body" | grep -E '^[[:space:]]*- \[[ xX]\]' ; } 2>/dev/null || true)
+    if [[ -z "$task_lines" ]]; then
+        return 0
+    fi
+    # Step 2: extract `#N` references that are NOT preceded by `/`. We use a
+    # two-pass approach:
+    #   (a) convert any `<owner/repo>#N` patterns into a sentinel that we will
+    #       drop;
+    #   (b) extract `#N` tokens.
+    # Simpler: use sed to delete same-line cross-repo segments before the
+    # extraction, leaving only same-repo `#N` matches.
+    local same_repo
+    same_repo=$(printf '%s\n' "$task_lines" \
+        | sed -E 's@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+@@g')
+    # Step 3: extract `#<digits>` matches and emit numbers.
+    local nums
+    nums=$({ printf '%s\n' "$same_repo" | grep -oE '#[0-9]+' | sed -E 's/^#//' ; } 2>/dev/null || true)
+    if [[ -z "$nums" ]]; then
+        return 0
+    fi
+    # Step 4: dedup preserving first-occurrence order, drop self-reference.
+    awk -v self="$self_num" '
+        $0 == self { next }
+        !seen[$0]++ { print $0 }
+    ' <<< "$nums"
+}
+
+# child_eligible — returns 0 if the child issue is eligible for dispatch; 1
+# otherwise. Sets CHILD_TITLE on eligibility-success or BLOCKING_REASON on
+# ineligibility (closed cases excluded — those are checked by the caller).
+#
+# Eligibility:
+#   - state == OPEN
+#   - title does NOT start with a managed lifecycle prefix
+#   - last comment is NOT exactly "IN PROGRESS"
+# Note: blocker checks are deliberately NOT run here — the existing
+# find-lock-issue.sh helpers (`all_open_blockers`) are the source of truth.
+# The caller (find-lock-issue.sh) checks blockers AFTER this returns
+# CHILD_NUMBER, before locking.
+child_eligible() {
+    local n="$1"
+    local title state
+    local json
+    json=$(gh issue view "$n" --json title,state --jq '{title, state}' 2>/dev/null) || {
+        BLOCKING_REASON="failed to fetch issue #$n"
+        return 1
+    }
+    title=$(printf '%s' "$json" | jq -r '.title // ""')
+    state=$(printf '%s' "$json" | jq -r '.state // ""')
+    if [[ "$state" != "OPEN" ]]; then
+        BLOCKING_REASON="child #$n is not OPEN (state=$state)"
+        return 1
+    fi
+    if has_managed_prefix "$title"; then
+        BLOCKING_REASON="child #$n has managed lifecycle title prefix"
+        return 1
+    fi
+    # Last comment check
+    local last_comment trimmed
+    last_comment=$(gh api --paginate --slurp "repos/${REPO}/issues/${n}/comments" 2>/dev/null \
+        | jq -r 'add // [] | .[-1].body // ""') || {
+        BLOCKING_REASON="failed to fetch comments for #$n"
+        return 1
+    }
+    trimmed=$(printf '%s' "$last_comment" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [[ "$trimmed" == "IN PROGRESS" ]]; then
+        BLOCKING_REASON="child #$n is locked (last comment: IN PROGRESS)"
+        return 1
+    fi
+    CHILD_TITLE="$title"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: detect
+# ---------------------------------------------------------------------------
+cmd_detect() {
+    local issue=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
+            *) echo "ERROR=Unknown option for detect: $1"; exit 2 ;;
+        esac
+    done
+    if [[ -z "$issue" ]]; then
+        echo "ERROR=Usage: umbrella-handler.sh detect --issue N"
+        exit 2
+    fi
+    fetch_issue_basics "$issue" || {
+        echo "ERROR=Failed to fetch issue #$issue"
+        exit 1
+    }
+    # Body-primary, title-fallback (FINDING_13).
+    if is_umbrella_body "$ISSUE_BODY"; then
+        echo "IS_UMBRELLA=true"
+        echo "UMBRELLA_TITLE=$ISSUE_TITLE"
+        echo "DETECTION=body"
+        return 0
+    fi
+    if is_umbrella_title "$ISSUE_TITLE"; then
+        echo "IS_UMBRELLA=true"
+        echo "UMBRELLA_TITLE=$ISSUE_TITLE"
+        echo "DETECTION=title"
+        return 0
+    fi
+    echo "IS_UMBRELLA=false"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: list-children
+# ---------------------------------------------------------------------------
+cmd_list_children() {
+    local issue=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
+            *) echo "ERROR=Unknown option for list-children: $1"; exit 2 ;;
+        esac
+    done
+    if [[ -z "$issue" ]]; then
+        echo "ERROR=Usage: umbrella-handler.sh list-children --issue N"
+        exit 2
+    fi
+    fetch_issue_basics "$issue" || {
+        echo "ERROR=Failed to fetch issue #$issue"
+        exit 1
+    }
+    local children
+    children=$(printf '%s' "$ISSUE_BODY" | parse_children_from_body "$issue")
+    if [[ -z "$children" ]]; then
+        echo "CHILDREN="
+        return 0
+    fi
+    # Single-line space-separated representation for downstream parsing.
+    local joined
+    joined=$(printf '%s\n' "$children" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+    echo "CHILDREN=$joined"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: pick-child
+# ---------------------------------------------------------------------------
+cmd_pick_child() {
+    local issue=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
+            *) echo "ERROR=Unknown option for pick-child: $1"; exit 2 ;;
+        esac
+    done
+    if [[ -z "$issue" ]]; then
+        echo "ERROR=Usage: umbrella-handler.sh pick-child --issue N"
+        exit 2
+    fi
+    fetch_issue_basics "$issue" || {
+        echo "ERROR=Failed to fetch issue #$issue"
+        exit 1
+    }
+    local children
+    children=$(printf '%s' "$ISSUE_BODY" | parse_children_from_body "$issue")
+    # FINDING_3: zero parsed children is NOT vacuous ALL_CLOSED — emit
+    # NO_ELIGIBLE_CHILD with a specific reason.
+    if [[ -z "$children" ]]; then
+        echo "NO_ELIGIBLE_CHILD=true"
+        echo "BLOCKING_REASON=no parseable children found in umbrella body"
+        return 0
+    fi
+    # Walk children in body order. Track per-child state for the aggregate
+    # ALL_CLOSED test. Any child whose state is not CLOSED makes ALL_CLOSED
+    # false. The first eligible (open + not-blocked-equivalent) child wins.
+    local all_closed=true
+    local first_blocking_reason=""
+    local first_blocking_set=false
+    while IFS= read -r child_num; do
+        [[ -z "$child_num" ]] && continue
+        local cstate cjson
+        cjson=$(gh issue view "$child_num" --json state,title --jq '{state,title}' 2>/dev/null) || {
+            # Treat fetch failures as ineligible-but-not-closed (defensive).
+            all_closed=false
+            if ! $first_blocking_set; then
+                first_blocking_reason="failed to fetch child #$child_num"
+                first_blocking_set=true
+            fi
+            continue
+        }
+        cstate=$(printf '%s' "$cjson" | jq -r '.state // ""')
+        if [[ "$cstate" == "CLOSED" ]]; then
+            continue
+        fi
+        # Open child — try eligibility.
+        all_closed=false
+        if child_eligible "$child_num"; then
+            echo "CHILD_NUMBER=$child_num"
+            echo "CHILD_TITLE=$CHILD_TITLE"
+            return 0
+        fi
+        if ! $first_blocking_set; then
+            first_blocking_reason="${BLOCKING_REASON:-child #$child_num ineligible}"
+            first_blocking_set=true
+        fi
+    done <<< "$children"
+    # Walked all children without finding an eligible one.
+    if $all_closed; then
+        # FINDING_3: at least one child was parsed AND all were CLOSED.
+        echo "ALL_CLOSED=true"
+        return 0
+    fi
+    # Some children open but none eligible.
+    echo "NO_ELIGIBLE_CHILD=true"
+    echo "BLOCKING_REASON=${first_blocking_reason:-no eligible child found}"
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+if [[ $# -lt 1 ]]; then
+    echo "ERROR=Usage: umbrella-handler.sh <detect|list-children|pick-child> --issue N"
+    exit 2
+fi
+
+SUBCOMMAND="$1"
+shift
+
+case "$SUBCOMMAND" in
+    detect)        cmd_detect "$@" ;;
+    list-children) cmd_list_children "$@" ;;
+    pick-child)    cmd_pick_child "$@" ;;
+    *)             echo "ERROR=Unknown subcommand: $SUBCOMMAND"; exit 2 ;;
+esac

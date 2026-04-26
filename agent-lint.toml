@@ -150,15 +150,41 @@ suppress = [
 # harness for skills/fix-issue/scripts/find-lock-issue.sh (the combined Find
 # + Lock + Rename pipeline introduced by the fold-find-and-lock refactor
 # closes #496). It uses a PATH-prepended `gh` stub under a per-fixture tmpdir
-# to validate the script's exit-code matrix (0/1/2/3) and unified stdout
+# to validate the script's exit-code matrix (0/1/2/3/4/5) and unified stdout
 # contract (ELIGIBLE / ISSUE_NUMBER / ISSUE_TITLE / LOCK_ACQUIRED / RENAMED /
-# ERROR) without any network or git-state mutation. Six fixtures cover ok,
-# lock-fail, rename-fail-best-effort, idempotent (deferred to
-# test-tracking-issue-write.sh), ineligible, and no-eligible-candidates.
+# ERROR + umbrella keys IS_UMBRELLA / UMBRELLA_NUMBER / UMBRELLA_TITLE /
+# UMBRELLA_ACTION) without any network or git-state mutation. Six pre-umbrella
+# fixtures (ok, lock-fail, rename-fail-best-effort, idempotent-deferred,
+# ineligible, no-eligible-candidates) plus umbrella fixtures (explicit-
+# umbrella-dispatched, all-closed-finalize, no-eligible-child, child-lock-
+# failure, auto-pick-skips-umbrella, umbrella-number-absent-on-non-umbrella).
 # The harness is referenced only from Makefile (test-find-lock-issue target)
 # and skills/fix-issue/scripts/test-find-lock-issue.md (sibling contract),
 # matching the same Makefile-only pattern as the other test-* harnesses
 # above. Both the .sh and the .md are excluded below.
+#
+# skills/fix-issue/scripts/test-umbrella-handler.sh is the offline regression
+# harness for skills/fix-issue/scripts/umbrella-handler.sh (umbrella detection
+# + child enumeration + pick-child for /fix-issue's umbrella support). PATH-
+# prepended `gh` stub. Fixtures cover detection priority (body-primary vs
+# title-fallback per FINDING_13), task-list grammar boundaries (cross-repo
+# rejection, self-reference filter, prose-only-no-task-list rejection), pick-
+# child eligibility branches (eligible / locked / managed-prefix / closed),
+# the all-closed terminal state, and FINDING_3's zero-children-is-not-
+# ALL_CLOSED invariant. Referenced only from Makefile (test-umbrella-handler
+# target) and skills/fix-issue/scripts/test-umbrella-handler.md (sibling
+# contract). Both the .sh and the .md are excluded below.
+#
+# skills/fix-issue/scripts/test-finalize-umbrella.sh is the offline regression
+# harness for skills/fix-issue/scripts/finalize-umbrella.sh (the umbrella-
+# finalize composer used by /fix-issue Step 0 exit-4 path and the Step 3 / 5a
+# / 6 finalize hooks). PATH-prepended `gh` stub. Fixtures cover finalize-
+# success, finalize-idempotent-when-marker-comment-exists (FINDING_2),
+# finalize-idempotent-when-already-DONE-prefix, finalize-idempotent-when-
+# already-CLOSED, rename-failed-but-close-success (best-effort rename
+# invariant). Referenced only from Makefile (test-finalize-umbrella target)
+# and skills/fix-issue/scripts/test-finalize-umbrella.md (sibling contract).
+# Both the .sh and the .md are excluded below.
 #
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
@@ -369,6 +395,8 @@ exclude = [
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.sh",
   "skills/fix-issue/scripts/test-fix-issue-step-order.sh",
   "skills/fix-issue/scripts/test-find-lock-issue.sh",
+  "skills/fix-issue/scripts/test-umbrella-handler.sh",
+  "skills/fix-issue/scripts/test-finalize-umbrella.sh",
   # skills/research/scripts/test-standard-angle-prompts.sh is the structural
   # regression guard for the /research --scale=standard per-lane angle-prompt
   # mapping introduced by #508 (extending deep-mode angle prompts to standard
@@ -552,6 +580,8 @@ exclude = [
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.md",
   "skills/fix-issue/scripts/test-fix-issue-step-order.md",
   "skills/fix-issue/scripts/test-find-lock-issue.md",
+  "skills/fix-issue/scripts/test-umbrella-handler.md",
+  "skills/fix-issue/scripts/test-finalize-umbrella.md",
   "skills/research/scripts/test-standard-angle-prompts.md",
   "skills/research/scripts/test-classify-research-scale.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
