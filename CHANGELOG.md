@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.5] - 2026-04-26
+
+### Changed
+
+- `scripts/test-loop-fix-issue-skill-md.sh` Assertion B — pins the `*/..|*/../*` path-component guard alongside the existing `/tmp/*|/private/tmp/*` prefix check, so removing the `..` guard from `skills/loop-fix-issue/SKILL.md` would now fail `make lint`. Achieves parity with the sibling driver harness's Assertion E pin on `driver.sh`'s `LOOP_TMPDIR` `..` guard. Sibling `scripts/test-loop-fix-issue-skill-md.md` and `docs/linting.md` updated in lock-step (assertion count 12→13, "Why these tokens are byte-pinned" rationale documents both dimensions of the security boundary). Closes #649.
+
 ## [7.15.4] - 2026-04-26
 
 ### Changed
