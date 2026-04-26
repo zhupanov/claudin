@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.6] - 2026-04-26
+
+### Fixed
+
+- `docs/external-reviewers.md` — replace the single "Output capture" bullet (which read "Captures stdout to a specified output file" as if universal) with two sub-bullets that distinguish the two patterns the `run-external-reviewer.sh` wrapper supports: stdout capture under `--capture-stdout` (Cursor pattern; `skills/review/SKILL.md:146-148, 177-179`), and tool-managed output paths when the reviewer takes its own output-path argument such as Codex's `--output-last-message` (Codex pattern; `skills/review/SKILL.md:160-163, 186-190`). The prior single bullet implied a universal stdout-capture behavior, so a skill author following the doc could omit `--output-last-message` for Codex (yielding an empty output file) or add `--capture-stdout` redundantly. Closes #660.
+
 ## [7.16.5] - 2026-04-26
 
 ### Fixed
