@@ -143,7 +143,7 @@ The validator script always exits 0. Failure modes that would otherwise abort a 
 | File exists but the cited line range exceeds the file length | `FAIL(line-out-of-range)` |
 | File exists, line range valid, but range is empty (start > end) | `FAIL(line-range-empty)` |
 | DOI fails syntactic validation (e.g., not `10.NNNN/...`) | `FAIL(doi-syntax)` |
-| DOI is syntactically valid but doi.org HEAD does not resolve to a permanent URL | `UNKNOWN(doi-unresolved)` |
+| DOI is syntactically valid but doi.org HEAD does not resolve to a permanent URL | `UNKNOWN(doi-unresolved)` (a 3xx HEAD on `https://doi.org/<doi>` IS the registry's success signal — the DOI path interprets `UNKNOWN(redirect-not-followed)` as PASS, not as `doi-unresolved`) |
 
 The `UNKNOWN` bucket is deliberately broad: every transient or environment-dependent failure ends there so the validator's strictness scales with the operator's environment without false negatives skewing the audit.
 

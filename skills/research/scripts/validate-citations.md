@@ -88,7 +88,7 @@ network calls.
 | `no-status-line` | UNKNOWN | curl exited 0 but `%{http_code}` was empty |
 | `unrecognized-status-<code>` | UNKNOWN | curl returned a code outside 2xx-5xx |
 | `doi-syntax` | FAIL | DOI does not match `^10\.[0-9]{4,9}/...` |
-| `doi-unresolved` | UNKNOWN | DOI passed syntactic check but doi.org HEAD did not return PASS |
+| `doi-unresolved` | UNKNOWN | DOI passed syntactic check but doi.org HEAD did not return PASS or a 3xx redirect (doi.org is a redirect resolver — a 3xx HEAD on `https://doi.org/<doi>` is the registry's success signal, so the DOI path interprets `UNKNOWN(redirect-not-followed)` as PASS) |
 | `git-root-unavailable` | UNKNOWN | `git rev-parse --show-toplevel` failed (not a git tree) |
 | `file-not-found` | FAIL | path does not exist relative to git root or cwd |
 | `path-is-directory` | FAIL | resolved path is a directory, not a file |

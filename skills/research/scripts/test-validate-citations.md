@@ -20,6 +20,7 @@ the sidecar body contains the expected `Status` / `Reason` tokens.
 | HEAD 403 / 501 mapping | both return `UNKNOWN(head-not-supported)` |
 | HEAD 404 mapping | returns `FAIL(head-not-found)` |
 | HEAD 301 mapping | returns `UNKNOWN(redirect-not-followed)` |
+| DOI HEAD 302 (doi.org redirect-by-design) | DOI row → `PASS` (DOI path interprets `UNKNOWN(redirect-not-followed)` as success) |
 | Curl argv MUST / MUST-NOT | `--max-redirs`, `--max-time`, `--noproxy`, HTTPS URL last; absent: `--insecure`, `-k`, `--proxy`, `--socks*`, `--cacert` |
 | Hostile `http_proxy` env | `--noproxy '*'` still in argv |
 | File:line PASS (existing) | `AGENTS.md:1` → `PASS` |
