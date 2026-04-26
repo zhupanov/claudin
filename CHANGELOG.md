@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.0] - 2026-04-26
+
+### Added
+
+- `/fix-issue <umbrella#>` now accepts an umbrella issue (detected by body literal `Umbrella tracking issue.` OR title prefix `Umbrella:` / `Umbrella —`) and dispatches to the next eligible child instead of working on the umbrella body itself. Neither the umbrella nor the chosen child needs a `GO` comment — the umbrella body is the approval signal, and children inherit approval from the umbrella's existence. Children are parsed from markdown task-list items (`- [ ] #N — ...`) in body order; cross-repo references (`owner/repo#N`) and prose `#N` mentions are filtered out at parse time. When all parsed children close, the umbrella is automatically renamed to `[DONE]` and closed (idempotent: concurrent finalize attempts won't double-comment, and a partial-success "rename + comment done but close failed" is recoverable on retry via a close-only retry path). Auto-pick mode (no positional argument to `/fix-issue`) NEVER selects umbrellas — the umbrella state machine is opt-in only via explicit positional argument. New scripts: `skills/fix-issue/scripts/umbrella-handler.sh` (detect / list-children / pick-child) and `skills/fix-issue/scripts/finalize-umbrella.sh` (idempotent rename + close composer). New `--lock-no-go` mode in `skills/fix-issue/scripts/issue-lifecycle.sh comment` for locking umbrella-dispatched children without a GO sentinel. Closes #622.
+
 ## [7.14.12] - 2026-04-26
 
 ### Changed

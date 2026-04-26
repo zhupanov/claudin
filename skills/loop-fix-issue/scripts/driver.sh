@@ -296,6 +296,19 @@ for (( ITER=1; ITER<=MAX_ITERATIONS; ITER++ )); do
       breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 lock acquisition failed; retaining LOOP_TMPDIR for inspection. Stopping loop."
       LOOP_PRESERVE_TMPDIR="true"
       TERMINATION_REASON="Step 0 lock failure (concurrent runner or partial-state)"
+    elif grep -F -q '0: find & lock — umbrella' "$ITER_OUT_FILE"; then
+      # Umbrella-terminal Step 0 paths: all-closed/finalize OR
+      # no-eligible-child. /loop-fix-issue drives no-arg /fix-issue, which
+      # auto-pick excludes umbrellas from per FINDING_4 from the umbrella-PR
+      # code-review panel — so this branch is normally unreachable. It
+      # exists as a defense-in-depth recognizer for any future invocation
+      # shape that lets a /loop-* driver hit umbrella-terminal Step 0
+      # literals (e.g., a new flag forwarding `--issue` through the loop).
+      # FINDING_2 from the umbrella-PR code-review panel: surface umbrella-
+      # terminal literals as a clean termination reason instead of
+      # falling through to the unknown-short-circuit defensive branch.
+      breadcrumb_done "3: iteration ${ITER} — /fix-issue umbrella-terminal Step 0 path. Loop complete."
+      TERMINATION_REASON="umbrella terminal (finalize / no-eligible-child)"
     else
       breadcrumb_warn "3: iteration ${ITER} — /fix-issue produced no recognized Step 0 literal; retaining LOOP_TMPDIR for inspection. Stopping loop."
       LOOP_PRESERVE_TMPDIR="true"
