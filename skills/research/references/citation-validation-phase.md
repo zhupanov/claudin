@@ -2,7 +2,7 @@
 
 **Consumer**: `/research` Step 2.7 — loaded via the `MANDATORY — READ ENTIRE FILE` directive at Step 2.7 entry in SKILL.md.
 
-**Contract**: scale-agnostic citation-credibility check. Runs unconditionally on every `/research` invocation that produced a `research-report.txt` (every scale: `quick`/`standard`/`deep`), executing between Step 2.5 (adjudication) and Step 3 (final report). The phase reads the validated synthesis at `$RESEARCH_TMPDIR/research-report.txt`, extracts cited provenance (file:line, URL, DOI), HEAD-fetches each unique URL with bounded timeout in parallel under SSRF guards (HTTPS-only, `--max-redirs 0`, `--noproxy '*'`, RFC1918/IPv6 link-local/RFC6598 hostname pre-rejection, DNS resolved-IP private-range check via `host`→`nslookup` fallback chain, connection-pinning via `--resolve` to mitigate rebinding TOCTOU), classifies domain credibility heuristically (advisory only — never flips PASS to FAIL), validates DOIs syntactically + via `HEAD https://doi.org/<doi>` under the same SSRF rules, spot-checks file:line existence + line-range against `git rev-parse --show-toplevel` with `realpath` canonical-path containment check, and writes a 3-state per-claim ledger (`PASS` / `FAIL` / `UNKNOWN` with reason classifier on `UNKNOWN`) to `$RESEARCH_TMPDIR/citation-validation.md` (sidecar). Step 3 splices the sidecar as a `## Citation Validation` section into `research-report-final.md` after the standard report block. **Fail-soft**: per-claim failures surface as warnings only; the validator script always exits 0; Step 3 is never blocked.
+**Contract**: scale-agnostic citation-credibility check. Runs unconditionally on every `/research` invocation that produced a `research-report.txt` (every scale: `quick`/`standard`/`deep`), executing between Step 2.5 (adjudication) and Step 3 (final report). The phase reads the validated synthesis at `$RESEARCH_TMPDIR/research-report.txt`, extracts cited provenance (file:line, URL, DOI), HEAD-fetches each unique URL with bounded timeout in parallel under SSRF guards (HTTPS-only, `--max-redirs 0`, `--noproxy '*'`, RFC1918/IPv6 link-local/RFC6598 hostname pre-rejection, DNS resolved-IP private-range check via `host`→`nslookup` fallback chain, connection-pinning via `--resolve` to mitigate rebinding TOCTOU), classifies domain credibility heuristically (advisory only — never flips PASS to FAIL), validates DOIs syntactically + via `HEAD https://doi.org/<doi>` under the same SSRF rules, spot-checks file:line existence + line-range against `git rev-parse --show-toplevel` with `realpath` canonical-path containment check, and writes a 3-state per-claim ledger (`PASS` / `FAIL` / `UNKNOWN` with reason classifier on `UNKNOWN`) to `$RESEARCH_TMPDIR/citation-validation.md` (sidecar). Step 3 splices the sidecar as a `## Citation Validation` section into `research-report-final.md` after the standard report block. **Fail-soft**: per-claim failures surface as warnings only; the validator script always exits 0 on validation paths (exit 2 only for argument/flag errors); Step 3 is never blocked.
 
 **When to load**: once Step 2.7 is about to execute. Do NOT load during Step 0, Step 1, Step 2, Step 2.5, Step 3, or Step 4. SKILL.md emits the Step 2.7 entry breadcrumb and the Step 2.7 completion print; this file does NOT emit those — it owns body content only.
 
@@ -10,7 +10,7 @@
 
 ## Step 2.7 — Citation Validation
 
-**IMPORTANT: Citation validation runs unconditionally on every scale that produced a synthesis. The phase is fail-soft: every per-claim failure is recorded in the sidecar; the validator exits 0; Step 3 never blocks on this phase. Domain credibility is advisory only — it never flips a `PASS` to `FAIL`. Quick mode runs the same validation against its single-lane synthesis output as standard/deep — there is no scale-specific skip path.**
+**IMPORTANT: Citation validation runs unconditionally on every scale that produced a synthesis. The phase is fail-soft: every per-claim failure is recorded in the sidecar; the validator exits 0 on validation paths (exit 2 only for argument/flag errors); Step 3 never blocks on this phase. Domain credibility is advisory only — it never flips a `PASS` to `FAIL`. Quick mode runs the same validation against its single-lane synthesis output as standard/deep — there is no scale-specific skip path.**
 
 ### 2.7.1 — Skip preconditions (input gate)
 
@@ -43,7 +43,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.sh \
   --tmpdir "$RESEARCH_TMPDIR"
 ```
 
-The script writes the sidecar to the path passed via `--output` and exits 0 on every path (fail-soft contract). On any internal error (curl missing, git rev-parse failure, etc.), the script writes a minimally-formed sidecar that explains the degraded path and still exits 0 — Step 3's splice consumer must always have a sidecar to read.
+The script writes the sidecar to the path passed via `--output` and exits 0 on validation paths (exit 2 only for argument/flag errors — operator or harness bug; fail-soft contract). On any internal error (curl missing, git rev-parse failure, etc.), the script writes a minimally-formed sidecar that explains the degraded path and still exits 0 — Step 3's splice consumer must always have a sidecar to read.
 
 See `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.md` for the full contract (argv, exit codes, sidecar schema, SSRF defenses, regex tiers, idempotency rerun semantics, budget-exhaustion process-group kill — Linux `setsid` + single `kill -- -$$`, macOS `set -m` + per-background `kill -- -<pid>` with no `kill -- -$$` fallback because that would self-signal the validator).
 
@@ -124,7 +124,7 @@ The validator does not consume measurable Claude subagent tokens (it is a shell 
 
 ### Failure modes and fail-soft posture
 
-The validator script always exits 0. Failure modes that would otherwise abort a strict validator are reclassified into `UNKNOWN` reasons in the per-claim ledger:
+The validator script always exits 0 on validation paths; exit 2 only for argument/flag errors. Failure modes that would otherwise abort a strict validator are reclassified into `UNKNOWN` reasons in the per-claim ledger:
 
 | Failure mode | Sidecar reason |
 |---|---|
@@ -166,7 +166,7 @@ A small allow-list of widely-recognized reputable hosts (e.g., `*.wikipedia.org`
   → § 2.7.1 input gates (evaluated in order):
       1. budget-abort gate → skip 2.7 → Step 4 (Step 3 was already skipped)
       2. empty-synthesis gate → skip 2.7 → Step 3
-    → § 2.7.2 validator invocation (always exits 0)
+    → § 2.7.2 validator invocation (exits 0 on validation paths; exit 2 only on argument errors)
     → § 2.7.5 completion line + conditional advisory warnings
   → Step 3 splice (§ 2.7.6) appends sidecar to research-report-final.md
   → Step 3 cat displays the spliced report to stdout

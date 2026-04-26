@@ -24,9 +24,9 @@ validate-citations.sh --report <path> --output <path> --tmpdir <path>
 
 ## Exit code
 
-**Always 0** (fail-soft contract). Per-claim failures land in the sidecar
-Status column. The ONLY non-zero exit is exit 2 on argument-parser errors,
-which are programmer bugs (missing required flag, unknown flag).
+Exit 0 for all fail-soft validation runs; exit 2 only for argument/flag
+errors — operator or harness bug. Per-claim failures land in the sidecar
+Status column.
 
 ## Stdout machine surface
 
