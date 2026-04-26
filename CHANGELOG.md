@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.3] - 2026-04-25
+
+### Changed
+
+- `scripts/test-research-structure.sh` now structurally pins the `## Finalize Validation` section of `skills/research/references/validation-phase.md` (Checks 38a-38c, anchored on a section-scoped awk window). 38a pins the post-#507 revision-subagent shape (`Route the synthesis-revision step to a separate Claude Agent subagent` + `revision-raw.txt` Write capture). 38b pins the atomic rewrite of `research-report.txt` (`Atomically rewrite` + `mktemp` + `mv`). 38c pins FINDING_1's marker contract — the 5 body markers (`### Agreements` / `### Divergences` / `### Significance` / `### Architectural patterns` / `### Risks and feasibility`) enumerated by REVISION_PROMPT. Sibling contract `scripts/test-research-structure.md` is updated in the same commit (gate count 41 → 44, new sub-bullet, must-stay-in-sync sentence). Closes #534.
+
 ## [7.8.2] - 2026-04-25
 
 ### Changed
