@@ -33,7 +33,7 @@ make eval-research ARGS="--id eval-1 --timeout 4200"
 | `--write-baseline <file>` | unset | Write run results in `eval-baseline.json` shape to this file path. Used to populate the committed baseline after a clean end-to-end run. |
 | `--timeout <sec>` | `4200` | Per-question timeout for the `/research` subprocess. Default is above `/research`'s composite budget (Step 1 1860s + Step 2 1860s = 3720s) so healthy runs never misclassify as harness timeouts. |
 | `--judge-timeout <sec>` | `600` | Per-question timeout for the LLM-as-judge call. |
-| `--smoke-test` | off | Parse and schema-validate `eval-set.md` and `eval-baseline.json`, then exit 0 without invoking `claude -p`. No API cost. Used by `scripts/test-eval-set-structure.sh`. |
+| `--smoke-test` | off | Parse and schema-validate `eval-set.md` and `eval-baseline.json`, then exit 0 without invoking `claude -p`. No API cost. Requires `jq` (the `claude` binary is not required in this mode, but `jq` is — schema validation has no fallback). Used by `scripts/test-eval-set-structure.sh`. |
 | `--help` | — | Print the script's usage block and exit 0. |
 
 ## Operational definitions
@@ -138,7 +138,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 - `0` — harness ran. Per-entry timeouts and parse failures are reported in the `status` column / `research_status` JSON field, not the exit code.
 - `1` — schema validation of `eval-set.md` or `eval-baseline.json` failed.
 - `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, baseline ref that cannot be resolved via `git show`, or a value-taking flag with no following value — e.g. a trailing `--baseline` — which previously aborted with code 1 under `set -e` and collided with the schema-validation code; issue #477 separated the two).
-- `3` — required tooling missing (`claude`, `jq`, or `awk`).
+- `3` — required tooling missing. `jq` and `awk` are required in all modes (including `--smoke-test`); `claude` is required in non-smoke-test runs.
 
 ## Security
 

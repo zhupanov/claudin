@@ -146,9 +146,9 @@ require_tool() {
   }
 }
 require_tool awk
+require_tool jq
 if [[ "$SMOKE_TEST" != "true" ]]; then
   require_tool claude
-  require_tool jq
 fi
 
 # ---- Validate baseline ref against strict regex --------------------------
@@ -281,24 +281,9 @@ validate_baseline_json() {
     printf 'eval-research: eval-baseline.json not found at %s\n' "$file" >&2
     return 1
   fi
-  if command -v jq >/dev/null 2>&1; then
-    if ! jq -e '.version and .scale and (.entries | type == "array")' "$file" >/dev/null 2>&1; then
-      printf 'eval-research: eval-baseline.json missing required keys (version, scale, entries)\n' >&2
-      return 1
-    fi
-  else
-    if ! grep -q '"version"' "$file"; then
-      printf 'eval-research: eval-baseline.json missing required key: version (jq not available; using grep fallback)\n' >&2
-      return 1
-    fi
-    if ! grep -q '"scale"' "$file"; then
-      printf 'eval-research: eval-baseline.json missing required key: scale (jq not available; using grep fallback)\n' >&2
-      return 1
-    fi
-    if ! grep -q '"entries"' "$file"; then
-      printf 'eval-research: eval-baseline.json missing required key: entries (jq not available; using grep fallback)\n' >&2
-      return 1
-    fi
+  if ! jq -e '.version and .scale and (.entries | type == "array")' "$file" >/dev/null 2>&1; then
+    printf 'eval-research: eval-baseline.json missing required keys (version, scale, entries) or not valid JSON\n' >&2
+    return 1
   fi
   return 0
 }
