@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.3] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/SKILL.md` anti-patterns block (lines 16-17) and Step 3B.4 narrative (line 147) referred to `scripts/wire-dag.sh` and `check-cycle.sh` as if they were independent scripts. The shipped coordinator is `.claude/skills/umbrella/scripts/helpers.sh` exposing `wire-dag` and `check-cycle` subcommands; the bash invocation at line 144 and script inventory at lines 202-203 already used the correct form. Update the three offending prose locations to point at the real entry points (`helpers.sh wire-dag` / `helpers.sh check-cycle`) so future maintainers are not directed at filenames that do not exist. Doc-only edit; no script or behavior changes. Closes #618.
+
 ## [7.14.2] - 2026-04-26
 
 ### Changed
