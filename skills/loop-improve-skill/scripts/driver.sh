@@ -383,6 +383,10 @@ breadcrumb_done "3: create issue — #${ISSUE_NUM}"
 #   - Prompt on STDIN (FINDING_9: avoids argv ARG_MAX on macOS default 262144)
 #   - Stderr redirected to <out-file>.stderr sidecar (FINDING_10: never posted)
 #   - --plugin-dir "$CLAUDE_PLUGIN_ROOT" (FINDING_7: plugin resolution)
+#   - --permission-mode bypassPermissions (issue #614, sibling to iteration
+#     kernel #585): non-interactive permission contract — without it, an
+#     in-child tool-permission prompt would stall the subprocess until the
+#     watchdog below fires.
 #   - Background-poll pattern (no external `timeout`/`gtimeout` dependency)
 #   - On rc!=0: emits redacted subprocess diagnostics (issue #399 remedy (b))
 #     and flips LOOP_PRESERVE_TMPDIR via dump_subprocess_diagnostics.
