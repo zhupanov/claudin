@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.5] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-batch-input.sh` — tighten the per-entry `depends_on` validator to reject non-integer numbers. The `bad_deps` jq predicate now disqualifies any value where `. != (. | floor)` in addition to the existing non-number / out-of-range checks, so `depends_on:[1.5]` fails with the documented `ERROR=pieces.json entry <i> has out-of-range depends_on values:` line + exit 1 instead of silently passing and leaking `PIECE_<i>_DEPENDS_ON=1.5` downstream into DAG construction. Adds a regression case to `test-render-batch-input.sh` pinning the contract; updates the sibling `render-batch-input.md` Test coverage paragraph and `test-render-batch-input.md` cases / edit-in-sync rules to reflect the new boundary assertion. Closes #647.
+
 ## [7.16.4] - 2026-04-26
 
 ### Fixed
