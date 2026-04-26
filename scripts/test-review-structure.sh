@@ -274,5 +274,78 @@ grep 'collect-reviewer-results.sh' "$SKILL_MD" \
   | grep -Fq -- '--validation-mode' \
   || fail "(13) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
 
-echo "PASS: test-review-structure.sh — all 13 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (14) Cursor slice-mode prompt carries the dual-list contract (#659).
+#      Pipeline-threaded grep: a single SKILL.md line must contain
+#      'cursor-wrap-prompt.sh' (anchors to the Cursor slice-mode prompt line —
+#      line 178 carries `cursor agent` as a Bash backslash-continuation, but the
+#      prompt body itself sits on the next line which is uniquely anchored by
+#      the `cursor-wrap-prompt.sh` invocation), 'slice-files.txt' (anchors to
+#      slice mode), the OOS-marking sentence, AND the two canonical section
+#      headers '### In-Scope Findings' and '### Out-of-Scope Observations'
+#      together. Pattern parallel to (5a)/(5b)/(5c)/(10): pipeline-threaded so a
+#      future edit that splits the directive across lines fails closed; under
+#      `set -o pipefail` a zero-match in any stage fails the pipeline and the
+#      `||` short-circuit triggers fail() — naturally avoids the vacuous-pass
+#      risk of a `while read` loop without a non-empty guard.
+# ---------------------------------------------------------------------------
+grep 'cursor-wrap-prompt.sh' "$SKILL_MD" \
+  | grep -F 'slice-files.txt' \
+  | grep -F 'Mark any finding about a file NOT in slice-files.txt as OOS' \
+  | grep -F '### In-Scope Findings' \
+  | grep -Fq '### Out-of-Scope Observations' \
+  || fail "(14) no single SKILL.md line carries 'cursor-wrap-prompt.sh', 'slice-files.txt', the OOS-marking sentence, '### In-Scope Findings', AND '### Out-of-Scope Observations' together — Cursor slice-mode dual-list contract is broken"
+
+# ---------------------------------------------------------------------------
+# (15) ALL slice-mode external-reviewer prompts carry the dual-list contract (#659).
+#      Both the Cursor slice-mode prompt (with the `cursor-wrap-prompt.sh`
+#      wrapper) and the Codex slice-mode prompt (a bare double-quoted positional
+#      argument to `codex exec` that has no tool-specific literal on its own
+#      line) carry the OOS-marking sentence as their unique signature in
+#      `SKILL.md`. Verify that EVERY line carrying the OOS-marking sentence also
+#      carries both section header literals — catches the Codex slice prompt
+#      that assertion (14) cannot anchor by tool name. Non-emptiness guard plus
+#      per-line check matches assertion (6)'s pattern; the count check
+#      additionally pins exactly two such lines (Cursor + Codex), failing if a
+#      future edit removes one prompt or accidentally adds a third.
+# ---------------------------------------------------------------------------
+oos_mark_lines=$(grep -F 'Mark any finding about a file NOT in slice-files.txt as OOS' "$SKILL_MD" || true)
+[[ -n "$oos_mark_lines" ]] \
+  || fail "(15) SKILL.md contains zero lines with the OOS-marking sentence 'Mark any finding about a file NOT in slice-files.txt as OOS' — Cursor and Codex slice-mode prompts have both regressed"
+
+oos_mark_count=$(printf '%s\n' "$oos_mark_lines" | grep -c .)
+[[ "$oos_mark_count" -eq 2 ]] \
+  || fail "(15) SKILL.md has $oos_mark_count lines with the OOS-marking sentence — expected exactly 2 (one Cursor slice prompt + one Codex slice prompt). A line was removed, duplicated, or added."
+
+while IFS= read -r line; do
+  [[ -z "$line" ]] && continue
+  if ! printf '%s\n' "$line" | grep -F '### In-Scope Findings' | grep -Fq '### Out-of-Scope Observations'; then
+    fail "(15) a slice-mode prompt line carries the OOS-marking sentence but is missing '### In-Scope Findings' and/or '### Out-of-Scope Observations' — slice-mode dual-list contract is broken on this line: $line"
+  fi
+done <<< "$oos_mark_lines"
+
+# ---------------------------------------------------------------------------
+# (16) Step 3a slice-mode external-reviewer parsing carries dual-list contract (#659).
+#      A single SKILL.md line carries 'In slice mode', 'dual-list output',
+#      '### In-Scope Findings', AND '### Out-of-Scope Observations' together —
+#      pinning the parser-side mode-conditional wording in Step 3a item 2.
+# ---------------------------------------------------------------------------
+grep 'In slice mode' "$SKILL_MD" \
+  | grep -F 'dual-list output' \
+  | grep -F '### In-Scope Findings' \
+  | grep -Fq '### Out-of-Scope Observations' \
+  || fail "(16) no single SKILL.md line carries 'In slice mode', 'dual-list output', '### In-Scope Findings', AND '### Out-of-Scope Observations' together — Step 3a slice-mode dual-list parsing contract is broken"
+
+# ---------------------------------------------------------------------------
+# (17) Step 3a diff-mode external-reviewer single-list preservation (#659).
+#      A single SKILL.md line carries 'In diff mode', 'single-list output', AND
+#      'entire output' together — pinning Step 3a item 2's diff-mode preservation
+#      so a future blanket rewrite cannot flatten the slice/diff modes.
+# ---------------------------------------------------------------------------
+grep 'In diff mode' "$SKILL_MD" \
+  | grep -F 'single-list output' \
+  | grep -Fq 'entire output' \
+  || fail "(17) no single SKILL.md line carries 'In diff mode', 'single-list output', AND 'entire output' together — Step 3a diff-mode single-list preservation is broken"
+
+echo "PASS: test-review-structure.sh — all 17 structural invariants hold"
 exit 0

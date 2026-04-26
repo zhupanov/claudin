@@ -104,7 +104,7 @@ Reviewers may surface **out-of-scope (OOS) observations** — pre-existing issue
 - **OOS items are never implemented in the current PR** — accepted items result in issue creation only
 - OOS scoring is asymmetric: accepted OOS earns +1 (like in-scope findings), but rejected or exonerated OOS scores 0 — no penalty (see [Point Competition](point-competition.md)). The mermaid chart above's `REJECT → SCORE` path applies -1 only to in-scope findings; rejected OOS routes through the same `SCORE` node but contributes 0 points.
 
-Only Claude subagent reviewers produce OOS observations (via their dual-list output format). External reviewers (Codex, Cursor) produce single-list output treated entirely as in-scope.
+Claude subagent reviewers always produce OOS observations (via their dual-list output format). External reviewers (Codex, Cursor) **in diff mode** produce single-list output treated entirely as in-scope; **in `/review` slice mode**, external reviewers produce dual-list output matching the Claude subagent contract and contribute OOS observations via voting (see [skills/review/SKILL.md](../skills/review/SKILL.md) Step 3a).
 
 ## Connection to Other Protocols
 
