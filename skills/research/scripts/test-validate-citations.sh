@@ -45,6 +45,7 @@ assert() {
 # A bash script that:
 #   - records every argv into $WORK/last-curl-argv.log
 #   - on `-w '%{http_code}'` mode, prints a code based on URL pattern:
+#       *://example-301.invalid/*        → 301
 #       *://example-403.invalid/*        → 403
 #       *://example-404.invalid/*        → 404
 #       *://example-501.invalid/*        → 501
@@ -71,6 +72,7 @@ for a in "$@"; do
 done
 
 case "$url" in
+    *example-301.invalid*) printf '301'; exit 0 ;;
     *example-403.invalid*) printf '403'; exit 0 ;;
     *example-404.invalid*) printf '404'; exit 0 ;;
     *example-501.invalid*) printf '501'; exit 0 ;;
@@ -184,6 +186,17 @@ __VC_FAKE_CURL="$FAKE_CURL" __VC_LAST_ARGV="$ARGV_LOG" \
 __VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example-404.invalid=8.8.8.8' \
     "$VALIDATOR" --report "$WORK/c9/report.txt" --output "$WORK/c9/cv.md" --tmpdir "$WORK/c9" >/dev/null 2>&1
 assert "Test 9: head-not-found reason present" "grep -F 'head-not-found' \"$WORK/c9/cv.md\""
+
+# ---------- Test 9b: HEAD 301 → UNKNOWN(redirect-not-followed) (issue #663) ----------
+echo "=== Test 9b: HEAD 301 mapping ==="
+mkdir -p "$WORK/c9b"
+cat > "$WORK/c9b/report.txt" <<'REPORT'
+See https://example-301.invalid/old.
+REPORT
+__VC_FAKE_CURL="$FAKE_CURL" __VC_LAST_ARGV="$ARGV_LOG" \
+__VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example-301.invalid=8.8.8.8' \
+    "$VALIDATOR" --report "$WORK/c9b/report.txt" --output "$WORK/c9b/cv.md" --tmpdir "$WORK/c9b" >/dev/null 2>&1
+assert "Test 9b: redirect-not-followed reason present" "grep -F 'redirect-not-followed' \"$WORK/c9b/cv.md\""
 
 # ---------- Test 10: fake-curl argv contract (MUST + MUST-NOT) ----------
 echo "=== Test 10: fake-curl argv MUST / MUST-NOT ==="

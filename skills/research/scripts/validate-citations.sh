@@ -434,7 +434,8 @@ fetch_url() {
     fi
 
     case "$code" in
-        2??|3??) printf 'STATUS=PASS\n' > "$out" ;;
+        2??) printf 'STATUS=PASS\n' > "$out" ;;
+        3??) printf 'STATUS=UNKNOWN(redirect-not-followed)\n' > "$out" ;;
         403|405|501) printf 'STATUS=UNKNOWN(head-not-supported)\n' > "$out" ;;
         404|410) printf 'STATUS=FAIL(head-not-found)\n' > "$out" ;;
         4??) printf 'STATUS=FAIL(head-client-error-%s)\n' "$code" > "$out" ;;

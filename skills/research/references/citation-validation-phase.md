@@ -135,7 +135,8 @@ The validator script always exits 0. Failure modes that would otherwise abort a 
 | Multi-answer DNS where ANY answer is private (rebinding defense) | `FAIL(ssrf-private-resolved)` |
 | HEAD returns 4xx/5xx that does not indicate non-support (e.g., 404, 410) | `FAIL(head-not-found)` for 404/410; `FAIL(head-server-error)` for ≥500 |
 | HEAD returns 403/405/501 | `UNKNOWN(head-not-supported)` (some servers reject HEAD; an optional constrained GET retry MAY upgrade to PASS — see `validate-citations.md`) |
-| HEAD response inside per-fetch timeout window | `PASS` |
+| HEAD 2xx response inside per-fetch timeout window | `PASS` |
+| HEAD 3xx response inside per-fetch timeout window | `UNKNOWN(redirect-not-followed)` (redirect destination not fetched; `--max-redirs 0`) |
 | HEAD response after timeout (per-claim or overall budget) | `UNKNOWN(timeout)` |
 | Realpath escape (`..`-traversal or symlink-escape outside repo root) | `UNKNOWN(out-of-tree-path-after-realpath)` |
 | Broken symlink on the resolved path | `UNKNOWN(broken-symlink)` |

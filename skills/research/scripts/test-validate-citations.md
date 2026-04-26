@@ -19,6 +19,7 @@ the sidecar body contains the expected `Status` / `Reason` tokens.
 | Multi-answer DNS rebinding | mixed public+private answers → `FAIL(ssrf-private-resolved)` |
 | HEAD 403 / 501 mapping | both return `UNKNOWN(head-not-supported)` |
 | HEAD 404 mapping | returns `FAIL(head-not-found)` |
+| HEAD 301 mapping | returns `UNKNOWN(redirect-not-followed)` |
 | Curl argv MUST / MUST-NOT | `--max-redirs`, `--max-time`, `--noproxy`, HTTPS URL last; absent: `--insecure`, `-k`, `--proxy`, `--socks*`, `--cacert` |
 | Hostile `http_proxy` env | `--noproxy '*'` still in argv |
 | File:line PASS (existing) | `AGENTS.md:1` → `PASS` |

@@ -82,6 +82,7 @@ network calls.
 | `head-client-error-<code>` | FAIL | HEAD returned 4xx (excl. 403/404/405/410/501) |
 | `head-server-error-<code>` | FAIL | HEAD returned 5xx |
 | `head-not-supported` | UNKNOWN | HEAD returned 403 / 405 / 501 (some servers reject HEAD) |
+| `redirect-not-followed` | UNKNOWN | HEAD returned 3xx; redirect destination not fetched (`--max-redirs 0`) |
 | `timeout` | UNKNOWN | per-fetch or overall budget elapsed |
 | `network-error` | UNKNOWN | curl exited non-zero (connection error, DNS failure) |
 | `no-status-line` | UNKNOWN | curl exited 0 but `%{http_code}` was empty |
@@ -218,6 +219,7 @@ fixture inputs with stubbed curl and stubbed DNS. Verified scenarios:
 - Realpath escape (`..`-traversal + symlink-escape) →
   `out-of-tree-path-after-realpath` / `broken-symlink`.
 - HEAD 403/405/501 → `head-not-supported`.
+- HEAD 3xx → `redirect-not-followed`.
 - Darwin budget-exhaustion no-orphan-curl (Test 20, Darwin-only): a hanging
   fake-curl fixture is run with `--budget-seconds 1`; after the kill loop
   no fake-curl PID survives. Linux runners skip this assertion and rely on
