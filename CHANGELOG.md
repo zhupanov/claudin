@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.10.4] - 2026-04-25
+
+### Changed
+
+- Wire `.claude/skills/umbrella/scripts/test-helpers.sh` (cycle-detection regression harness, 13 assertions covering empty graph / self-loop / 2- and 3-cycle close / parallel forward edge / diamond cycle and cross-edge / disconnected components / four error-path cases) into `make lint` via a new `test-umbrella-helpers` Makefile target added to `.PHONY` and to the `test-harnesses` prerequisite list, mirroring the `test-parse-input` style. CI's existing `test-harnesses` job now exercises the harness; future regressions in `helpers.sh check-cycle` semantics or stdout grammar (`CYCLE=true|false`) will fail CI. Sibling `test-helpers.md` flipped from a "Wire into `make lint`" pending TODO to a statement that the wiring is in place. Closes #558.
+
 ## [7.10.3] - 2026-04-25
 
 ### Changed
