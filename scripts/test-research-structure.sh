@@ -1,13 +1,15 @@
 #!/bin/bash
 # Structural regression test for /research skill progressive-disclosure refactor.
-# Asserts that the skill's 3-reference topology survives edits:
-#  - skills/research/references/research-phase.md, validation-phase.md, and
-#    adjudication-phase.md all exist
+# Asserts that the skill's 4-reference symmetric topology survives edits:
+#  - skills/research/references/research-phase.md, validation-phase.md,
+#    adjudication-phase.md, and citation-validation-phase.md all exist
 #  - Each appears on a 'MANDATORY — READ ENTIRE FILE' line in skills/research/SKILL.md,
 #    and the SAME line also carries reciprocal 'Do NOT load <each-other-reference>'
-#    guards naming BOTH other references (line-scoped so a future edit cannot split
-#    the MANDATORY and the Do-NOT-load directives into different paragraphs without
-#    the harness catching the drift)
+#    guards naming ALL THREE other references (line-scoped so a future edit cannot
+#    split the MANDATORY and the Do-NOT-load directives into different paragraphs
+#    without the harness catching the drift). Order-agnostic: the harness uses
+#    per-substring grep loops so minor reordering of unrelated lines does NOT
+#    break the check (presence-not-order).
 #  - Each references/*.md OPENS WITH the Consumer / Contract / When-to-load header triplet
 #    in the first 20 lines (a /research-local tightening layered on top of the cross-skill
 #    presence check enforced by scripts/test-references-headers.sh — matches the sibling
@@ -41,6 +43,7 @@ REFS_DIR="$REPO_ROOT/skills/research/references"
 RESEARCH_MD="$REFS_DIR/research-phase.md"
 VALIDATION_MD="$REFS_DIR/validation-phase.md"
 ADJUDICATION_MD="$REFS_DIR/adjudication-phase.md"
+CITATION_MD="$REFS_DIR/citation-validation-phase.md"
 
 fail() {
   echo "FAIL: $1" >&2
@@ -50,35 +53,74 @@ fail() {
 # Check 1: SKILL.md exists.
 [[ -f "$SKILL_MD" ]] || fail "SKILL.md missing: $SKILL_MD"
 
-# Check 2: All three reference files exist.
+# Check 2: All four reference files exist.
 [[ -f "$RESEARCH_MD" ]]      || fail "references/research-phase.md missing: $RESEARCH_MD"
 [[ -f "$VALIDATION_MD" ]]    || fail "references/validation-phase.md missing: $VALIDATION_MD"
 [[ -f "$ADJUDICATION_MD" ]]  || fail "references/adjudication-phase.md missing: $ADJUDICATION_MD"
+[[ -f "$CITATION_MD" ]]      || fail "references/citation-validation-phase.md missing: $CITATION_MD"
 
 # Check 3: Each reference file is named on a MANDATORY — READ ENTIRE FILE line in SKILL.md
 #          AND that same line carries reciprocal 'Do NOT load <each-other>' guards naming
-#          BOTH other references. Line-scoped by construction (grep operates line-by-line)
-#          so a future edit that splits the directive across lines — parking 'Do NOT load X'
-#          in a different paragraph — fails.
+#          ALL THREE other references. Line-scoped by construction so a future edit that
+#          splits the directive across lines fails. Order-agnostic via per-substring grep
+#          loops: each MANDATORY line is extracted, then asserted to contain ALL THREE
+#          'Do NOT load <each-other>' substrings (presence-not-order — minor reordering of
+#          unrelated lines must NOT break the check).
 #
-# Each MANDATORY line for reference X must also mention BOTH other references in Do-NOT-load
-# clauses. The Do-NOT-load clauses may be in either order on the line (the harness checks
-# for both possible orderings), but both other reference filenames must be present.
+# Procedure per reference X:
+#   1. Find the line in SKILL.md that contains 'MANDATORY — READ ENTIRE FILE' AND <X>.
+#   2. For each of the OTHER three references Y, assert the line ALSO contains
+#      'Do NOT load' followed by <Y> somewhere later on the same line.
+check_mandatory_topology() {
+    local target="$1"  # filename basename of the reference being asserted
+    shift
+    local -a others=("$@")  # the other three filenames
+    # Find the canonical MANDATORY line: it begins with the literal '**MANDATORY'
+    # token and names the target reference EARLIER in the line than any 'Do NOT load'
+    # clause. The reference-of-record for the line is the one named between the
+    # MANDATORY directive and the first 'Do NOT load' clause.
+    local target_re
+    target_re=$(printf '%s' "$target" | sed 's/\./\\./g')
+    local line
+    # shellcheck disable=SC1087
+    line=$(grep -E "MANDATORY — READ ENTIRE FILE[^\$]*${target_re}[^\$]*Do NOT load" "$SKILL_MD" \
+          | grep -E "MANDATORY — READ ENTIRE FILE.*${target_re}.*Do NOT load" \
+          | head -n 1 || true)
+    # Filter: only the line where $target appears BEFORE the first 'Do NOT load'
+    # token is the reference-of-record line.
+    if [[ -n "$line" ]]; then
+        local prefix
+        prefix="${line%%Do NOT load*}"
+        if ! printf '%s' "$prefix" | grep -Fq "$target"; then
+            line=""
+        fi
+    fi
+    # If the head-line filter dropped the candidate, do a second pass over ALL
+    # MANDATORY lines and pick the one whose pre-'Do NOT load' prefix names $target.
+    if [[ -z "$line" ]]; then
+        local candidate
+        while IFS= read -r candidate; do
+            local cand_prefix="${candidate%%Do NOT load*}"
+            if printf '%s' "$cand_prefix" | grep -Fq "$target"; then
+                line="$candidate"
+                break
+            fi
+        done < <(grep -E "MANDATORY — READ ENTIRE FILE" "$SKILL_MD" || true)
+    fi
+    [[ -n "$line" ]] \
+      || fail "SKILL.md must contain a 'MANDATORY — READ ENTIRE FILE' line naming '$target' as the reference-of-record (before the first 'Do NOT load' clause)"
+    local other other_re
+    for other in "${others[@]}"; do
+        other_re=$(printf '%s' "$other" | sed 's/\./\\./g')
+        printf '%s\n' "$line" | grep -qE "Do NOT load.*$other_re" \
+          || fail "SKILL.md MANDATORY line for '$target' must also contain a 'Do NOT load $other' clause on the same line (4-reference symmetric topology)"
+    done
+}
 
-# research-phase.md: MANDATORY line must mention BOTH validation-phase.md AND adjudication-phase.md
-grep -qE 'MANDATORY — READ ENTIRE FILE.*research-phase\.md.*Do NOT load.*validation-phase\.md.*Do NOT load.*adjudication-phase\.md' "$SKILL_MD" \
-  || grep -qE 'MANDATORY — READ ENTIRE FILE.*research-phase\.md.*Do NOT load.*adjudication-phase\.md.*Do NOT load.*validation-phase\.md' "$SKILL_MD" \
-  || fail "SKILL.md Step 1 MANDATORY for research-phase.md must share a line with reciprocal 'Do NOT load' guards naming BOTH validation-phase.md AND adjudication-phase.md"
-
-# validation-phase.md: MANDATORY line must mention BOTH research-phase.md AND adjudication-phase.md
-grep -qE 'MANDATORY — READ ENTIRE FILE.*validation-phase\.md.*Do NOT load.*research-phase\.md.*Do NOT load.*adjudication-phase\.md' "$SKILL_MD" \
-  || grep -qE 'MANDATORY — READ ENTIRE FILE.*validation-phase\.md.*Do NOT load.*adjudication-phase\.md.*Do NOT load.*research-phase\.md' "$SKILL_MD" \
-  || fail "SKILL.md Step 2 MANDATORY for validation-phase.md must share a line with reciprocal 'Do NOT load' guards naming BOTH research-phase.md AND adjudication-phase.md"
-
-# adjudication-phase.md: MANDATORY line must mention BOTH research-phase.md AND validation-phase.md
-grep -qE 'MANDATORY — READ ENTIRE FILE.*adjudication-phase\.md.*Do NOT load.*research-phase\.md.*Do NOT load.*validation-phase\.md' "$SKILL_MD" \
-  || grep -qE 'MANDATORY — READ ENTIRE FILE.*adjudication-phase\.md.*Do NOT load.*validation-phase\.md.*Do NOT load.*research-phase\.md' "$SKILL_MD" \
-  || fail "SKILL.md Step 2.5 MANDATORY for adjudication-phase.md must share a line with reciprocal 'Do NOT load' guards naming BOTH research-phase.md AND validation-phase.md"
+check_mandatory_topology "research-phase.md"          "validation-phase.md"          "adjudication-phase.md"        "citation-validation-phase.md"
+check_mandatory_topology "validation-phase.md"        "research-phase.md"            "adjudication-phase.md"        "citation-validation-phase.md"
+check_mandatory_topology "adjudication-phase.md"      "research-phase.md"            "validation-phase.md"          "citation-validation-phase.md"
+check_mandatory_topology "citation-validation-phase.md" "research-phase.md"          "validation-phase.md"          "adjudication-phase.md"
 
 # Check 4: Each references/*.md opens with the Consumer / Contract / When-to-load header
 #          triplet in the first 20 lines. The sibling contract says "opens with" — enforce that
@@ -92,7 +134,7 @@ contract_header_patterns=(
   '^\*\*Contract\*\*:'
   '^\*\*When to load\*\*:'
 )
-for ref_path in "$RESEARCH_MD" "$VALIDATION_MD" "$ADJUDICATION_MD"; do
+for ref_path in "$RESEARCH_MD" "$VALIDATION_MD" "$ADJUDICATION_MD" "$CITATION_MD"; do
   for pattern in "${contract_header_patterns[@]}"; do
     head -n 20 "$ref_path" | grep -Eq "$pattern" \
       || fail "references/$(basename "$ref_path") must open with anchored header matching '$pattern' in the first 20 lines"
@@ -843,5 +885,77 @@ echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Architectural patterns" \
 echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Risks and feasibility" \
   || fail "references/validation-phase.md '## Finalize Validation' REVISION_PROMPT must enumerate the '### Risks and feasibility' body marker (#534 Check 38c)"
 
-echo "PASS: test-research-structure.sh — all 44 structural invariants hold"
+# Check 39 (#516): Step 2.7 — Citation Validation block presence in SKILL.md.
+# Pin the literal section header AND the validator script invocation AND the
+# completion-line breadcrumb format. The block lives between Step 2.5's budget
+# gate and Step 3 — see SKILL.md.
+grep -Fq "## Step 2.7 — Citation Validation" "$SKILL_MD" \
+  || fail "SKILL.md must contain the '## Step 2.7 — Citation Validation' section header (#516)"
+grep -Fq "validate-citations.sh" "$SKILL_MD" \
+  || fail "SKILL.md must invoke skills/research/scripts/validate-citations.sh in Step 2.7 (#516)"
+grep -Fq "citation-validation —" "$SKILL_MD" \
+  || fail "SKILL.md Step 2.7 must use the 'citation-validation' short-name in completion-line breadcrumbs (#516)"
+
+# Check 40 (#516): Step Name Registry must list 2.7 with the citation-validation
+# short name. Per-substring grep loop (presence-not-order) — minor reordering
+# of unrelated rows must not break the check.
+STEP_REGISTRY_HITS=$(grep -E '^\| 2\.7 \|' "$SKILL_MD" | grep -c 'citation-validation' || true)
+[[ "$STEP_REGISTRY_HITS" -ge 1 ]] \
+  || fail "SKILL.md Step Name Registry must contain a row for Step 2.7 with the 'citation-validation' short name (#516 Check 40)"
+
+# Check 41 (#516): Step 3 splice contract — the citation-validation sidecar
+# must be appended to research-report-final.md before the user-visible cat.
+# Pin (a) the sidecar filename literal, (b) an append-redirect (`>>`) into
+# research-report-final.md somewhere in SKILL.md (Step 3 owns this).
+grep -Fq "citation-validation.md" "$SKILL_MD" \
+  || fail "SKILL.md must reference the citation-validation.md sidecar in Step 3's splice block (#516 Check 41)"
+# shellcheck disable=SC2016
+grep -Eq '>> "\$RESEARCH_TMPDIR/research-report-final\.md"' "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must append the citation-validation sidecar to research-report-final.md via '>>' (#516 Check 41)"
+
+# Check 42 (#516): the citation-validation reference file body pins.
+# The reference owns the validator-invocation contract recap and the SSRF
+# defenses recap. Pin the script filename + the curl-flag MUST literals.
+grep -Fq "validate-citations.sh" "$CITATION_MD" \
+  || fail "references/citation-validation-phase.md must reference validate-citations.sh (#516 Check 42)"
+grep -Fq -- "--max-redirs 0" "$CITATION_MD" \
+  || fail "references/citation-validation-phase.md must document the '--max-redirs 0' SSRF guard (#516 Check 42)"
+grep -Fq -- "--noproxy" "$CITATION_MD" \
+  || fail "references/citation-validation-phase.md must document the '--noproxy' SSRF guard (#516 Check 42)"
+
+# Check 43 (#516): the validate-citations.sh script + sibling .md exist and the
+# script is executable. Without these pins, a future edit could quietly remove
+# either surface and Step 2.7 would be a no-op.
+VALIDATE_CITATIONS_SCRIPT="$REPO_ROOT/skills/research/scripts/validate-citations.sh"
+VALIDATE_CITATIONS_MD="$REPO_ROOT/skills/research/scripts/validate-citations.md"
+[[ -f "$VALIDATE_CITATIONS_SCRIPT" ]] \
+  || fail "skills/research/scripts/validate-citations.sh must exist (#516 Check 43)"
+[[ -x "$VALIDATE_CITATIONS_SCRIPT" ]] \
+  || fail "skills/research/scripts/validate-citations.sh must be executable (#516 Check 43)"
+[[ -f "$VALIDATE_CITATIONS_MD" ]] \
+  || fail "skills/research/scripts/validate-citations.md sibling contract must exist (#516 Check 43)"
+
+# Check 44 (#516): file-line-regex-lib.sh shared library + sibling .md exist.
+# Source-only library replacing the inlined regex tier rules in
+# validate-research-output.sh and powering the file:line claim extractor in
+# validate-citations.sh.
+FILELINELIB_SCRIPT="$REPO_ROOT/scripts/file-line-regex-lib.sh"
+FILELINELIB_MD="$REPO_ROOT/scripts/file-line-regex-lib.md"
+[[ -f "$FILELINELIB_SCRIPT" ]] \
+  || fail "scripts/file-line-regex-lib.sh must exist (#516 Check 44)"
+[[ -f "$FILELINELIB_MD" ]] \
+  || fail "scripts/file-line-regex-lib.md sibling contract must exist (#516 Check 44)"
+# The library MUST be source-only (no `set -e`, no top-level `exit`).
+grep -Eq '^set -[euo]+pipefail' "$FILELINELIB_SCRIPT" \
+  && fail "scripts/file-line-regex-lib.sh must NOT set strict mode (it is a source-only library) (#516 Check 44)"
+grep -Eq '^[[:space:]]*exit[[:space:]]+[0-9]' "$FILELINELIB_SCRIPT" \
+  && fail "scripts/file-line-regex-lib.sh must NOT contain top-level 'exit' calls (it is a source-only library) (#516 Check 44)"
+
+# Check 45 (#516): validate-research-output.sh sources the shared library.
+# Without this pin, the refactor could be silently reverted (regex inlined
+# again) and the two consumers would drift on tier rules.
+grep -Fq 'file-line-regex-lib.sh' "$REPO_ROOT/scripts/validate-research-output.sh" \
+  || fail "scripts/validate-research-output.sh must source scripts/file-line-regex-lib.sh (#516 Check 45)"
+
+echo "PASS: test-research-structure.sh — all 45 structural invariants hold"
 exit 0

@@ -103,6 +103,11 @@
 # returning 1 (no match) must NOT abort the script.
 set -uo pipefail
 
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=scripts/file-line-regex-lib.sh
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/file-line-regex-lib.sh"
+
 MIN_WORDS=""
 REQUIRE_CITATIONS=true
 VALIDATION_MODE=false
@@ -211,19 +216,17 @@ if [[ "$REQUIRE_CITATIONS" == "true" ]]; then
     # The first stem character `[A-Za-z_]` may be `_`, but the strict-mode
     # `[/_-]` requires a signal AFTER the start char, so a bare-underscore
     # start does not by itself satisfy the rule.
-    PROBE1_LONG_EXTS='cc|cfg|cjs|cpp|css|csv|cs|dart|gradle|groovy|go|html|htm|hpp|java|json|jsx|js|kt|lua|mjs|mk|mm|md|php|pl|proto|py|rb|rs|sass|scala|scss|sh|sql|swift|toml|tsx|tsv|ts|vue|xml|yaml|yml'
-    PROBE1_SHORT_EXTS='lock|env|txt|c|h|m|r'
-    PROBE1_LONG_RE='(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.('"$PROBE1_LONG_EXTS"')(:[0-9]+(-[0-9]+)?)?($|[^A-Za-z0-9_:/-])'
-    PROBE1_SHORT_PATH_RE='(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*[/_-][A-Za-z0-9_./-]*\.('"$PROBE1_SHORT_EXTS"')(:[0-9]+(-[0-9]+)?)?($|[^A-Za-z0-9_:/-])'
-    PROBE1_SHORT_LINE_RE='(^|[^A-Za-z0-9])\.?[A-Za-z_][A-Za-z0-9_./-]*\.('"$PROBE1_SHORT_EXTS"'):[0-9]+(-[0-9]+)?($|[^A-Za-z0-9_:/-])'
-    if grep -Eq "$PROBE1_LONG_RE|$PROBE1_SHORT_PATH_RE|$PROBE1_SHORT_LINE_RE" "$INPUT"; then
+    # Tier-split regex now sourced from scripts/file-line-regex-lib.sh
+    # (`__filelinelib_long_re`, `__filelinelib_short_path_re`,
+    # `__filelinelib_short_line_re`, `__filelinelib_any_re`).
+    if grep -Eq "$__filelinelib_any_re" "$INPUT"; then
         exit 0
     fi
 
     # Probe 2: extensionless capitalized filenames (Makefile, Dockerfile,
     # GNUmakefile) — common /research provenance citations not covered by
-    # probe 1.
-    if grep -Eq '(^|[^A-Za-z0-9_])(Makefile|Dockerfile|GNUmakefile)(:[0-9]+(-[0-9]+)?)?' "$INPUT"; then
+    # probe 1. Pattern sourced from `__filelinelib_extensionless_re`.
+    if grep -Eq "$__filelinelib_extensionless_re" "$INPUT"; then
         exit 0
     fi
 
