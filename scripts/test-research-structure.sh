@@ -201,7 +201,10 @@ grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_M
 #
 # All sort/comm invocations use LC_ALL=C for deterministic ordering across
 # macOS and Linux.
-INDEP_LINES=$(grep -nE '^Flags are independent' "$SKILL_MD" | cut -d: -f1)
+# `|| true` keeps a no-match grep from aborting the script under
+# `set -euo pipefail` before the explicit count check below can fail with
+# the targeted Check 13 diagnostic.
+INDEP_LINES=$(grep -nE '^Flags are independent' "$SKILL_MD" | cut -d: -f1 || true)
 INDEP_LINE_COUNT=$(printf '%s' "$INDEP_LINES" | grep -c . || true)
 [[ "$INDEP_LINE_COUNT" == "1" ]] \
   || fail "Check 13: SKILL.md must contain exactly one line beginning with 'Flags are independent' (found $INDEP_LINE_COUNT) (#531)"
@@ -225,7 +228,10 @@ process_bullet() {
   BULLET_COUNT=$((BULLET_COUNT + 1))
   local leading_token canonical
   # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
-  leading_token=$(printf '%s\n' "$first_line" | grep -oE '^- `[^`]+`' | head -n 1)
+  # `|| true` keeps a no-match grep from aborting the script under
+  # `set -euo pipefail` before the explicit emptiness check below can fail
+  # with the targeted Check 13 diagnostic.
+  leading_token=$(printf '%s\n' "$first_line" | grep -oE '^- `[^`]+`' | head -n 1 || true)
   [[ -n "$leading_token" ]] \
     || fail "Check 13: SKILL.md flag-block bullet has no parseable leading backticked --<flag> token: $first_line (#531)"
   # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
