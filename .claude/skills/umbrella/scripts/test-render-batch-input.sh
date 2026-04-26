@@ -91,6 +91,39 @@ assert_too_few_entries() {
   PASS=$((PASS + 1))
 }
 
+# assert_invalid_depends_on — feed valid JSON whose entry 2 has a non-integer
+# depends_on value (e.g. 1.5) and verify the per-entry validator at
+# render-batch-input.sh's `bad_deps` jq predicate emits the documented
+# `ERROR=pieces.json entry <i> has out-of-range depends_on values:` line and
+# exits 1. Closes #647 — without the integer-only tightening, fractional values
+# silently pass and leak into PIECE_<i>_DEPENDS_ON=1.5 downstream.
+assert_invalid_depends_on() {
+  local label="$1"
+  local content="$2"
+  local pieces="$TMP/pieces.json"
+  printf '%s' "$content" > "$pieces"
+  local stderr_file="$TMP/stderr.txt"
+  local exit_code=0
+  bash "$SCRIPT" --tmpdir "$TMP" --pieces-file "$pieces" >/dev/null 2>"$stderr_file" || exit_code=$?
+
+  if [[ "$exit_code" -ne 1 ]]; then
+    printf '  ❌ %s — expected exit 1, got %d (stderr: %s)\n' \
+      "$label" "$exit_code" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  if ! grep -q '^ERROR=pieces.json entry 2 has out-of-range depends_on values:' "$stderr_file"; then
+    printf '  ❌ %s — stderr missing "out-of-range depends_on values" line. Got: %s\n' \
+      "$label" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  printf '  ✅ %s — exit 1 + out-of-range depends_on line present\n' "$label"
+  PASS=$((PASS + 1))
+}
+
 # assert_valid_baseline — feed valid 2-piece pieces.json and verify the script
 # succeeds (exit 0), prints BATCH_INPUT_FILE=, and writes the markdown output.
 # Confirms the new guard does not regress the happy path.
@@ -154,6 +187,11 @@ assert_malformed_json "top-level string" '"not-an-array"'
 
 # Valid JSON but too few entries (< 2): exercises the pre-existing path.
 assert_too_few_entries "single entry" '[{"title":"a","body":"b","depends_on":[]}]'
+
+# Fractional depends_on value: per-entry validator must reject non-integer
+# numbers so PIECE_<i>_DEPENDS_ON=1.5 cannot leak downstream into DAG
+# construction (closes #647).
+assert_invalid_depends_on "fractional depends_on" '[{"title":"a","body":"b","depends_on":[]},{"title":"b","body":"c","depends_on":[1.5]}]'
 
 # Valid 2-piece baseline: confirms the new guard doesn't regress the happy path.
 assert_valid_baseline "valid 2-piece baseline"
