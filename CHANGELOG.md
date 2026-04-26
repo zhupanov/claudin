@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.13] - 2026-04-26
+
+### Fixed
+
+- `skills/research/references/citation-validation-phase.md` — reorder §2.7.1 skip preconditions to match `skills/research/SKILL.md` Step 2.7's emission order: `BUDGET_ABORTED=true` budget-abort gate FIRST (proceed to Step 4 because Step 3 was already skipped), then missing/empty `$RESEARCH_TMPDIR/research-report.txt` empty-synthesis gate SECOND (proceed to Step 3). Each gate now explicitly names its downstream branch in the prose. The line-23 prose previously folded `BUDGET_ABORTED` into the "no synthesis to validate" rationale for the Step 3 path; the budget-abort cause is now removed from that list and the empty-synthesis explanation states that `BUDGET_ABORTED=true` is handled by the budget-abort gate above and never reaches the empty-synthesis branch. Also updates the §2.7.6 "Step 2.7 → Step 3 control-flow summary" diagram to spell out the two ordered input gates with their distinct downstream targets, replacing the prior `skip if empty/budget-aborted` line that conflated the two skips. SKILL.md Step 2.7 was already correct; this is a documentation-only alignment fix. Closes #666.
+
 ## [7.16.12] - 2026-04-26
 
 ### Fixed
