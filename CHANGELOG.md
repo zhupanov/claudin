@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.8] - 2026-04-26
+
+### Fixed
+
+- `skills/loop-fix-issue/scripts/driver.sh` Usage block (lines 9-19) gains a `--no-admin-fallback` entry, matching the existing parser at line 148 and the SKILL.md frontmatter (line 4) + Flags section (line 21) advertisement. Pre-existing inconsistency surfaced as out-of-scope by the codex reviewer during an earlier `/loop-fix-issue` design phase. Pure docstring fix; no behavioral change. Closes #626.
+
 ## [7.14.7] - 2026-04-26
 
 ### Added

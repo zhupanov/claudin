@@ -7,7 +7,7 @@
 # and this driver's post-call Bash.
 #
 # Usage:
-#   driver.sh [--debug] [--max-iterations N] [--no-slack]
+#   driver.sh [--debug] [--max-iterations N] [--no-slack] [--no-admin-fallback]
 #
 # Arguments:
 #   --debug            — optional flag (currently no-op; reserved for future
@@ -16,6 +16,8 @@
 #                        when /fix-issue reports no eligible issues OR this
 #                        cap is hit.
 #   --no-slack         — forwarded to /fix-issue (which forwards to /implement)
+#                        each iteration.
+#   --no-admin-fallback — forwarded to /fix-issue (which forwards to /implement)
 #                        each iteration.
 #
 # Termination signal:
