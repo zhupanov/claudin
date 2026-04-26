@@ -187,3 +187,13 @@ On stderr, the emitter prints a single human summary line of the form:
 ## Sub-skill Invocation
 
 This skill invokes `/issue` via the Skill tool (Step 3A and Steps 3B.2 / 3B.3). See `/Users/zhupanov/larch1/skills/shared/subskill-invocation.md` for the canonical conventions. This skill is a pure delegator over `/issue` for the issue-creation half of the work — there are no post-Skill-call steps that depend on `/issue` side effects beyond parsing the stdout grammar (which is a deterministic mechanical verification per the conventions checklist). The sub-skill calls happen at known checkpoints, not buried in conditionals.
+
+## Script contracts
+
+Each script under `scripts/` has a sibling contract `.md` documenting CLI surface, stdout grammar, exit codes, and edit-in-sync rules (per `AGENTS.md` "Per-script contracts live beside the script"):
+
+- `scripts/parse-args.sh` — Step 0 flag parser; contract `scripts/parse-args.md`.
+- `scripts/render-batch-input.sh` — Step 3B.1 batch-input renderer (`pieces.json` → `/issue --input-file` markdown); contract `scripts/render-batch-input.md`.
+- `scripts/render-umbrella-body.sh` — Step 3B.3 umbrella-body composer (summary + children TSV → markdown body with GitHub-native checklist); contract `scripts/render-umbrella-body.md`.
+- `scripts/helpers.sh` — Steps 3B.4 / 4 consolidated helpers exposing `check-cycle`, `wire-dag`, and `emit-output` subcommands; contract `scripts/helpers.md`.
+- `scripts/test-helpers.sh` — regression harness for `helpers.sh check-cycle`; contract `scripts/test-helpers.md`. Run manually via `bash scripts/test-helpers.sh`; wire into `make lint` as a follow-up issue.
