@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.1] - 2026-04-26
+
+### Fixed
+
+- `docs/linting.md`'s `make test-umbrella-parse-args` table row and `CHANGELOG.md` entry [7.13.9] now match the actual harness and ERROR= template count: the row body says "25 cases" (was "22 cases") and "11 templates" (was "10 templates"), aligned with the 25 numbered cases in `.claude/skills/umbrella/scripts/test-umbrella-parse-args.sh` and the 11 frozen ERROR= templates in `.claude/skills/umbrella/scripts/parse-args.md`. The drift was introduced when umbrella parse-args FINDING_1 / FINDING_2 added cases 23-25 without updating the lint doc and changelog template count. Closes #615.
+
 ## [7.14.0] - 2026-04-26
 
 ### Changed
