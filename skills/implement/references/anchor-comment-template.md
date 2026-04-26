@@ -32,7 +32,7 @@ This line is suppressed as soon as any fragment contains a non-whitespace byte â
 
 ## Canonical template
 
-```markdown
+````markdown
 <!-- larch:implement-anchor v1 issue=<N> -->
 
 <!-- section:plan-goals-test -->
@@ -114,7 +114,7 @@ This line is suppressed as soon as any fragment contains a non-whitespace byte â
 | Rebase count | <N> |
 
 <!-- section-end:run-statistics -->
-```
+````
 
 ## Section markers â€” exact slug list
 
@@ -197,4 +197,4 @@ This is a defense-in-depth layer above `scripts/redact-secrets.sh`'s outbound sc
 | `scripts/assemble-anchor.sh` | Consumes `SECTION_MARKERS` via the shared helper; emits marker pairs and the first-line HTML marker documented here. |
 | `scripts/tracking-issue-read.sh` | Anchor-marker filter uses the same strict `<!-- larch:implement-anchor v1` prefix. |
 | `skills/implement/references/pr-body-template.md` | Sibling slim-projection template for the PR body (Summary + Diagrams + Test plan + `Closes #<N>` + footer only); Phase 3+ the anchor comment is canonical for rich content. |
-| `scripts/test-implement-structure.sh` | Phase 3 test-harness assertion (9a) pins the three load-bearing literals here (`Accepted OOS (GitHub issues filed)`, `| OOS issues filed |`, `<details><summary>Execution Issues</summary>`); assertion (9b) pins a â‰¥3 reference floor for `anchor-comment-template.md` in SKILL.md. |
+| `scripts/test-implement-structure.sh` | Phase 3 test-harness assertion (9a) pins the three load-bearing literals here (`Accepted OOS (GitHub issues filed)`, `\| OOS issues filed \|`, `<details><summary>Execution Issues</summary>`); assertion (9b) pins a â‰¥3 reference floor for `anchor-comment-template.md` in SKILL.md. |

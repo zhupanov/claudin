@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.8] - 2026-04-26
+
+### Fixed
+
+- `skills/implement/references/anchor-comment-template.md` — lift the outer fence of the "Canonical template" code block from three backticks to four so the inner ` ```mermaid ` blocks no longer terminate it under CommonMark / GitHub-flavored Markdown. The rendered template was previously broken on GitHub (the first inner triple-backtick run was parsed as the outer block's closing fence); anyone copying the template visually rather than via `assemble-anchor.sh` would have gotten a malformed structure. Also escapes the literal pipes in the Edit-in-sync pointers row's documentation reference (`\| OOS issues filed \|`) to silence pre-existing markdownlint MD056 / MD038 warnings on that line; the load-bearing literal `| OOS issues filed |` still appears verbatim at line 110 inside the Run Statistics table of the canonical template, so `scripts/test-implement-structure.sh` assertion (9a) is unchanged. Closes #653.
+
 ## [7.15.7] - 2026-04-26
 
 ### Added
