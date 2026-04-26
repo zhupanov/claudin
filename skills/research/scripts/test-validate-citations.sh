@@ -45,11 +45,17 @@ assert() {
 # A bash script that:
 #   - records every argv into $WORK/last-curl-argv.log
 #   - on `-w '%{http_code}'` mode, prints a code based on URL pattern:
+#       *://example-301.invalid/*        → 301
 #       *://example-403.invalid/*        → 403
 #       *://example-404.invalid/*        → 404
 #       *://example-501.invalid/*        → 501
 #       *://example-hang.invalid/*       → sleep 60 (budget tester drives this)
-#       https://doi.org/10.1234/*        → 200 (allow DOI happy path)
+#       https://doi.org/*                → 302 (doi.org is a redirect resolver
+#                                             by design; with --max-redirs 0
+#                                             the validator reads this as
+#                                             UNKNOWN(redirect-not-followed),
+#                                             which the DOI path interprets
+#                                             as PASS — issue #663)
 #       any other https://*               → 200
 #   - exit 0 (curl simulated success)
 
@@ -71,9 +77,11 @@ for a in "$@"; do
 done
 
 case "$url" in
+    *example-301.invalid*) printf '301'; exit 0 ;;
     *example-403.invalid*) printf '403'; exit 0 ;;
     *example-404.invalid*) printf '404'; exit 0 ;;
     *example-501.invalid*) printf '501'; exit 0 ;;
+    *://doi.org/*) printf '302'; exit 0 ;;
     *example-hang.invalid*)
         sleep 60
         printf '200'; exit 0 ;;
@@ -184,6 +192,31 @@ __VC_FAKE_CURL="$FAKE_CURL" __VC_LAST_ARGV="$ARGV_LOG" \
 __VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example-404.invalid=8.8.8.8' \
     "$VALIDATOR" --report "$WORK/c9/report.txt" --output "$WORK/c9/cv.md" --tmpdir "$WORK/c9" >/dev/null 2>&1
 assert "Test 9: head-not-found reason present" "grep -F 'head-not-found' \"$WORK/c9/cv.md\""
+
+# ---------- Test 9b: HEAD 301 → UNKNOWN(redirect-not-followed) (issue #663) ----------
+echo "=== Test 9b: HEAD 301 mapping ==="
+mkdir -p "$WORK/c9b"
+cat > "$WORK/c9b/report.txt" <<'REPORT'
+See https://example-301.invalid/old.
+REPORT
+__VC_FAKE_CURL="$FAKE_CURL" __VC_LAST_ARGV="$ARGV_LOG" \
+__VC_SKIP_DNS=1 __VC_STUB_RESOLVE='example-301.invalid=8.8.8.8' \
+    "$VALIDATOR" --report "$WORK/c9b/report.txt" --output "$WORK/c9b/cv.md" --tmpdir "$WORK/c9b" >/dev/null 2>&1
+assert "Test 9b: redirect-not-followed reason present" "grep -F 'redirect-not-followed' \"$WORK/c9b/cv.md\""
+
+# ---------- Test 9c: DOI HEAD 302 → PASS (doi.org is redirect-by-design; issue #663) ----------
+# Regression guard: a 3xx HEAD on https://doi.org/<doi> is the success signal for DOI
+# registration, so the DOI path must interpret UNKNOWN(redirect-not-followed) as PASS.
+echo "=== Test 9c: DOI HEAD 302 mapping → PASS ==="
+mkdir -p "$WORK/c9c"
+cat > "$WORK/c9c/report.txt" <<'REPORT'
+Reference: 10.1234/foo.bar
+REPORT
+__VC_FAKE_CURL="$FAKE_CURL" __VC_LAST_ARGV="$ARGV_LOG" \
+__VC_SKIP_DNS=1 __VC_STUB_RESOLVE='doi.org=8.8.8.8' \
+    "$VALIDATOR" --report "$WORK/c9c/report.txt" --output "$WORK/c9c/cv.md" --tmpdir "$WORK/c9c" >/dev/null 2>&1
+assert "Test 9c: DOI row marked PASS for doi.org 302" "grep -E '\\| .*10\\.1234/foo\\.bar.* \\| doi \\| PASS \\|' \"$WORK/c9c/cv.md\""
+assert "Test 9c: DOI row not marked doi-unresolved" "! grep -F 'doi-unresolved' \"$WORK/c9c/cv.md\""
 
 # ---------- Test 10: fake-curl argv contract (MUST + MUST-NOT) ----------
 echo "=== Test 10: fake-curl argv MUST / MUST-NOT ==="

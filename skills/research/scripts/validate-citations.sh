@@ -434,7 +434,8 @@ fetch_url() {
     fi
 
     case "$code" in
-        2??|3??) printf 'STATUS=PASS\n' > "$out" ;;
+        2??) printf 'STATUS=PASS\n' > "$out" ;;
+        3??) printf 'STATUS=UNKNOWN(redirect-not-followed)\n' > "$out" ;;
         403|405|501) printf 'STATUS=UNKNOWN(head-not-supported)\n' > "$out" ;;
         404|410) printf 'STATUS=FAIL(head-not-found)\n' > "$out" ;;
         4??) printf 'STATUS=FAIL(head-client-error-%s)\n' "$code" > "$out" ;;
@@ -831,8 +832,10 @@ if [[ -n "$DOIS" ]]; then
         local_hash=$(printf '%s' "https://doi.org/$doi" | shasum 2>/dev/null | awk '{print $1}')
         [[ -z "$local_hash" ]] && local_hash=$(printf '%s' "https://doi.org/$doi" | md5sum 2>/dev/null | awk '{print $1}')
         raw=$(read_status "$local_hash")
+        # doi.org is a redirect resolver by design — a 3xx HEAD on https://doi.org/<doi>
+        # is the success signal for DOI registration, so treat redirect-not-followed as PASS.
         case "$raw" in
-            PASS) status=PASS; reason=""; PASS=$((PASS + 1)) ;;
+            PASS|UNKNOWN\(redirect-not-followed\)) status=PASS; reason=""; PASS=$((PASS + 1)) ;;
             UNKNOWN\(*|FAIL\(*) status=UNKNOWN; reason="doi-unresolved"; UNKNOWN=$((UNKNOWN + 1)) ;;
             *) status=UNKNOWN; reason="doi-unresolved"; UNKNOWN=$((UNKNOWN + 1)) ;;
         esac

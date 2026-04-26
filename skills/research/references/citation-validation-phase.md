@@ -135,14 +135,15 @@ The validator script always exits 0. Failure modes that would otherwise abort a 
 | Multi-answer DNS where ANY answer is private (rebinding defense) | `FAIL(ssrf-private-resolved)` |
 | HEAD returns 4xx/5xx that does not indicate non-support (e.g., 404, 410) | `FAIL(head-not-found)` for 404/410; `FAIL(head-server-error)` for ≥500 |
 | HEAD returns 403/405/501 | `UNKNOWN(head-not-supported)` (some servers reject HEAD; an optional constrained GET retry MAY upgrade to PASS — see `validate-citations.md`) |
-| HEAD response inside per-fetch timeout window | `PASS` |
+| HEAD 2xx response inside per-fetch timeout window | `PASS` |
+| HEAD 3xx response inside per-fetch timeout window | `UNKNOWN(redirect-not-followed)` (redirect destination not fetched; `--max-redirs 0`) |
 | HEAD response after timeout (per-claim or overall budget) | `UNKNOWN(timeout)` |
 | Realpath escape (`..`-traversal or symlink-escape outside repo root) | `UNKNOWN(out-of-tree-path-after-realpath)` |
 | Broken symlink on the resolved path | `UNKNOWN(broken-symlink)` |
 | File exists but the cited line range exceeds the file length | `FAIL(line-out-of-range)` |
 | File exists, line range valid, but range is empty (start > end) | `FAIL(line-range-empty)` |
 | DOI fails syntactic validation (e.g., not `10.NNNN/...`) | `FAIL(doi-syntax)` |
-| DOI is syntactically valid but doi.org HEAD does not resolve to a permanent URL | `UNKNOWN(doi-unresolved)` |
+| DOI is syntactically valid but doi.org HEAD does not resolve to a permanent URL | `UNKNOWN(doi-unresolved)` (a 3xx HEAD on `https://doi.org/<doi>` IS the registry's success signal — the DOI path interprets `UNKNOWN(redirect-not-followed)` as PASS, not as `doi-unresolved`) |
 
 The `UNKNOWN` bucket is deliberately broad: every transient or environment-dependent failure ends there so the validator's strictness scales with the operator's environment without false negatives skewing the audit.
 
