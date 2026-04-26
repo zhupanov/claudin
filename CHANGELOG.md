@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.10] - 2026-04-26
+
+### Fixed
+
+- `skills/research/scripts/validate-citations.md` — add the missing `curl-unavailable` row to the Reason vocabulary table. The script emits `STATUS=UNKNOWN(curl-unavailable)` at line 353 when the `curl` binary is not found on PATH, and the sibling reference `skills/research/references/citation-validation-phase.md` already documents this token, but the script's own contract `.md` table omitted it. A cross-check of every `STATUS=...` emission in `validate-citations.sh` against the table confirmed `curl-unavailable` was the only missing token. Closes #664.
+
 ## [7.16.9] - 2026-04-26
 
 ### Fixed
