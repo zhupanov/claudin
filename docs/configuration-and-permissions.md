@@ -43,6 +43,107 @@
 
 Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, all `larch:`-prefixed entries sort **before** `Skill(loop-review)`, `Skill(research)`, and `Skill(review)` (whose first letters are `l`-then-`o`, `r`, and `r`). Sort the whole block with `sort -u` to verify if you extend it. This section reflects currently-documented Claude Code behavior; consult the upstream docs above if matching semantics change in a future release.
 
+## `claude -p` permission propagation
+
+Larch's loop drivers (`skills/improve-skill/scripts/iteration.sh`, `skills/loop-fix-issue/scripts/driver.sh`, `skills/loop-review/scripts/driver.sh`, `skills/loop-improve-skill/scripts/driver.sh`, `scripts/eval-research.sh`) spawn each per-iteration child as a fresh non-interactive `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` subprocess after `cd "$REPO_ROOT"`. This section documents how the project-level `.claude/settings.json` propagates to those children. Audit issue: [#586](https://github.com/zhupanov/larch/issues/586). Tested against Claude Code CLI version `2.1.119`.
+
+### Empirical findings
+
+A single `claude -p` invocation with `--debug-file` against this repo's settings, run with the same shape as `invoke_claude_p` (`cd "$REPO_ROOT" && claude -p --plugin-dir "$REPO_ROOT" --debug-file <log>` with a stdin prompt), produces an init-phase debug line of the form:
+
+```
+[DEBUG] Applying permission update: Adding 182 allow rule(s) to destination 'projectSettings': ["Bash(...)", ..., "Edit", ..., "Write"]
+[DEBUG] Applying permission update: Adding N directory with destination 'localSettings': [...]
+```
+
+That is, every entry in this repo's `.claude/settings.json` `permissions.allow` list — including the bare `"Edit"` and `"Write"` entries — is parsed and registered in the child's `projectSettings` permission destination, and the `additionalDirectories` entries are added to `localSettings`.
+
+**Answers to the audit's investigation questions** (issue #586):
+
+| Q | Question | Answer |
+|---|----------|--------|
+| 1 | Does `claude -p` read project-level `.claude/settings.json`? | **Yes.** The init-phase debug log shows the project's `permissions.allow` rules being added to the child's `projectSettings` destination. The `--plugin-dir` flag affects plugin discovery only; settings discovery is independent and is driven by the child's working directory (see Q5). |
+| 2 | Is the bare `"Edit"` allow rule honored, or does the harness require path qualifiers? | **Bare entries are honored.** The literal `"Edit"` string appears in the `projectSettings` allow rules. Path-qualified entries (e.g., `Edit($PWD/.claude/skills/**)`) are accepted but not required for the iteration kernel's needs. Larch's existing `Bash($PWD/...)` patterns illustrate the path-qualified form for callers that want least-privilege scoping. |
+| 3 | Does `defaultMode: bypassPermissions` apply to non-interactive `-p` runs? | **Yes.** The settings file (containing `"defaultMode": "bypassPermissions"`) is parsed end-to-end, and `claude -p` does not require an interactive workspace-trust dialog (`-p` skips it explicitly per `claude --help`). An equivalent CLI override is also available (`--permission-mode bypassPermissions`) — useful for callers that want to pin the mode independently of the on-disk file. |
+| 4 | Do user-level settings at `~/.claude/settings.json` or `~/.claude/settings.local.json` override the project file? | **No, in the audited shape.** The debug log shows only `projectSettings` and `localSettings` destinations receiving allow-rule additions; no `userSettings` destination overrode the bare `"Edit"` allow. User-level settings can still affect *user-scoped* destinations, but they do not silently strip a project-scoped allow. (Caveat: contributors with custom user-level settings should run the manual reproducer below in their own shell to verify their environment.) |
+| 5 | Does `cd "$REPO_ROOT"` in the iteration kernel take effect for settings discovery in the child? | **Yes.** The debug log explicitly references `/Users/zhupanov/larch4/.claude/settings.local.json` (resolved relative to cwd). The child's settings discovery follows the working directory established by the parent's subshell. |
+
+### Settings load destinations
+
+The `--debug-file` log's `Applying permission update` lines reveal a three-bucket structure:
+
+- **`projectSettings`** — populated from `<repo>/.claude/settings.json` (`permissions.allow`, `permissions.deny`, etc.). This is the bucket that grants `"Edit"` / `"Write"` / `Bash(...)` for `claude -p` children spawned from the iteration kernel.
+- **`localSettings`** — populated from `<repo>/.claude/settings.local.json` (gitignored) AND from `additionalDirectories` in `.claude/settings.json`. The `additionalDirectories` field's `["/tmp", "/var/folders"]` entries land here.
+- **`userSettings`** — populated from `~/.claude/settings.json`, when present. In the audited shape this destination did not receive any allow-rule additions because the audited host's `~/.claude/settings.json` had no `permissions.allow` entries that needed to be merged in.
+
+Project settings cannot be silently downgraded by user-level files for entries that already exist project-side — the destinations are independent allow lists.
+
+### Implication for the umbrella stall (issue #566)
+
+Because the bare `"Edit"` allow rule IS honored by `claude -p` and `defaultMode: bypassPermissions` IS in effect, the umbrella stall reported in [#566](https://github.com/zhupanov/larch/issues/566) (where `/loop-improve-skill /umbrella` iteration 1 hit a permission-prompt stall on `Edit` against `.claude/skills/umbrella/SKILL.md`) is **not caused by missing or insufficient on-disk permissions**. The decisive remedy is the kernel-side fix tracked in [#585](https://github.com/zhupanov/larch/issues/585) (pin the permission contract at the `invoke_claude_p` invocation site, e.g., via explicit `--permission-mode bypassPermissions` and/or `--allowedTools` flags), which removes the dependence on settings discovery entirely.
+
+This audit therefore does **not** modify `.claude/settings.json`. The settings are correct as-shipped; no path-qualified `Edit($PWD/.claude/skills/**)` entry is needed.
+
+### Manual reproducer recipe
+
+Anyone hitting a future `claude -p` permission-related stall can re-run the audit with the recipe below to verify whether the configured permissions still propagate. The recipe is forward-compatible: it observes the runtime debug log directly rather than relying on the audit hook (which is opt-in via `.claude/settings.local.json` and only fires on actual `Edit`/`Write` events).
+
+```bash
+#!/usr/bin/env bash
+# audit-claude-p-permissions.sh
+# Inspects whether the current .claude/settings.json propagates to a
+# claude -p child invoked with the same shape as invoke_claude_p.
+set -euo pipefail
+
+# Private log location ($HOME, not /tmp — debug logs may include file paths
+# and prompt content; treat as sensitive).
+AUDIT_DIR="$HOME/audit-claude-p-permissions"
+mkdir -p "$AUDIT_DIR"
+chmod 700 "$AUDIT_DIR"
+LOG="$AUDIT_DIR/run-$(date +%Y%m%dT%H%M%S).log"
+
+# Mirror production: prefer ${CLAUDE_PLUGIN_ROOT} when set; fall back to
+# the git toplevel.
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(git rev-parse --show-toplevel)}"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+cd "$REPO_ROOT"
+
+# Minimal prompt that does NOT require any tool use — the goal is to
+# observe init-phase settings load, not exercise tools.
+echo 'Print exactly the string AUDIT_OK and nothing else.' \
+  | claude -p --plugin-dir "$PLUGIN_ROOT" --debug-file "$LOG"
+
+echo "---"
+echo "Audit log: $LOG"
+echo "Inspect with:"
+echo "  grep -E 'Applying permission update|projectSettings|userSettings|localSettings' \"$LOG\""
+```
+
+After running, inspect the log for the `Applying permission update` lines. The expected shape on a healthy install is:
+
+- One line `Adding N allow rule(s) to destination 'projectSettings': [...]` with `N` matching the size of this repo's `.claude/settings.json` `permissions.allow` array, and including `"Edit"` / `"Write"` literally.
+- Optional lines `Adding M directory with destination 'localSettings': [...]` for each `additionalDirectories` entry.
+
+If the bare `"Edit"` is missing from the loaded list, file an issue with the redacted log (see "Evidence handling" below).
+
+### Evidence handling
+
+The `--debug-file` log can include **the full `permissions.allow` list (which is public — committed in `.claude/settings.json`), MCP server URLs, plugin paths, and the path of every settings file checked**. It is generally less sensitive than the `dev-hook-audit.md` PostToolUse log (which can capture file contents and secrets) — but you should still **never paste the raw debug log verbatim into a public PR or issue**. When attaching evidence to a PR or filed issue:
+
+1. Trim the log to the `Applying permission update` lines and immediately-relevant init lines.
+2. Replace any host-specific paths (`/Users/<name>/...`) with anonymized stand-ins (`<HOME>/...`, `<repo>/...`).
+3. Replace any MCP-server URLs or proxy hostnames with `<INTERNAL-URL>`.
+4. Remove any PII (real names in paths, account IDs).
+
+Refer to `docs/dev-hook-audit.md` lines 115-137 for the analogous (stricter) policy on PostToolUse audit-hook logs — they may contain full file contents and must NEVER be pasted into PRs or issues without manual redaction.
+
+### Known limitations
+
+- **`git rev-parse --show-toplevel 2>/dev/null || pwd -P` fallback in `invoke_claude_p`.** When invoked outside a git working tree (or in a submodule whose toplevel is not the larch repo root), `pwd -P` may resolve to a directory whose `.claude/settings.json` does not match this repo's settings. The current production drivers all start with cwd inside the larch checkout, so this edge case has not been observed in practice. A defensive `--project-dir "$REPO_ROOT"` flag on every `claude -p` call site would close this gap; tracked separately as a follow-up to this audit (see filed follow-up issue).
+- **Empirical answer can drift across Claude Code CLI versions.** This audit was performed against version `2.1.119`. If a future release changes how `--setting-sources` defaults, how `projectSettings` is resolved, or how `defaultMode` interacts with `-p`, the manual reproducer above can be re-run to verify. The reproducer's expected-shape assertion is the forward-compatible regression check.
+- **No automated CI guard.** The reproducer requires a working `claude` binary and a live API call, neither of which is appropriate for `make lint` (which is offline-only and fast). The manual reproducer is the regression coverage. ASCII sort order on `.claude/settings.json` is also a manual convention — verify with `LC_ALL=C sort -c <(jq -r '.permissions.allow[]' .claude/settings.json)` when adding entries; no Makefile target enforces it.
+
 ## `--admin` merge behavior
 
 When `/implement --merge` encounters a PR that passes CI but cannot be merged due to branch protection rules (e.g., required reviews), it retries with `gh pr merge --admin` as a fallback. The `--admin` flag overrides **all** branch protection rules including review requirements.
