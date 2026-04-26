@@ -124,6 +124,40 @@ assert_invalid_depends_on() {
   PASS=$((PASS + 1))
 }
 
+# assert_invalid_title — feed valid JSON whose entry 1 has a title containing an
+# embedded LF and verify the per-entry validator rejects it with the documented
+# `ERROR=pieces.json entry <i> title contains embedded newline` line + exit 1.
+# Closes #648 — without the guard, a multi-line title would pass the existing
+# non-empty check and later be emitted as `printf 'PIECE_<i>_TITLE=%s\n' "$title"`,
+# splitting one logical KV line into multiple physical stdout lines and silently
+# breaking the one-KV-per-line grammar that umbrella SKILL.md Step 3B.1 parses.
+assert_invalid_title() {
+  local label="$1"
+  local content="$2"
+  local pieces="$TMP/pieces.json"
+  printf '%s' "$content" > "$pieces"
+  local stderr_file="$TMP/stderr.txt"
+  local exit_code=0
+  bash "$SCRIPT" --tmpdir "$TMP" --pieces-file "$pieces" >/dev/null 2>"$stderr_file" || exit_code=$?
+
+  if [[ "$exit_code" -ne 1 ]]; then
+    printf '  ❌ %s — expected exit 1, got %d (stderr: %s)\n' \
+      "$label" "$exit_code" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  if ! grep -q '^ERROR=pieces.json entry 1 title contains embedded newline$' "$stderr_file"; then
+    printf '  ❌ %s — stderr missing "ERROR=pieces.json entry 1 title contains embedded newline" line. Got: %s\n' \
+      "$label" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  printf '  ✅ %s — exit 1 + embedded-newline title line present\n' "$label"
+  PASS=$((PASS + 1))
+}
+
 # assert_valid_baseline — feed valid 2-piece pieces.json and verify the script
 # succeeds (exit 0), prints BATCH_INPUT_FILE=, and writes the markdown output.
 # Confirms the new guard does not regress the happy path.
@@ -192,6 +226,12 @@ assert_too_few_entries "single entry" '[{"title":"a","body":"b","depends_on":[]}
 # numbers so PIECE_<i>_DEPENDS_ON=1.5 cannot leak downstream into DAG
 # construction (closes #647).
 assert_invalid_depends_on "fractional depends_on" '[{"title":"a","body":"b","depends_on":[]},{"title":"b","body":"c","depends_on":[1.5]}]'
+
+# Embedded LF in title: per-entry validator must reject newline-bearing titles
+# so `printf 'PIECE_<i>_TITLE=%s\n' "$title"` cannot split one logical KV
+# into multiple physical stdout lines (closes #648). The JSON `\n` escape
+# materializes via jq -r as a real LF in the captured shell value.
+assert_invalid_title "embedded newline in title" '[{"title":"Multi\nline title","body":"b","depends_on":[]},{"title":"second","body":"c","depends_on":[]}]'
 
 # Valid 2-piece baseline: confirms the new guard doesn't regress the happy path.
 assert_valid_baseline "valid 2-piece baseline"
