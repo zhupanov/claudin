@@ -19,11 +19,19 @@ Reference for every slash command shipped by the larch plugin. Each section belo
 
 ## `/alias`
 
-**Arguments**: `[--merge] [--no-slack] <alias-name> <target-skill> [preset-flags...]`
+**Arguments**: `[--merge] [--no-slack] [--private] <alias-name> <target-skill> [preset-flags...]`
 
 **Source**: [`skills/alias/SKILL.md`](../skills/alias/SKILL.md)
 
-Create a project-level alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR. `--no-slack` (when placed before the first positional) forwards to the `/implement` invocation so the alias-creation PR does NOT post to Slack; `--no-slack` placed after the first positional is passed through verbatim as a preset flag for the generated alias. Example: `/alias i implement --merge` creates `/i` as a shortcut for `/implement --merge`.
+Create an alias for a larch skill with preset flags. Delegates to `/implement --quick --auto` for the full pipeline (code review, version bump, PR). `--merge` also merges the PR.
+
+**Target directory** is auto-resolved: inside a Claude plugin source repo (detected by the two-file predicate `.claude-plugin/plugin.json` AND `skills/implement/SKILL.md` at the git repo root), the alias is generated under `skills/<alias-name>/SKILL.md` (exported plugin skill, ships with the plugin); anywhere else, it's generated under `.claude/skills/<alias-name>/SKILL.md` (dev-only repo-private). `--private` forces `.claude/skills/<alias-name>/` even inside a plugin repo (escape hatch); in non-plugin repos it's a no-op.
+
+`--no-slack` (when placed before the first positional) forwards to the `/implement` invocation so the alias-creation PR does NOT post to Slack; `--no-slack` placed after the first positional is passed through verbatim as a preset flag for the generated alias.
+
+Example (in a plugin repo): `/alias i implement --merge` creates `<repo-root>/skills/i/SKILL.md` so that `/i <feature>` is equivalent to `/implement --merge <feature>`.
+
+Example with `--private` or in a consumer repo: `/alias i implement --merge` creates `<repo-root>/.claude/skills/i/SKILL.md` (dev-only).
 
 ## `/compress-skill`
 
