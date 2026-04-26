@@ -38,10 +38,10 @@ When `LABELS_COUNT=0`, no `LABEL_*` lines are emitted (the `LABEL_<i>` block is 
 **Quoting subset** (phase-1 flag-prefix lexer only — phase 2 TASK is verbatim):
 - **Double quotes** (`"..."`): the lexer recognizes `\"`, `\\`, `\$` as escape sequences (the `\` is consumed; the next char is literal). Any other `\X` inside double quotes is preserved as the literal two-character sequence `\X`. Literal newline bytes inside the run are rejected.
 - **Single quotes** (`'...'`): no escape processing — every byte until the next `'` is literal. Literal newline bytes inside the run are rejected.
-- **Outside quotes**: backslash escapes the next character (`\<c>` → literal `<c>`). Stray trailing backslash is rejected.
+- **Outside quotes**: backslash escapes the next non-newline byte (`\<c>` → literal `<c>`). Stray trailing backslash is rejected. Backslash-escaped newline (`\<LF>`) outside quotes is rejected (frozen template `ERROR=embedded newline in unquoted value at offset <N>`).
 - **Whitespace separators outside quotes**: space, tab, newline.
 
-**TASK contract**: TASK is the verbatim remainder of `$ARGS_STR` from a recorded byte offset to end-of-string. Phase 1 stops at the first non-flag-looking token (or after a bare unquoted `--`); the byte offset is the first character of that next token (NOT including any preceding separator whitespace). Phase 2 slices `${ARGS_STR:offset}` and emits it AS-IS — no quote handling, no escape processing. Unbalanced quotes inside TASK are not lexer errors. Embedded multi-space runs and trailing whitespace are preserved. **One exception** — TASK MUST NOT contain a literal newline byte: a newline in TASK would, via `printf 'TASK=%s\n' "$TASK"`, produce multiple physical lines and break the documented one-KV-per-line stdout grammar (the contract this script enforces). Phase 2 scans TASK for newline bytes and rejects with `ERROR=embedded newline in TASK at offset <N>` if any are present. This is the same fail-fast rule as for embedded newlines inside quoted values during phase-1 lexing.
+**TASK contract**: TASK is the verbatim remainder of `$ARGS_STR` from a recorded byte offset to end-of-string. Phase 1 stops at the first non-flag-looking token (or after a bare unquoted `--`); the byte offset is the first character of that next token (NOT including any preceding separator whitespace). Phase 2 slices `${ARGS_STR:offset}` and emits it AS-IS — no quote handling, no escape processing. Unbalanced quotes inside TASK are not lexer errors. Embedded multi-space runs and trailing whitespace are preserved. **One exception** — TASK MUST NOT contain a literal newline byte: a newline in TASK would, via `printf 'TASK=%s\n' "$TASK"`, produce multiple physical lines and break the documented one-KV-per-line stdout grammar (the contract this script enforces). Phase 2 scans TASK for newline bytes and rejects with `ERROR=embedded newline in TASK at offset <N>` if any are present. This is the same fail-fast rule as for embedded newlines in flag values during phase-1 lexing (both the quoted-value paths and the unquoted backslash-newline path).
 
 **Frozen ERROR= templates** (the harness keys off these exact substrings):
 
@@ -56,11 +56,12 @@ ERROR=unclosed double quote at offset <N>
 ERROR=unclosed single quote at offset <N>
 ERROR=stray backslash at end of input
 ERROR=embedded newline in quoted value at offset <N>
+ERROR=embedded newline in unquoted value at offset <N>
 ERROR=embedded newline in TASK at offset <N>
 ```
 
 **Exit codes**: `0` success; `1` parse failure (one `ERROR=...` line on stderr).
 
-**Edit-in-sync rules**: any change to flag set OR stdout grammar OR the frozen ERROR= list OR the quoting subset OR `UMBRELLA_TMPDIR` ownership requires a same-PR update to `SKILL.md` Step 0 (which parses the grammar) and Step 5 (which removes the tmpdir). The harness `test-umbrella-parse-args.sh` keys off the frozen ERROR= templates and stdout shape — update it in lockstep.
+**Edit-in-sync rules**: any change to flag set OR stdout grammar OR the frozen ERROR= list OR the quoting subset OR `UMBRELLA_TMPDIR` ownership requires a same-PR update to `SKILL.md` Step 0 (which parses the grammar) and Step 5 (which removes the tmpdir). The harness `test-umbrella-parse-args.sh` keys off the frozen ERROR= templates and stdout shape — update it in lockstep. Wording-only ERROR= template changes (no stdout grammar change, no behavioral change to which inputs are rejected) do NOT require a SKILL.md update because Step 0 surfaces ERROR= lines verbatim and does not parse them.
 
 **Test harness**: `.claude/skills/umbrella/scripts/test-umbrella-parse-args.sh` (sibling `test-umbrella-parse-args.md`); wired into `make lint` via the `test-umbrella-parse-args` Makefile target alongside `test-umbrella-helpers`.

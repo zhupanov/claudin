@@ -56,5 +56,5 @@ requires updating this harness in the same PR. Add new test cases before changin
 | 21 | Newline as unquoted separator outside quotes. |
 | 22 | Unbalanced quote inside TASK — verbatim, lexer does NOT validate TASK. |
 | 23 | Embedded newline in TASK → ERROR (post-Phase-2 guard; would break single-line KV grammar). |
-| 24 | Backslash-escaped newline in unquoted value → ERROR (extends embedded-newline-in-quoted-value rule to outside-quote backslash escapes). |
+| 24 | Backslash-escaped newline in unquoted value → ERROR (distinct frozen template `embedded newline in unquoted value`; cases 18 and 25 carry the parallel `embedded newline in quoted value` template for genuinely quoted-value paths). |
 | 25 | Backslash-escaped newline INSIDE double-quoted value → ERROR (closes the double-quoted reader's `\\)` arm). |
