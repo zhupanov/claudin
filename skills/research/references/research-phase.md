@@ -486,7 +486,24 @@ Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Un
 
 There are no external launches in quick mode — the Step 1.3 Quick subsection launched K=3 homogeneous Claude Agent-tool subagents (issue #520) which return synchronously by design. **Skip `collect-reviewer-results.sh` entirely** — its contract is built around `run-external-reviewer.sh` sentinel polling, `.meta` retry files, and tool inference from `*cursor*` / `*codex*` basenames; it is the wrong abstraction for homogeneous Claude Agent-tool returns and would exit non-zero on the empty external-path list anyway.
 
-Instead, **classify each of the K=3 lane outputs locally** via a non-emptiness check on each `quick-lane-<k>-output.txt` file (persisted at the end of Step 1.3 Quick). A lane is "successful" iff the file exists and is non-empty. Count the successful lanes as `LANES_SUCCEEDED ∈ {0,1,2,3}`, then persist the count via the canonical helper:
+Instead, **classify each of the K=3 lane outputs locally** via a two-stage gate: (a) non-emptiness check, then (b) substantive-content validation. The substantive gate mirrors the standard/deep modes' `collect-reviewer-results.sh --substantive-validation` invocation (without `--validation-mode`) so the "what is substantive" semantics — 200-word floor + default citation requirement, defined by `${CLAUDE_PLUGIN_ROOT}/scripts/validate-research-output.sh` — stay byte-aligned across scales (issue #543; closes the gap left by issue #520, where thin/uncited Quick-lane outputs slipped through to vote-merge synthesis).
+
+For each lane k ∈ {1,2,3}, with `LANE_FILE="$RESEARCH_TMPDIR/quick-lane-${k}-output.txt"`:
+
+1. **Non-emptiness check first** (cheap; catches missing/zero-byte files before fork): `[[ -s "$LANE_FILE" ]]`. If false, the lane has failed; skip the validator call and leave the file untouched (it is already empty, so Step 1.5 Quick's "omit empty/unreadable lanes" prompt instruction excludes it correctly).
+2. **Substantive validator** (only when the non-empty check passed):
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/validate-research-output.sh "$LANE_FILE"
+   ```
+   Capture the validator's exit code AND stdout diagnostic. On exit 0 the lane has succeeded. On any non-zero exit (codes 1/2/3/4 — usage / body-thin / no-marker / file-unreadable), the lane has failed substantive validation; collapse this into the existing failed-lane bucket and **truncate the lane file** so downstream Step 1.5 Quick treats it identically to an originally-empty lane:
+   ```bash
+   : > "$LANE_FILE"
+   ```
+   Truncation is the chosen exclusion mechanism because it makes the existing `SYNTHESIS_PROMPT_QUICK_VOTE` instruction ("if a path's content is empty or unreadable, omit that lane from the vote-merge") naturally exclude validator-failed lanes without modifying the synthesis subagent prompt or `quick-vote-state.sh`'s schema (which still persists only `LANES_SUCCEEDED ∈ {0,1,2,3}`). Emit a sanitized per-lane operator-visible breadcrumb for substantive-failure cases — mirror `collect-reviewer-results.sh`'s `FAILURE_REASON` sanitization (`tr '|\n' '/ '` + truncate to 80 chars) so the breadcrumb is parse-safe:
+   ```
+   lane $k: NOT_SUBSTANTIVE: <sanitized validator stdout, ≤80 chars>
+   ```
+3. **Count successful lanes** as `LANES_SUCCEEDED ∈ {0,1,2,3}` (a lane is successful iff its file is non-empty AND the validator exited 0 — equivalently, post-truncation, iff the file is non-empty), then persist via the canonical helper:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/quick-vote-state.sh write \
@@ -726,7 +743,7 @@ Print the assembled synthesis (header + partial-degradation banner when applicab
 
 #### When `LANES_SUCCEEDED == 1` (single-lane fallback path)
 
-Exactly one of the K=3 lanes returned non-empty content. Skip the synthesis subagent entirely (only one input — voting is impossible). Read the surviving lane's body from its `quick-lane-<k>-output.txt` file. Produce a single-lane synthesis inline under `## Research Synthesis` that explicitly opens with the byte-canonical fallback disclaimer literal stored at `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer-fallback.txt` (currently `**Single-lane confidence — no validation pass.**` — the data file is the single source of truth for this fallback path; SKILL.md Step 3 picks this file when `LANES_SUCCEEDED == 1`). Then summarize the surviving lane's findings: key observations, relevant files/modules/areas and architectural patterns, and risks / constraints / feasibility concerns.
+Exactly one of the K=3 lanes succeeded (passed both the non-empty check and substantive-content validation per Step 1.4 Quick). Skip the synthesis subagent entirely (only one input — voting is impossible). Read the surviving lane's body from its `quick-lane-<k>-output.txt` file. Produce a single-lane synthesis inline under `## Research Synthesis` that explicitly opens with the byte-canonical fallback disclaimer literal stored at `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer-fallback.txt` (currently `**Single-lane confidence — no validation pass.**` — the data file is the single source of truth for this fallback path; SKILL.md Step 3 picks this file when `LANES_SUCCEEDED == 1`). Then summarize the surviving lane's findings: key observations, relevant files/modules/areas and architectural patterns, and risks / constraints / feasibility concerns.
 
 Print an operator-visible warning before the synthesis: `**⚠ Quick K-vote partially failed — only 1 of 3 lanes succeeded; falling back to single-lane synthesis with reduced confidence.**`
 
@@ -734,15 +751,15 @@ Write `$RESEARCH_TMPDIR/research-report.txt` with the same content (research que
 
 #### When `LANES_SUCCEEDED == 0` (no-lane hard-fail path)
 
-All K=3 lanes returned empty content (timeout, model error, or zero-length output). The research phase has materially failed; there is no surviving lane to synthesize from.
+All K=3 lanes returned empty content or failed substantive-content validation (timeout, model error, zero-length output, or thin/uncited research per Step 1.4 Quick's substantive gate). The research phase has materially failed; there is no surviving lane to synthesize from.
 
-Print an operator-visible error: `**⚠ Quick K-vote hard-failed — all 3 of 3 lanes returned empty; research phase has no findings.**`
+Print an operator-visible error: `**⚠ Quick K-vote hard-failed — all 3 of 3 lanes returned empty or failed substantive validation; research phase has no findings.**`
 
 Write `$RESEARCH_TMPDIR/research-report.txt` with a minimal stub:
 1. The original research question.
 2. The branch and commit being researched.
 3. The `## Research Synthesis` header.
-4. A single line: `**⚠ All K=3 quick research lanes returned empty — research phase failed; no findings to report.**`
+4. A single line: `**⚠ All K=3 quick research lanes returned empty or failed substantive validation — research phase failed; no findings to report.**`
 
 The Step 1.5 contract is preserved (file exists). Step 2 is still skipped per the byte-stable `⏩ 2: validation — skipped (--scale=quick)` breadcrumb. Step 3 emits an explicit "0 agents (research-phase failed)" header (see SKILL.md Step 3 Quick). Downstream skills (e.g., `/implement` consumer) proceed without findings to report.
 

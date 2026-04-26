@@ -266,7 +266,7 @@ Proceed to Step 0b. The fallback is deliberate: a classifier failure must NEVER 
 
 ### 0b — Initialize lane-status record
 
-**Skip this entire sub-step when `RESEARCH_SCALE=quick`.** Quick mode has no external lanes to attribute; Step 3 emits a per-`LANES_SUCCEEDED` research-phase header (issue #520: "3 agents (K-lane voting confidence — no validation pass)" on the `LANES_SUCCEEDED >= 2` vote path; "1 agent (single-lane fallback — K-vote partially failed)" on the `LANES_SUCCEEDED == 1` path; "0 agents (research-phase failed — all K=3 lanes returned empty)" on the `LANES_SUCCEEDED == 0` path) and the literal `0 reviewers (validation phase skipped — see synthesis disclaimer)` validation-phase header, without consulting `lane-status.txt` (Step 3 Quick branch sets these literals directly — see the `### Quick (RESEARCH_SCALE=quick)` subsection below).
+**Skip this entire sub-step when `RESEARCH_SCALE=quick`.** Quick mode has no external lanes to attribute; Step 3 emits a per-`LANES_SUCCEEDED` research-phase header (issue #520: "3 agents (K-lane voting confidence — no validation pass)" on the `LANES_SUCCEEDED >= 2` vote path; "1 agent (single-lane fallback — K-vote partially failed)" on the `LANES_SUCCEEDED == 1` path; "0 agents (research-phase failed — all K=3 lanes returned empty or failed substantive validation)" on the `LANES_SUCCEEDED == 0` path) and the literal `0 reviewers (validation phase skipped — see synthesis disclaimer)` validation-phase header, without consulting `lane-status.txt` (Step 3 Quick branch sets these literals directly — see the `### Quick (RESEARCH_SCALE=quick)` subsection below).
 
 For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`, write `$RESEARCH_TMPDIR/lane-status.txt` with the per-tool aggregate pre-launch attribution. The same 8-key schema below covers both standard (1 Cursor + 1 Codex per phase) and deep (per-tool aggregate across 2 Cursor + 2 Codex in research, 1 Cursor + 1 Codex in validation): `RESEARCH_CURSOR_*` reflects the per-tool aggregate over both Cursor research slots in deep mode; same for `RESEARCH_CODEX_*`. Step 1.4 (research-phase) and Step 2 entry / validation-phase render-failure handlers (Cursor / Codex `On non-zero exit` paths) / Step 2.4 (validation-phase) update this file later via surgical phase-local rewrites; Step 3 reads it via `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.sh` for standard mode and `${CLAUDE_PLUGIN_ROOT}/scripts/render-deep-lane-status.sh` for deep mode to render the final-report header (both share the rendering library `render-lane-status-lib.sh`). Quick mode does NOT consult this file — see Step 3 ### Quick.
 
@@ -436,7 +436,7 @@ Skip `render-lane-status.sh` (Step 0b did not write `lane-status.txt` for quick 
 
 - `LANES_SUCCEEDED >= 2`: `RESEARCH_HEADER="3 agents (K-lane voting confidence — no validation pass)"` (vote path).
 - `LANES_SUCCEEDED == 1`: `RESEARCH_HEADER="1 agent (single-lane fallback — K-vote partially failed)"` (single-lane fallback path).
-- `LANES_SUCCEEDED == 0`: `RESEARCH_HEADER="0 agents (research-phase failed — all K=3 lanes returned empty)"` (no-lane hard-fail path).
+- `LANES_SUCCEEDED == 0`: `RESEARCH_HEADER="0 agents (research-phase failed — all K=3 lanes returned empty or failed substantive validation)"` (no-lane hard-fail path).
 
 In all three cases:
 - `VALIDATION_HEADER="0 reviewers (validation phase skipped — see synthesis disclaimer)"`

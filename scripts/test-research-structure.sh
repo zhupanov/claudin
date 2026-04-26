@@ -1120,5 +1120,37 @@ grep -Fq "<reviewer_adjudication_resolutions>" "$CRITIQUE_LOOP_MD" \
 grep -Fq "<reviewer_critique_findings>" "$CRITIQUE_LOOP_MD" \
   || fail "references/critique-loop-phase.md must carry the namespaced '<reviewer_critique_findings>' XML wrapper tag literal (#517 Check 51)"
 
-echo "PASS: test-research-structure.sh — all 51 structural invariants hold"
+# Check 52 (#543): research-phase.md Step 1.4 Quick subsection must invoke
+# validate-research-output.sh per lane and document the truncation exclusion
+# mechanism (`: > "$LANE_FILE"`) so validator-failed lanes are removed from the
+# synthesis input. Without these pins, a future edit could silently drop the
+# substantive gate or the truncation step, allowing thin/uncited K=3 lane
+# outputs to slip through to the synthesis subagent (which lists all 3 lane
+# paths in SYNTHESIS_PROMPT_QUICK_VOTE and only omits files whose content is
+# "empty or unreadable" — substantively-failed but non-empty files would
+# otherwise be merged).
+#
+# Pattern: same windowing as Check 16 — narrow to the `## 1.4` section first,
+# then to the `### Quick (RESEARCH_SCALE=quick)` subsection. The literal
+# `### Quick (RESEARCH_SCALE=quick)` appears 3x in research-phase.md (Step
+# 1.3 Quick, Step 1.4 Quick, Step 1.5 Quick) so windowing on `## 1.4 ` first
+# is required to avoid cross-section leakage.
+# shellcheck disable=SC2016 # literal '$' chars in patterns; do not expand
+QUICK_VALIDATOR_PIN='\$\{CLAUDE_PLUGIN_ROOT\}/scripts/validate-research-output\.sh'
+# shellcheck disable=SC2016 # literal '$LANE_FILE' shell-syntax substring; do not expand
+QUICK_TRUNCATE_PIN=': > "$LANE_FILE"'
+# shellcheck disable=SC2016 # literal '$k' shell-syntax substring; do not expand
+QUICK_BREADCRUMB_PIN='lane \$k: NOT_SUBSTANTIVE'
+SECTION_1_4_QUICK=$(echo "$SECTION_1_4" \
+  | awk '/^### Quick \(RESEARCH_SCALE=quick\)/{f=1; next} f && /^###/{f=0} f')
+[[ -n "$SECTION_1_4_QUICK" ]] \
+  || fail "references/research-phase.md must contain a '### Quick (RESEARCH_SCALE=quick)' subsection inside Step 1.4 — Check 52 cannot anchor without it (#543)"
+echo "$SECTION_1_4_QUICK" | grep -Eq "$QUICK_VALIDATOR_PIN" \
+  || fail "references/research-phase.md Step 1.4 ### Quick subsection must invoke validate-research-output.sh per lane (#543 Check 52)"
+echo "$SECTION_1_4_QUICK" | grep -Fq "$QUICK_TRUNCATE_PIN" \
+  || fail "references/research-phase.md Step 1.4 ### Quick subsection must document the truncation exclusion mechanism (': > \"\$LANE_FILE\"') so validator-failed lanes are excluded from synthesis (#543 Check 52)"
+echo "$SECTION_1_4_QUICK" | grep -Eq "$QUICK_BREADCRUMB_PIN" \
+  || fail "references/research-phase.md Step 1.4 ### Quick subsection must document the per-lane breadcrumb shape ('lane \$k: NOT_SUBSTANTIVE') (#543 Check 52)"
+
+echo "PASS: test-research-structure.sh — all 52 structural invariants hold"
 exit 0
