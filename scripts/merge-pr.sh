@@ -138,10 +138,12 @@ if [[ "$CI_GOOD" != "true" ]]; then
     exit 0
 fi
 
-# Double-check freshness (may have changed since first check)
+# Double-check freshness (may have changed since first check).
 # CLEAN = mergeable normally; UNSTABLE = CI passed but review not approved;
 # BLOCKED = review/policy block (--admin handles this); HAS_HOOKS = has pre-receive hooks.
-# Anything else (BEHIND, DIRTY, DRAFT, UNKNOWN) = not ready.
+# BEHIND and empty/UNKNOWN are already handled above; remaining non-admin-eligible
+# states (e.g. DIRTY, DRAFT, or any future GitHub-added value) → main_advanced
+# to retry after updating the branch.
 if [[ "$MERGE_STATE" != "CLEAN" ]] && [[ "$MERGE_STATE" != "UNSTABLE" ]] && [[ "$MERGE_STATE" != "HAS_HOOKS" ]] && [[ "$MERGE_STATE" != "BLOCKED" ]]; then
     MERGE_RESULT="main_advanced"
     ERROR="Branch mergeStateStatus is $MERGE_STATE"
