@@ -36,9 +36,17 @@
 #   --dry-run                — do not call gh; emit DRY_RUN=true and preview.
 #
 # Output (key=value on stdout; warnings on stderr):
-#   ISSUE_NUMBER=<N>   ISSUE_URL=<url>    on success
-#   ISSUE_FAILED=true  ISSUE_ERROR=<msg>  on failure
-#   DRY_RUN=true       on --dry-run success path
+#   ISSUE_NUMBER=<N>   ISSUE_URL=<url>   ISSUE_ID=<numeric-id>    on success
+#   ISSUE_FAILED=true  ISSUE_ERROR=<msg>                           on failure
+#   DRY_RUN=true                                                   on --dry-run success path
+#
+# ISSUE_ID is the issue's internal numeric id (NOT the display number). It is
+# emitted only on the non-dry-run CREATE path because the dry-run branch makes
+# no API call. Required by /issue's dependency-analysis path (issue #546):
+# add-blocked-by.sh's POST body needs the BLOCKER's internal id, and capturing
+# it here at create-time avoids a separate `gh api` round-trip per intra-batch
+# blocker (which would introduce an orphan-failure mode where the issue is
+# created but a transient id-lookup fails).
 #
 # Exit code:
 #   0 — success (issue created OR --dry-run emitted preview)
@@ -245,36 +253,85 @@ done
 # trap, so every exit path — including emit_redaction_failure — removes the
 # stderr temp file.
 ERR_TMP=$(mktemp)
-if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
-    # gh issue create emits the URL on stdout. Extract the trailing number.
-    # `|| true` keeps the no-URL branch reachable under `set -euo pipefail`
-    # when grep finds no match; without it pipefail would abort the script
-    # before the defensive `[[ -z "$URL_LINE" ]]` check below.
-    URL_LINE=$(echo "$ISSUE_URL" | grep -oE 'https?://[^[:space:]]+/issues/[0-9]+' | tail -1 || true)
-    if [[ -z "$URL_LINE" ]]; then
-        # gh's output on this branch may include body fragments echoed by the
-        # API on a rejected request — redact through the same helper before
-        # surfacing to stdout. Flatten to a single line / 500 chars so the
-        # emitted key=value line honors the one-line-per-record contract.
-        REDACTED_OUTPUT=$(redact "$ISSUE_URL") || emit_redaction_failure
+# Try modern `gh issue create --json` first to capture id+number+url in a
+# single response. This avoids a separate post-create `gh api ... --jq .id`
+# call that would introduce an orphan-failure mode (issue #546 plan-review
+# FINDING_8: an issue exists on GitHub but a transient lookup-failure would
+# mark /issue as failed, causing reruns to duplicate).
+if ISSUE_JSON=$(gh "${GH_ARGS[@]}" --json id,number,url 2>"$ERR_TMP"); then
+    ISSUE_NUM=$(echo "$ISSUE_JSON" | jq -r '.number // empty')
+    ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url // empty')
+    ISSUE_ID=$(echo "$ISSUE_JSON" | jq -r '.id // empty')
+    if [[ -z "$ISSUE_NUM" || -z "$ISSUE_URL" || -z "$ISSUE_ID" ]]; then
+        REDACTED_OUTPUT=$(redact "$ISSUE_JSON") || emit_redaction_failure
         REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
         echo "ISSUE_FAILED=true"
-        echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT_FLAT)"
+        echo "ISSUE_ERROR=gh issue create returned incomplete JSON (output: $REDACTED_OUTPUT_FLAT)"
         exit 2
     fi
-    ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
     echo "ISSUE_NUMBER=$ISSUE_NUM"
-    echo "ISSUE_URL=$URL_LINE"
+    echo "ISSUE_URL=$ISSUE_URL"
+    echo "ISSUE_ID=$ISSUE_ID"
     echo "ISSUE_TITLE=$FINAL_TITLE"
     exit 0
-else
-    # Read stderr from the temp file and redact secondary leak surface
-    # (tokens in auth-failure messages, request bodies echoed by the API in
-    # 4xx responses) before flattening/echoing.
-    ERR_CONTENT=$(cat "$ERR_TMP")
-    REDACTED_ERR=$(redact "$ERR_CONTENT") || emit_redaction_failure
-    ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
-    echo "ISSUE_FAILED=true"
-    echo "ISSUE_ERROR=$ERR_FLAT"
-    exit 2
 fi
+# `gh issue create --json` failed. Two possibilities: (a) the gh CLI version
+# does not support `--json` on `issue create` (older versions), in which case
+# stderr will mention an unrecognized flag; (b) genuine API failure. Detect
+# (a) and fall back to plain `gh issue create` + a follow-up `gh api ...
+# --jq .id` lookup. (b) flows to the redacted-error emission below.
+ERR_CONTENT=$(cat "$ERR_TMP")
+if echo "$ERR_CONTENT" | grep -qiE 'unknown flag|unknown option|flag provided but not defined' && echo "$ERR_CONTENT" | grep -qE -- '--json'; then
+    # Fallback path for older gh: plain create, then id lookup.
+    : >"$ERR_TMP"
+    if ISSUE_URL=$(gh "${GH_ARGS[@]}" 2>"$ERR_TMP"); then
+        URL_LINE=$(echo "$ISSUE_URL" | grep -oE 'https?://[^[:space:]]+/issues/[0-9]+' | tail -1 || true)
+        if [[ -z "$URL_LINE" ]]; then
+            REDACTED_OUTPUT=$(redact "$ISSUE_URL") || emit_redaction_failure
+            REDACTED_OUTPUT_FLAT=$(echo "$REDACTED_OUTPUT" | tr '\n' ' ' | head -c 500)
+            echo "ISSUE_FAILED=true"
+            echo "ISSUE_ERROR=gh issue create did not emit a URL (output: $REDACTED_OUTPUT_FLAT)"
+            exit 2
+        fi
+        ISSUE_NUM=$(echo "$URL_LINE" | grep -oE '[0-9]+$')
+        # Best-effort id lookup. Failure here surfaces ISSUE_FAILED so the
+        # caller cleans up the just-created orphan via cleanup-failed-issue.sh
+        # (per issue #546 fail-closed contract: an issue without an id we can
+        # use for dep-wiring is functionally orphaned for /issue's purposes).
+        if ISSUE_ID=$(gh api "/repos/$REPO/issues/$ISSUE_NUM" --jq '.id' 2>"$ERR_TMP"); then
+            if [[ -z "$ISSUE_ID" || ! "$ISSUE_ID" =~ ^[0-9]+$ ]]; then
+                ID_ERR=$(cat "$ERR_TMP")
+                REDACTED_ERR=$(redact "$ID_ERR") || emit_redaction_failure
+                ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
+                echo "ISSUE_FAILED=true"
+                echo "ISSUE_ERROR=id-lookup returned non-numeric id for #$ISSUE_NUM (output: $ERR_FLAT)"
+                exit 2
+            fi
+            echo "ISSUE_NUMBER=$ISSUE_NUM"
+            echo "ISSUE_URL=$URL_LINE"
+            echo "ISSUE_ID=$ISSUE_ID"
+            echo "ISSUE_TITLE=$FINAL_TITLE"
+            exit 0
+        else
+            ID_ERR=$(cat "$ERR_TMP")
+            REDACTED_ERR=$(redact "$ID_ERR") || emit_redaction_failure
+            ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
+            echo "ISSUE_FAILED=true"
+            echo "ISSUE_ERROR=id-lookup failed for #$ISSUE_NUM after create: $ERR_FLAT"
+            exit 2
+        fi
+    else
+        ERR_CONTENT=$(cat "$ERR_TMP")
+        REDACTED_ERR=$(redact "$ERR_CONTENT") || emit_redaction_failure
+        ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
+        echo "ISSUE_FAILED=true"
+        echo "ISSUE_ERROR=$ERR_FLAT"
+        exit 2
+    fi
+fi
+# Genuine API failure (not a flag-incompatibility). Redact and surface.
+REDACTED_ERR=$(redact "$ERR_CONTENT") || emit_redaction_failure
+ERR_FLAT=$(echo "$REDACTED_ERR" | tr '\n' ' ' | head -c 500)
+echo "ISSUE_FAILED=true"
+echo "ISSUE_ERROR=$ERR_FLAT"
+exit 2

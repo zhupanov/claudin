@@ -78,7 +78,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><a href="docs/skills.md#issue"><code>/issue</code></a></td>
       <td><code>[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [&lt;issue description&gt;]</code></td>
     </tr>
-    <tr><td colspan="2">Create one or more GitHub issues with LLM-based semantic duplicate detection.</td></tr>
+    <tr><td colspan="2">Create one or more GitHub issues with LLM-based semantic duplicate detection AND always-on inter-issue blocker-dependency analysis (issue #546): every invocation analyzes the new item(s) against existing OPEN issues and applies hard GitHub-native blocker dependencies via the Issue Dependencies REST API on detected pairs (merge-conflict risk or "must land first"). Hard-fail with retries (3 tries, 10s/30s sleeps); orphan close + non-zero exit on exhaustion.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#improve-skill"><code>/improve-skill</code></a></td>
