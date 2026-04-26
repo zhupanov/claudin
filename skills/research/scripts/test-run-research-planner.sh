@@ -152,6 +152,32 @@ run_case "no-question-marks" \
   1 \
   '^REASON=count_below_minimum$'
 
+# Case: subquestion contains literal `||` — rejected to protect lane-assignments.txt's
+# unquoted `||` in-cell delimiter from silent mis-splitting at rehydration.
+run_case "delimiter-collision-basic" \
+  $'What is X?\nWhat is X || Y?\n' \
+  1 \
+  '^REASON=delimiter_collision$'
+
+# Case: `||` at end of a retained line — same outcome.
+run_case "delimiter-collision-at-boundary" \
+  $'What is A?\nWhat is B?\nWhat is C ||?\n' \
+  1 \
+  '^REASON=delimiter_collision$'
+
+# Case: `||` rejection precedes count gate — operator with both `||` AND too many lines
+# sees the more actionable `delimiter_collision` token, not `count_above_maximum`.
+run_case "delimiter-collision-precedes-count" \
+  $'What is A?\nWhat is B?\nWhat is C?\nWhat is D?\nWhat is E || F?\n' \
+  1 \
+  '^REASON=delimiter_collision$'
+
+# Case: single `|` is fine — only the literal substring `||` is forbidden.
+run_case "single-pipe-allowed" \
+  $'What is X | Y in regex?\nWhat is Z?\n' \
+  0 \
+  '^COUNT=2$'
+
 # Case: control characters stripped, 2 questions retained.
 # (Insert a literal BEL character between the leading content and the rest.)
 run_case "control-chars-stripped" \

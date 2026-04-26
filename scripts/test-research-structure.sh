@@ -160,13 +160,26 @@ grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
 grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_MD" \
   || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of quick|standard|deep (got: foo). Aborting.' required) (#418, #460)"
 
-# Check 13 (#418 + #424 + #510 + #518): SKILL.md documents that --debug,
-# --scale, --adjudicate, --keep-sidecar, and --token-budget are independent
-# flags (order-independence). Pin the explicit independence statement — five
-# flags now after #518 added --token-budget.
+# Check 13 (#418 + #424 + #510 + #518 + #522): SKILL.md documents that --debug,
+# --scale, --adjudicate, --keep-sidecar, --token-budget, and --interactive are
+# independent flags (order-independence). Pin the explicit independence
+# statement — six flags now after #522 added --interactive.
 # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
-grep -Eq -e '`--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, and `--token-budget` are independent' "$SKILL_MD" \
-  || fail "SKILL.md must explicitly state that '--debug', '--scale', '--adjudicate', '--keep-sidecar', and '--token-budget' are independent (order-independence) (#418 + #424 + #510 + #518)"
+grep -Eq -e '`--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, `--token-budget`, and `--interactive` are independent' "$SKILL_MD" \
+  || fail "SKILL.md must explicitly state that '--debug', '--scale', '--adjudicate', '--keep-sidecar', '--token-budget', and '--interactive' are independent (order-independence) (#418 + #424 + #510 + #518 + #522)"
+
+# Check 13b (#522): SKILL.md documents the --interactive boolean flag with its
+# pre-planner TTY check. Pin the flag literal in argument-hint, the flag-spec
+# bullet, and the resolution rule's TTY error literal so future SKILL.md edits
+# cannot silently drop the flag or weaken the TTY guard.
+grep -Fq -e "[--interactive]" "$SKILL_MD" \
+  || fail "SKILL.md argument-hint must contain the '[--interactive]' bracketed flag (#522)"
+grep -Fq -e "RESEARCH_PLAN_INTERACTIVE=true" "$SKILL_MD" \
+  || fail "SKILL.md must document the 'RESEARCH_PLAN_INTERACTIVE=true' mental flag set by --interactive (#522)"
+grep -Fq -e "--interactive requires a TTY" "$SKILL_MD" \
+  || fail "SKILL.md must contain the literal '--interactive requires a TTY' pre-planner TTY-guard error (#522)"
+grep -Fq -e "--interactive requires --plan" "$SKILL_MD" \
+  || fail "SKILL.md must contain the literal '--interactive requires --plan' usage error (#522)"
 
 # Check 14 (#418): research-phase.md ### Standard subsection contains a stable
 # byte-drift pin (the existing standard-mode cursor research output filename

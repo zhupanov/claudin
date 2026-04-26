@@ -9,7 +9,8 @@
 # Stdout (machine output only):
 #   On success: COUNT=<N> followed by OUTPUT=<path>, exit 0.
 #   On failure: REASON=<token> (one of empty_input | count_below_minimum |
-#               count_above_maximum | missing_arg | bad_path), exit non-zero.
+#               count_above_maximum | delimiter_collision | missing_arg |
+#               bad_path), exit non-zero.
 #   No other lines appear on stdout.
 #
 # Stderr: human diagnostics (one line per anomaly observed during sanitization).
@@ -25,7 +26,13 @@
 #      dropped (NOT counted) — this fail-closes against prose preambles like
 #      "Here are the subquestions:".
 #   4. Empty lines (post-sanitization) are dropped.
-#   5. The retained line count N must satisfy 2 <= N <= 4.
+#   5. No retained line may contain the literal substring `||`
+#      (REASON=delimiter_collision). lane-assignments.txt uses `||` as the
+#      unquoted in-cell delimiter (research-phase.md §1.2.b); embedded `||`
+#      in a single subquestion would silently mis-split at rehydration. This
+#      rule runs BEFORE the count gate so `delimiter_collision` surfaces when
+#      both `||` and an out-of-range count apply.
+#   6. The retained line count N must satisfy 2 <= N <= 4.
 #      (REASON=count_below_minimum if N<2, REASON=count_above_maximum if N>4.)
 #
 # On success, retained lines are written to --output, one per line, with a
@@ -132,6 +139,18 @@ if [[ -z "$SUBQUESTIONS" ]]; then
   # All lines dropped — could be empty input post-sanitize OR no question-shaped lines.
   echo "REASON=count_below_minimum"
   echo "No question-shaped lines remained after sanitization (all lines dropped)." >&2
+  exit 1
+fi
+
+# Lane-delimiter rejection. lane-assignments.txt (research-phase.md §1.2.b) uses `||` as the
+# in-cell delimiter with plain prefix-strip + `||`-split rehydration; embedded `||` in a single
+# subquestion produces silent wrong splits. Fail loud here rather than relying on a downstream
+# escape/decode pair. This check runs BEFORE the count gates so the more actionable
+# `delimiter_collision` token surfaces when both `||` and an out-of-range count apply.
+# Stdout invariant per the contract above: only `REASON=<token>` on failure; diagnostics → stderr.
+if printf '%s\n' "$SUBQUESTIONS" | grep -qF '||'; then
+  echo "REASON=delimiter_collision"
+  echo "Subquestion line(s) contain the lane-delimiter literal '||', which would corrupt deep-mode lane assignments." >&2
   exit 1
 fi
 
