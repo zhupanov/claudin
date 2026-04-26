@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.19] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-batch-input.sh` — guard `PIECE_<i>_TITLE` against embedded newlines in the per-entry validation loop. A multi-line title from untrusted `pieces.json` would previously be emitted via `printf 'PIECE_<i>_TITLE=%s\n' "$title"`, splitting one logical KV into multiple physical stdout lines and silently breaking the one-KV-per-line grammar that umbrella SKILL.md Step 3B.1 parses. New `case "$title" in *$'\n'*) ... esac` assertion fires immediately after the existing empty-title check, before any markdown or stdout emission, with stable `ERROR=pieces.json entry <i> title contains embedded newline` stderr line + exit 1. Scope is LF only; CR (`\r`) and Unicode line separators (U+2028 / U+2029) are documented as out of scope. Sibling docs updated in sync — `render-batch-input.md` bumps the pinned-mode count from 3 to 4, adds the single-line stdout free-text fields rationale, and documents the residual gap; `test-render-batch-input.md` adds case 8 to Cases list, qualifies the Out-of-scope paragraph, and adds an edit-in-sync rule pinning the new `ERROR=` literal. Regression test in `test-render-batch-input.sh` (case 8 — `assert_invalid_title`) feeds a multi-line title and asserts the documented stderr line + exit 1; existing 8 cases continue to pass. Closes #648.
+
 ## [7.16.18] - 2026-04-26
 
 ### Changed
