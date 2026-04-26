@@ -34,11 +34,22 @@
 #   - LOOP_TMPDIR MUST begin with /tmp/ or /private/tmp/ AND MUST NOT contain
 #     `..` as a path component.
 #   - Per-iteration artifacts (iter-N-out.txt, iter-N-out.txt.stderr) accumulate
-#     in LOOP_TMPDIR; retained on subprocess failure for inspection.
+#     in LOOP_TMPDIR. The per-iteration `claude -p` is redirected so that its
+#     raw stdout goes to iter-N-out.txt, its raw stderr (and any
+#     `claude-iter-N: TIMED OUT after Xs` watcher diagnostic) goes to
+#     iter-N-out.txt.stderr. Driver stdout (captured by the caller's
+#     `> LOG_PATH 2>&1` redirect) carries only driver-emitted breadcrumbs and
+#     the `LOOP_TMPDIR=` cleanup line — never raw child stdout/stderr.
 #   - All `claude -p` invocations follow loop-review's contract:
 #     --plugin-dir, prompt on STDIN (avoids ARG_MAX), stderr sidecar.
-#   - $LOOP_TMPDIR cleaned via EXIT trap on success; retained on any abnormal
-#     exit so operators can inspect per-iteration artifacts.
+#   - $LOOP_TMPDIR retention rule: cleaned via EXIT trap when
+#     LOOP_PRESERVE_TMPDIR=false (clean success, including --max-iterations
+#     cap-hit which is itself a clean exit); retained when
+#     LOOP_PRESERVE_TMPDIR=true. The driver sets LOOP_PRESERVE_TMPDIR=true on
+#     four documented abnormal-exit paths: claude subprocess error, Step 0
+#     error, Step 0 lock failure, and sentinel mismatch. On retained paths,
+#     the cleanup warning names the iter-*-out.txt and iter-*-out.txt.stderr
+#     artifact glob patterns so they can be located without consulting docs.
 #
 # LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE is an advisory env var used ONLY by
 # tests to redirect `claude -p` invocations at a stub shim. Documented in
@@ -71,7 +82,7 @@ cleanup_on_exit() {
   printf 'LOOP_TMPDIR=%s\n' "${LOOP_TMPDIR}"
   if [[ -n "$LOOP_TMPDIR" && -d "$LOOP_TMPDIR" ]]; then
     if [[ "$LOOP_PRESERVE_TMPDIR" == "true" ]]; then
-      breadcrumb_warn "cleanup — retained working directory: ${LOOP_TMPDIR}"
+      breadcrumb_warn "cleanup — retained working directory: ${LOOP_TMPDIR} (per-iteration artifacts: ${LOOP_TMPDIR}/iter-*-out.txt and ${LOOP_TMPDIR}/iter-*-out.txt.stderr)"
     elif [[ -x "${CLAUDE_PLUGIN_ROOT:-}/scripts/cleanup-tmpdir.sh" ]]; then
       "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$LOOP_TMPDIR" || true
     fi

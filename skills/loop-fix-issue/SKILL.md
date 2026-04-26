@@ -59,7 +59,7 @@ The log file lives **outside** `LOOP_TMPDIR` on purpose: `driver.sh`'s EXIT trap
 
 ### Step 2 — Surface the log path to the user (visible line)
 
-Emit a prominent line (outside any suppressed-verbosity section) BEFORE launching Monitor, so the user always knows where the unfiltered output lives. Substitute the literal `LOG_PATH` from Step 1:
+Emit a prominent line (outside any suppressed-verbosity section) BEFORE launching Monitor, so the user always knows where the driver log is written. Substitute the literal `LOG_PATH` from Step 1:
 
 ```
 📄 Full driver log: <LOG_PATH>
@@ -91,16 +91,19 @@ where `"$LOG_FILE"` is the literal Step-1 path, double-quoted to tolerate whites
 
 ### Step 5 — Completion
 
-When the background Bash task completes, re-emit the log path so the user can easily retrieve the unfiltered output without scrolling. Substitute the literal `LOG_PATH` from Step 1:
+When the background Bash task completes, re-emit the log path so the user can easily retrieve the driver log without scrolling. Substitute the literal `LOG_PATH` from Step 1:
 
 ```
 📄 Full driver log (retained): <LOG_PATH>
 ```
 
-### What the Monitor stream shows vs. what the log file holds
+### What the Monitor stream shows vs. what the log file holds vs. where child output lives
 
-- The **Monitor stream** (live in conversation) shows ONLY lines matching `^(✅|> \*\*🔶|\*\*⚠)` — the driver's three breadcrumb prefix families.
-- The **log file** at `LOG_PATH` holds the FULL unfiltered output — every breadcrumb, all `/fix-issue` subprocess stdout, all stderr, and any other diagnostic lines. The file is retained on /tmp for post-run inspection.
+There are three observability surfaces. Each carries a different kind of content with a different retention rule.
+
+- **Monitor stream** (live in conversation): shows ONLY lines from the parent driver's stdout/stderr that match the breadcrumb regex `^(✅|> \*\*🔶|\*\*⚠)` — the driver's three breadcrumb prefix families. The child `/fix-issue` subprocess emits its own breadcrumb-shaped lines, but those go to per-iteration sidecar files (see below) — not to the parent driver's stdout — so they do **not** appear on the Monitor stream.
+- **Log file at `LOG_PATH`** (driver stdout+stderr capture): retained on /tmp for post-run inspection. Holds the driver's own emitted output: every breadcrumb (`🔶` / `✅` / `⚠`), the unconditional cleanup `LOOP_TMPDIR=…` line, the final summary line, and any stderr `printf` from setup paths. It does **NOT** contain raw `/fix-issue` subprocess stdout/stderr; those streams are redirected by `invoke_claude_p_skill` into per-iteration sidecar files described next.
+- **Per-iteration child stdout/stderr**: each iteration's `claude -p /fix-issue` writes its raw stdout to `$LOOP_TMPDIR/iter-N-out.txt` and its raw stderr (including any `claude-iter-N: TIMED OUT after Xs` watcher diagnostic) to `$LOOP_TMPDIR/iter-N-out.txt.stderr`. Retained **only** when `LOOP_PRESERVE_TMPDIR=true`, which the driver sets on every documented abnormal-exit path: claude subprocess error, Step 0 error, Step 0 lock failure, and sentinel mismatch. On clean success and on `--max-iterations` cap-hit (also a clean exit), `LOOP_TMPDIR` is wiped and the sidecars go with it. On retained paths, the cleanup warning line names the artifact glob patterns explicitly so they can be located without consulting these docs.
 
 ### If Monitor is unavailable (older runtime)
 
