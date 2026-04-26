@@ -160,13 +160,123 @@ grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
 grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_MD" \
   || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of quick|standard|deep (got: foo). Aborting.' required) (#418, #460)"
 
-# Check 13 (#418 + #424 + #510 + #518 + #522): SKILL.md documents that --debug,
-# --scale, --adjudicate, --keep-sidecar, --token-budget, and --interactive are
-# independent flags (order-independence). Pin the explicit independence
-# statement — six flags now after #522 added --interactive.
+# Check 13 (#418 + #424 + #510 + #518 + #522 + #531): SKILL.md flag-independence
+# statement is structurally consistent with the flag-bullet block.
+#
+# Replaces a former 5-flag literal substring pin (which would silently pass on
+# any future flag addition that updated the bullet block but not the
+# independence statement — issue #531). The new check derives the expected
+# "independent" flag set from the flag bullets and asserts set-equality with
+# the backticked --flag tokens on the line containing "Flags are independent".
+#
+# Anchors:
+#   - independence statement: a single line in SKILL.md beginning with
+#     "Flags are independent" (must occur exactly once).
+#   - bullet-block window: from the line AFTER the independence statement
+#     until the next ^## H2 heading (currently "## Token telemetry and
+#     budget enforcement"). The window is NOT fence-aware — the flag block
+#     contains no code fences today; if a future bullet introduces fenced
+#     content mentioning "cross-effect", the bullet will be classified as
+#     coupled (per the documented contract in scripts/test-research-structure.md).
+#   - bullets: lines matching ^- at column 1 inside the window; one bullet
+#     record runs from one ^- line until the next ^- line OR end-of-window.
+#
+# Per-bullet classification:
+#   - leading flag: the FIRST backticked span on the bullet's first line
+#     (`grep -oE '^- `[^`]+`'`), then strip from `=` or `<` onward via sed
+#     to yield the canonical --<name>. Handles value flags
+#     (`--scale=quick|standard|deep` -> --scale, `--token-budget=<positive
+#     integer>` -> --token-budget) and compound bullets (`--keep-sidecar`
+#     AND `--keep-sidecar=<PATH>` -> --keep-sidecar via the FIRST backticked
+#     token).
+#   - independent vs coupled: case-sensitive substring "cross-effect" in
+#     the bullet body marks the flag as coupled (today only --plan, whose
+#     bullet documents a --scale cross-effect). All other flags are
+#     classified as independent and MUST appear on the independence line.
+#
+# Two-sided set-equality with separate failure modes naming specific flags:
+#   - MISSING: an independent flag absent from the independence line.
+#   - STALE: a flag listed on the independence line that is not an
+#     independent bullet (either no bullet, or the bullet is coupled).
+#
+# All sort/comm invocations use LC_ALL=C for deterministic ordering across
+# macOS and Linux.
+INDEP_LINES=$(grep -nE '^Flags are independent' "$SKILL_MD" | cut -d: -f1)
+INDEP_LINE_COUNT=$(printf '%s' "$INDEP_LINES" | grep -c . || true)
+[[ "$INDEP_LINE_COUNT" == "1" ]] \
+  || fail "Check 13: SKILL.md must contain exactly one line beginning with 'Flags are independent' (found $INDEP_LINE_COUNT) (#531)"
+INDEP_LINE=$INDEP_LINES
+INDEP_LINE_TEXT=$(awk -v ln="$INDEP_LINE" 'NR == ln { print; exit }' "$SKILL_MD")
+
+# Extract bullet-block window starting AFTER the independence line, terminating
+# on the next ^## H2 heading.
+BULLET_WINDOW=$(awk -v start="$INDEP_LINE" 'NR > start && /^## /{exit} NR > start {print}' "$SKILL_MD")
+
+# Slice the window into per-bullet records (one record per ^- bullet).
+EXPECTED_INDEP=""
+STALE_FROM_BULLETS=""  # Bullets whose canonical flag is coupled (informational; subset of "not independent").
+BULLET_COUNT=0
+CURRENT_FIRST_LINE=""
+CURRENT_BODY=""
+process_bullet() {
+  local first_line="$1"
+  local body="$2"
+  [[ -z "$first_line" ]] && return 0
+  BULLET_COUNT=$((BULLET_COUNT + 1))
+  local leading_token canonical
+  # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
+  leading_token=$(printf '%s\n' "$first_line" | grep -oE '^- `[^`]+`' | head -n 1)
+  [[ -n "$leading_token" ]] \
+    || fail "Check 13: SKILL.md flag-block bullet has no parseable leading backticked --<flag> token: $first_line (#531)"
+  # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
+  canonical=$(printf '%s\n' "$leading_token" | sed -E 's/^- `(--[a-z][a-z0-9-]*)([=<].*)?`.*$/\1/')
+  if [[ ! "$canonical" =~ ^--[a-z][a-z0-9-]*$ ]]; then
+    fail "Check 13: SKILL.md flag-block bullet leading token '$leading_token' did not canonicalize to a --<name> (got: '$canonical') (#531)"
+  fi
+  if printf '%s' "$body" | grep -Fq "cross-effect"; then
+    STALE_FROM_BULLETS+="$canonical"$'\n'
+  else
+    EXPECTED_INDEP+="$canonical"$'\n'
+  fi
+}
+while IFS= read -r line; do
+  if [[ "$line" =~ ^-\  ]]; then
+    process_bullet "$CURRENT_FIRST_LINE" "$CURRENT_BODY"
+    CURRENT_FIRST_LINE="$line"
+    CURRENT_BODY="$line"$'\n'
+  else
+    if [[ -n "$CURRENT_FIRST_LINE" ]]; then
+      CURRENT_BODY+="$line"$'\n'
+    fi
+  fi
+done <<< "$BULLET_WINDOW"
+process_bullet "$CURRENT_FIRST_LINE" "$CURRENT_BODY"
+
+# Sanity floor: at least 4 bullets must be extracted. Catches catastrophic
+# extraction failures (anchor missing, window collapsed). Today's SKILL.md has
+# 6 flag bullets; floor at 4 leaves headroom for future trimming while still
+# detecting parser regressions. Documented as part of the product contract.
+[[ "$BULLET_COUNT" -ge 4 ]] \
+  || fail "Check 13: SKILL.md flag-block extraction yielded fewer than 4 bullets (got: $BULLET_COUNT) — Check 13 anchors are likely broken or the flag block has been consolidated below the documented contract floor (#531)"
+
+EXPECTED_SORTED=$(printf '%s' "$EXPECTED_INDEP" | grep -v '^$' | LC_ALL=C sort -u || true)
 # shellcheck disable=SC2016 # backticks are literal markdown — single quotes are correct here
-grep -Eq -e '`--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, `--token-budget`, and `--interactive` are independent' "$SKILL_MD" \
-  || fail "SKILL.md must explicitly state that '--debug', '--scale', '--adjudicate', '--keep-sidecar', '--token-budget', and '--interactive' are independent (order-independence) (#418 + #424 + #510 + #518 + #522)"
+ACTUAL_SORTED=$(printf '%s' "$INDEP_LINE_TEXT" | grep -oE '`--[a-z][a-z0-9-]*`' | tr -d '`' | LC_ALL=C sort -u || true)
+
+MISSING=$(LC_ALL=C comm -23 <(printf '%s\n' "$EXPECTED_SORTED") <(printf '%s\n' "$ACTUAL_SORTED") | grep -v '^$' || true)
+STALE=$(LC_ALL=C comm -13 <(printf '%s\n' "$EXPECTED_SORTED") <(printf '%s\n' "$ACTUAL_SORTED") | grep -v '^$' || true)
+EXPECTED_DISPLAY=$(printf '%s' "$EXPECTED_SORTED" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+ACTUAL_DISPLAY=$(printf '%s' "$ACTUAL_SORTED" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+
+if [[ -n "$MISSING" ]]; then
+  MISSING_DISPLAY=$(printf '%s' "$MISSING" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+  fail "Check 13: SKILL.md independence statement is missing flag(s): $MISSING_DISPLAY. Expected (from bullets): $EXPECTED_DISPLAY. Actual (from independence line): $ACTUAL_DISPLAY. Add the missing flag(s) to the line beginning 'Flags are independent', OR mark the bullet(s) as coupled by adding the literal phrase 'cross-effect' to the bullet body. (#531)"
+fi
+
+if [[ -n "$STALE" ]]; then
+  STALE_DISPLAY=$(printf '%s' "$STALE" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+  fail "Check 13: SKILL.md independence statement contains stale or non-independent flag(s): $STALE_DISPLAY. Expected (from bullets): $EXPECTED_DISPLAY. Actual (from independence line): $ACTUAL_DISPLAY. Remove the stale flag(s) from the line, OR add a corresponding flag bullet without the 'cross-effect' sentinel. (#531)"
+fi
 
 # Check 13b (#522): SKILL.md documents the --interactive boolean flag with its
 # pre-planner TTY check. Pin the flag literal in argument-hint, the flag-spec
