@@ -218,7 +218,7 @@ OOS items are **not** written to `rejected-findings.md`. They follow a separate 
 - **Unified filing**: `/implement` Step 9a.1 reads all three artifacts, deduplicates across phases, and creates GitHub issues via `/issue` (batch mode) with LLM-based semantic duplicate detection against open + recently-closed GitHub issues. All three artifacts share the same `### OOS_N:` schema (Description, Reviewer, Vote tally, Phase). Main-agent items use Reviewer=`Main agent`, Vote tally=`N/A — auto-filed per policy`, Phase=`implement`.
 - **Non-accepted OOS items**: Collected and reported in a dedicated `<details><summary>Out-of-Scope Observations</summary>` section in the PR body for future reference.
 
-External reviewers (Codex, Cursor) use single-list prompts and do not produce OOS items — their entire output is treated as in-scope findings. Only Claude subagent reviewers (which use the dual-list templates from `reviewer-templates.md`) produce OOS items via voting; the main agent's dual-write path produces OOS items without voting.
+External reviewers (Codex, Cursor) **in diff mode** use single-list prompts and do not produce OOS items — their entire output is treated as in-scope findings. **In `/review` slice mode**, external reviewers produce **dual-list output** matching the Claude subagent contract (with `### In-Scope Findings` and `### Out-of-Scope Observations` section headers) and contribute OOS items via voting — see `${CLAUDE_PLUGIN_ROOT}/skills/review/SKILL.md` Step 3a. Claude subagent reviewers (which use the dual-list templates from `reviewer-templates.md`) produce OOS items via voting in both modes; the main agent's dual-write path produces OOS items without voting.
 
 ## Zero Accepted Findings
 
