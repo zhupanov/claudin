@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.6] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-batch-input.sh` — harden the LLM-output gatekeeper boundary against malformed `pieces.json`. The prior `PIECES_TOTAL=$(jq 'length' "$PIECES_FILE")` call leaked raw `jq:` parse errors and exited with jq's exit code on parse failure, breaking the script's documented `ERROR=…` + exit 1 grammar. Replaced with a captured-stderr guard that emits a stable `ERROR=invalid pieces.json: <reason>` line and exits 1. Added a top-level type assertion (must be a JSON array) using the same prefix so a valid-JSON-but-non-array root (object with ≥2 keys, string root, etc.) no longer crashes the per-entry loop with raw jq output. New regression harness `.claude/skills/umbrella/scripts/test-render-batch-input.sh` (with sibling `.md` contract) pins both gatekeeper failure modes plus the pre-existing too-few-entries path and the valid-baseline happy path; wired into `make lint` via the new `test-umbrella-render-batch-input` Makefile target. Updated `render-batch-input.md` Test coverage section and added a script-catalog bullet to the umbrella `SKILL.md`. Closes #646.
+
 ## [7.15.5] - 2026-04-26
 
 ### Changed
