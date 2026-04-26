@@ -90,7 +90,7 @@ Decompose `TASK` into N concrete work-pieces (`N >= 2`). Each piece must be smal
 - `body` — markdown, the implementation contract for that piece (problem, suggested approach, acceptance criteria).
 - `depends-on` — comma-separated 1-based indices of earlier pieces this one depends on (empty if none).
 
-If decomposition produces fewer than 2 pieces, fall back to one-shot: print two strict KV lines — `UMBRELLA_VERDICT=one-shot` (preserving the line-62 token grammar) and `UMBRELLA_DOWNGRADE=decomposition<2` (carrying the downgrade reason on a separate machine-grep-friendly line) — and execute Step 3A with the original `TASK`.
+If decomposition produces fewer than 2 pieces, fall back to one-shot: print three strict KV lines — `UMBRELLA_VERDICT=one-shot` (preserving the Step 2 `UMBRELLA_VERDICT=<one-shot|multi-piece>` token grammar), `UMBRELLA_DOWNGRADE=decomposition-lt-2` (shell-safe machine token capturing the downgrade trigger on a separate KV line), and `UMBRELLA_RATIONALE=Downgraded from multi-piece — fewer than two decomposed pieces` (preserving the Step 2 verdict + rationale shape required by the "NEVER skip the user-visible classification verdict" anti-pattern) — and execute Step 3A with the original `TASK`. Carry `UMBRELLA_DOWNGRADE=decomposition-lt-2` through to Step 4's `output.kv` (see the optional schema entry).
 
 Render the batch-input markdown file:
 
@@ -157,6 +157,7 @@ Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoki
 ```
 UMBRELLA_VERDICT=<one-shot|multi-piece>
 UMBRELLA_RATIONALE=<one-line>
+UMBRELLA_DOWNGRADE=<token>   (only when Step 3B.1 downgraded multi-piece → one-shot; e.g., `decomposition-lt-2`)
 CHILDREN_CREATED=<N>
 CHILDREN_DEDUPLICATED=<N>
 CHILDREN_FAILED=<N>
