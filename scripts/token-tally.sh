@@ -57,24 +57,69 @@ validate_dir() {
         return 1
     fi
     # Canonical-path guard (defense in depth — resolves symlinks, ., ..).
-    # Skip when the directory does not yet exist (the `report` and
-    # `check-budget` paths handle the missing-dir case explicitly via their
-    # own `[[ ! -d $dir ]]` branches; `write` calls `mkdir -p` after this
-    # function returns). Use `cd ... && pwd -P` rather than `realpath` for
-    # portability — `realpath` is not POSIX and missing on some macOS
-    # installs without coreutils.
-    if [[ -d "$d" ]]; then
-        local resolved
-        resolved=$(cd "$d" 2>/dev/null && pwd -P) || {
-            echo "ERROR: cannot resolve --dir: $d" >&2
-            return 1
-        }
-        if [[ "$resolved" != /tmp/* && "$resolved" != /private/tmp/* ]]; then
-            echo "ERROR: --dir resolves outside /tmp/ (resolved: $resolved)" >&2
-            return 1
-        fi
+    # The string-prefix check above rejects literal escapes like /home/foo,
+    # but a path like /tmp/foo/link/leaf where /tmp/foo/link is a symlink
+    # to outside /tmp still passes the string check. Until #538 we only
+    # canonicalized when [[ -d $d ]] held, leaving cmd_write's mkdir -p
+    # to materialize the escaped directory on a not-yet-existing leaf.
+    # Fix: walk to the nearest existing-or-symlink ancestor and require
+    # it to canonicalize under /tmp or /private/tmp. Use `cd ... && pwd -P`
+    # rather than `realpath` for portability (realpath is not POSIX and
+    # missing on some macOS installs without coreutils). This mirrors
+    # scripts/deny-edit-write.sh's pattern.
+
+    # Canonicalize the allowed roots once. On macOS /tmp -> /private/tmp,
+    # so both spellings collapse to one canonical path; on Linux they
+    # are typically distinct (and /private/tmp may not exist). Accept
+    # paths that resolve under either canonical root.
+    local allowed_root_a allowed_root_b=""
+    allowed_root_a=$(cd /tmp 2>/dev/null && pwd -P) || {
+        echo "ERROR: cannot canonicalize /tmp" >&2
+        return 1
+    }
+    if [[ -d /private/tmp ]]; then
+        allowed_root_b=$(cd /private/tmp 2>/dev/null && pwd -P) || true
     fi
-    return 0
+
+    # Walk up from $d to the nearest existing-or-symlink anchor. The
+    # `! -L` clause stops at dangling symlinks so the validator surfaces
+    # a clear error rather than letting `cd` (or a subsequent mkdir -p)
+    # fail later with a confusing message. Note `-e` is true for a
+    # symlink only when its target exists, so dangling symlinks would
+    # otherwise be silently walked past.
+    local probe="$d"
+    while [[ ! -e "$probe" && ! -L "$probe" ]] && [[ "$probe" != "/" ]]; do
+        probe=$(dirname "$probe")
+    done
+    if [[ "$probe" == "/" ]]; then
+        echo "ERROR: --dir has no existing ancestor: $d" >&2
+        return 1
+    fi
+    # A regular file (or symlink-to-file) is not a directory; reject
+    # with a clear error rather than silently taking dirname.
+    if [[ -f "$probe" ]]; then
+        echo "ERROR: --dir nearest existing ancestor is not a directory: $probe" >&2
+        return 1
+    fi
+
+    # Canonicalize the probe directory. Symlinks anywhere on the chain
+    # are resolved here — this is the load-bearing security check. A
+    # dangling-symlink probe makes `cd` fail; treat that as a hard error.
+    local resolved
+    resolved=$(cd "$probe" 2>/dev/null && pwd -P) || {
+        echo "ERROR: cannot resolve --dir: $d" >&2
+        return 1
+    }
+
+    # Accept iff resolved anchor matches either canonical root.
+    if [[ "$resolved" == "$allowed_root_a" ]] || [[ "$resolved" == "$allowed_root_a"/* ]]; then
+        return 0
+    fi
+    if [[ -n "$allowed_root_b" ]] && { [[ "$resolved" == "$allowed_root_b" ]] || [[ "$resolved" == "$allowed_root_b"/* ]]; }; then
+        return 0
+    fi
+    echo "ERROR: --dir resolves outside /tmp/ (resolved: $resolved)" >&2
+    return 1
 }
 
 # Sanitize a lane label: lowercase, non-alphanumerics → '-'.

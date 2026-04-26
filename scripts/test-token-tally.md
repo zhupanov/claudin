@@ -27,12 +27,13 @@
 | 14 | report | `--budget-aborted true` + `--adjudicate true` + no adjudication sidecars | Adjudication row reads "skipped … aborted before Step 2.5" (review FINDING_10) |
 | 15 | (all) | `--dir /tmp/../etc` (path-escape attempt) | exit 1 (review FINDING_2 — `..` segments rejected) |
 | 16 | check-budget | `--dir` points at non-existent directory | success line includes `BUDGET=<N>` (review FINDING_3 — uniform success-line shape across missing-dir and present-dir paths) |
+| 17 | (all) | symlink-parent escape under /tmp/ | exit 1 across all 3 subcommands; no escape directory created (issue #538). 17a: live symlink to outside-/tmp target (the reproducer). 17b: dangling symlink (`! -L` clause must stop the walk before `cd` fails). 17c: nearest existing ancestor is a regular file (validator must reject, not normalize via dirname). |
 
-Total: 34 individual assertions across 17 test cases (12 original + 5 new from review-round-1 fixes; Test 6 split into 6 and 6b; T15 covers all 3 subcommands per round-2 review nit).
+Total: 39 individual assertions across 18 test cases (12 original + 5 new from review-round-1 fixes + 5 new from #538 plan-review; Test 6 split into 6 and 6b; T15 covers all 3 subcommands; T17 has three sub-cases 17a/17b/17c).
 
 ## Invariants
 
-- All test fixtures use `mktemp -d "/tmp/test-token-tally.XXXXXX"` to satisfy the `--dir` path-prefix guard. Fixtures are removed at the end of each test (`rm -rf "$T"`).
+- All test fixtures use `mktemp -d "/tmp/test-token-tally.XXXXXX"` to satisfy the `--dir` path-prefix guard. Fixtures are removed at the end of each test (`rm -rf "$T"`). **T17 exception**: T17 must demonstrate that `validate_dir` rejects a symlink whose target lies *outside* `/tmp/`, so its escape-target fixture lives outside `/tmp/`'s canonical tree. T17 attempts `/var/tmp` first (POSIX standard, outside `/tmp/` on both macOS and Linux, and reliably writable in CI sandboxes), falls back to `$HOME`, and finally skips T17 with a `WARNING:` to stderr if neither location is writable. The cleanup trap is installed immediately after `T_DIR` is created (before the escape-target `mktemp`) so a `mktemp` failure under `set -euo pipefail` does not leak the under-`/tmp` fixture. This deviation from the under-`/tmp` rule is intentional and unique to T17.
 - The harness uses three assertion helpers: `assert_exit_code`, `assert_stdout_contains`, `assert_stdout_not_contains`. Failures collect into `FAIL_DETAILS` and print at the end.
 - Exit code 1 on any failure; exit code 0 only when all assertions pass.
 
