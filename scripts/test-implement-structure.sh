@@ -330,5 +330,25 @@ if ! [[ "$inline_markers" =~ ^[0-9]+$ ]] || (( inline_markers > 0 )); then
   fail "(12b) tracking-issue-write.sh must NOT contain a standalone 'SECTION_MARKERS=(' declaration (now lives in anchor-section-markers.sh); found ${inline_markers:-0}"
 fi
 
-echo "PASS: test-implement-structure.sh — all 12 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (13) Orchestrator-judgment-bail invariant (closes #553): two byte-pinned
+#      anchor literals must be present in skills/implement/SKILL.md so future
+#      edits cannot silently delete the rule. The two literals are the
+#      headline of NEVER #7 and the headline of the Step 2 "scope-lock" cue.
+#      Both literals are byte-unique within SKILL.md by construction (each is
+#      a distinctive headline), so the whole-file fixed-string check is
+#      sufficient — this assertion guards against deletion, not against
+#      relocation. Mirrors the pattern of assertion (5)'s verbosity literal
+#      list.
+# ---------------------------------------------------------------------------
+never7_literals=(
+  'NEVER bail mid-run on orchestrator-judgment "scope" or "capacity" concerns without a mechanical justification.'
+  '**No mid-run scope re-litigation.**'
+)
+for lit in "${never7_literals[@]}"; do
+  grep -Fq "$lit" "$SKILL_MD" \
+    || fail "(13) SKILL.md lost orchestrator-judgment-bail invariant literal: $lit"
+done
+
+echo "PASS: test-implement-structure.sh — all 13 structural invariants hold"
 exit 0
