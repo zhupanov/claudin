@@ -2,19 +2,19 @@
 
 **Consumer**: `/research` Step 1 — loaded via the `MANDATORY — READ ENTIRE FILE` directive at Step 1 entry in SKILL.md.
 
-**Contract**: scale-aware research-lane invariant. `RESEARCH_SCALE=standard` (default) keeps the 3-lane shape — Claude inline + Cursor + Codex, **angle-differentiated per lane** (Cursor → `RESEARCH_PROMPT_ARCH`; Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`; Claude inline → `RESEARCH_PROMPT_SEC`), with Claude subagent fallbacks preserving the 3-lane count when an external tool is unavailable. `RESEARCH_SCALE=quick` runs 1 inline Claude lane only carrying `RESEARCH_PROMPT_BASELINE` (single-lane confidence; no externals, no fallbacks). `RESEARCH_SCALE=deep` runs 5 lanes — Claude inline (baseline `RESEARCH_PROMPT_BASELINE`) plus 2 Cursor slots and 2 Codex slots carrying the four diversified angle prompts (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`). Owns the spawn-order rule, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT_BASELINE` literals (used by quick mode and deep-mode's Claude inline lane only), the four named angle-prompt literals (used by standard mode for 3 of 4 and deep mode for all 4), external launch bash blocks, per-slot fallback rules, the Claude-inline independence rule, Step 1.4 collection with zero-externals branch + runtime-timeout replacement, and Step 1.5 synthesis requirements. Additionally owns the optional Step 1.1 (Planner Pre-Pass) and Step 1.2 (Lane Assignment), gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE != quick` (see SKILL.md "Planner pre-pass — scale interaction"); when planner runs, each lane's angle base prompt is augmented with a per-lane subquestion suffix (additive — the suffix is the only planner-mode variation; the base prompt differs per lane by angle). Standard mode uses 3 of the 4 angle prompts (Cursor=ARCH, Codex=EDGE/EXT, Claude inline=SEC); deep mode uses all 4 angle prompts on the external slots and `RESEARCH_PROMPT_BASELINE` on the Claude-inline integrator.
+**Contract**: scale-aware research-lane invariant. Two orthogonal mode selectors: `RESEARCH_SCALE` (`standard`|`deep`) and `RESEARCH_QUICK` (boolean). When `RESEARCH_QUICK=true`, the Quick mode (K=3 homogeneous Claude lanes with vote-merge) runs and `RESEARCH_SCALE`'s value is irrelevant (the SKILL.md mutual-exclusion gate ensures explicit `--scale=standard|deep` was not also set). `RESEARCH_SCALE=standard` (default) keeps the 3-lane shape — Claude inline + Cursor + Codex, **angle-differentiated per lane** (Cursor → `RESEARCH_PROMPT_ARCH`; Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`; Claude inline → `RESEARCH_PROMPT_SEC`), with Claude subagent fallbacks preserving the 3-lane count when an external tool is unavailable. `RESEARCH_QUICK=true` runs `RESEARCH_QUICK_K=3` (hardcoded) homogeneous Claude inline lanes carrying identical `RESEARCH_PROMPT_BASELINE` plus a structured-output rubric (each lane emits a `<lane_claims>` block with claims/evidence/unknowns); the orchestrator parses the per-lane structured outputs and vote-merges via reproducible Jaccard-based clustering. Three-tier partial-failure handling: 3/3 lanes succeed → full vote-merge; 2/3 → degraded vote-merge with explicit "1 lane failed" disclaimer; <2 → fail-closed (run aborts). `RESEARCH_SCALE=deep` runs 5 lanes — Claude inline (baseline `RESEARCH_PROMPT_BASELINE`) plus 2 Cursor slots and 2 Codex slots carrying the four diversified angle prompts (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`). Owns the spawn-order rule, the external-evidence trigger detector and the conditional `RESEARCH_PROMPT_BASELINE` literals (used by `--quick` mode's K=3 lanes and deep-mode's Claude inline lane only), the four named angle-prompt literals (used by standard mode for 3 of 4 and deep mode for all 4), external launch bash blocks, per-slot fallback rules, the Claude-inline independence rule, Step 1.4 collection with zero-externals branch + runtime-timeout replacement, the **Quick-mode K=3 launch + `<lane_claims>` parser + Jaccard clustering rubric + three-tier partial-failure handling + `quick-ballot.md` artifact emission**, and Step 1.5 synthesis requirements. Additionally owns the optional Step 1.1 (Planner Pre-Pass) and Step 1.2 (Lane Assignment), gated on `RESEARCH_PLAN=true` AND `RESEARCH_QUICK=false` (see SKILL.md "Planner pre-pass — scale interaction"); when planner runs, each lane's angle base prompt is augmented with a per-lane subquestion suffix (additive — the suffix is the only planner-mode variation; the base prompt differs per lane by angle). Standard mode uses 3 of the 4 angle prompts (Cursor=ARCH, Codex=EDGE/EXT, Claude inline=SEC); deep mode uses all 4 angle prompts on the external slots and `RESEARCH_PROMPT_BASELINE` on the Claude-inline integrator.
 
 **When to load**: once Step 1 is about to execute. Do NOT load during Step 0, Step 2, Step 3, or Step 4. SKILL.md emits the Step 1 entry breadcrumb and the Step 1 completion print; this file does NOT emit those — it owns body content only.
 
 ---
 
-**IMPORTANT: The research phase runs the lane shape selected by `RESEARCH_SCALE`. When `RESEARCH_SCALE=standard` (default) or `deep`, the phase MUST run with the configured ≥3 agents (using Claude subagent fallbacks where an external tool is unavailable, preserving the configured lane count). When `RESEARCH_SCALE=quick`, the phase runs 1 inline Claude lane only — that is the designated minimum, and the synthesis must explicitly note "single-lane confidence". Never silently promote between scales: `quick` does not get auto-upgraded to `standard`, and `standard` is not auto-upgraded to `deep`.**
+**IMPORTANT: The research phase runs the lane shape selected by `RESEARCH_QUICK` first (true → Quick mode, K=3 homogeneous Claude lanes), else by `RESEARCH_SCALE`. When `RESEARCH_SCALE=standard` (default) or `deep`, the phase MUST run with the configured ≥3 agents (using Claude subagent fallbacks where an external tool is unavailable, preserving the configured lane count). When `RESEARCH_QUICK=true`, the phase runs `RESEARCH_QUICK_K=3` homogeneous Claude inline lanes — the synthesis must explicitly carry the "K-lane vote-merge confidence" disclaimer; partial-failure tier 2/3 prepends an additional "1 lane failed" disclaimer; tier <2 aborts the run. Never silently promote between modes: `--quick` does not get auto-upgraded to `--scale=standard`, and `standard` is not auto-upgraded to `deep`.**
 
 A diverge-then-converge phase where N agents independently explore the codebase before synthesizing findings. N is 1 for `quick`, 3 for `standard`, and 5 for `deep`. In standard mode, diversity comes from model-family heterogeneity (Claude + Cursor's backing model + Codex's backing model) **and from differentiated per-lane angle prompts** (architecture / edge cases or external comparisons / security). In deep mode, all four named angle prompts run plus a baseline Claude inline lane.
 
 The research agents per scale:
 
-- **`RESEARCH_SCALE=quick`** (1 lane):
+- **`RESEARCH_QUICK=true`** (`RESEARCH_QUICK_K=3` lanes):
   1. **Claude (inline)** — the orchestrating agent's own research, run with `RESEARCH_PROMPT_BASELINE` below. No external launches, no fallbacks.
 
 - **`RESEARCH_SCALE=standard`** (3 lanes — default; angle-differentiated):
@@ -31,7 +31,7 @@ The research agents per scale:
 
 ## 1.1 — Planner Pre-Pass (optional)
 
-Gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE != quick` (see SKILL.md "Planner pre-pass — scale interaction" for the resolution rule). When the gate is closed, **skip this entire step** and proceed directly to Step 1.2 (which is also a no-op when the gate is closed) and then Step 1.3.
+Gated on `RESEARCH_PLAN=true` AND `RESEARCH_QUICK=false` (see SKILL.md "Planner pre-pass — scale interaction" for the resolution rule). When the gate is closed, **skip this entire step** and proceed directly to Step 1.2 (which is also a no-op when the gate is closed) and then Step 1.3.
 
 When the gate is open, the orchestrator decomposes `RESEARCH_QUESTION` into 2–4 focused subquestions before fan-out, then assigns them to the per-scale lane list in Step 1.2 (3 standard-mode lanes or 5 deep-mode lanes). Bounded — does NOT recurse, does NOT call this skill again.
 
@@ -199,7 +199,7 @@ After the edit subroutine returns successfully (validator accepted), `subquestio
 
 ## 1.2 — Lane Assignment (optional)
 
-Gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN_N>0` (i.e., Step 1.1 succeeded). When the gate is closed, **skip this entire step** and proceed to Step 1.3 with no per-lane suffix.
+Gated on `RESEARCH_PLAN=true` AND `RESEARCH_QUICK=false` AND `RESEARCH_PLAN_N>0` (i.e., Step 1.1 succeeded). When the gate is closed, **skip this entire step** and proceed to Step 1.3 with no per-lane suffix.
 
 When the gate is open, compute per-lane subquestion assignments and persist them so Step 1.4's runtime-timeout fallback can rehydrate the per-lane prompt for any replacement subagent.
 
@@ -304,7 +304,7 @@ Print: `✅ 1.2: lane-assign — N=$RESEARCH_PLAN_N, per-lane suffixes composed 
 
 **Baseline prompt** (`RESEARCH_PROMPT_BASELINE`). Per-scale applicability:
 
-- `RESEARCH_SCALE=quick` — the single inline Claude lane runs `RESEARCH_PROMPT_BASELINE` verbatim.
+- `RESEARCH_QUICK=true` — all `RESEARCH_QUICK_K=3` Claude subagent lanes run `RESEARCH_PROMPT_BASELINE` verbatim (homogeneous; no angle differentiation, no per-lane suffix), each with the structured-output rubric appended (see § 1.3 Quick subsection below).
 - `RESEARCH_SCALE=deep` — only the **inline Claude lane** runs `RESEARCH_PROMPT_BASELINE` (general/synthesis-style role); the four external slots (Cursor-Arch, Cursor-Edge, Codex-Ext, Codex-Sec) and their per-slot Claude fallbacks run the corresponding **named angle prompts** (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) defined further below — NOT this baseline literal.
 - `RESEARCH_SCALE=standard` — does **NOT** use `RESEARCH_PROMPT_BASELINE`. All 3 standard-mode lanes use angle prompts (3 of the 4 below); see the per-lane mapping in the `### Standard` subsection.
 
@@ -375,9 +375,46 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
 **Claude research (inline)** — runs `RESEARCH_PROMPT_SEC`: Only after all external and fallback launches are issued, produce your own 2-3 paragraph research inline using `RESEARCH_PROMPT_SEC` as your brief (with per-lane suffix appended for Lane 3 when `RESEARCH_PLAN=true` AND `RESEARCH_PLAN_N>0`). Print it under a `### Claude Research (inline)` header. Write this **before** reading any external or subagent outputs to preserve independence.
 
-### Quick (RESEARCH_SCALE=quick)
+### Quick (RESEARCH_QUICK=true)
 
-Skip all external launches and all Claude subagent fallbacks — there are none in quick mode. Produce a single inline Claude research paragraph (2-3 paragraphs) using `RESEARCH_PROMPT_BASELINE` as the brief and print it under a `### Claude Research (inline)` header. The single-lane outcome is by design; the synthesis at Step 1.5 must label the result with explicit "single-lane confidence" framing so the operator does not mistake it for a multi-perspective synthesis.
+Skip all Cursor/Codex external launches and all per-slot Claude fallbacks — there are no externals in `--quick` mode. Instead, launch `RESEARCH_QUICK_K=3` (hardcoded constant defined in SKILL.md prose) homogeneous Claude subagents in parallel via the Agent tool with `subagent_type=general-purpose` (NOT `code-reviewer` — research, not review). All three subagents carry **identical** brief: the verbatim `RESEARCH_PROMPT_BASELINE` body PLUS the structured-output rubric appendix below.
+
+**Structured-output rubric** (append to each lane's prompt):
+
+```
+After producing your prose research output, also emit a structured <lane_claims> block at the end of your message containing 3-7 atomic claims that capture the core findings. Each claim must be on its own line as a bullet item with the following four sub-fields, exactly:
+
+<lane_claims>
+- claim: <one declarative sentence stating the claim>
+  evidence: <one or more file:line citations, comma-separated>
+  confidence: <high | medium | low>
+  unknowns: <semicolon-separated open questions, or "none">
+- claim: <next claim — at least 3, at most 7 total>
+  evidence: ...
+  confidence: ...
+  unknowns: ...
+</lane_claims>
+
+The claim text should be a clean, declarative sentence — not a question and not hedged with "perhaps" / "maybe". The evidence field is REQUIRED (at least one file:line citation per claim). The unknowns field MAY be "none" if the claim is firmly grounded.
+```
+
+**Spawn the K=3 subagents in parallel** in a single message via Agent tool calls. The orchestrator collects the three Agent-tool returns and writes each lane's full output (prose + `<lane_claims>` block) to a per-lane file:
+
+- Lane 1 → `$RESEARCH_TMPDIR/quick-lane-1-output.txt`
+- Lane 2 → `$RESEARCH_TMPDIR/quick-lane-2-output.txt`
+- Lane 3 → `$RESEARCH_TMPDIR/quick-lane-3-output.txt`
+
+After all three Agent returns, the orchestrator emits per-lane sidecars for token telemetry (matching the existing `Synthesis` / `Revision` / `Code` sidecar pattern):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write \
+  --dir "$RESEARCH_TMPDIR" --phase research --lane "Quick-Lane-1" --tool claude \
+  --tokens "<total_tokens-from-Lane1-Agent-return>"
+```
+
+Same call for Lane-2 and Lane-3 (substitute `Quick-Lane-2` / `Quick-Lane-3`). Per-lane sidecars enable budget enforcement on the K=3 subagents (per `RESEARCH_TOKEN_BUDGET`).
+
+Step 1.4 Quick subsection parses the per-lane outputs, applies the Jaccard-clustering vote-merge, and handles partial-failure tiers; Step 1.5 Quick subsection writes `research-report.txt` and `quick-ballot.md`.
 
 ### Deep (RESEARCH_SCALE=deep)
 
@@ -469,9 +506,26 @@ Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Un
 
 **Per-lane suffix rehydration**: when `RESEARCH_PLAN=true` AND `RESEARCH_PLAN_N>0`, the runtime fallback subagent for lane k MUST receive the per-lane prompt for that specific lane — the lane's angle base prompt (Lane 1/Cursor → `RESEARCH_PROMPT_ARCH`, Lane 2/Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`, Lane 3/Claude inline → `RESEARCH_PROMPT_SEC`) + the lane k suffix derived from `$RESEARCH_TMPDIR/lane-assignments.txt`. Read the `LANE<k>_SUBQUESTIONS=<subq1>||<subq2>` line via prefix-strip + `||`-split, recompose the suffix per the Step 1.2.c template, and append it to the lane's angle base prompt. Do NOT re-derive the lane assignment from memory — the file is the single source of truth. (When `RESEARCH_PLAN=false`, `lane-assignments.txt` was never written; the runtime fallback uses the lane's angle base prompt verbatim with no suffix.)
 
-### Quick (RESEARCH_SCALE=quick)
+### Quick (RESEARCH_QUICK=true)
 
-There are no external launches and no fallbacks in quick mode — the Step 1.3 Quick subsection produced exactly one Claude inline output. **Skip `collect-reviewer-results.sh` entirely** (this reuses the same zero-externals discipline as standard mode's `COLLECT_ARGS=()` branch — `collect-reviewer-results.sh` exits non-zero when called with an empty path list). Proceed directly to Step 1.5.
+There are no external (Cursor/Codex) launches in `--quick` mode — the Step 1.3 Quick subsection launched `RESEARCH_QUICK_K=3` homogeneous Claude subagents in parallel via the Agent tool. **Skip `collect-reviewer-results.sh` entirely** (this reuses the same zero-externals discipline as standard mode's `COLLECT_ARGS=()` branch — `collect-reviewer-results.sh` exits non-zero when called with an empty path list). Lane outputs are produced by Agent-tool returns directly; the orchestrator already wrote them to `quick-lane-{1,2,3}-output.txt` in Step 1.3.
+
+**Per-lane structured-output validation**: parse each `quick-lane-N-output.txt` for the trailing `<lane_claims>...</lane_claims>` block. A lane PASSES validation if all of:
+
+1. The output file exists and is non-empty.
+2. The file contains exactly one `<lane_claims>` opening tag and exactly one `</lane_claims>` closing tag, with the closing tag after the opening tag.
+3. The `<lane_claims>` block contains at least 3 and at most 7 lines starting with `- claim:` (after whitespace strip).
+4. Each `- claim:` is followed (in subsequent indented lines until the next `- claim:` or `</lane_claims>`) by at least one `evidence:` line containing the substring matching `[a-zA-Z0-9_/.-]+:[0-9]+` (a file:line citation).
+
+A lane FAILS validation if any of the above is missing or malformed; the orchestrator records `LANE_N_OK=false` and a one-line `LANE_N_FAIL_REASON` (e.g., "missing `<lane_claims>` block", "fewer than 3 claims", "no evidence citation").
+
+**Three-tier partial-failure handling**: count `QUICK_LANES_OK = sum(LANE_N_OK == true for N in 1..3)`. Branch:
+
+- `QUICK_LANES_OK == 3` (3/3): full vote-merge in Step 1.5. Set `QUICK_DEGRADED=false`.
+- `QUICK_LANES_OK == 2` (2/3 degraded): proceed to Step 1.5 with a degraded-mode disclaimer. Set `QUICK_DEGRADED=true`. Set `QUICK_LANE_FAIL_REASON` from the failed lane's reason. Print: `**⚠ /research --quick: 1 of 3 lanes failed validation ($QUICK_LANE_FAIL_REASON). Proceeding with degraded 2-of-2 vote-merge.**`
+- `QUICK_LANES_OK < 2` (0/3 or 1/3): fail-closed. Print: `**⚠ /research --quick: $QUICK_LANES_OK of 3 lanes succeeded. Vote-merge requires at least 2 lanes for cross-checking. Aborting — rerun the query.**` and exit the orchestrator block (skip Step 1.5, skip Step 2, skip Step 3, jump to Step 4 cleanup). Do NOT abort the parent process — the cleanup at Step 4 must still run.
+
+The validation contract above guards the false-consensus risk (a lane that omits `<lane_claims>` cannot be silently treated as a vote — its output is not comparable). The three-tier behavior mirrors the repo's existing disclosure-backed-degradation pattern (cf. `quick-disclaimer.txt` lower-assurance framing): explicit disclosure beats silent fail-closed.
 
 ### Deep (RESEARCH_SCALE=deep)
 
@@ -509,9 +563,9 @@ Read the lane's `LANE<k>_SUBQUESTIONS=<subq1>||<subq2>` line via prefix-strip + 
 
 ### Update lane-status.txt (RESEARCH_* slice only)
 
-`RESEARCH_SCALE=quick` skips this update entirely — quick mode has no external lanes to attribute. SKILL.md Step 0b initialized `lane-status.txt` only when `RESEARCH_SCALE != quick`; if quick mode entered, the file does not exist and Step 3 emits a literal "1 agent (Claude inline only — single-lane confidence)" header without consulting it. Step 3 also emits a literal "0 reviewers (validation phase skipped — see synthesis disclaimer)" validation-phase header so the report shape stays uniform across scales — see SKILL.md § Quick (RESEARCH_SCALE=quick).
+`RESEARCH_QUICK=true` skips this update entirely — `--quick` mode has no external lanes to attribute. SKILL.md Step 0b initialized `lane-status.txt` only when `RESEARCH_QUICK=false`; if `--quick` mode entered, the file does not exist and Step 3 emits literal headers without consulting it (`3 agents (homogeneous Claude inline — K-lane vote-merge confidence)` for 3/3 success, `2 agents (homogeneous Claude inline — K-lane vote-merge confidence; 1 lane failed: $QUICK_LANE_FAIL_REASON)` for 2/3 degraded). Step 3 also emits a literal "0 reviewers (validation phase skipped — see synthesis disclaimer)" validation-phase header so the report shape stays uniform across modes — see SKILL.md § Quick (RESEARCH_QUICK=true).
 
-For `RESEARCH_SCALE=standard` and `RESEARCH_SCALE=deep`: after Runtime Timeout Fallback determinations are made, surgically update only the `RESEARCH_*` slice of `$RESEARCH_TMPDIR/lane-status.txt`. The `VALIDATION_*` keys must be preserved verbatim — Step 0b initialized them and Step 2 (validation-phase.md) owns subsequent updates. Do NOT rewrite the full file. In deep mode, `RESEARCH_CURSOR_*` reflects the per-tool aggregate across both Cursor slots (any one Cursor slot with `STATUS != OK` flips the session-wide flag and is reflected here as `fallback_runtime_*`); same for `RESEARCH_CODEX_*` across both Codex slots.
+For `RESEARCH_QUICK=false` AND (`RESEARCH_SCALE=standard` OR `RESEARCH_SCALE=deep`): after Runtime Timeout Fallback determinations are made, surgically update only the `RESEARCH_*` slice of `$RESEARCH_TMPDIR/lane-status.txt`. The `VALIDATION_*` keys must be preserved verbatim — Step 0b initialized them and Step 2 (validation-phase.md) owns subsequent updates. Do NOT rewrite the full file. In deep mode, `RESEARCH_CURSOR_*` reflects the per-tool aggregate across both Cursor slots (any one Cursor slot with `STATUS != OK` flips the session-wide flag and is reflected here as `fallback_runtime_*`); same for `RESEARCH_CODEX_*` across both Codex slots.
 
 For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:
 - `STATUS=TIMED_OUT` or `SENTINEL_TIMEOUT` → token `fallback_runtime_timeout`, reason empty
@@ -563,7 +617,7 @@ The Write tool is permitted on canonical `/tmp` paths under `$RESEARCH_TMPDIR` b
 
 ### Reduced-diversity banner preamble (Standard + Deep only)
 
-This preamble defines the **degraded-path banner** that the `### Standard` and `### Deep` synthesis branches prepend to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt` when any external research lane (Cursor or Codex) ran as a Claude-fallback. Quick mode (`RESEARCH_SCALE=quick`) does NOT apply this preamble — it carries its own `**Single-lane confidence — no validation pass.**` disclaimer instead.
+This preamble defines the **degraded-path banner** that the `### Standard` and `### Deep` synthesis branches prepend to BOTH the printed `## Research Synthesis` AND `$RESEARCH_TMPDIR/research-report.txt` when any external research lane (Cursor or Codex) ran as a Claude-fallback. Quick mode (`RESEARCH_QUICK=true`) does NOT apply this preamble — it carries its own `**K-lane vote-merge confidence — no validation pass.**` disclaimer instead (sourced from `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer.txt`); when `QUICK_DEGRADED=true`, the orchestrator additionally prepends a "1 lane failed" disclaimer line per the Step 1.4 Quick subsection above.
 
 **Banner literal (fixed template; only `<N_FALLBACK>` and `<LANE_TOTAL>` are integer-substituted; never splice `_REASON` or raw KV lines from `lane-status.txt` into the banner)**:
 
@@ -668,11 +722,48 @@ Synthesis is routed to the same Claude Agent subagent pattern as the `RESEARCH_P
 
 Print the assembled synthesis to the terminal for operator visibility. Step 2 (validation) consumes the report and validates against the parent `RESEARCH_QUESTION` — the validation contract is unchanged, since `research-report.txt` still leads with the original question.
 
-### Quick (RESEARCH_SCALE=quick)
+### Quick (RESEARCH_QUICK=true)
 
-Read the single Claude inline research output. Produce a single-lane synthesis under a `## Research Synthesis` header that explicitly opens with the byte-canonical disclaimer literal stored at `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer.txt` (currently `**Single-lane confidence — no validation pass.**` — the data file is the single source of truth, also consumed by SKILL.md Step 3 when invoking `render-findings-batch.sh --quick-disclaimer`). The disclaimer is one short sentence noting that the result reflects one perspective and was not cross-checked by a multi-lane synthesis or a validation panel. Then summarize the inline findings: key observations, relevant files/modules/areas and architectural patterns, and risks / constraints / feasibility concerns.
+Read the per-lane outputs from `$RESEARCH_TMPDIR/quick-lane-{1,2,3}-output.txt` (only the lanes with `LANE_N_OK=true` per Step 1.4 validation). Branch on `QUICK_DEGRADED`:
 
-Write `$RESEARCH_TMPDIR/research-report.txt` with the same content (research question, branch + commit, single-lane synthesis with disclaimer). The Step 1.5 contract is preserved — the report file MUST exist so Step 3 can render it, even though Step 2 is skipped.
+- `QUICK_DEGRADED=false` (3/3): all three lanes' `<lane_claims>` blocks contribute to clustering.
+- `QUICK_DEGRADED=true` (2/3): the two surviving lanes' `<lane_claims>` blocks contribute. Two-lane consensus = both agree; two-lane divergence = lanes disagree on the same claim or one lane has a single-lane-only claim.
+
+**Parse `<lane_claims>` blocks** from each surviving lane. For each `- claim:` bullet, extract: claim text (the sentence after `claim:`), evidence list (file:line citations after `evidence:`), confidence enum, unknowns string. Build a per-lane list of structured claim records.
+
+**Reproducible Jaccard-based clustering rubric** (the orchestrator-inline algorithm — runs as Claude inline reasoning over the parsed records, not as a Bash script in v1). For every claim's text, compute a normalized **cluster key** by:
+
+1. Lowercase the text.
+2. Strip leading/trailing whitespace.
+3. Collapse internal whitespace runs to single spaces.
+4. Strip punctuation `. , ; : ! ? " '` from each end of the text.
+5. Tokenize by splitting on whitespace.
+
+Two claim texts cluster (are deemed equivalent) when their **token-set Jaccard similarity** (|A ∩ B| / |A ∪ B|) is ≥ 0.6. The threshold is fixed at 0.6 — do NOT make this configurable in v1; reproducibility requires a fixed rubric. Across lanes, transitively merge clusters: if claim A clusters with claim B (Jaccard ≥0.6) and claim B clusters with claim C, all three are in one cluster.
+
+**Cluster classification**:
+
+- **Agreed** (`QUICK_DEGRADED=false` 3/3): the cluster contains claims from ≥ 2 of the 3 lanes (i.e., 2/3 or 3/3 majority).
+- **Agreed** (`QUICK_DEGRADED=true` 2/3): the cluster contains claims from BOTH surviving lanes (2/2 consensus).
+- **Single-lane** (any tier): the cluster contains a claim from exactly 1 lane.
+- **Divergent** (rare): two claims with cluster keys that DO NOT meet the Jaccard threshold but address the same conceptual point — orchestrator surfaces these only when its inline reasoning detects an explicit contradiction (e.g., two lanes give opposing yes/no answers to the same sub-question). When the orchestrator is uncertain, default to two separate Single-lane clusters.
+
+**Synthesis prose** under the `## Research Synthesis` header. Open with the byte-canonical disclaimer literal stored at `${CLAUDE_PLUGIN_ROOT}/skills/research/data/quick-disclaimer.txt` (the data file is the single source of truth — its first sentence is the bold-marked **K-lane vote-merge confidence** label that operators visually recognize as the lower-assurance signal; also consumed by SKILL.md Step 3 when invoking `render-findings-batch.sh --quick-disclaimer`). When `QUICK_DEGRADED=true`, prepend an additional disclaimer line: `**Degraded mode: 1 of 3 lanes failed validation ($QUICK_LANE_FAIL_REASON). Two-lane consensus replaces 2-of-3 majority for this run.**` Then emit three required sub-sections (in order):
+
+1. `### Agreements (≥2/3 lanes concur)` — bullet list of agreed clusters; for each cluster, render: the consensus claim text (use the most representative claim from the cluster — typically the one with the highest confidence; ties broken by lane index), confidence (lowest across the cluster's claims), evidence (deduplicated union of all clustered claims' citations), and a parenthetical lane attribution like `(lanes 1, 2, 3)` or `(lanes 1, 2 — lane 3 failed)`.
+2. `### Divergences (no consensus)` — bullet list of single-lane and divergent clusters; each item attributed to the specific lane index, with a `1 of 3 lanes` (or `1 of 2 surviving lanes` when degraded) prefix and the lane's evidence/confidence/unknowns. Items in this section are NOT consensus claims — they are reported for transparency.
+3. `### Why lanes differed` — short qualitative analysis (2-4 sentences) of the divergence pattern: do divergences cluster around a particular theme? Are they citation-level disagreements or substantive contradictions? Do unknowns from one lane match another lane's claim text (suggesting one lane was less thorough)? When there are zero divergences, write `No substantive divergences — all lanes' claims clustered into Agreements.` Do NOT pad this section.
+
+**Write `$RESEARCH_TMPDIR/quick-ballot.md`** (the audit-trail artifact preserved via `--keep-sidecar`). The ballot is a structured markdown file with the following content (rendered with H4 headings — `####` — inside the file body so this reference's H2/H3 hierarchy is not disturbed by the embedded template):
+
+- A top-line H1 `# Quick-mode Ballot`.
+- Two metadata lines: `**Research question**:` followed by `<RESEARCH_QUESTION>`, and `**Mode**:` followed by `--quick (K=3 homogeneous Claude lanes; <QUICK_LANES_OK>/3 succeeded)`.
+- An H4 sub-section `#### Per-lane parsed claims` containing one `##### Lane N (LANE_N_OK=<true|false>)` block per lane (N ∈ {1, 2, 3}). Each lane block carries either (a) the verbatim parsed claim records from `quick-lane-N-output.txt`'s `<lane_claims>` body when `LANE_N_OK=true`, or (b) a one-liner `Lane failed validation: <LANE_N_FAIL_REASON>` when `LANE_N_OK=false`.
+- An H4 sub-section `#### Cluster mapping` containing one bullet block per cluster identified by the orchestrator. Each cluster bullet block lists: `Cluster type:` (one of `agreed` / `single-lane` / `divergent`); `Member claims:` (one entry per member, formatted `lane N: <verbatim claim text>; ...`); `Cluster key (normalized):` (the post-normalization key tokens — Jaccard input); `Confidence (per cluster):` (lowest across members).
+
+Write the ballot via Bash heredoc to `$RESEARCH_TMPDIR/quick-ballot.md`. The file is wiped at Step 4 cleanup unless `KEEP_SIDECAR=true` — see SKILL.md Step 4.
+
+**Write `$RESEARCH_TMPDIR/research-report.txt`** with the standard envelope: research question, branch + commit, the synthesis prose above (disclaimer + the three required sub-sections). The Step 1.5 contract is preserved — the report file MUST exist so Step 3 can render it, even though Step 2 is skipped.
 
 ### Deep (RESEARCH_SCALE=deep)
 

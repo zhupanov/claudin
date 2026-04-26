@@ -18,7 +18,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.sh \
   [--quick-disclaimer "$QUICK_DISCLAIMER"]
 ```
 
-All flags are required except `--quick-disclaimer`. The orchestrator passes `--quick-disclaimer` only when `RESEARCH_SCALE=quick`, sourcing the canonical literal from `skills/research/data/quick-disclaimer.txt`.
+All flags are required except `--quick-disclaimer`. The orchestrator passes `--quick-disclaimer` only when `RESEARCH_QUICK=true` (the `--quick` boolean — issue #520 re-keyed the trigger from `RESEARCH_SCALE=quick`), sourcing the canonical literal from `skills/research/data/quick-disclaimer.txt`. The script itself is unchanged: it forwards the `--quick-disclaimer <text>` argument verbatim into each rendered finding's body when present.
 
 ## Contract
 

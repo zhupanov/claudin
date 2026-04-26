@@ -98,7 +98,7 @@ SECTION_15_DEEP_TRUE=$(echo "$SECTION_15_DEEP_FULL" | awk '
 
 # Quick branch under §1.5 ### Quick.
 SECTION_15_QUICK=$(echo "$SECTION_15_FULL" | awk '
-  /^### Quick \(RESEARCH_SCALE=quick\)/{f=1; next}
+  /^### Quick \(RESEARCH_QUICK=true\)/{f=1; next}
   f && /^### /{f=0}
   f
 ')
@@ -112,7 +112,7 @@ SECTION_15_QUICK=$(echo "$SECTION_15_FULL" | awk '
 [[ -n "$SECTION_15_DEEP_TRUE" ]] \
   || fail "research-phase.md must contain §1.5 Deep '#### When \`RESEARCH_PLAN=true\`' subsection — extractor cannot anchor"
 [[ -n "$SECTION_15_QUICK" ]] \
-  || fail "research-phase.md must contain §1.5 '### Quick (RESEARCH_SCALE=quick)' subsection — extractor cannot anchor"
+  || fail "research-phase.md must contain §1.5 '### Quick (RESEARCH_QUICK=true)' subsection — extractor cannot anchor (#520 anchor renamed)"
 
 if (( FAIL > 0 )); then
   echo "test-synthesis-subagent.sh — $PASS passed, $FAIL failed" >&2
@@ -161,16 +161,18 @@ assert_branch_has_subagent "Deep RESEARCH_PLAN=true"      "$SECTION_15_DEEP_TRUE
 # ---------- Pin 5: Quick branch must NOT contain subagent invocation ----------
 
 if echo "$SECTION_15_QUICK" | grep -Eiq '(Invoke the synthesis subagent|synthesis subagent.*Standard|Apply the structural validator)'; then
-  fail "[Quick] §1.5 Quick branch must remain inline (no Agent subagent invocation, no validator) per #507 — single-lane synthesis has no diversity to debias"
+  fail "[Quick] §1.5 Quick branch must remain orchestrator-inline (no synthesis-subagent invocation, no structural validator) per #507 + #520 — K=3 vote-merge clustering is orchestrator-inline reasoning, not a separate Agent-tool subagent"
 else
   PASS=$((PASS + 1))
 fi
 
-# Quick branch retains its 'Single-lane confidence' disclaimer (sanity).
-if echo "$SECTION_15_QUICK" | grep -Fq "Single-lane confidence"; then
+# Quick branch retains its 'K-lane vote-merge confidence' disclaimer (sanity —
+# #520 re-keyed from the prior 'Single-lane confidence' wording to reflect K=3
+# homogeneous Claude lanes with vote-merge synthesis).
+if echo "$SECTION_15_QUICK" | grep -Fq "K-lane vote-merge confidence"; then
   PASS=$((PASS + 1))
 else
-  fail "[Quick] §1.5 Quick branch must retain the 'Single-lane confidence' disclaimer"
+  fail "[Quick] §1.5 Quick branch must retain the 'K-lane vote-merge confidence' disclaimer (#520)"
 fi
 
 # ---------- Pin 6: 5 body markers mandated in research-phase.md ----------

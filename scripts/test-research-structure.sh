@@ -20,7 +20,7 @@
 #  - reviewer XML wrapper tags (<reviewer_research_question>, <reviewer_research_findings>)
 #    appear in validation-phase.md (byte pin for prompt-injection hardening)
 #  - render-lane-status.sh + lane-status.txt pins (#421)
-#  - --scale=quick|standard|deep value-flag surface (#418): flag enum + 4 named angle
+#  - --scale=standard|deep value-flag surface (#418, #520): flag enum + 4 named angle
 #    prompt identifiers + literal quick-mode skip breadcrumb + abort-on-invalid + flag
 #    independence statement + ### Standard byte-drift pins on existing filename literals
 #  - --substantive-validation flag wiring + STATUS=NOT_SUBSTANTIVE token mapping
@@ -131,11 +131,22 @@ grep -Fq "lane-status.txt" "$RESEARCH_MD" \
 grep -Fq "lane-status.txt" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must mention lane-status.txt (#421 VALIDATION_* slice update + Step 2 entry propagation)"
 
-# Check 9 (#418): SKILL.md documents the --scale=quick|standard|deep value flag.
-# Pin the literal triple so a future edit cannot silently rename or drop a value
-# from the enum. Use `-e --` so grep does not interpret the leading '--' as flags.
-grep -Fq -e "--scale=quick|standard|deep" "$SKILL_MD" \
-  || fail "SKILL.md must document the --scale=quick|standard|deep value flag (#418)"
+# Check 9 (#418, #520): SKILL.md documents the --scale=standard|deep value flag.
+# Pin the literal pair so a future edit cannot silently rename or drop a value
+# from the enum. Issue #520 removed the `quick` value (replaced by the orthogonal
+# --quick boolean — see Check 9b). Use `-e --` so grep does not interpret the
+# leading '--' as flags.
+grep -Fq -e "--scale=standard|deep" "$SKILL_MD" \
+  || fail "SKILL.md must document the --scale=standard|deep value flag (#418, #520 — quick removed in favor of --quick boolean)"
+
+# Check 9b (#520): SKILL.md documents the --quick boolean flag (replacement
+# for the removed --scale=quick value). Pin the bare flag literal AND the
+# RESEARCH_QUICK_K=3 hardcoded constant.
+# shellcheck disable=SC2016 # backticks are literal markdown
+grep -Fq -e '`--quick`' "$SKILL_MD" \
+  || fail "SKILL.md must document the --quick boolean flag (#520)"
+grep -Fq "RESEARCH_QUICK_K=3" "$SKILL_MD" \
+  || fail "SKILL.md must document the hardcoded RESEARCH_QUICK_K=3 constant (#520)"
 
 # Check 10 (#418): research-phase.md defines all four named angle prompts as
 # explicit identifiers. These are the data-bearing literals that distinguish
@@ -146,22 +157,33 @@ for prompt in RESEARCH_PROMPT_ARCH RESEARCH_PROMPT_EDGE RESEARCH_PROMPT_EXT RESE
     || fail "references/research-phase.md must define the named angle prompt '$prompt' (#418 deep mode)"
 done
 
-# Check 11 (#418): SKILL.md documents the exact quick-mode skip breadcrumb.
+# Check 11 (#418, #520): SKILL.md documents the exact quick-mode skip breadcrumb.
 # Pin the literal so the gate cannot silently drop or rephrase the visible
-# user signal that validation was intentionally skipped.
-grep -Fq -e "⏩ 2: validation — skipped (--scale=quick)" "$SKILL_MD" \
-  || fail "SKILL.md must contain the literal quick-mode skip breadcrumb '⏩ 2: validation — skipped (--scale=quick)' (#418)"
+# user signal that validation was intentionally skipped. Issue #520 re-keyed
+# the message from `--scale=quick` to `--quick` (the new boolean flag).
+grep -Fq -e "⏩ 2: validation — skipped (--quick)" "$SKILL_MD" \
+  || fail "SKILL.md must contain the literal quick-mode skip breadcrumb '⏩ 2: validation — skipped (--quick)' (#418, #520)"
 
-# Check 12 (#418, #460): SKILL.md documents abort-on-invalid-value for --scale.
+# Check 12 (#418, #460, #520): SKILL.md documents abort-on-invalid-value for --scale.
 # Pin the full composite error sentence as a single literal so the check
 # cannot pass spuriously if only one of two unrelated substrings appears
 # (#460: an unrelated `Aborting` elsewhere would otherwise satisfy the prior
-# two-grep AND).
-grep -Fq -e "must be one of quick|standard|deep (got: foo). Aborting." "$SKILL_MD" \
-  || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of quick|standard|deep (got: foo). Aborting.' required) (#418, #460)"
+# two-grep AND). Issue #520 removed `quick` from the enum, leaving `standard|deep`.
+grep -Fq -e "must be one of standard|deep (got: foo). Aborting." "$SKILL_MD" \
+  || fail "SKILL.md must document abort-on-invalid for --scale (composite literal 'must be one of standard|deep (got: foo). Aborting.' required) (#418, #460, #520)"
 
-# Check 13 (#418 + #424 + #510 + #518 + #522 + #531): SKILL.md flag-independence
-# statement is structurally consistent with the flag-bullet block.
+# Check 12b (#520): SKILL.md documents the legacy --scale=quick fatal error
+# with migration pointer. Pin the full composite migration message so the
+# fatal-error path cannot silently degrade to a silent remap or generic error.
+grep -Fq -e "--scale=quick has been replaced by --quick" "$SKILL_MD" \
+  || fail "SKILL.md must contain the legacy --scale=quick migration-pointer error literal '--scale=quick has been replaced by --quick' (#520)"
+
+# Check 13 (#418 + #424 + #510 + #518 + #520 + #522 + #531): SKILL.md
+# flag-independence statement is structurally consistent with the flag-bullet
+# block. #520 added --quick and #522 added --interactive to the flag set;
+# this structural check derives the expected set from the bullets, so adding
+# new flags requires only updating the bullet block + independence line in
+# SKILL.md (no harness churn).
 #
 # Replaces a former 5-flag literal substring pin (which would silently pass on
 # any future flag addition that updated the bullet block but not the
@@ -482,11 +504,12 @@ echo "$SECTION_15_PREAMBLE" | grep -Fq "compute-degraded-banner.sh" \
 # extractors bound each subsection to its own scope so a banner reference
 # that is present in one branch cannot satisfy the check for another.
 #
-# CRITICAL: research-phase.md has THREE pairs of `### Quick (RESEARCH_SCALE=quick)`
+# CRITICAL: research-phase.md has THREE pairs of `### Quick (RESEARCH_QUICK=true)`
 # and `### Deep (RESEARCH_SCALE=deep)` headings — one pair each in §1.3 (Launch
 # Research Perspectives), §1.4 (Wait and Validate), and §1.5 (Synthesis). A
 # whole-file awk scan keyed only on the heading would concatenate all three
-# pairs, allowing cross-section leakage.
+# pairs, allowing cross-section leakage. (Quick anchor renamed in #520 from
+# `RESEARCH_SCALE=quick` to `RESEARCH_QUICK=true` per the new `--quick` boolean.)
 #
 # Mitigation: first slice the §1.5 window (from `## 1.5 — Synthesis` to the
 # next `## ` heading, or EOF), then run the per-subsection extractors against
@@ -517,7 +540,7 @@ SECTION_15_DEEP=$(echo "$SECTION_15_FULL" | awk '
   f
 ')
 SECTION_15_QUICK=$(echo "$SECTION_15_FULL" | awk '
-  /^### Quick \(RESEARCH_SCALE=quick\)/{f=1; next}
+  /^### Quick \(RESEARCH_QUICK=true\)/{f=1; next}
   f && /^### /{f=0}
   f
 ')
@@ -529,7 +552,7 @@ SECTION_15_QUICK=$(echo "$SECTION_15_FULL" | awk '
 [[ -n "$SECTION_15_DEEP" ]] \
   || fail "references/research-phase.md must contain a '### Deep (RESEARCH_SCALE=deep)' subsection — Check 21d cannot anchor (#506)"
 [[ -n "$SECTION_15_QUICK" ]] \
-  || fail "references/research-phase.md must contain a '### Quick (RESEARCH_SCALE=quick)' subsection — Check 21e cannot anchor (#506)"
+  || fail "references/research-phase.md must contain a '### Quick (RESEARCH_QUICK=true)' subsection — Check 21e cannot anchor (#506, #520 anchor renamed)"
 
 # Check 21b (#506): Standard RESEARCH_PLAN=false branch must reference the
 # banner preamble. Anchor on the literal "Reduced-diversity banner preamble"
@@ -545,18 +568,21 @@ echo "$SECTION_15_STANDARD_TRUE" | grep -Fq "Reduced-diversity banner preamble" 
 echo "$SECTION_15_DEEP" | grep -Fq "Reduced-diversity banner preamble" \
   || fail "references/research-phase.md §1.5 '### Deep (RESEARCH_SCALE=deep)' must reference the 'Reduced-diversity banner preamble' (#506 Check 21d)"
 
-# Check 21e (#506): Quick branch must NOT contain the banner literal or
-# trigger language. Quick mode has its own 'Single-lane confidence' disclaimer;
-# accidentally adding the reduced-diversity banner there would be a regression.
+# Check 21e (#506, #520): Quick branch must NOT contain the banner literal or
+# trigger language. Quick mode has its own 'K-lane vote-merge confidence'
+# disclaimer (re-keyed from 'Single-lane confidence' in #520); accidentally
+# adding the reduced-diversity banner there would be a regression.
 if echo "$SECTION_15_QUICK" | grep -Fq "Reduced lane diversity"; then
-  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT contain the reduced-diversity banner — Quick mode carries its own 'Single-lane confidence' disclaimer (#506 Check 21e negative)"
+  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_QUICK=true)' must NOT contain the reduced-diversity banner — Quick mode carries its own 'K-lane vote-merge confidence' disclaimer (#506 Check 21e negative; #520 disclaimer wording)"
 fi
 if echo "$SECTION_15_QUICK" | grep -Fq "Reduced-diversity banner preamble"; then
-  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT reference the reduced-diversity banner preamble (#506 Check 21e negative)"
+  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_QUICK=true)' must NOT reference the reduced-diversity banner preamble (#506 Check 21e negative; #520 anchor renamed)"
 fi
-# Sanity: Quick still has its single-lane disclaimer (the existing contract).
-echo "$SECTION_15_QUICK" | grep -Fq "Single-lane confidence" \
-  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must retain the 'Single-lane confidence' disclaimer (#506 Check 21e positive)"
+# Sanity: Quick still has its K-lane vote-merge disclaimer (#520 — re-keyed
+# from 'Single-lane confidence' to reflect K=3 homogeneous Claude lanes with
+# vote-merge synthesis).
+echo "$SECTION_15_QUICK" | grep -Fq "K-lane vote-merge confidence" \
+  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_QUICK=true)' must retain the 'K-lane vote-merge confidence' disclaimer (#506 Check 21e positive; #520 disclaimer wording)"
 
 # Check 22 (#506): SKILL.md Step 3 must contain the byte-stable banner phrase
 # in its degraded-path preview. SKILL.md is the operator-facing example surface

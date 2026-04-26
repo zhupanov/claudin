@@ -346,9 +346,16 @@ Yes
 EOF
 run_case "empty-title fallback (Finding N)" "$FIXTURE_TITLE_FALLBACK" "" 0 2
 
-# Case 10: --quick-disclaimer prepended to each item body.
+# Case 10: --quick-disclaimer prepended to each item body. Issue #520 re-keyed
+# the disclaimer body from the legacy single-line "Single-lane confidence" form
+# to the multi-line "K-lane vote-merge confidence" prose. The harness uses the
+# stable bold-marked first sentence "**K-lane vote-merge confidence — no
+# validation pass.**" as the assertion sentinel — this matches the first line
+# of skills/research/data/quick-disclaimer.txt (and continues to work even if
+# the trailing sentences are re-edited, since `run_case` only requires the
+# disclaimer string to appear in the output, not the full file body).
 run_case "quick-disclaimer per item" "$FIXTURE_NUMBERED" \
-  "**Single-lane confidence — no validation pass.**" 0 3
+  "**K-lane vote-merge confidence — no validation pass.**" 0 3
 
 # Case 11: special characters in finding text — backticks, dollars, asterisks.
 read -r -d '' FIXTURE_SPECIAL <<'EOF' || true
