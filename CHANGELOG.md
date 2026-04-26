@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.2] - 2026-04-26
+
+### Changed
+
+- `.claude/skills/umbrella/SKILL.md` Step 4 canonical `output.kv` grammar gains an optional `UMBRELLA_FAILURE_REASON=<text>` field (only present on multi-piece partial — children created, umbrella creation failed). Step 3B.3's umbrella-creation-failure path now derives the value from `/issue`'s failure signals (stderr `**⚠ /issue: create failed for item 1: …**` line first, `ISSUE_1_ERROR=…` from stdout when present for dep-link / transitive paths, and a constrained stdout fallback restricted to `^ISSUE_1_` / `^ISSUES_FAILED=` prefixes), with sanitization that strips control characters, collapses whitespace, strips markdown metacharacters (so the value cannot break the surrounding `**…**` formatting), redacts secrets / internal URLs / PII with the canonical `<REDACTED-TOKEN>` / `<INTERNAL-URL>` / `<REDACTED-PII>` tokens, and trims to ~200 chars. Step 4's multi-piece-partial human-summary template interpolates the reason when present (`**⚠ /umbrella: <N> children created but umbrella creation failed (<reason>). Children remain unlinked.**`) and falls back to the original wording when no failure signal could be extracted. The `## Sub-skill Invocation` section gains a narrow stderr-consumption carve-out documenting that Step 3B.3 reads `/issue`'s stderr in addition to its stdout grammar. `helpers.sh emit-output` is unchanged (the new key is accepted by the existing `^[A-Z][A-Z0-9_]*=` validator). Closes #603.
+
 ## [7.14.1] - 2026-04-26
 
 ### Fixed
