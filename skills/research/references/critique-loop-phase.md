@@ -4,7 +4,7 @@
 
 **Contract**: scale-gated bounded evaluator-optimizer loop. Runs unconditionally on `RESEARCH_SCALE in {standard, deep}` after Step 2.7 (citation validation) finishes; SKILL.md's Step 2.8 entry short-circuits with a `⏩` breadcrumb on `RESEARCH_SCALE=quick`. Per iteration (cap `RESEARCH_CRITIQUE_MAX=2`): a single Claude Code Reviewer subagent critiques the validated synthesis at `$RESEARCH_TMPDIR/research-report.txt` against the original research question + Step 2 accepted-findings tally + Step 2.7's `citation-validation.md` sidecar (verbatim, under namespaced XML wrappers) + (optional) `adjudication-resolutions.md` (verbatim, under a namespaced wrapper); the orchestrator parses findings, applies a categorical Important-finding gate (with a parser fail-safe that defaults to "continue"); on continue, a second Claude Agent subagent revises the synthesis under the same per-profile structural-validator + atomic-mktemp+mv contract used at Step 2 Finalize Validation; the revised synthesis is then re-validated by `validate-citations.sh` (overwrites the existing `citation-validation.md` in place — per dialectic DECISION_3, no per-iteration archive). Iteration N+1's critique pass consumes the freshly-overwritten sidecar. Loop exits early when the critique reports zero in-scope `**Important**` findings, when the cap is reached, or when a refine pass produces a byte-identical synthesis AND the most recent critique had zero Important findings (the byte-equal exit is a refinement of the categorical gate, not a parallel exit path — FINDING_4 from plan review). The post-Step-2 budget gate is RELOCATED in SKILL.md to fire after Step 2.8 instead of after Step 2 (single gate, no new `--phase` enum — per dialectic DECISION_4).
 
-**When to load**: once Step 2.8 is about to execute. Do NOT load during Step 0, Step 1, Step 2, Step 2.5, Step 2.7, Step 3, or Step 4. SKILL.md emits the Step 2.8 entry breadcrumb and the Step 2.8 completion print; this file does NOT emit those — it owns body content only.
+**When to load**: once Step 2.8 is about to execute. Do NOT load during Step 0, Step 1, Step 2, Step 2.5, Step 2.7, Step 3, or Step 4. SKILL.md is the sole owner of the Step 2.8 entry breadcrumb and the Step 2.8 completion print; this file does NOT emit those. This file does own intermediate operator-visible prints (notably the per-iteration `✅ 2.8 [iter <iter>]: citation-revalidation — …` breadcrumb in 2.8.6) as well as body content.
 
 ---
 
@@ -156,7 +156,13 @@ ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.sh \
 
 The script overwrites `citation-validation.md` in place (per dialectic DECISION_3 — no per-iteration archive). Iteration N+1's critique pass (back at 2.8.3) consumes the freshly-overwritten sidecar via the `<reviewer_citation_validation>` block.
 
-The script always exits 0 (fail-soft contract — same as Step 2.7). Step 2.8 does NOT emit the standard 2.7 completion breadcrumb here (which would visually duplicate the original Step 2.7 output and confuse operators about which step is running). OOS_1 in the plan-review batch tracks an optional follow-up to introduce a Step-2.8-scoped breadcrumb form like `✅ 2.8 [iter <iter>]: citation-revalidation — ...`; until that lands, the re-run is silent.
+The script always exits 0 (fail-soft contract — same as Step 2.7). After each in-loop re-run, parse the validator's last stdout line `SUMMARY=PASS=<n> FAIL=<n> UNKNOWN=<n> TOTAL=<n>` (same parsing as Step 2.7's completion-breadcrumb path in SKILL.md) and emit a Step-2.8-scoped per-iteration breadcrumb namespaced under the iteration index:
+
+```
+✅ 2.8 [iter <iter>]: citation-revalidation — <pass> PASS, <fail> FAIL, <unknown> UNKNOWN (<total> claims) (<elapsed>)
+```
+
+`<elapsed>` is timed from this iteration's `validate-citations.sh` invocation start. The breadcrumb mirrors Step 2.7's completion-breadcrumb shape but is namespaced under `2.8 [iter <iter>]` so operators can attribute each in-loop revalidation result to its iteration without confusing it with the original Step 2.7 output. This is a per-iteration intermediate breadcrumb owned by this reference file; the SKILL.md ownership rule ("SKILL.md is the sole owner of Step 2.8 entry and completion breadcrumbs") is unaffected — entry and completion breadcrumbs for the step as a whole remain in SKILL.md. No advisory FAIL/UNKNOWN warnings are emitted here (unlike Step 2.7's terminal path) — aggregate counts already appear in the breadcrumb's numeric segment, and the loop's next critique pass consumes the refreshed sidecar via the `<reviewer_citation_validation>` block, so per-claim signal is acted on by the next iteration rather than surfaced as standalone advisories.
 
 ### 2.8.7 — Byte-equal idle-cycle guard
 
