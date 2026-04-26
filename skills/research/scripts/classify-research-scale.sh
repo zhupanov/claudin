@@ -11,7 +11,7 @@
 # Stdout (machine output only):
 #   On success: SCALE=<bucket> followed by REASON=<token>, exit 0.
 #     SCALE tokens: quick | standard | deep
-#     REASON tokens: length_quick | length_deep | keyword_deep | multi_part_deep |
+#     REASON tokens: length_deep | keyword_deep | multi_part_deep |
 #                    lookup_quick | default_standard
 #   On failure: REASON=<token>, exit non-zero.
 #     REASON tokens: empty_input (exit 1) | missing_arg (exit 2) | bad_path (exit 2)
@@ -35,7 +35,9 @@
 #        b. exactly one '?' character in the question text
 #        c. matches at least one lookup keyword (case-insensitive):
 #           "what is", "where is", "who owns", "which file", "value of",
-#           "does ", "how many"
+#           "how many"
+#           (Note: "does" was deliberately excluded — it would false-positive on
+#           "how does X work" questions. Yes/no questions land in standard.)
 #        d. zero deep keywords present (Stage 1 already excluded by structure,
 #           but re-checked to keep Stage 2 self-contained)
 #   5. Stage 3 — default -> SCALE=standard.

@@ -35,16 +35,23 @@ run_case() {
 
   CASE_NUM=$((CASE_NUM + 1))
   local question_file="$TMPDIR_TEST/case${CASE_NUM}-question.txt"
+  local stderr_file="$TMPDIR_TEST/case${CASE_NUM}-stderr.txt"
 
   printf '%s' "$question" > "$question_file"
 
+  # Capture stderr to a tempfile so it's available for failure diagnostics
+  # (rather than swallowed unconditionally — addresses code review FINDING_6).
   local stdout_capture
   local actual_exit=0
-  stdout_capture="$(bash "$SCRIPT" --question "$question_file" 2>/dev/null)" || actual_exit=$?
+  stdout_capture="$(bash "$SCRIPT" --question "$question_file" 2>"$stderr_file")" || actual_exit=$?
 
   if [[ "$actual_exit" -ne "$expected_exit" ]]; then
     echo "FAIL [$name]: expected exit=$expected_exit, got exit=$actual_exit" >&2
     echo "       stdout: $stdout_capture" >&2
+    if [[ -s "$stderr_file" ]]; then
+      echo "       stderr:" >&2
+      sed 's/^/         /' "$stderr_file" >&2
+    fi
     FAIL=$((FAIL + 1))
     return
   fi
@@ -53,6 +60,10 @@ run_case() {
     echo "FAIL [$name]: stdout did not match pattern" >&2
     echo "       expected pattern: $expected_pattern" >&2
     echo "       actual stdout:    $stdout_capture" >&2
+    if [[ -s "$stderr_file" ]]; then
+      echo "       stderr:" >&2
+      sed 's/^/         /' "$stderr_file" >&2
+    fi
     FAIL=$((FAIL + 1))
     return
   fi
@@ -71,16 +82,23 @@ run_case_invocation() {
   local -a args=("$@")
 
   CASE_NUM=$((CASE_NUM + 1))
+  local stderr_file="$TMPDIR_TEST/case${CASE_NUM}-stderr.txt"
 
+  # Capture stderr to a tempfile so it's available for failure diagnostics
+  # (rather than swallowed unconditionally — addresses code review FINDING_6).
   local stdout_capture
   local actual_exit=0
   # The ${args[@]+"${args[@]}"} idiom works around `set -u` with an empty
   # array under bash 3.2 (macOS default).
-  stdout_capture="$(bash "$SCRIPT" ${args[@]+"${args[@]}"} 2>/dev/null)" || actual_exit=$?
+  stdout_capture="$(bash "$SCRIPT" ${args[@]+"${args[@]}"} 2>"$stderr_file")" || actual_exit=$?
 
   if [[ "$actual_exit" -ne "$expected_exit" ]]; then
     echo "FAIL [$name]: expected exit=$expected_exit, got exit=$actual_exit" >&2
     echo "       stdout: $stdout_capture" >&2
+    if [[ -s "$stderr_file" ]]; then
+      echo "       stderr:" >&2
+      sed 's/^/         /' "$stderr_file" >&2
+    fi
     FAIL=$((FAIL + 1))
     return
   fi
@@ -89,6 +107,10 @@ run_case_invocation() {
     echo "FAIL [$name]: stdout did not match pattern" >&2
     echo "       expected pattern: $expected_pattern" >&2
     echo "       actual stdout:    $stdout_capture" >&2
+    if [[ -s "$stderr_file" ]]; then
+      echo "       stderr:" >&2
+      sed 's/^/         /' "$stderr_file" >&2
+    fi
     FAIL=$((FAIL + 1))
     return
   fi
