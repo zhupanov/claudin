@@ -21,4 +21,4 @@ Regression harness for `helpers.sh check-cycle` (pure logic, no network). Self-c
 
 **Edit-in-sync**: any change to `helpers.sh check-cycle` semantics OR its stdout grammar (`CYCLE=true|false`) requires a same-PR update to the assertion expectations here.
 
-**Out of scope**: `wire-dag` and `emit-output` subcommands. `wire-dag` requires GitHub API access and is best-effort by design (fail-open when the dependency-API surface is unavailable); a network-mocking harness is filed as a follow-up issue. `emit-output` is a thin awk validator covered indirectly by SKILL.md integration.
+**Out of scope**: `wire-dag` and `emit-output` subcommands. `wire-dag` requires GitHub API access and is best-effort by design (fail-open when the dependency-API surface is unavailable); a network-mocking harness is filed as a follow-up issue. `emit-output` is a thin awk validator covered indirectly by SKILL.md integration; its Step 4 prose contract (orchestrator-attribution, single-emission-point, canonical breadcrumb shapes, stderr discipline) is structurally pinned by `test-umbrella-emit-output-contract.sh`.
