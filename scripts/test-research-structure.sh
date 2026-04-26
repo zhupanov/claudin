@@ -27,6 +27,10 @@
 #    (#416 Phase 3 of umbrella #413, substantive content validator)
 #  - adjudication-phase.md mentions both build-research-adjudication-ballot.sh and
 #    run-research-adjudication.sh (byte pin for the ballot-builder + coordinator wiring) (#424)
+#  - validation-phase.md '## Finalize Validation' section pins (#534): the revision
+#    subagent invocation pattern + revision-raw.txt Write capture (38a), atomic
+#    rewrite of research-report.txt via mktemp + mv (38b), and the 5 body markers
+#    enumerated in REVISION_PROMPT (38c — FINDING_1's marker contract)
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 set -euo pipefail
@@ -654,5 +658,61 @@ SECTION_12_DEEP=$(echo "$SECTION_12_FULL" | awk '
 echo "$SECTION_12_DEEP" | grep -Fq "Lane 5 (Claude inline)" \
   || fail "references/research-phase.md §1.2 Deep table must contain 'Lane 5 (Claude inline)' column (#519 Check 37 — confirms 5-lane shape)"
 
-echo "PASS: test-research-structure.sh — all 41 structural invariants hold"
+# Checks 38a-38c (#534): structural pins for validation-phase.md '## Finalize
+# Validation' section. After PR #507's refactor introduced a separate revision
+# subagent, this section became a load-bearing contract surface with no
+# structural assertion — future edits could silently drop or reshape the
+# revision-subagent invocation, the atomic rewrite of research-report.txt, or
+# the 5-marker body contract from the originating Step 1.5 branch.
+#
+# Slice the '## Finalize Validation' window first so per-pin greps cannot leak
+# across to other sections. The section is the last '## ' heading in the file,
+# so the awk terminator falls through to EOF naturally.
+SECTION_FINALIZE_VALIDATION=$(awk '
+  /^## Finalize Validation/{f=1; next}
+  f && /^## /{f=0}
+  f
+' "$VALIDATION_MD")
+[[ -n "$SECTION_FINALIZE_VALIDATION" ]] \
+  || fail "references/validation-phase.md must contain a '## Finalize Validation' section — Checks 38a-38c cannot anchor (#534)"
+
+# Check 38a (#534): the revision subagent invocation pattern. Pin both the
+# canonical "Route the synthesis-revision step" sentence (the directive that
+# mandates the separate-subagent shape) and the 'revision-raw.txt' Write
+# capture filename literal (the on-disk handoff path between subagent and
+# orchestrator).
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "Route the synthesis-revision step to a separate Claude Agent subagent" \
+  || fail "references/validation-phase.md '## Finalize Validation' must mandate routing the synthesis-revision step to a separate Claude Agent subagent (#534 Check 38a)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "revision-raw.txt" \
+  || fail "references/validation-phase.md '## Finalize Validation' must capture the revision subagent's response to 'revision-raw.txt' via the Write tool (#534 Check 38a)"
+
+# Check 38b (#534): atomic rewrite of research-report.txt. Pin the 'Atomically
+# rewrite' directive plus the research-report.txt filename plus the mktemp +
+# mv literals that document the atomic-write technique.
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "Atomically rewrite" \
+  || fail "references/validation-phase.md '## Finalize Validation' must mandate atomic rewrite of the research report (#534 Check 38b)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "research-report.txt" \
+  || fail "references/validation-phase.md '## Finalize Validation' must name 'research-report.txt' as the rewrite target (#534 Check 38b)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "mktemp" \
+  || fail "references/validation-phase.md '## Finalize Validation' must specify 'mktemp' as part of the atomic-rewrite technique (#534 Check 38b)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "mv" \
+  || fail "references/validation-phase.md '## Finalize Validation' must specify 'mv' as part of the atomic-rewrite technique (#534 Check 38b)"
+
+# Check 38c (#534): the 5 body markers from the originating Step 1.5 branch
+# (FINDING_1 marker contract — Standard RESEARCH_PLAN=false profile). The
+# REVISION_PROMPT enumerates them so the revision subagent preserves the same
+# marker structure as the original synthesis. Pin each marker independently so
+# a subset deletion fails CI individually.
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Agreements" \
+  || fail "references/validation-phase.md '## Finalize Validation' REVISION_PROMPT must enumerate the '### Agreements' body marker (#534 Check 38c)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Divergences" \
+  || fail "references/validation-phase.md '## Finalize Validation' REVISION_PROMPT must enumerate the '### Divergences' body marker (#534 Check 38c)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Significance" \
+  || fail "references/validation-phase.md '## Finalize Validation' REVISION_PROMPT must enumerate the '### Significance' body marker (#534 Check 38c)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Architectural patterns" \
+  || fail "references/validation-phase.md '## Finalize Validation' REVISION_PROMPT must enumerate the '### Architectural patterns' body marker (#534 Check 38c)"
+echo "$SECTION_FINALIZE_VALIDATION" | grep -Fq "### Risks and feasibility" \
+  || fail "references/validation-phase.md '## Finalize Validation' REVISION_PROMPT must enumerate the '### Risks and feasibility' body marker (#534 Check 38c)"
+
+echo "PASS: test-research-structure.sh — all 44 structural invariants hold"
 exit 0
