@@ -166,7 +166,21 @@ if [[ "$1" == "repo" ]]; then
     echo 'owner/repo'
     exit 0
 fi
-# issue create path — emit fake URL.
+# api path — handle the issue-id lookup used by the old-gh fallback in
+# create-one.sh after issue #546. Returns the numeric id 4242 for issue #42.
+if [[ "$1" == "api" ]]; then
+    echo '4242'
+    exit 0
+fi
+# issue create path — modern gh path uses --json id,number,url, so detect
+# that flag and return JSON. Fall through to the legacy URL-on-stdout path
+# when --json is absent (covers older test invocations and the fallback).
+for ((i=1; i<=$#; i++)); do
+    if [[ "${!i}" == "--json" ]]; then
+        echo '{"id":4242,"number":42,"url":"https://github.com/owner/repo/issues/42"}'
+        exit 0
+    fi
+done
 echo 'https://github.com/owner/repo/issues/42'
 exit 0
 GHSTUB
@@ -235,7 +249,20 @@ if [[ "$1" == "repo" ]]; then
     echo 'owner/repo'
     exit 0
 fi
-# issue create path — emit a harmless warning on stderr and a valid URL on stdout.
+# api path — handle issue-id lookup from create-one.sh's old-gh fallback.
+if [[ "$1" == "api" ]]; then
+    echo '13737'
+    exit 0
+fi
+# issue create path — modern path returns JSON when --json is requested.
+for ((i=1; i<=$#; i++)); do
+    if [[ "${!i}" == "--json" ]]; then
+        echo 'warning: experimental feature enabled' >&2
+        echo '{"id":13737,"number":137,"url":"https://github.com/owner/repo/issues/137"}'
+        exit 0
+    fi
+done
+# Legacy / fallback path — emit warning on stderr and URL on stdout.
 echo 'warning: experimental feature enabled' >&2
 echo 'https://github.com/owner/repo/issues/137'
 exit 0

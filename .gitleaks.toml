@@ -4,7 +4,7 @@ title = "larch gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Test fixtures (scripts/test-redact-secrets.sh, scripts/test-tracking-issue-write.md), redaction-scanner source (scripts/redact-secrets.sh), tracking-issue-write lifecycle helper and its contract doc (scripts/tracking-issue-write.sh, scripts/tracking-issue-write.md), and the .gitleaks.toml self-allowlist — these paths legitimately contain token-shaped strings throughout. Documentation files (README.md, CHANGELOG.md, SECURITY.md, skills/issue/SKILL.md, skills/issue/scripts/create-one.sh) are intentionally NOT allowlisted — see SECURITY.md 'Layered secret scanning' (#375)."
+description = "Test fixtures (scripts/test-redact-secrets.sh, scripts/test-tracking-issue-write.md, skills/issue/scripts/test-add-blocked-by.sh), redaction-scanner source (scripts/redact-secrets.sh), tracking-issue-write lifecycle helper and its contract doc (scripts/tracking-issue-write.sh, scripts/tracking-issue-write.md), and the .gitleaks.toml self-allowlist — these paths legitimately contain token-shaped strings throughout. Documentation files (README.md, CHANGELOG.md, SECURITY.md, skills/issue/SKILL.md, skills/issue/scripts/create-one.sh) are intentionally NOT allowlisted — see SECURITY.md 'Layered secret scanning' (#375)."
 paths = [
     '''^\.gitleaks\.toml$''',
     '''^scripts/redact-secrets\.sh$''',
@@ -12,4 +12,5 @@ paths = [
     '''^scripts/tracking-issue-write\.sh$''',
     '''^scripts/tracking-issue-write\.md$''',
     '''^scripts/test-tracking-issue-write\.md$''',
+    '''^skills/issue/scripts/test-add-blocked-by\.sh$''',
 ]
