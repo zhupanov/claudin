@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.0] - 2026-04-26
+
+### Added
+
+- `/skill-evolver [--debug] <skill-name>` — research-and-file-issues orchestrator that targets an existing larch skill. Validates the skill name (regex + plugin-repo CWD + `skills/<name>/SKILL.md` or `.claude/skills/<name>/SKILL.md`) via `skills/skill-evolver/scripts/validate-args.sh`, then invokes `/research --scale=deep` against repo-local sibling skills + reputable external sources (Anthropic / OpenAI / DeepMind / ≥500-star OSS) for concrete actionable improvements with citations. The research prompt mandates an `ACTIONABLE_IMPROVEMENTS_COUNT=<n>` machine-readable footer (with a deterministic shape-based fallback when the lane synthesis omits it). On `≥1` improvement, distills the findings into a task description and delegates to `/umbrella` with `--label evolved-by:skill-evolver --label skill:<name> --title-prefix "[skill-evolver:<name>] "`; `/umbrella`'s own classifier picks one-shot (single issue) vs multi-piece (umbrella + one child per piece). Step 3 reads `/umbrella`'s `UMBRELLA_VERDICT` and only quotes `UMBRELLA_NUMBER` / `UMBRELLA_URL` on the multi-piece success path or `CHILD_1_URL` on the one-shot path; failure / dry-run / partial shapes get a clear "did not return a recognized success shape" warning instead of fabricated URLs. Research-and-file-issues only — does NOT modify the target skill's files; implementation lands later via `/fix-issue` (per filed issue), `/improve-skill` (single judge-design-implement iteration), or `/loop-improve-skill` (multi-round). Prerequisite: `/umbrella` must be present in the loaded plugin/session — currently shipped under `.claude/skills/umbrella/` (project-local), not yet promoted to the plugin tree.
+
 ## [7.15.8] - 2026-04-26
 
 ### Fixed
