@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.3] - 2026-04-25
+
+### Changed
+
+- Adaptive scaling becomes the default behavior for `/research`: when `--scale=` is omitted, a new deterministic shell classifier (`skills/research/scripts/classify-research-scale.sh`) inspects `RESEARCH_QUESTION` at Step 0.5 and resolves `RESEARCH_SCALE` to one of `quick|standard|deep` automatically. `--scale=quick|standard|deep` is preserved as a manual override (skips classifier; CI/eval determinism path); explicit `--scale=` (empty value) still aborts as operator error. On classifier failure, falls back to `RESEARCH_SCALE=standard` with a visible warning. The classifier uses **asymmetric conservatism** (per dialectic resolution on issue #513 DECISION_1, voted 2-1 ANTI_THESIS): `quick` requires conjunction of length<80 + single `?` + lookup keyword + zero deep keywords; `deep` fires on any single strong trigger (length>600, ≥2 deep keywords, or ≥2 `?`); ambiguity → `standard`. Pure shell heuristic — zero measurable LLM tokens, fully reproducible across CI and laptops. New `make test-classify-research-scale` harness with 26 cases wired into `make lint`. The `--plan + --scale=quick` warning text branches on `SCALE_SOURCE` (`override` vs `auto/fallback`) so operators never see a warning citing a flag they did not type. `scripts/eval-research.sh` now forwards `--scale=$SCALE` so adaptive auto-classification doesn't silently route runs labeled in baseline metadata to a different bucket. Bucket schema and per-bucket lane shapes (1 / 3+3 / 5+5) are unchanged. Closes #513 (umbrella #512).
+
 ## [7.9.2] - 2026-04-25
 
 ### Changed
