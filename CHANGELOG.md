@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.11] - 2026-04-26
+
+### Fixed
+
+- `skills/research/references/adjudication-phase.md` — line 5 of the **Contract** paragraph named `$RESEARCH_TMPDIR/research-synthesis.txt` as the consumed input artifact, but the `/research` pipeline standardizes on `$RESEARCH_TMPDIR/research-report.txt` and no other in-repo reference creates the `research-synthesis.txt` filename. A reader/implementer following only that line would look for a non-existent path. Replace `research-synthesis.txt` with `research-report.txt` and explicitly state that the validated body lives under the `## Revised Research Findings` header (with fallback to Step 1.4's `## Research Synthesis` header when no findings were accepted at validation), aligning the one-line Contract summary with `validation-phase.md`, `research-phase.md`, and `SKILL.md` Step 2.5. Closes #665.
+
 ## [7.16.10] - 2026-04-26
 
 ### Fixed
