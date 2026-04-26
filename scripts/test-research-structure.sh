@@ -590,18 +590,38 @@ echo "$SECTION_15_STANDARD_TRUE" | grep -Fq "Reduced-diversity banner preamble" 
 echo "$SECTION_15_DEEP" | grep -Fq "Reduced-diversity banner preamble" \
   || fail "references/research-phase.md §1.5 '### Deep (RESEARCH_SCALE=deep)' must reference the 'Reduced-diversity banner preamble' (#506 Check 21d)"
 
-# Check 21e (#506): Quick branch must NOT contain the banner literal or
-# trigger language. Quick mode has its own 'Single-lane confidence' disclaimer;
-# accidentally adding the reduced-diversity banner there would be a regression.
+# Check 21e (#506 + #520): Quick branch must NOT contain the Reduced-lane-diversity
+# banner literal or trigger language. Quick mode has its own per-path disclaimers
+# (issue #520: K-lane voting confidence on the vote path, Single-lane confidence
+# on the single-lane fallback path); accidentally adding the Reduced-diversity
+# banner there would be a regression.
 if echo "$SECTION_15_QUICK" | grep -Fq "Reduced lane diversity"; then
-  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT contain the reduced-diversity banner — Quick mode carries its own 'Single-lane confidence' disclaimer (#506 Check 21e negative)"
+  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT contain the reduced-diversity banner — Quick mode carries its own per-path disclaimers (#506 + #520 Check 21e negative)"
 fi
 if echo "$SECTION_15_QUICK" | grep -Fq "Reduced-diversity banner preamble"; then
   fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT reference the reduced-diversity banner preamble (#506 Check 21e negative)"
 fi
-# Sanity: Quick still has its single-lane disclaimer (the existing contract).
+
+# Check 21e positive (split — issue #520):
+# Vote path positive: Quick branch must reference 'K-lane voting confidence'
+# (the new K-vote disclaimer text).
+echo "$SECTION_15_QUICK" | grep -Fq "K-lane voting confidence" \
+  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must reference 'K-lane voting confidence' framing on the vote path (#520 Check 21e vote-path positive)"
+
+# Fallback path positive: Quick branch must retain 'Single-lane confidence'
+# in the LANES_SUCCEEDED == 1 fallback sub-subsection.
 echo "$SECTION_15_QUICK" | grep -Fq "Single-lane confidence" \
-  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must retain the 'Single-lane confidence' disclaimer (#506 Check 21e positive)"
+  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must retain the 'Single-lane confidence' disclaimer on the LANES_SUCCEEDED == 1 fallback path (#520 Check 21e fallback-path positive)"
+
+# Quick branch must reference the fallback file path (not just the disclaimer text).
+echo "$SECTION_15_QUICK" | grep -Fq "quick-disclaimer-fallback.txt" \
+  || fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must reference 'quick-disclaimer-fallback.txt' on the LANES_SUCCEEDED == 1 fallback path (#520 Check 21e fallback-file positive)"
+
+# Quick branch must NOT contain "independent reviewers" — failure-mode
+# mitigation against overstating K-lane voting as cross-tool diversity.
+if echo "$SECTION_15_QUICK" | grep -Fq "independent reviewers"; then
+  fail "references/research-phase.md §1.5 '### Quick (RESEARCH_SCALE=quick)' must NOT contain 'independent reviewers' — overstates K-lane voting as cross-tool diversity (#520 Check 21e negative)"
+fi
 
 # Check 22 (#506): SKILL.md Step 3 must contain the byte-stable banner phrase
 # in its degraded-path preview. SKILL.md is the operator-facing example surface
@@ -704,6 +724,44 @@ grep -Fq "$DISCLAIMER_PATH" "$REPO_ROOT/skills/research/references/research-phas
 if [[ ! -s "$REPO_ROOT/$DISCLAIMER_PATH" ]]; then
   fail "$DISCLAIMER_PATH must exist and be non-empty (#510)"
 fi
+
+# Check 30b (#520): the Quick disclaimer fallback file must exist and be
+# non-empty (used when LANES_SUCCEEDED == 1).
+DISCLAIMER_FALLBACK_PATH="skills/research/data/quick-disclaimer-fallback.txt"
+if [[ ! -s "$REPO_ROOT/$DISCLAIMER_FALLBACK_PATH" ]]; then
+  fail "$DISCLAIMER_FALLBACK_PATH must exist and be non-empty (#520)"
+fi
+
+# Check 29b (#520): SKILL.md Step 3 AND research-phase.md Quick branch must both
+# reference the fallback disclaimer file path (parallel to Check 29 for the
+# canonical disclaimer). Without both references in sync, the two-file system
+# can desync silently.
+grep -Fq "$DISCLAIMER_FALLBACK_PATH" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must reference $DISCLAIMER_FALLBACK_PATH (#520 Check 29b)"
+grep -Fq "$DISCLAIMER_FALLBACK_PATH" "$REPO_ROOT/skills/research/references/research-phase.md" \
+  || fail "research-phase.md Quick branch must reference $DISCLAIMER_FALLBACK_PATH (#520 Check 29b)"
+
+# Check 30c (#520): the K-vote state helper must exist and be executable.
+QUICK_VOTE_STATE_PATH="skills/research/scripts/quick-vote-state.sh"
+if [[ ! -x "$REPO_ROOT/$QUICK_VOTE_STATE_PATH" ]]; then
+  fail "$QUICK_VOTE_STATE_PATH must exist and be executable (#520)"
+fi
+
+# Check 30d (#520): the K-vote state helper's sibling .md must exist and be
+# non-empty (per project edit-in-sync convention).
+if [[ ! -s "$REPO_ROOT/skills/research/scripts/quick-vote-state.md" ]]; then
+  fail "skills/research/scripts/quick-vote-state.md must exist and be non-empty (#520)"
+fi
+
+# Check 30e (#520): research-phase.md Quick branch must reference the K-vote
+# state helper (write at Step 1.4 / read at Step 1.5).
+echo "$SECTION_15_QUICK" | grep -Fq "quick-vote-state.sh" \
+  || fail "research-phase.md §1.5 Quick must reference quick-vote-state.sh helper (#520)"
+
+# Check 30f (#520): SKILL.md Step 3 must reference the K-vote state helper to
+# pick the right disclaimer file.
+grep -Fq "quick-vote-state.sh" "$SKILL_MD" \
+  || fail "SKILL.md Step 3 must reference quick-vote-state.sh to pick the disclaimer file (#520)"
 
 # Check 31 (#510): SKILL.md Step 3 writes research-report-final.md before
 # invoking the helper (single-authoritative-write per #510 FINDING_8).

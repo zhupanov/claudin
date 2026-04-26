@@ -333,7 +333,12 @@ cmd_report() {
     else
         case "$scale" in
             quick)
-                echo "  Research phase         (1 lane — Claude inline only): not measured"
+                # Issue #520: Quick is now K=3 homogeneous Claude Agent-tool lanes with
+                # vote-merge synthesis. Lanes ARE measurable (Quick-Lane-1/2/3 sidecars +
+                # Synthesis sidecar on the LANES_SUCCEEDED >= 2 path). If we are here, the
+                # sidecar dir is empty/unreadable — warn explicitly rather than implying
+                # the old "Claude inline only" topology.
+                echo "  Research phase         (3 lanes — K-vote, sidecars missing): not measured"
                 ;;
             standard)
                 echo "  Research phase         (3 lanes — Claude inline + 2 externals, all unmeasurable): not measured"

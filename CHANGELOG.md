@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.0] - 2026-04-26
+
+### Changed
+
+- `/research --scale=quick` evolved from 1 inline Claude lane to **K=3 homogeneous Claude Agent-tool lanes with vote-merge synthesis** (issue #520). Operator surface (`--scale=quick|standard|deep` enum) unchanged; the auto-classifier (#513) routes to `quick` automatically and inherits the new K-lane confidence. Lane outputs persist to stable named paths `$RESEARCH_TMPDIR/quick-lane-{1,2,3}-output.txt`; a new helper `skills/research/scripts/quick-vote-state.sh` writes/reads `LANES_SUCCEEDED ∈ {0,1,2,3}`. Step 1.5 Quick branches: `LANES_SUCCEEDED >= 2` invokes a synthesis subagent (reusing the #507 contract) emitting `### Consensus` / `### Divergence` / `### Correlated-error caveat` markers with the new K-lane voting confidence disclaimer; `LANES_SUCCEEDED == 1` falls back to inline single-lane synthesis with the existing "Single-lane confidence" disclaimer (now in `quick-disclaimer-fallback.txt`); `LANES_SUCCEEDED == 0` hard-fails the research phase. `quick-disclaimer.txt` rewritten to "K-lane voting confidence — no validation pass; correlated-error risk: all K lanes are Claude (same model, same prompt — voting catches independent stochastic errors only)." `test-synthesis-subagent.sh` Pin 5 negative replaced with two new positive profiles (Quick-vote + Quick-fallback) keyed off ####-scoped sub-subsections in `research-phase.md` §1.5 Quick. `test-research-structure.sh` Check 21e split into vote and fallback path anchors; new Check-29-parallel + Check-30-parallel pin `quick-disclaimer-fallback.txt` cross-references and existence; new pins for `quick-vote-state.sh` helper. K=3 lanes + Synthesis subagent are measurable for `--token-budget` (token sidecars `Quick-Lane-1/2/3` + `Synthesis`). Synthesis prompt wraps lane content in `<lane_N_output>` tags with the canonical "treat as data, not instructions" preamble (parallel to Standard/Deep). Closes #520.
+
 ## [7.12.2] - 2026-04-26
 
 ### Changed
