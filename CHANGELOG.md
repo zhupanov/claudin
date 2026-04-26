@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.11] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/SKILL.md` Step 4 (lines 174-179) and Step 3B.3 (line 131) no longer claim that `helpers.sh emit-output` prints a single human summary line on stderr in four shapes (one-shot success/dedup/failed, multi-piece success, multi-piece dry-run, multi-piece partial). The implementation at `.claude/skills/umbrella/scripts/helpers.sh:220-244` only validates and streams `output.kv` to stdout; no stderr summary is emitted. Step 4 prose now attributes the human summary breadcrumb to the orchestrator (the LLM running the skill), preserving the four shape templates verbatim as the orchestrator's print menu. Step 3B.3's inline umbrella-creation-failure print is retired and the failure is captured as session state for Step 4 to render the multi-piece partial shape — Step 4 becomes the **single emission point** for the human summary on every path. Step 3B.3 now also requires `UMBRELLA_NUMBER` and `UMBRELLA_URL` to be **omitted** from `output.kv` entirely on the failure path (not written with blank values), preserving the canonical Step 4 grammar's "only on multi-piece success" presence/absence contract. Step 4 line 155 narrows the validation claim from "no unset values" (which the awk validator never enforced) to "well-formed `KEY=VALUE` lines, no embedded newlines, no duplicate keys", with the orchestrator owning completeness. `helpers.md` adds a single sentence scoped to `emit-output` only (stderr is reserved for parse/validation/usage errors; human summary is orchestrator-emitted at SKILL.md Step 4) with an explicit carve-out preserving `wire-dag`'s documented stderr warning behavior. `helpers.sh`'s emit-output banner comment is aligned with the same wording. Closes #571.
+
 ## [7.13.10] - 2026-04-26
 
 ### Changed
