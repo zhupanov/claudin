@@ -24,7 +24,7 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 **Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol. Note in the scoreboard that scores apply to round 1 only — round 2+ findings are auto-accepted and do not contribute to scores.
 
-**Zero accepted in-scope findings**: If voting rejects all in-scope findings, print `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` (In diff mode driven by `/implement`, OOS items accepted for issue filing are processed by `/implement` Step 9a.1; in slice mode with `--create-issues`, `/review` Step 4b files them inline via `/issue` — see lines 31-32 below.) and skip to **Step 4**.
+**Zero accepted in-scope findings**: If voting rejects all in-scope findings, print `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` (In diff mode driven by `/implement`, OOS items accepted for issue filing are processed by `/implement` Step 9a.1; in slice mode with `--create-issues`, `/review` Step 4b files them inline via `/issue` — see the **Diff mode** / **Slice mode** bullets below.) and skip to **Step 4**.
 
 **OOS items accepted by vote** (2+ YES in round 1): These are accepted for GitHub issue filing, NOT for code implementation.
 
