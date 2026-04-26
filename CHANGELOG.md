@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.5] - 2026-04-26
+
+### Fixed
+
+- `skills/loop-improve-skill/scripts/driver.sh:402-404`'s slim `invoke_claude_p` (used only for the Step 5a post-iter-cap re-judge) now passes `--permission-mode bypassPermissions` adjacent to the FINDING_7 `--plugin-dir "$CLAUDE_PLUGIN_ROOT"` argv pair, mirroring the `iteration.sh` fix from issue #585. Without this flag, an in-child tool-permission prompt could stall the post-iter-cap re-judge subprocess until the 1200s watchdog fires — the same halt-class variant that #585 closed in the kernel, now closed in the driver as well. `scripts/test-loop-improve-skill-driver.sh` adds a Tier-1 `check_contains` needle for the new flag literal and a `--permission-mode) shift 2 ;;` arm in the stub `claude` parser adjacent to `--plugin-dir`'s arm, so any future Tier-2 fixture reaching Step 5a does not mis-consume `bypassPermissions` as the prompt; `scripts/test-loop-improve-skill-driver.md` enumerates the new permission-mode contract alongside FINDING_7/9/10. `SECURITY.md`'s `## Trust Model` carve-out paragraph is extended to cover both `iteration.sh` and `driver.sh` launch sites, and a peer bullet is added under `## /loop-improve-skill subprocess invocation` parallel to the existing bullet in the `## /improve-skill subprocess invocation` subsection. `docs/installation-and-setup.md` line-53 minimum-CLI-version note updated to reflect that both `claude -p` launch sites in `/loop-improve-skill` (per-iteration kernel + post-iter-cap re-judge) are now pinned. Closes #614.
+
 ## [7.14.4] - 2026-04-26
 
 ### Added
