@@ -10,6 +10,7 @@
 # Required flags:
 #   --name <name>                Validated skill name.
 #   --description <desc>         Validated description (already sanitized by validate-args.sh).
+#                                Used as the YAML frontmatter `description:` field.
 #   --target-dir <absolute-path> Absolute path where the new skill dir will live
 #                                (e.g. /path/.claude/skills/foo or /path/skills/foo).
 #   --local-token <token>        Literal path token to embed in generated SKILL.md
@@ -19,6 +20,26 @@
 #                                references — always ${CLAUDE_PLUGIN_ROOT}.
 #   --multi-step true|false      Select scaffold variant.
 #
+# Optional flags:
+#   --feature-spec-file <path>   Path to a file containing the freeform feature
+#                                spec for the scaffolded skill's body. When
+#                                provided, the body's opening paragraph is the
+#                                file content (raw passthrough — multi-line
+#                                allowed; NOT YAML-escaped). When omitted, the
+#                                body falls back to ${DESCRIPTION} for backward
+#                                compatibility.
+#
+# Body-vs-frontmatter contract:
+#   - --description always feeds the YAML frontmatter `description:` field
+#     (single-line, validated, YAML-escaped via ESCAPED_DESC).
+#   - --feature-spec-file (when present) feeds ONLY the body's opening paragraph
+#     (raw passthrough — the file's bytes are emitted verbatim into an unquoted
+#     heredoc; bash parameter expansion is single-pass, so substituted file
+#     content is data, not re-parsed shell syntax).
+#   - When --feature-spec-file is omitted, FEATURE_SPEC defaults to the raw
+#     (pre-YAML-escape) DESCRIPTION value, preserving today's behavior for
+#     callers that haven't migrated to the two-slot contract yet.
+#
 # Behavior:
 #   - mkdir -p for the parent directory (safe on fresh consumer repos).
 #   - mkdir (no -p) for the final leaf (fails loudly on collision / concurrent run).
@@ -27,6 +48,9 @@
 #     (bodies are TODO-only so there are no dangling script references).
 #   - Description is YAML-escaped (always double-quoted, inner " backslash-escaped).
 #     Newlines and control chars are already rejected by validate-args.sh.
+#   - --feature-spec-file content is NOT YAML-escaped — it lands in body markdown
+#     and is intentionally raw. F9 in prepare-description.sh has already rejected
+#     XML / backticks / $( / heredoc tokens upstream.
 
 set -euo pipefail
 
@@ -36,15 +60,17 @@ TARGET_DIR=""
 LOCAL_TOKEN=""
 PLUGIN_TOKEN=""
 MULTI_STEP=false
+FEATURE_SPEC_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --name)         NAME="$2";         shift 2 ;;
-    --description)  DESCRIPTION="$2";  shift 2 ;;
-    --target-dir)   TARGET_DIR="$2";   shift 2 ;;
-    --local-token)  LOCAL_TOKEN="$2";  shift 2 ;;
-    --plugin-token) PLUGIN_TOKEN="$2"; shift 2 ;;
-    --multi-step)   MULTI_STEP="$2";   shift 2 ;;
+    --name)               NAME="$2";              shift 2 ;;
+    --description)        DESCRIPTION="$2";       shift 2 ;;
+    --target-dir)         TARGET_DIR="$2";        shift 2 ;;
+    --local-token)        LOCAL_TOKEN="$2";       shift 2 ;;
+    --plugin-token)       PLUGIN_TOKEN="$2";      shift 2 ;;
+    --multi-step)         MULTI_STEP="$2";        shift 2 ;;
+    --feature-spec-file)  FEATURE_SPEC_FILE="$2"; shift 2 ;;
     *)
       echo "ERROR=Unknown argument: $1" >&2
       exit 1
@@ -60,6 +86,19 @@ for arg in NAME DESCRIPTION TARGET_DIR LOCAL_TOKEN PLUGIN_TOKEN; do
     exit 1
   fi
 done
+
+# --- Resolve FEATURE_SPEC for body interpolation. Body content is the raw
+# pre-YAML-escape value, NOT $ESCAPED_DESC, since the body lands in markdown
+# prose and YAML escaping would surface as visible \" / \\ artifacts.
+if [[ -n "$FEATURE_SPEC_FILE" ]]; then
+  if [[ ! -f "$FEATURE_SPEC_FILE" || ! -r "$FEATURE_SPEC_FILE" ]]; then
+    echo "ERROR=Cannot read --feature-spec-file: $FEATURE_SPEC_FILE" >&2
+    exit 1
+  fi
+  FEATURE_SPEC="$(cat "$FEATURE_SPEC_FILE")"
+else
+  FEATURE_SPEC="$DESCRIPTION"
+fi
 
 # --- Prepare target directory ---
 
@@ -117,7 +156,7 @@ TMP_FILE="$TARGET_DIR/SKILL.md.tmp"
 
 if [[ "$MULTI_STEP" == "true" ]]; then
   cat >> "$TMP_FILE" <<MULTI_STEP_BODY
-${DESCRIPTION}
+${FEATURE_SPEC}
 
 <!--
   TODO (author): replace this scaffold with the real skill.
@@ -172,7 +211,7 @@ If this skill does not delegate to any other skill, delete this entire section.
 MULTI_STEP_BODY
 else
   cat >> "$TMP_FILE" <<MINIMAL_BODY
-${DESCRIPTION}
+${FEATURE_SPEC}
 
 <!--
   TODO (author): replace this scaffold with the real skill.

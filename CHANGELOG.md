@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.5] - 2026-04-26
+
+### Fixed
+
+- `skills/create-skill/scripts/render-skill-md.sh` body interpolation no longer loses the operator's original feature spec on PR #549's synthesis path. The script gains a new optional `--feature-spec-file <path>` flag whose content is interpolated into the scaffolded SKILL.md body's opening paragraph (raw passthrough, multi-line preserved); when omitted, the body falls back to `${DESCRIPTION}` for backward compatibility. `skills/create-skill/SKILL.md` Step 3 forwards the resolved absolute path of `$RAW_DESC_FILE` to the new flag so the body-vs-frontmatter split is now mechanically guaranteed by the renderer rather than relying on the implementing agent to manually rewrite the scaffold body. Two new sibling contract files close AGENTS.md "Per-script contracts" gaps: `skills/create-skill/scripts/render-skill-md.md` (the renderer's contract) and `skills/create-skill/scripts/test-render-skill-md.md` (the test harness's contract). `SECURITY.md` describes the new body path's safety posture (single-pass parameter expansion; pre-synthesis F9 banned-token scan still applies). `test-render-skill-md.sh` adds three new cases covering multi-line `--feature-spec-file` distinct from `--description`, explicit backward-compat body assertion, and missing-file rejection. Closes #568.
+
 ## [7.13.4] - 2026-04-26
 
 ### Fixed
