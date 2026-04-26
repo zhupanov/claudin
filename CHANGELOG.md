@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.9] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/parse-args.sh`'s `read_unquoted_token` arm at line 103 emitted the frozen template `embedded newline in quoted value at offset <N>` for backslash-escaped newlines in **unquoted** values, contradicting both `parse-args.md:58`'s frozen list (which scoped that template to quoted values) and the script's own header comment block. Introduce a distinct frozen template `ERROR=embedded newline in unquoted value at offset <N>` for the unquoted backslash-newline path; cases 18 and 25 in `test-umbrella-parse-args.sh` (genuinely quoted-value paths) keep the existing template; case 24 (the unquoted backslash-newline repro) is retargeted to the new substring and a one-line guard comment warns future editors not to dedupe the distinct templates back into a shared substring. Lockstep updates: `parse-args.md` frozen list and TASK-section prose (now states the rule covers both quoted and unquoted phase-1 flag-value paths); the Outside-quotes bullet (now documents `\<LF>` rejection); the edit-in-sync rule (narrowed to clarify that wording-only ERROR= changes do NOT require a SKILL.md update because Step 0 surfaces ERROR= lines verbatim and does not parse them); `parse-args.sh`'s `read_unquoted_token` helper comment (now says "next non-newline byte"); `test-umbrella-parse-args.md` case-24 coverage-row prose; and `docs/linting.md`'s `test-umbrella-parse-args` row (frozen-template count 11 → 12). Lexer behavior is unchanged — only stderr text and surrounding documentation. Closes #616.
+
 ## [7.14.8] - 2026-04-26
 
 ### Fixed
