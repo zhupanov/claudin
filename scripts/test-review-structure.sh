@@ -27,6 +27,16 @@
 #  - Each references/*.md opens with '**Consumer**:' and '**Binding convention**:'
 #    header lines in the first 20 lines. /review deliberately uses this 2-line header
 #    schema, NOT the /implement Consumer/Contract/When-to-load triplet.
+#  - Three-way slice-mode activation contract pins (#637, parallel to assertions 5a/5b/5c):
+#    a single SKILL.md line carries 'Slice mode', '--slice', '--slice-file', AND
+#    'positional' (case-insensitive on 'positional') together — pinning the activation
+#    sentence that defines slice mode as enabled by --slice OR --slice-file OR positional
+#    text after --create-issues; SKILL.md contains the verbatim empty-positional abort
+#    message ('--create-issues requires a slice description (--slice <text>, --slice-file
+#    <path>, or trailing positional text)'); SKILL.md contains the verbatim
+#    positional-vs-slice-flag mutual-exclusion abort message ('Positional slice text
+#    cannot be combined with --slice or --slice-file'). Together these three pins anchor
+#    the contracts introduced by PR #638 so a future edit cannot regress them silently.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 set -euo pipefail
@@ -211,5 +221,42 @@ for ref_path in "${ref_files[@]}"; do
   done
 done
 
-echo "PASS: test-review-structure.sh — all 9 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (10) Three-way slice-mode activation pin (#637). A SINGLE line in SKILL.md must
+#      carry 'Slice mode', '--slice', '--slice-file', AND 'positional' together
+#      (case-insensitive on 'positional' since prose/heading variants like
+#      'Positional' may appear). Anchors the activation sentence that defines
+#      slice mode as enabled by --slice OR --slice-file OR positional text after
+#      --create-issues. Pattern parallel to (5a)/(5b)/(5c): pipeline threads each
+#      token through its own filter stage while preserving line granularity, so a
+#      future edit that splits the activation directive across lines fails closed.
+#      Under `set -o pipefail` a zero-match in any stage fails the pipeline and the
+#      `||` short-circuit triggers fail().
+# ---------------------------------------------------------------------------
+grep 'Slice mode' "$SKILL_MD" \
+  | grep -F -- '--slice' \
+  | grep -F -- '--slice-file' \
+  | grep -iq 'positional' \
+  || fail "(10) no single SKILL.md line carries 'Slice mode', '--slice', '--slice-file', and 'positional' together — three-way slice-mode activation contract pin is broken"
+
+# ---------------------------------------------------------------------------
+# (11) Empty-positional abort message verbatim pin (#637). SKILL.md must contain
+#      the exact literal string of the abort message printed when --create-issues
+#      is set without --slice, --slice-file, or trailing positional text. Verbatim
+#      grep -F so any wording drift fails closed — the abort message is a
+#      user-facing contract that downstream tooling may depend on.
+# ---------------------------------------------------------------------------
+grep -Fq '**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**' "$SKILL_MD" \
+  || fail "(11) SKILL.md is missing the verbatim empty-positional abort message — the contract introduced by PR #638 has regressed"
+
+# ---------------------------------------------------------------------------
+# (12) Positional-vs-slice-flag mutual-exclusion abort message verbatim pin (#637).
+#      SKILL.md must contain the exact literal string of the abort message printed
+#      when positional slice text is combined with --slice or --slice-file.
+#      Verbatim grep -F same rationale as (11).
+# ---------------------------------------------------------------------------
+grep -Fq '**⚠ Positional slice text cannot be combined with --slice or --slice-file. Aborting.**' "$SKILL_MD" \
+  || fail "(12) SKILL.md is missing the verbatim positional-vs-slice-flag mutual-exclusion abort message — the contract introduced by PR #638 has regressed"
+
+echo "PASS: test-review-structure.sh — all 12 structural invariants hold"
 exit 0

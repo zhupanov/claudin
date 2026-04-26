@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.12] - 2026-04-26
+
+### Changed
+
+- `scripts/test-review-structure.sh` — three new structural assertions (10/11/12) pin the `/review` skill's three-way slice-mode activation contracts introduced by PR #638. Assertion (10) is a line-scoped grep pipeline (parallel to (5a)/(5b)/(5c)) requiring at least one `SKILL.md` line to carry `Slice mode`, `--slice`, `--slice-file`, AND `positional` together. Assertions (11) and (12) are verbatim `grep -Fq` pins for the empty-positional abort message (`**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**`) and the positional-vs-slice-flag mutual-exclusion abort message (`**⚠ Positional slice text cannot be combined with --slice or --slice-file. Aborting.**`). Final PASS line count bumped from 9 to 12; file-header comment block extended; sibling `scripts/test-review-structure.md` contract updated. Closes #637.
+
 ## [7.14.11] - 2026-04-26
 
 ### Changed
