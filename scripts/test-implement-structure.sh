@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 13 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 14 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -79,6 +79,19 @@
 #      edits cannot silently delete the rule — the headline of NEVER #7 and the
 #      headline of the Step 2 "scope-lock" cue. Mirrors the byte-pin pattern of
 #      assertion (5).
+# (14) Step 0.5 Branch 2/3 anchor-lookup contract (closes #654): SKILL.md
+#      must invoke `tracking-issue-write.sh find-anchor` for the marker probe
+#      AND must NOT contain the legacy non-paginated inline pattern
+#      `gh api ... /comments --jq ... | head -1` for that probe. The legacy
+#      pattern (Branch 2 line 267, Branch 3 line 316 pre-fix) silently missed
+#      anchors past the first page of issue comments and silently picked one
+#      anchor when multiple existed, corrupting the canonical state. The
+#      paginated, multi-anchor-fail-closed `find-anchor` subcommand replaces
+#      that pattern. Both find-anchor invocations (Branch 2: --issue
+#      "$ISSUE_ARG"; Branch 3: --issue "$RECOVERED_N") must be present so a
+#      future edit reverting either branch to the buggy pattern would
+#      regress #654 silently against the unit-test harness alone — this
+#      assertion is the structural pin.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
@@ -371,5 +384,34 @@ for lit in "${never7_literals[@]}"; do
     || fail "(13) SKILL.md lost orchestrator-judgment-bail invariant literal: $lit"
 done
 
-echo "PASS: test-implement-structure.sh — all 13 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (14) Step 0.5 Branch 2/3 anchor-lookup contract pin (closes #654).
+#      Positive: both find-anchor invocations must be present in SKILL.md
+#      (Branch 2: --issue "$ISSUE_ARG"; Branch 3: --issue "$RECOVERED_N").
+#      Negative: the legacy non-paginated inline pattern
+#      `gh api .../issues/<var>/comments` followed by a jq pipeline ending
+#      in `head -1` must NOT be present in SKILL.md — that pattern was the
+#      source of #654 and any future revert would silently re-introduce
+#      the silent-data-loss path.
+# ---------------------------------------------------------------------------
+fa_branch2=$(grep -cF 'tracking-issue-write.sh find-anchor --issue "$ISSUE_ARG"' "$SKILL_MD" || true)
+if ! [[ "$fa_branch2" =~ ^[0-9]+$ ]] || (( fa_branch2 < 1 )); then
+  fail "(14) SKILL.md missing Branch 2 find-anchor invocation 'tracking-issue-write.sh find-anchor --issue \"\$ISSUE_ARG\"' (closes #654)"
+fi
+fa_branch3=$(grep -cF 'tracking-issue-write.sh find-anchor --issue "$RECOVERED_N"' "$SKILL_MD" || true)
+if ! [[ "$fa_branch3" =~ ^[0-9]+$ ]] || (( fa_branch3 < 1 )); then
+  fail "(14) SKILL.md missing Branch 3 find-anchor invocation 'tracking-issue-write.sh find-anchor --issue \"\$RECOVERED_N\"' (closes #654)"
+fi
+# Negative pin: the legacy non-paginated lookup pattern must be gone from
+# Step 0.5. Match the most distinctive shape of the old code: a `gh api`
+# line that hits an `/issues/<var>/comments` path with a jq that pipes
+# through `head -1`. Use a single ERE match that requires both pieces
+# on the same line so historical/explanatory prose mentioning either
+# fragment in isolation is not a false positive.
+legacy_pattern=$(grep -cE 'gh api "?/repos/.*/issues/.*/comments".* \| head -1' "$SKILL_MD" || true)
+if ! [[ "$legacy_pattern" =~ ^[0-9]+$ ]] || (( legacy_pattern > 0 )); then
+  fail "(14) SKILL.md still contains the legacy non-paginated 'gh api .../comments | head -1' anchor-lookup pattern (closes #654); use tracking-issue-write.sh find-anchor instead"
+fi
+
+echo "PASS: test-implement-structure.sh — all 14 structural invariants hold"
 exit 0

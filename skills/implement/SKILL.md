@@ -23,7 +23,7 @@ Four invariants enforced across multiple steps. Anchor cross-step questions here
 
 3. **Degraded-Git Fail-Closed** — `check-bump-version.sh STATUS != ok` MUST force `VERIFIED=false` at Step 12 regardless of `COMMITS_AFTER`. **Enforcement**: STATUS-first evaluation ordering in the Rebase + Re-bump Sub-procedure step 4 (see `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/bump-verification.md` Block β); Step 8 permissive, Step 12 strict (bail to 12d). **Why**: a coerced 0 baseline from a transient git error routes to a bogus "wrong commit count" mis-diagnosis — the fail-closed rule prevents silently wrong merged versions.
 
-4. **Tracking-Issue Sentinel Idempotency** (umbrella #348) — re-running `/implement` in the same session MUST NOT double-create a tracking issue or double-adopt under a mismatched anchor. **Enforcement**: the `$IMPLEMENT_TMPDIR/parent-issue.md` sentinel detected at Step 0.5 entry; prior `ISSUE_NUMBER` + `ANCHOR_COMMENT_ID` are recovered from it so no `tracking-issue-write.sh create-issue` call (Branch 4 path, which runs at Step 0.5 on first-remote-write) runs twice, and no duplicate `upsert-anchor` without `--anchor-id` runs (which could create a second anchor comment). Ordering invariant on Branch 4 first-creation: `create-issue` → `assemble-anchor.sh` + `upsert-anchor` (capture `ANCHOR_COMMENT_ID`) → write sentinel last — the sentinel is written ONLY after both `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` have resolved to non-empty values. If either the create-issue or upsert-anchor step fails (or returns an empty `ANCHOR_COMMENT_ID`), Step 0.5 flips to `deferred=true` and skips the sentinel write entirely — there is no partial sentinel, no empty-`ANCHOR_COMMENT_ID` sentinel. **Why**: `tracking-issue-write.sh upsert-anchor`'s marker-search fallback is deterministic but single-shot; the sentinel is the byte-exact session-scope guard against double-creation on retry or resume. Parallel to Invariant #2 — sentinel-based byte-exact idempotency guards for distinct session artifacts.
+4. **Tracking-Issue Sentinel Idempotency** (umbrella #348) — re-running `/implement` in the same session MUST NOT double-create a tracking issue or double-adopt under a mismatched anchor. **Enforcement**: the `$IMPLEMENT_TMPDIR/parent-issue.md` sentinel detected at Step 0.5 entry; prior `ISSUE_NUMBER` + `ANCHOR_COMMENT_ID` are recovered from it so no `tracking-issue-write.sh create-issue` call (Branch 4 path, which runs at Step 0.5 on first-remote-write) runs twice, and no duplicate `upsert-anchor` without `--anchor-id` runs (which could create a second anchor comment). Ordering invariant on Branch 4 first-creation: `create-issue` → `assemble-anchor.sh` + `upsert-anchor` (capture `ANCHOR_COMMENT_ID`) → write sentinel last — the sentinel is written ONLY after both `ISSUE_NUMBER` and `ANCHOR_COMMENT_ID` have resolved to non-empty values. If either the create-issue or upsert-anchor step fails (or returns an empty `ANCHOR_COMMENT_ID`), Step 0.5 flips to `deferred=true` and skips the sentinel write entirely — there is no partial sentinel, no empty-`ANCHOR_COMMENT_ID` sentinel. **Why**: `tracking-issue-write.sh upsert-anchor`'s marker-search fallback is deterministic but single-shot, and `tracking-issue-write.sh find-anchor` (the read-only paginated, multi-anchor-fail-closed lookup invoked by Branch 2 / Branch 3 adoption) is itself deterministic but does not bind a sentinel; the local sentinel is the byte-exact session-scope guard against double-creation on retry or resume. Parallel to Invariant #2 — sentinel-based byte-exact idempotency guards for distinct session artifacts.
 
 ## NEVER List
 
@@ -261,19 +261,27 @@ Detect PR-vs-issue: if `.url` contains `/pull/`, print `**⚠ 0.5: tracking issu
 
 If `.state == "CLOSED"`: print `**⚠ 0.5: tracking issue — adopted issue #$ISSUE_ARG is CLOSED. Aborting.**`, emit `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout, skip to Step 18. (`/fix-issue` Step 5a consumes this bail token and branches to a specific warning + skip-to-cleanup path without calling `issue-lifecycle.sh close`.)
 
-Else (`.state == "OPEN"`): **adopt safely without clobbering any populated existing anchor**. First try to locate an existing anchor via marker search:
+Else (`.state == "OPEN"`): **adopt safely without clobbering any populated existing anchor**. First try to locate an existing anchor via the paginated, multi-anchor-fail-closed `find-anchor` subcommand (delegates to `tracking-issue-write.sh`'s `list_anchor_comments` helper, which uses `gh api --paginate` so anchors past the first page of comments are not silently missed; multi-anchor state fails closed instead of silently picking one — see `scripts/tracking-issue-write.md` for the contract):
 
 ```bash
-ANCHOR_ID=$(gh api "/repos/$REPO/issues/$ISSUE_ARG/comments" --jq '.[] | select(.body | startswith("<!-- larch:implement-anchor v1")) | .id' | head -1)
+FIND_OUT=$(${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh find-anchor --issue "$ISSUE_ARG")
 ```
 
-- If `ANCHOR_ID` is non-empty: existing anchor present. Fetch its body to hydrate local fragments before any upsert:
+**Parse `FAILED=true` FIRST**, before checking `ANCHOR_COMMENT_ID=`. The multi-anchor branch and the gh-failure branch both emit `FAILED=true` + `ERROR=<msg>` and do NOT emit `ANCHOR_COMMENT_ID=`; the success branches emit only `ANCHOR_COMMENT_ID=<id-or-empty>` and do NOT emit `FAILED=true`. Checking `FAILED=true` first prevents misclassifying a multi-anchor failure as "no anchor" (which would route into the seed-plant path and corrupt the canonical state — closes #654).
+
+- If `FIND_OUT` contains `FAILED=true`: parse `ERROR=` (multi-anchor case starts with "multiple anchor comments found (ids: ...)"; gh-failure case carries the redacted gh stderr). Print `**⚠ 0.5: tracking issue — find-anchor failed: $ERROR. Aborting.**` and skip to Step 18.
+- Else, extract `ANCHOR_ID` from the `ANCHOR_COMMENT_ID=` line of `$FIND_OUT`:
+  ```bash
+  ANCHOR_ID=$(printf '%s\n' "$FIND_OUT" | grep -E '^ANCHOR_COMMENT_ID=' | sed 's/^ANCHOR_COMMENT_ID=//')
+  ```
+  `ANCHOR_ID` is the canonical name used by the next two sub-branches and by the hydration `gh api ... /comments/$ANCHOR_ID` call below. The value is empty when `find-anchor` reported zero anchors and non-empty when it reported one anchor.
+- If `ANCHOR_ID` is non-empty (existing anchor present): fetch its body to hydrate local fragments before any upsert:
   ```bash
   mkdir -p "$IMPLEMENT_TMPDIR/anchor-hydrate" "$IMPLEMENT_TMPDIR/anchor-sections"
   gh api "/repos/$REPO/issues/comments/$ANCHOR_ID" --jq '.body' > "$IMPLEMENT_TMPDIR/anchor-hydrate/anchor-body.md"
   ```
   Run the inline awk section-extraction loop (matching `<!-- section:<slug> -->` / `<!-- section-end:<slug> -->` pairs) over `anchor-body.md`, writing each section interior to `$IMPLEMENT_TMPDIR/anchor-sections/<slug>.md`. Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. Do NOT call `upsert-anchor` at this point — future fragment writes will update sections in place without clobbering hydrated content.
-- If `ANCHOR_ID` is empty: no existing anchor. Compose a seed body via `scripts/assemble-anchor.sh` (passing an empty or partially-populated `$IMPLEMENT_TMPDIR/anchor-sections/` — the helper emits the anchor first-line marker, a seed-only visible placeholder line so the comment renders non-empty in GitHub's UI, and 8 empty section-marker pairs when no fragments exist yet; see `scripts/assemble-anchor.md` "Seed-only visible placeholder"), then plant the anchor:
+- Else (`ANCHOR_ID` empty — no existing anchor): compose a seed body via `scripts/assemble-anchor.sh` (passing an empty or partially-populated `$IMPLEMENT_TMPDIR/anchor-sections/` — the helper emits the anchor first-line marker, a seed-only visible placeholder line so the comment renders non-empty in GitHub's UI, and 8 empty section-marker pairs when no fragments exist yet; see `scripts/assemble-anchor.md` "Seed-only visible placeholder"), then plant the anchor:
   ```bash
   mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"
   ${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh \
@@ -310,14 +318,21 @@ Check for an existing PR on the current branch; if present, extract the first `C
 gh pr view --json body --jq '.body' 2>/dev/null | grep -oE 'Closes #[0-9]+' | head -1 | grep -oE '[0-9]+'
 ```
 
-If a number emerges as `RECOVERED_N`: validate the target issue via `gh issue view "$RECOVERED_N" --json state,url` (same PR-vs-issue + CLOSED checks as Branch 2). If target is a PR URL or CLOSED, fall through to Branch 4. Else (OPEN issue): **adopt safely without clobbering any populated existing anchor** using the same marker-search-then-hydrate pattern as Branch 2:
+If a number emerges as `RECOVERED_N`: validate the target issue via `gh issue view "$RECOVERED_N" --json state,url` (same PR-vs-issue + CLOSED checks as Branch 2). If target is a PR URL or CLOSED, fall through to Branch 4. Else (OPEN issue): **adopt safely without clobbering any populated existing anchor** using the same paginated, multi-anchor-fail-closed `find-anchor` subcommand as Branch 2 — only the issue-number variable differs (`$RECOVERED_N` here vs `$ISSUE_ARG` in Branch 2):
 
 ```bash
-ANCHOR_ID=$(gh api "/repos/$REPO/issues/$RECOVERED_N/comments" --jq '.[] | select(.body | startswith("<!-- larch:implement-anchor v1")) | .id' | head -1)
+FIND_OUT=$(${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh find-anchor --issue "$RECOVERED_N")
 ```
 
-- If `ANCHOR_ID` is non-empty: fetch its body and hydrate local fragments (same as Branch 2 — direct `gh api /repos/.../issues/comments/$ANCHOR_ID` + awk section-extraction). Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. No upsert.
-- If `ANCHOR_ID` is empty: plant a fresh seed anchor using the shared helper (`mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"` then `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" --issue "$RECOVERED_N" --output "$IMPLEMENT_TMPDIR/anchor-seed.md"`, then `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"`). Parse `ANCHOR_COMMENT_ID` from stdout.
+**Parse `FAILED=true` FIRST**, same as Branch 2 (multi-anchor and gh-failure cases emit `FAILED=true` + `ERROR=`; success cases emit only `ANCHOR_COMMENT_ID=<id-or-empty>`). On any `FAILED=true`, print `**⚠ 0.5: tracking issue — find-anchor failed: $ERROR. Aborting.**` and skip to Step 18.
+
+Otherwise, extract `ANCHOR_ID` from the `ANCHOR_COMMENT_ID=` line of `$FIND_OUT`:
+```bash
+ANCHOR_ID=$(printf '%s\n' "$FIND_OUT" | grep -E '^ANCHOR_COMMENT_ID=' | sed 's/^ANCHOR_COMMENT_ID=//')
+```
+
+- If `ANCHOR_ID` is non-empty (existing anchor): fetch its body and hydrate local fragments (same as Branch 2 — direct `gh api /repos/.../issues/comments/$ANCHOR_ID` + awk section-extraction). Set `ANCHOR_COMMENT_ID=$ANCHOR_ID`. No upsert.
+- Else (`ANCHOR_ID` empty — no existing anchor): plant a fresh seed anchor using the shared helper (`mkdir -p "$IMPLEMENT_TMPDIR/anchor-sections"` then `${CLAUDE_PLUGIN_ROOT}/scripts/assemble-anchor.sh --sections-dir "$IMPLEMENT_TMPDIR/anchor-sections" --issue "$RECOVERED_N" --output "$IMPLEMENT_TMPDIR/anchor-seed.md"`, then `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh upsert-anchor --issue $RECOVERED_N --body-file "$IMPLEMENT_TMPDIR/anchor-seed.md"`). Parse `ANCHOR_COMMENT_ID` from stdout.
 
 On either sub-branch, **rename the recovered issue to `[IN PROGRESS]`** so the title reflects the active run (matches Branch 2 / Branch 4):
 

@@ -2,14 +2,15 @@
 # test-tracking-issue-write.sh — regression harness for tracking-issue-write.sh.
 #
 # Mirrors the stub-gh + PATH-override pattern of scripts/test-redact-secrets.sh.
-# Eleven assertion categories (a-k) covering redaction, exit codes, truncation,
+# Fifteen assertion categories (a-o) covering redaction, exit codes, truncation,
 # anchor-skeleton preservation, anchor-upsert semantics, gh-failure redaction,
 # the anchor-section-markers.sh startup-guard fail-closed, the
 # SECTION_MARKERS ⊆ COLLAPSE_PRIORITY invariant, the rename subcommand
-# (idempotency, strip-exactly-one, redaction, invalid --state), and the
-# seed-only visible placeholder upsert survival (issue #431). All
-# assertions run in a hermetic mktemp -d tmproot with a stub gh binary on
-# PATH.
+# (idempotency, strip-exactly-one, redaction, invalid --state), the
+# seed-only visible placeholder upsert survival (issue #431), and the
+# find-anchor subcommand contract (zero/one/multiple anchors plus
+# pagination across >100 comments — closes #654). All assertions run in
+# a hermetic mktemp -d tmproot with a stub gh binary on PATH.
 #
 # Usage:
 #   bash scripts/test-tracking-issue-write.sh
@@ -218,6 +219,52 @@ fi
 # Any other path — emit token on stderr, fail.
 echo "API error: token $token rejected" >&2
 exit 1
+GHSTUB
+    chmod +x "$stub_dir/gh"
+}
+
+# Pagination-sensitive stub for case (o). Scans "$@" for `--paginate` before
+# deciding payload size: WITHOUT --paginate, emit only the first 100 rows
+# (no anchor); WITH --paginate, emit all 150 rows with the anchor on row
+# 125. This is the regression guard for #654 — if a future edit drops
+# --paginate from list_anchor_comments, find-anchor would receive only
+# the first 100 rows from this stub and fail to detect the late-page
+# anchor, so the case (o) assertion would fail.
+build_stub_pagination() {
+    local stub_dir="$1"
+    mkdir -p "$stub_dir"
+    cat > "$stub_dir/gh" <<'GHSTUB'
+#!/usr/bin/env bash
+if [[ "$1" == "repo" ]]; then
+    echo 'owner/repo'
+    exit 0
+fi
+if [[ "$1" == "api" ]]; then
+    has_paginate=0
+    for arg in "$@"; do
+        if [[ "$arg" == "--paginate" ]]; then
+            has_paginate=1
+            break
+        fi
+    done
+    if (( has_paginate )); then
+        # Full 150-row payload — anchor on row 125 (well past page 1).
+        for i in $(seq 1 150); do
+            if (( i == 125 )); then
+                printf '%s\t%s\n' "$((5000 + i))" '<!-- larch:implement-anchor v1 issue=42 -->'
+            else
+                printf '%s\t%s\n' "$((5000 + i))" "Comment body $i"
+            fi
+        done
+    else
+        # No --paginate: emit only the first 100 rows, no anchor.
+        for i in $(seq 1 100); do
+            printf '%s\t%s\n' "$((5000 + i))" "Comment body $i"
+        done
+    fi
+    exit 0
+fi
+exit 0
 GHSTUB
     chmod +x "$stub_dir/gh"
 }
@@ -640,6 +687,63 @@ else
     FAILED_TESTS+=("(k) body capture missing")
     echo "  FAIL: (k) body capture file missing" >&2
 fi
+
+echo ""
+echo "=== (l) find-anchor — zero anchors → ANCHOR_COMMENT_ID= empty, exit 0 ==="
+# Reuse build_stub_success which returns an empty comment list for `gh api`.
+STUB_L="$TMPROOT/stub-l"
+build_stub_success "$STUB_L"
+exit_l=0
+out_l=$(PATH="$STUB_L:$PATH" bash "$WRITE" find-anchor --issue 42 --repo owner/repo 2>&1) || exit_l=$?
+assert_equal "$exit_l" "0" '(l) exit code is 0 (zero anchors is success)'
+# Pin the exact ANCHOR_COMMENT_ID= line (with empty value) on its own line.
+if [[ "$out_l" == 'ANCHOR_COMMENT_ID=' ]] || [[ "$out_l" == 'ANCHOR_COMMENT_ID='$'\n'* ]] || [[ "$out_l" == *$'\n''ANCHOR_COMMENT_ID='$'\n'* ]] || [[ "$out_l" == *$'\n''ANCHOR_COMMENT_ID=' ]]; then
+    PASS=$((PASS + 1))
+    echo "  ok: (l) ANCHOR_COMMENT_ID= (empty value) on its own line"
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("(l) ANCHOR_COMMENT_ID= empty-value line missing")
+    echo "  FAIL: (l) expected exact 'ANCHOR_COMMENT_ID=' line, got: $out_l" >&2
+fi
+assert_not_contains "$out_l" 'FAILED=true' '(l) zero-anchor case does not emit FAILED=true'
+
+echo ""
+echo "=== (m) find-anchor — exactly one anchor → ANCHOR_COMMENT_ID=<id>, exit 0 ==="
+STUB_M="$TMPROOT/stub-m"
+build_stub_one_anchor "$STUB_M"
+exit_m=0
+out_m=$(PATH="$STUB_M:$PATH" bash "$WRITE" find-anchor --issue 42 --repo owner/repo 2>&1) || exit_m=$?
+assert_equal "$exit_m" "0" '(m) exit code is 0 (one anchor is success)'
+assert_contains "$out_m" 'ANCHOR_COMMENT_ID=5001' '(m) ANCHOR_COMMENT_ID=5001 emitted'
+assert_not_contains "$out_m" 'FAILED=true' '(m) one-anchor case does not emit FAILED=true'
+
+echo ""
+echo "=== (n) find-anchor — multiple anchors → fail closed exit 2 ==="
+STUB_N="$TMPROOT/stub-n"
+build_stub_multi_anchor "$STUB_N"
+exit_n=0
+out_n=$(PATH="$STUB_N:$PATH" bash "$WRITE" find-anchor --issue 42 --repo owner/repo 2>&1) || exit_n=$?
+assert_equal "$exit_n" "2" '(n) exit code is 2 (multi-anchor fail-closed)'
+assert_contains "$out_n" 'FAILED=true' '(n) FAILED=true on stdout'
+assert_contains "$out_n" 'multiple anchor comments found' '(n) ERROR mentions multiple anchor comments'
+assert_contains "$out_n" 'ids: 5001,5002' '(n) ERROR includes comma-separated ids in canonical order'
+assert_not_contains "$out_n" 'ANCHOR_COMMENT_ID=' '(n) multi-anchor case does NOT emit ANCHOR_COMMENT_ID=...'
+
+echo ""
+echo "=== (o) find-anchor — pagination across >100 comments (regression guard for #654) ==="
+# The stub is sensitive to whether `--paginate` appears in the gh argv. If
+# list_anchor_comments ever drops --paginate, this stub returns only the
+# first 100 rows (no anchor) and find-anchor would emit ANCHOR_COMMENT_ID=
+# (empty), failing the assert_contains below. With --paginate present, the
+# stub returns 150 rows with the anchor on row 125, so find-anchor emits
+# ANCHOR_COMMENT_ID=5125.
+STUB_O="$TMPROOT/stub-o"
+build_stub_pagination "$STUB_O"
+exit_o=0
+out_o=$(PATH="$STUB_O:$PATH" bash "$WRITE" find-anchor --issue 42 --repo owner/repo 2>&1) || exit_o=$?
+assert_equal "$exit_o" "0" '(o) exit code is 0 when late-page anchor is found'
+assert_contains "$out_o" 'ANCHOR_COMMENT_ID=5125' '(o) late-page anchor (id=5125, comment 125 of 150) found via --paginate'
+assert_not_contains "$out_o" 'FAILED=true' '(o) pagination success does not emit FAILED=true'
 
 echo ""
 echo "=== Summary ==="

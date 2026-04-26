@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Phase 1 (umbrella #348) foundation layer: outbound helper for the tracking-issue lifecycle. Four narrow subcommands (`create-issue`, `append-comment`, `upsert-anchor`, `rename`) that each perform exactly one GitHub write, sharing a KEY=value stdout envelope and fail-closed redaction posture modelled on `skills/issue/scripts/create-one.sh`. The first three were added in Phase 1; `rename` was added alongside the tracking-issue title-prefix lifecycle (see "Title-prefix lifecycle" below).
+Phase 1 (umbrella #348) foundation layer: helper for the tracking-issue lifecycle. Five narrow subcommands — four writes (`create-issue`, `append-comment`, `upsert-anchor`, `rename`) plus one read-only lookup (`find-anchor`) — sharing a KEY=value stdout envelope and fail-closed redaction posture modelled on `skills/issue/scripts/create-one.sh`. The first three writes were added in Phase 1; `rename` was added alongside the tracking-issue title-prefix lifecycle (see "Title-prefix lifecycle" below); `find-anchor` was added in #654 to give SKILL.md callers a paginated, multi-anchor-fail-closed marker probe that reuses the same `list_anchor_comments` + `filter_anchor_ids` helpers as `upsert-anchor`'s marker-search-fallback (without the body-write side effects).
 
 ## Subcommands
 
@@ -11,6 +11,7 @@ tracking-issue-write.sh create-issue   --title T --body-file F [--repo OWNER/REP
 tracking-issue-write.sh append-comment --issue N --body-file F [--lifecycle-marker ID] [--repo OWNER/REPO]
 tracking-issue-write.sh upsert-anchor  --issue N [--anchor-id ID] --body-file F [--repo OWNER/REPO]
 tracking-issue-write.sh rename         --issue N --state in-progress|done|stalled [--repo OWNER/REPO]
+tracking-issue-write.sh find-anchor    --issue N [--repo OWNER/REPO]                (read-only)
 ```
 
 ## Output contract (KEY=value on stdout)
@@ -27,6 +28,7 @@ This script emits `FAILED=true` / `ERROR=<msg>` on failure — NOT the `ISSUE_FA
 | `append-comment` | `COMMENT_ID=<id>`, `COMMENT_URL=<url>` |
 | `upsert-anchor` | `ANCHOR_COMMENT_ID=<id>`, `ANCHOR_COMMENT_URL=<url>`, `UPDATED=true\|false` (`true` when an existing anchor was PATCHed; `false` when a new anchor comment was created) |
 | `rename` | `RENAMED=true\|false`, `NEW_TITLE=<title>` (`false` when the current title already starts with the target prefix — no `gh issue edit` call was made) |
+| `find-anchor` | `ANCHOR_COMMENT_ID=<id-or-empty>` — exactly one anchor → `ANCHOR_COMMENT_ID=<id>` (exit 0); zero anchors → `ANCHOR_COMMENT_ID=` empty value (exit 0); multiple anchors → `FAILED=true ERROR=multiple anchor comments found (ids: <comma-list>)` (exit 2). Stdout contains ONLY KEY=value lines (no progress text); diagnostics route to stderr — same posture as the four write subcommands. |
 
 ### Failure keys
 
@@ -38,7 +40,7 @@ This script emits `FAILED=true` / `ERROR=<msg>` on failure — NOT the `ISSUE_FA
 |---|---|
 | 0 | Success |
 | 1 | Invocation-usage error OR validated-content rejection (e.g. missing body file, empty body). Disambiguate via `ERROR=`. |
-| 2 | `gh` failure (`FAILED=true` / `ERROR=` already emitted on stdout) |
+| 2 | `gh` failure OR fail-closed content-state error — e.g. `upsert-anchor`'s and `find-anchor`'s "multiple anchor comments found (ids: …)" branch. `FAILED=true` / `ERROR=` already emitted on stdout; consumers must branch on `FAILED=` before checking other keys. |
 | 3 | Redaction helper failure (`FAILED=true` / `ERROR=redaction:…`) |
 
 ## Invariants
@@ -58,6 +60,10 @@ Truncation operates on section interiors only — never on the HTML first-line a
 ### Anchor version policy (strict v1)
 
 Upsert-anchor matches and emits only `<!-- larch:implement-anchor v1` prefixed comments. Future versions (v2, …) introduce a new marker handled by a new tool version. Mixed-version state on one issue fails closed via the multiple-anchor-comments branch (exit 2 with `FAILED=true ERROR=multiple anchor comments found (ids: <list>)`).
+
+### find-anchor read-only contract
+
+`find-anchor` is the only read-only subcommand. It reuses the same `list_anchor_comments` (paginated `gh api --paginate`) + `filter_anchor_ids` (strict v1 first-line + UTF-8 BOM strip) helpers as `upsert-anchor`'s marker-search-fallback, plus a small cardinality block (count + 0/1/many envelope decision). Behavior is byte-aligned with the write-side fallback: zero anchors → `ANCHOR_COMMENT_ID=` empty + exit 0; one anchor → `ANCHOR_COMMENT_ID=<id>` + exit 0; ≥2 anchors → `FAILED=true ERROR=multiple anchor comments found (ids: <comma-list>)` + exit 2; gh listing failure → `FAILED=true ERROR=<redacted gh stderr>` + exit 2 (via the shared `emit_gh_failure` path). Stdout is exclusively KEY=value lines on every path; no progress text leaks. **Marker semantic alignment with reads**: the strict-v1 first-line + BOM-strip match is intentionally aligned with `tracking-issue-read.sh`'s anchor-marker filter and `upsert-anchor`'s marker-search-fallback — `find-anchor` does NOT preserve the older inline `jq startswith("<!-- larch:implement-anchor v1")` whole-body semantics; for typical anchors (marker IS the first line, no BOM) classification is identical, but pathological comments (BOM not stripped by jq, or marker not on the true first line) classify per the first-line+BOM-strip policy.
 
 ## Truncation algorithm
 
@@ -113,7 +119,7 @@ The regression harness `scripts/test-tracking-issue-write.sh` is wired into `mak
 
 ## Test harness
 
-`scripts/test-tracking-issue-write.sh` covers ten assertion categories (a-j):
+`scripts/test-tracking-issue-write.sh` covers fifteen assertion categories (a-o):
 
 - **(a)** `create-issue` redacts title + body (`sk-ant-*` secret → `<REDACTED-TOKEN>`).
 - **(b)** `create-issue` exits 3 with `FAILED=true` / `ERROR=redaction:…` when the redactor is missing. Pins exact key literals `FAILED=true` (not `ISSUE_FAILED`).
@@ -126,6 +132,11 @@ The regression harness `scripts/test-tracking-issue-write.sh` is wired into `mak
 - **(h) Missing `anchor-section-markers.sh` helper**: when the script's sourced helper is missing from the script's `$SCRIPT_DIR`, it fails closed with `FAILED=true` / `ERROR=missing helper: …` on stdout and exits 1 — preserving the stdout contract invariant.
 - **(i) `SECTION_MARKERS` ⊆ `COLLAPSE_PRIORITY` invariant**: every slug defined in `scripts/anchor-section-markers.sh` appears in `COLLAPSE_PRIORITY`, so the body-level truncation pass has a collapse target for every section.
 - **(j) `rename` subcommand**: base rename (no existing prefix → prepend), transition rename (`[IN PROGRESS]` → `[DONE]`), idempotent no-op (already at target state → `RENAMED=false`, no `gh` call), strip-exactly-one (stacked-prefix residue preserved), redact pipeline applied (token in title → `<REDACTED-TOKEN>` in outbound), invalid `--state` → `FAILED=true ERROR=invalid --state: ...`.
+- **(k) Seed-only visible placeholder survival** in `upsert-anchor` publish path (issue #431).
+- **(l) `find-anchor` zero anchors**: empty comment list → `ANCHOR_COMMENT_ID=` (empty value) on stdout, exit 0.
+- **(m) `find-anchor` one anchor**: stub returns one v1-marker comment → `ANCHOR_COMMENT_ID=<id>` on stdout, exit 0.
+- **(n) `find-anchor` multi-anchor fail-closed**: stub returns two v1-marker comments → exit 2, `FAILED=true ERROR=multiple anchor comments found (ids: 5001,5002)`, no `ANCHOR_COMMENT_ID=` line on stdout.
+- **(o) `find-anchor` pagination across >100 comments** (regression guard for #654): stub is sensitive to whether `--paginate` is in the `gh api` argv. WITHOUT `--paginate`, returns only the first 100 rows (no anchor); WITH `--paginate`, returns all 150 rows with the anchor on row 125. Asserts `find-anchor` returns `ANCHOR_COMMENT_ID=5125` (the late-page anchor) — a future edit dropping `--paginate` from `list_anchor_comments` would fail this assertion.
 
 ## Edit-in-sync pointers
 

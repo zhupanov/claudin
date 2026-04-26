@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # tracking-issue-write.sh — outbound helper for the tracking-issue lifecycle.
 #
-# Phase 1 (umbrella #348) foundation layer. Ships four narrow subcommands
-# (create-issue, append-comment, upsert-anchor, rename) that each perform
-# exactly one GitHub write, all sharing the same KEY=value stdout envelope
-# and fail-closed redaction posture as skills/issue/scripts/create-one.sh.
+# Phase 1 (umbrella #348) foundation layer. Ships five narrow subcommands —
+# four writes (create-issue, append-comment, upsert-anchor, rename) that each
+# perform exactly one GitHub write, plus one read-only lookup (find-anchor)
+# that lists comments and returns the v1 anchor id (or empty / fail-closed
+# on multi-anchor) — all sharing the same KEY=value stdout envelope and
+# fail-closed redaction posture as skills/issue/scripts/create-one.sh.
 #
 # Subcommands:
 #   create-issue   --title T --body-file F [--repo OWNER/REPO]
 #   append-comment --issue N --body-file F [--lifecycle-marker ID] [--repo OWNER/REPO]
 #   upsert-anchor  --issue N [--anchor-id ID] --body-file F [--repo OWNER/REPO]
 #   rename         --issue N --state in-progress|done|stalled [--repo OWNER/REPO]
+#   find-anchor    --issue N [--repo OWNER/REPO]                (read-only)
 #
 # Output contract (KEY=value on stdout; warnings on stderr). NAMESPACE note:
 # this script emits FAILED=true / ERROR=<msg> on failure — NOT the
@@ -26,6 +29,11 @@
 #   append-comment: COMMENT_ID=<id>   COMMENT_URL=<url>
 #   upsert-anchor:  ANCHOR_COMMENT_ID=<id>  ANCHOR_COMMENT_URL=<url>  UPDATED=true|false
 #   rename:         RENAMED=true|false  NEW_TITLE=<title>
+#   find-anchor:    ANCHOR_COMMENT_ID=<id-or-empty>
+#                   (one match → ANCHOR_COMMENT_ID=<id>; zero matches →
+#                   ANCHOR_COMMENT_ID= empty value; multiple matches →
+#                   FAILED=true ERROR=multiple anchor comments found
+#                   (ids: <comma-list>) and exit 2.)
 #
 # Rename semantics (tracking-issue title-prefix lifecycle):
 #   Strips exactly ONE leading managed prefix (anchored regex
@@ -46,7 +54,8 @@
 # Exit codes:
 #   0 — success
 #   1 — invocation-usage error OR validated-content rejection (disambiguate via ERROR=)
-#   2 — gh failure (FAILED=true / ERROR= already emitted on stdout)
+#   2 — gh failure OR fail-closed content-state error (e.g., multiple anchor
+#       comments found) — FAILED=true / ERROR= already emitted on stdout
 #   3 — redaction helper failure (FAILED=true / ERROR=redaction:…)
 #
 # Security posture (see SECURITY.md "tracking-issue-write.sh outbound path"):
@@ -120,6 +129,7 @@ Usage:
   tracking-issue-write.sh append-comment --issue N --body-file F [--lifecycle-marker ID] [--repo OWNER/REPO]
   tracking-issue-write.sh upsert-anchor  --issue N [--anchor-id ID] --body-file F [--repo OWNER/REPO]
   tracking-issue-write.sh rename         --issue N --state in-progress|done|stalled [--repo OWNER/REPO]
+  tracking-issue-write.sh find-anchor    --issue N [--repo OWNER/REPO]
 USAGE
 }
 
@@ -708,6 +718,56 @@ case "$cmd" in
         echo "RENAMED=true"
         echo "NEW_TITLE=$NEW_TITLE"
         exit 0
+        ;;
+
+    find-anchor)
+        ISSUE=""
+        REPO=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --issue) ISSUE="${2:?--issue requires a value}"; shift 2 ;;
+                --repo) REPO="${2:?--repo requires a value}"; shift 2 ;;
+                *) echo "Unknown option for find-anchor: $1" >&2; usage; exit 1 ;;
+            esac
+        done
+        if [[ -z "$ISSUE" ]]; then
+            usage
+            exit 1
+        fi
+        if [[ -z "$REPO" ]]; then
+            REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || REPO=""
+            if [[ -z "$REPO" ]]; then
+                echo "FAILED=true"
+                echo "ERROR=could not determine repo"
+                exit 2
+            fi
+        fi
+
+        # Reuse the same paginated listing pipeline upsert-anchor uses for
+        # marker-search-fallback (lines ~568-609 above). list_anchor_comments
+        # returns 2 on gh failure with the captured stderr stashed in
+        # LIST_ANCHOR_ERROR; emit_gh_failure runs in the main script process
+        # (not nested in $(...)) so FAILED= lines reach the caller's stdout.
+        if ! LIST_OUT=$(list_anchor_comments "$ISSUE" "$REPO"); then
+            emit_gh_failure "${LIST_ANCHOR_ERROR:-gh api list comments failed}"
+        fi
+        ANCHOR_IDS=$(printf '%s\n' "$LIST_OUT" | filter_anchor_ids)
+        ANCHOR_COUNT=0
+        if [[ -n "$ANCHOR_IDS" ]]; then
+            ANCHOR_COUNT=$(printf '%s\n' "$ANCHOR_IDS" | wc -l | tr -d '[:space:]')
+        fi
+        if (( ANCHOR_COUNT == 0 )); then
+            echo "ANCHOR_COMMENT_ID="
+            exit 0
+        elif (( ANCHOR_COUNT == 1 )); then
+            echo "ANCHOR_COMMENT_ID=$ANCHOR_IDS"
+            exit 0
+        else
+            IDS_FLAT=$(printf '%s' "$ANCHOR_IDS" | tr '\n' ',' | sed 's/,$//')
+            echo "FAILED=true"
+            echo "ERROR=multiple anchor comments found (ids: $IDS_FLAT)"
+            exit 2
+        fi
         ;;
 
     *)
