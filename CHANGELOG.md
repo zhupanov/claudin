@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.9] - 2026-04-26
+
+### Fixed
+
+- `scripts/tracking-issue-write.sh` — add a paginated, multi-anchor-fail-closed `find-anchor` read-only subcommand that reuses the existing `list_anchor_comments` (`gh api --paginate`) and `filter_anchor_ids` (strict v1 first-line + BOM-strip) helpers. Stdout envelope: `ANCHOR_COMMENT_ID=<id>` for one match, empty value for zero, `FAILED=true ERROR=multiple anchor comments found (ids: <list>)` exit 2 for multi-anchor (mirrors the existing `upsert-anchor` marker-search-fallback). `skills/implement/SKILL.md` Step 0.5 Branch 2 (`--issue $ISSUE_ARG`) and Branch 3 (`--issue $RECOVERED_N`) now invoke the subcommand instead of the buggy inline `gh api .../comments | head -1` lookup, parsing `FAILED=true` first to abort on multi-anchor / gh failure before extracting `ANCHOR_ID`. The legacy lookup silently missed anchors past page 1 of issue comments and silently picked one anchor when multiple existed, causing `upsert-anchor` to plant an empty seed alongside the missed anchor (silent canonical-state data loss on tracking issues with >30 comments). Per dialectic resolution DECISION_1 (THESIS=3, ANTI_THESIS=0) the existing `upsert-anchor` marker-search-fallback (lines 568-609) is left byte-identical — `find-anchor` is a parallel subcommand reusing the same shared helpers, not a refactor of the working write path. New tests (l)/(m)/(n)/(o) in `scripts/test-tracking-issue-write.sh` cover zero-anchors / one-anchor / multi-anchor / pagination across >100 comments — case (o)'s stub is sensitive to whether `--paginate` is in the `gh api` argv, so a future drop of `--paginate` from `list_anchor_comments` fails the test. New structural assertion (14) in `scripts/test-implement-structure.sh` pins both find-anchor invocations in SKILL.md Branch 2/3 and rejects any revert to the legacy `gh api .../comments | head -1` pattern. Updates `scripts/tracking-issue-write.md` (Purpose paragraph, Success keys table, exit-code 2 description, find-anchor invariant section), `scripts/test-tracking-issue-write.md`, `scripts/test-implement-structure.md`, and SKILL.md Load-Bearing Invariant #4 to name `find-anchor` for read-only discovery. Closes #654.
+
 ## [7.16.8] - 2026-04-26
 
 ### Fixed
