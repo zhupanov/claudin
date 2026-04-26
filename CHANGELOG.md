@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.15] - 2026-04-26
+
+### Changed
+
+- `README.md` Skills table — trim three over-long descriptions (`/issue`, `/research`, `/skill-evolver`) to 1-2 sentences matching the surrounding entries; canonical detail remains at the linked `docs/skills.md` anchors. The `/research` row drops from a multi-paragraph block (~5500 chars) to a 2-sentence summary; `/issue` from ~600 chars to ~150; `/skill-evolver` from ~830 chars to ~280. Adds a parallel paragraph to `docs/skills.md#issue` covering always-on inter-issue blocker-dependency analysis (per-item rollback / multi-item continuation / run-level non-zero exit on retry exhaustion) so no factual detail is lost. Closes #682.
+
 ## [7.16.14] - 2026-04-26
 
 ### Fixed
