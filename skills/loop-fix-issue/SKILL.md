@@ -21,7 +21,7 @@ Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-
 
 ## Termination
 
-The driver greps each iteration's captured stdout for the literal `🔶 1: setup` breadcrumb. `/fix-issue` Step 0 exit 1/2/3 paths (no eligible issue / error / lock-failed-mid-sequence) skip directly to Step 8 cleanup without printing this; Step 1 unconditionally prints it after a successful Step 0 lock. Sentinel absence is the deterministic "no work was done" signal — break the loop. See `${CLAUDE_PLUGIN_ROOT}/skills/loop-fix-issue/scripts/driver.md` for the full contract.
+The driver greps each iteration's captured stdout for the fixed substring `find & lock — found and locked` — the explicit literal `/fix-issue` Step 0 prints on the success path (`> **🔶 0: find & lock — found and locked #<N>: <title>**`). Step 0 exits 1/2/3 (no eligible / error / lock-failed-mid-sequence) print different literals, so the substring's absence is the deterministic "no work was done" signal — break the loop. See `${CLAUDE_PLUGIN_ROOT}/skills/loop-fix-issue/scripts/driver.md` for the full contract.
 
 ## Driver
 

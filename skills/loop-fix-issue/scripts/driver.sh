@@ -19,12 +19,16 @@
 #                        each iteration.
 #
 # Termination signal:
-#   /fix-issue Step 0 exit 1/2/3 (no eligible issues / error / lock-failed)
-#   skips directly to Step 8 cleanup, never printing the Step 1 setup
-#   breadcrumb (`> **🔶 1: setup**`). Step 1 unconditionally prints its
-#   breadcrumb after a successful Step 0 lock. So absence of the literal
-#   `🔶 1: setup` in captured stdout is the deterministic
-#   "no work was done" signal — break the loop.
+#   /fix-issue Step 0 exit 0 (success) explicitly mandates printing the
+#   literal `> **🔶 0: find & lock — found and locked #<N>: <title>**` on
+#   stdout. Step 0 exits 1/2/3 (no eligible / error / lock-failed) print
+#   different literals (`no approved issues found`, `error:`, `lock failed`).
+#   The driver greps captured stdout for the fixed substring
+#   `find & lock — found and locked` — present means an issue was processed,
+#   absent means the loop should stop. Choosing the Step 0 SUCCESS literal
+#   (rather than the Step 1 setup breadcrumb) is more robust because Step 0's
+#   success line is explicitly mandated by /fix-issue SKILL.md, while the
+#   Step 1 breadcrumb is only an implicit progress-reporting convention.
 #
 # Security posture (mirrors loop-review/driver.sh):
 #   - LOOP_TMPDIR MUST begin with /tmp/ or /private/tmp/ AND MUST NOT contain
@@ -208,11 +212,15 @@ breadcrumb_done "2: session setup — LOOP_TMPDIR=${LOOP_TMPDIR}"
 # Step 3 — Loop: invoke /fix-issue until no work remains.
 # --------------------------------------------------------------------------
 
-# Termination sentinel: /fix-issue prints `> **🔶 1: setup**` only after
-# Step 0 successfully locked an issue. Step 0 exit 1/2/3 paths skip directly
-# to Step 8 cleanup without printing this. We grep for the literal substring
-# `🔶 1: setup` (no shell-pattern characters) so a fixed-string match is safe.
-SETUP_SENTINEL='🔶 1: setup'
+# Termination sentinel: /fix-issue Step 0 exit 0 prints the explicit literal
+# `> **🔶 0: find & lock — found and locked #<N>: <title>**`. Step 0
+# exits 1/2/3 print different literals. We grep for the fixed substring
+# `find & lock — found and locked` (no shell-pattern characters; no `🔶`
+# emoji prefix needed since the substring is unique to the success path).
+# Chosen over the Step 1 setup breadcrumb because Step 0's success line is
+# explicitly mandated by /fix-issue SKILL.md while Step 1's breadcrumb is
+# only an implicit progress-reporting convention.
+SETUP_SENTINEL='find & lock — found and locked'
 
 # Compose the per-iteration prompt once (identical across iterations).
 PROMPT_FILE="$LOOP_TMPDIR/fix-issue-prompt.txt"

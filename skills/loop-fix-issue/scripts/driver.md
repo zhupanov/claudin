@@ -50,10 +50,12 @@ Per-iteration timeout: 1800s (30 min), enforced by a polling kill loop (matches 
 
 ## Termination signal
 
-`/fix-issue` Step 0 has three non-success exit paths (no eligible issue / error / lock-failed-mid-sequence) — all of them skip directly to Step 8 cleanup, never printing the Step 1 setup breadcrumb. Step 1 unconditionally prints `> **🔶 1: setup**` after a successful Step 0 lock. The driver greps the iteration's captured stdout for the literal substring `🔶 1: setup` (fixed-string match via `grep -F`):
+`/fix-issue` Step 0 exit 0 (success) explicitly mandates printing the literal `> **🔶 0: find & lock — found and locked #<N>: <title>**` on stdout. Step 0 exits 1/2/3 (no eligible / error / lock-failed-mid-sequence) print different literals — `no approved issues found`, `error:`, `lock failed`. The driver greps the iteration's captured stdout for the fixed substring `find & lock — found and locked` (fixed-string match via `grep -F`):
 
-- **Sentinel present**: `/fix-issue` reached Step 1 → an issue was processed → continue to next iteration.
+- **Sentinel present**: Step 0 succeeded → an issue was processed → continue to next iteration.
 - **Sentinel absent**: no work was done → break the loop with reason `"no eligible issues (Step 0 short-circuit)"`.
+
+Why the Step 0 success literal rather than the Step 1 setup breadcrumb: Step 0's `found and locked #<N>` line is *explicitly mandated* by `/fix-issue` SKILL.md (Step 0 success-path Print directive), whereas Step 1's `🔶 1: setup` breadcrumb is only an implicit progress-reporting convention inherited from `skills/shared/progress-reporting.md`. A model that runs Step 1's bash without emitting the breadcrumb would yield a false "no work" signal under the older sentinel and stop the loop prematurely after a successful pass; the Step 0 success literal eliminates that failure mode.
 
 Other termination reasons:
 
@@ -77,7 +79,7 @@ Note that "Step 0 short-circuit" subsumes Step 0 exit 1 (clean: no eligible issu
 
 ## Test-only override
 
-`LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE=<path>` redirects `claude -p` invocations at a stub shim. Used ONLY by tests (none yet wired into `make lint`; harness is a future addition). Documented in SECURITY.md as test-only; never set in production. Same-user arbitrary-executable risk if set in a production environment — review SECURITY.md before adding test fixtures that rely on it.
+`LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE=<path>` redirects `claude -p` invocations at a stub shim. Reserved for tests; no harness using it is wired into `make lint` yet (harness is a future addition). Same-user arbitrary-executable risk if set in a production environment — when the first harness using this override lands, document it in `SECURITY.md` alongside `LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE` (the analogous override for `loop-review/scripts/driver.sh`).
 
 ## Edit-in-sync
 
