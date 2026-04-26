@@ -386,6 +386,21 @@ exclude = [
   # test-* harnesses above.
   "skills/research/scripts/test-classify-research-scale.sh",
   "scripts/test-anti-halt-banners.sh",
+  # scripts/test-alias-target-resolution.sh is the regression harness for
+  # skills/alias/scripts/resolve-target.sh (closes the alias target-routing
+  # rework — adds plugin-repo detection + --private flag). Referenced only
+  # from Makefile (test-alias-target-resolution target) and the sibling
+  # scripts/test-alias-target-resolution.md (excluded under the skill-local-
+  # sibling block below). Same Makefile-only pattern as the other test-*
+  # harnesses above.
+  "scripts/test-alias-target-resolution.sh",
+  # scripts/test-alias-structure.sh is the structural regression test for
+  # skills/alias/SKILL.md (companion to the helper-script harness above).
+  # Pins the prompt-side contract that target-dir resolution flows through
+  # a single $TARGET_DIR variable threaded through Steps 2/3/4. Referenced
+  # only from Makefile (test-alias-structure target) and the sibling
+  # scripts/test-alias-structure.md. Same Makefile-only pattern.
+  "scripts/test-alias-structure.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
   "scripts/test-implement-structure.sh",
@@ -529,6 +544,8 @@ exclude = [
   # under skills/<name>/scripts/. Not orchestrator references (not cited
   # from the owning SKILL.md by design — contributors discover them by
   # editing the sibling .sh). Excluded from S030/orphaned-skill-files.
+  "skills/alias/scripts/generate-alias.md",
+  "skills/alias/scripts/resolve-target.md",
   "skills/issue/scripts/parse-input.md",
   "skills/fix-issue/scripts/parse-prose-blockers.md",
   "skills/fix-issue/scripts/issue-lifecycle.md",
@@ -548,4 +565,11 @@ exclude = [
   # etc.).
   "skills/create-skill/scripts/test-render-skill-md.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
+  # scripts/test-alias-target-resolution.md and scripts/test-alias-structure.md
+  # are the sibling contracts for the two alias-rework regression harnesses
+  # added alongside skills/alias/scripts/resolve-target.sh. Same harness-
+  # sibling-not-cited-from-SKILL.md pattern as the test-fix-issue-*.md and
+  # test-find-lock-issue.md entries above.
+  "scripts/test-alias-target-resolution.md",
+  "scripts/test-alias-structure.md",
 ]
