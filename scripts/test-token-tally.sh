@@ -260,16 +260,23 @@ assert_stdout_contains "T16: success on missing-dir" "BUDGET_EXCEEDED=false" "$o
 # ─── Test 17 (#538): validate_dir rejects symlink-parent escape ───
 # T17 is the only test case whose escape target lives outside /tmp/ —
 # the test must demonstrate that a symlinked parent under /tmp/ cannot
-# materialize a directory under $HOME via mkdir -p. mktemp -d under
-# $HOME gives a unique target; trap-based cleanup ensures no fixture
-# leak even if an assertion fails partway through.
+# materialize a directory outside /tmp/ via mkdir -p. The escape-target
+# fixture lives under /var/tmp (POSIX standard, outside /tmp/'s canonical
+# tree on both macOS and Linux, and reliably writable in CI sandboxes
+# where $HOME may be restricted). The RETURN trap is installed BEFORE
+# the escape-target mktemp so a /var/tmp or $HOME write failure does
+# not leak the under-/tmp fixture under set -euo pipefail.
 t17_run() {
-    local T_ESCAPE_DIR T_DIR T_DANGLING T_FILE rc
+    local T_ESCAPE_DIR="" T_DIR T_DANGLING T_FILE rc
     T_DIR="$(make_dir)"
-    T_ESCAPE_DIR=$(mktemp -d "${HOME}/test-token-tally-escape.XXXXXX")
     # shellcheck disable=SC2317  # cleanup invoked via RETURN trap
-    t17_cleanup() { rm -rf "$T_DIR" "$T_ESCAPE_DIR"; }
+    t17_cleanup() { rm -rf "$T_DIR" ${T_ESCAPE_DIR:+"$T_ESCAPE_DIR"}; }
     trap t17_cleanup RETURN
+    T_ESCAPE_DIR=$(mktemp -d /var/tmp/test-token-tally-escape.XXXXXX 2>/dev/null) || \
+        T_ESCAPE_DIR=$(mktemp -d "${HOME}/test-token-tally-escape.XXXXXX" 2>/dev/null) || {
+            echo "WARNING: T17 skipped — could not create escape-target outside /tmp/ (tried /var/tmp and \$HOME)" >&2
+            return 0
+        }
 
     # 17a: live symlink-parent escape (the #538 reproducer).
     ln -s "$T_ESCAPE_DIR" "$T_DIR/link"

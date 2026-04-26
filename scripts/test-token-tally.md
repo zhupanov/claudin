@@ -33,7 +33,7 @@ Total: 39 individual assertions across 18 test cases (12 original + 5 new from r
 
 ## Invariants
 
-- All test fixtures use `mktemp -d "/tmp/test-token-tally.XXXXXX"` to satisfy the `--dir` path-prefix guard. Fixtures are removed at the end of each test (`rm -rf "$T"`). **T17 exception**: T17 must demonstrate that `validate_dir` rejects a symlink whose target lies *outside* `/tmp/`, so its escape-target fixture lives under `$HOME` (created via `mktemp -d "${HOME}/test-token-tally-escape.XXXXXX"`) and cleanup is wrapped in a `trap … RETURN` to survive mid-assertion failures. This deviation from the under-/tmp rule is intentional and unique to T17.
+- All test fixtures use `mktemp -d "/tmp/test-token-tally.XXXXXX"` to satisfy the `--dir` path-prefix guard. Fixtures are removed at the end of each test (`rm -rf "$T"`). **T17 exception**: T17 must demonstrate that `validate_dir` rejects a symlink whose target lies *outside* `/tmp/`, so its escape-target fixture lives outside `/tmp/`'s canonical tree. T17 attempts `/var/tmp` first (POSIX standard, outside `/tmp/` on both macOS and Linux, and reliably writable in CI sandboxes), falls back to `$HOME`, and finally skips T17 with a `WARNING:` to stderr if neither location is writable. The cleanup trap is installed immediately after `T_DIR` is created (before the escape-target `mktemp`) so a `mktemp` failure under `set -euo pipefail` does not leak the under-`/tmp` fixture. This deviation from the under-`/tmp` rule is intentional and unique to T17.
 - The harness uses three assertion helpers: `assert_exit_code`, `assert_stdout_contains`, `assert_stdout_not_contains`. Failures collect into `FAIL_DETAILS` and print at the end.
 - Exit code 1 on any failure; exit code 0 only when all assertions pass.
 
