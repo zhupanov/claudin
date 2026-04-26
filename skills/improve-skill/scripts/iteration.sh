@@ -588,6 +588,7 @@ invoke_claude_p() {
   (
     cd "$REPO_ROOT"
     claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
+      --permission-mode bypassPermissions \
       < "$prompt_file" > "$out_file" 2> "$stderr_file" &
     # Subshell variables are already isolated from the parent function;
     # no `local` keyword needed (and `local` inside `( ... )` outside a

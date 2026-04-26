@@ -77,6 +77,20 @@ All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p
 - `gh issue comment` bodies always pass through `redact-secrets.sh`.
 - In loop mode, iteration.sh does NOT clean up the caller-supplied work-dir (`OWNS_WORK_DIR=false`) — driver owns `cleanup-tmpdir.sh`. Standalone-mode cleanup is now conditional on terminal status (see Retention on non-success above).
 
+### Non-interactive permission contract (issue #585)
+
+`invoke_claude_p` launches every `claude -p` child with `--permission-mode bypassPermissions` adjacent to the FINDING_7 `--plugin-dir "$CLAUDE_PLUGIN_ROOT"` argv pair. Without this flag, an in-child tool-permission prompt would stall the subprocess until the 3600s `kill -0` watchdog fires (the parent has no human at the prompt to answer it), converting a permission gate into a silent hang. Closing this halt-class variant complements #273 — which eliminated the *post-child-return* model halt — by also closing the *in-child* permission stall.
+
+**Trust boundary** (real, not idealized). Child sessions are launched by trusted bash glue, but the prompts themselves transitively carry:
+- `/skill-judge` output (LLM output composed against the user-selected skill).
+- `/design` output (LLM output that already absorbed `/skill-judge` output and codebase content).
+- Repo-derived content read by Read/Grep at prompt-assembly time.
+- User-supplied argv (skill name, `--issue`, `--breadcrumb-prefix`).
+
+`bypassPermissions` does NOT mitigate prompt-injection within this boundary — it only removes the interactive-gate stall class. The mitigations remain the kernel's deterministic prompt-assembly path, the pinned `--plugin-dir`, the FINDING_10 stderr-sidecar isolation, and the redact-secrets.sh outbound scrubber on `gh issue comment`. See `SECURITY.md`'s `## /improve-skill subprocess invocation` subsection for the full security posture.
+
+**Minimum `claude` CLI version**: `--permission-mode bypassPermissions` is required CLI surface. Older `claude` binaries that do not recognize the flag fail-fast (subprocess returns non-zero, existing `dump_subprocess_diagnostics` captures stderr) — there is no silent corruption path. See `docs/installation-and-setup.md` for the documented minimum-version requirement.
+
 ## Amended `/design` prompt — four-rule directive set
 
 The design phase emits four directive clauses (byte-parallel to pre-#273 driver.sh plus one new clause):
