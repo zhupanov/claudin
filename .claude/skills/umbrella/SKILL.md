@@ -39,7 +39,9 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 $PWD/.claude/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
 ```
 
-Parse stdout for: `LABELS` (newline-joined; may be empty), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `TASK` (everything after the last flag — may be empty), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5).
+Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
+
+When forwarding labels to `/issue` in Steps 3A, 3B.2, and 3B.3 below, reconstruct the repeated `--label` flags by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>`.
 
 On non-zero exit, print the `ERROR=` line and abort.
 
@@ -72,7 +74,7 @@ Forward the entire `TASK` to `/issue` (single mode). Do NOT add or strip any fla
 Invoke the Skill tool:
 
 - Try skill `"issue"` first (bare name). If no skill matches, try `"larch:issue"`.
-- args: `[--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <TASK>` — pass each captured flag verbatim; omit the flag if its parsed value is the default.
+- args: `[--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <TASK>` — pass each captured flag verbatim; omit the flag if its parsed value is the default. Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0.
 
 Parse `/issue`'s stdout for `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`, `ISSUE_1_NUMBER`, `ISSUE_1_URL`, `ISSUE_1_TITLE`, `ISSUE_1_DUPLICATE_OF_NUMBER` / `ISSUE_1_DUPLICATE_OF_URL` (when deduplicated), `ISSUE_1_DRY_RUN` (when dry-run). Capture into the `CHILD_*` fields per Step 4 (the one-shot child is `CHILD_1`).
 
@@ -105,7 +107,7 @@ Write `$UMBRELLA_TMPDIR/pieces.json` (a JSON array of `{title, body, depends_on:
 Invoke the Skill tool:
 
 - Try skill `"issue"` first. Fall back to `"larch:issue"`.
-- args: `--input-file <BATCH_INPUT_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go]` — flags forwarded verbatim. Do NOT pass `<TASK>` (batch mode rejects a trailing description).
+- args: `--input-file <BATCH_INPUT_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go]` — flags forwarded verbatim. Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0. Do NOT pass `<TASK>` (batch mode rejects a trailing description).
 
 Parse the per-item `ISSUE_<i>_NUMBER`, `ISSUE_<i>_URL`, `ISSUE_<i>_TITLE`, `ISSUE_<i>_DUPLICATE_OF_NUMBER`, `ISSUE_<i>_DUPLICATE_OF_URL`, `ISSUE_<i>_DRY_RUN`, `ISSUE_<i>_FAILED`, plus aggregate `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`.
 
@@ -126,7 +128,7 @@ Write `$UMBRELLA_TMPDIR/summary.txt` (the summary paragraph) and `$UMBRELLA_TMPD
 Then forward to `/issue` (single mode) for the umbrella itself:
 
 - Try skill `"issue"` first; fall back to `"larch:issue"`.
-- args: `--body-file <UMBRELLA_BODY_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <UMBRELLA_TITLE_HINT>` — title is the trailing description (`/issue` derives the title from the first non-empty line, which is `UMBRELLA_TITLE_HINT`).
+- args: `--body-file <UMBRELLA_BODY_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <UMBRELLA_TITLE_HINT>` — title is the trailing description (`/issue` derives the title from the first non-empty line, which is `UMBRELLA_TITLE_HINT`). Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0.
 
 Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as `UMBRELLA_URL`), `ISSUE_1_TITLE` (capture as `UMBRELLA_TITLE`). On `ISSUE_1_FAILED=true` or empty `ISSUE_1_NUMBER`, print `**⚠ /umbrella: umbrella issue creation failed. Children remain orphan but were created — see CHILD_<i>_* output lines.**` and jump to Step 4 with `UMBRELLA_NUMBER` / `UMBRELLA_URL` empty (skipping 3B.4).
 
@@ -198,3 +200,4 @@ Each script under `scripts/` has a sibling contract `.md` documenting CLI surfac
 - `scripts/render-umbrella-body.sh` — Step 3B.3 umbrella-body composer (summary + children TSV → markdown body with GitHub-native checklist); contract `scripts/render-umbrella-body.md`.
 - `scripts/helpers.sh` — Steps 3B.4 / 4 consolidated helpers exposing `check-cycle`, `wire-dag`, and `emit-output` subcommands; contract `scripts/helpers.md`.
 - `scripts/test-helpers.sh` — regression harness for `helpers.sh check-cycle`; contract `scripts/test-helpers.md`. Run manually via `bash scripts/test-helpers.sh`; wire into `make lint` as a follow-up issue.
+- `scripts/test-umbrella-parse-args.sh` — regression harness for `parse-args.sh`; contract `scripts/test-umbrella-parse-args.md`. Wired into `make lint` via the `test-umbrella-parse-args` Makefile target alongside `test-umbrella-helpers`.
