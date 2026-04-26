@@ -404,15 +404,15 @@ The claim text should be a clean, declarative sentence — not a question and no
 - Lane 2 → `$RESEARCH_TMPDIR/quick-lane-2-output.txt`
 - Lane 3 → `$RESEARCH_TMPDIR/quick-lane-3-output.txt`
 
-After all three Agent returns, the orchestrator emits per-lane sidecars for token telemetry (matching the existing `Synthesis` / `Revision` / `Code` sidecar pattern):
+After all three Agent returns, the orchestrator emits per-lane sidecars for token telemetry (matching the existing `Synthesis` / `Revision` / `Code` sidecar pattern). The flag name is `--total-tokens` (not `--tokens`) — see `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.md` for the helper contract:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh write \
   --dir "$RESEARCH_TMPDIR" --phase research --lane "Quick-Lane-1" --tool claude \
-  --tokens "<total_tokens-from-Lane1-Agent-return>"
+  --total-tokens "<total_tokens-from-Lane1-Agent-return>"
 ```
 
-Same call for Lane-2 and Lane-3 (substitute `Quick-Lane-2` / `Quick-Lane-3`). Per-lane sidecars enable budget enforcement on the K=3 subagents (per `RESEARCH_TOKEN_BUDGET`).
+Same call for Lane-2 and Lane-3 (substitute `Quick-Lane-2` / `Quick-Lane-3`). Per-lane sidecars enable budget enforcement on the K=3 subagents (per `RESEARCH_TOKEN_BUDGET`). Pass `--total-tokens unknown` when the Agent return lacks a parseable `<usage>` block (matching the existing helper contract).
 
 Step 1.4 Quick subsection parses the per-lane outputs, applies the Jaccard-clustering vote-merge, and handles partial-failure tiers; Step 1.5 Quick subsection writes `research-report.txt` and `quick-ballot.md`.
 

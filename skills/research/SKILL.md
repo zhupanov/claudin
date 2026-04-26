@@ -455,16 +455,22 @@ If `BUDGET_ABORTED=true` (set by any of the budget gates after Steps 1, 2, or 2.
 
 Render the `## Token Spend` section before `cleanup-tmpdir.sh` so sidecars under `$RESEARCH_TMPDIR` are still readable. The script owns the full section (header + body) — SKILL.md just executes it and prints the stdout:
 
+**`TALLY_SCALE` derivation** (#520 review FINDING_1): `RESEARCH_QUICK=true` is orthogonal to `RESEARCH_SCALE` (which retains its `standard` default in quick mode). `token-tally.sh report` overloads `--scale` to drive its labelling and validation-row branches, so passing the raw `RESEARCH_SCALE` would render quick-mode telemetry as standard-mode telemetry (validation row falls into the defensive "may not have run" message instead of the intentional "skipped" branch, and zero-sidecar fallback text uses the wrong mode label). Map the runtime mode explicitly:
+
 ```bash
+TALLY_SCALE="$RESEARCH_SCALE"
+if [[ "$RESEARCH_QUICK" == "true" ]]; then
+  TALLY_SCALE="quick"
+fi
 ${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh report \
   --dir "$RESEARCH_TMPDIR" \
-  --scale "$RESEARCH_SCALE" \
+  --scale "$TALLY_SCALE" \
   --adjudicate "$RESEARCH_ADJUDICATE" \
   --planner "$RESEARCH_PLAN" \
   --budget-aborted "$BUDGET_ABORTED"
 ```
 
-The script is a no-op-safe call: when no sidecars exist (e.g., quick mode with no measurable lanes), it prints a `_(no measurements available)_` placeholder; if `$RESEARCH_TMPDIR` was already removed, it prints `_(token telemetry unavailable)_`. Either path exits 0 — the report block is always emitted, even on degraded paths. See `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.md` for the full contract.
+The script is a no-op-safe call: when no sidecars exist (degraded paths), it prints a `_(no measurements available)_` placeholder; if `$RESEARCH_TMPDIR` was already removed, it prints `_(token telemetry unavailable)_`. Either path exits 0 — the report block is always emitted, even on degraded paths. Under `--quick`, the K=3 Claude subagents ARE measurable (each Agent return carries a `<usage>` block), so the report renders K=3 rows under the `quick` label rather than falling through to the no-measurements placeholder. See `${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.md` for the full contract.
 
 ### Preserve sidecar (when `KEEP_SIDECAR=true`)
 

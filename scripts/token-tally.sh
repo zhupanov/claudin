@@ -233,7 +233,19 @@ cmd_report() {
     echo
 
     if [[ "$total_lane_count" -eq 0 ]]; then
-        echo "_(no measurements available — Claude inline only, no measurable subagent invocations)_"
+        # Under --quick, the K=3 Claude subagents ARE measurable, so a no-measurements
+        # outcome there indicates that no sidecar write fired (every quick lane failed
+        # to write, or the orchestrator never reached the write step). Distinguish
+        # so the operator does not misread "Claude inline only" as the intentional
+        # standard/deep degraded path.
+        case "$scale" in
+            quick)
+                echo "_(no measurements available — K=3 quick lanes did not produce sidecars; orchestrator may have aborted before write)_"
+                ;;
+            *)
+                echo "_(no measurements available — Claude inline only, no measurable subagent invocations)_"
+                ;;
+        esac
         if [[ "$aborted" == "true" ]]; then
             echo
             echo "**Run aborted: --token-budget exceeded.**"
@@ -288,7 +300,11 @@ cmd_report() {
     else
         case "$scale" in
             quick)
-                echo "  Research phase         (1 lane — Claude inline only): not measured"
+                # --quick mode runs K=3 homogeneous Claude subagents — all measurable.
+                # If we land here with no research sidecars, every quick lane failed to
+                # write a sidecar (orchestrator bug or partial-failure tier <2 fail-closed
+                # path that aborted before any sidecar write).
+                echo "  Research phase         (3 lanes — K=3 homogeneous Claude inline, all measurable): not measured"
                 ;;
             standard)
                 echo "  Research phase         (3 lanes — Claude inline + 2 externals, all unmeasurable): not measured"
@@ -308,7 +324,7 @@ cmd_report() {
     if [[ ${#validation_lanes[@]} -gt 0 ]]; then
         fmt_phase_row "Validation phase" "$validation_total" "$validation_measured" "$validation_unknown"
     elif [[ "$scale" == "quick" ]]; then
-        echo "  Validation phase       (skipped in --scale=quick): -"
+        echo "  Validation phase       (skipped in --quick): -"
     elif [[ "$aborted" == "true" ]]; then
         echo "  Validation phase       (skipped: --token-budget aborted before Step 2): -"
     else
