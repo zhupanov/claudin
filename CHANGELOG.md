@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.12] - 2026-04-26
+
+### Fixed
+
+- `skills/review/SKILL.md` (Step 3a), `skills/implement/SKILL.md` (Step 5 quick-mode), and `skills/design/references/plan-review.md` — pass `--substantive-validation --validation-mode` to `collect-reviewer-results.sh` so banner-only reviewer output (e.g., a CLI `Authentication required` banner) is rejected as `STATUS=NOT_SUBSTANTIVE` rather than passing as `STATUS=OK` and getting merged into round-1 dedup/voting. NOT_SUBSTANTIVE flows through the existing Runtime Timeout Fallback (`skills/shared/external-reviewers.md:35`), triggering the same Claude-subagent fallback as a timeout. The three call sites all use prompts that demand "numbered findings ... If NO issues, output exactly NO_ISSUES_FOUND" — the exact format `--validation-mode` is designed for (30-word floor + `NO_ISSUES_FOUND` short-circuit + citation requirement). Per dialectic resolutions: DECISION_1 (3-0 voted) skipped `skills/design/SKILL.md:199` (sketch collector with `--timeout 1260` and prose-paragraph contract); DECISION_2 (2-1) added structural-test pins (`scripts/test-{review,design,implement}-structure.sh` plus their sibling `.md` contracts) so future edits cannot silently drop the flags; DECISION_3 (0-3, OVERRULES synthesis) left `/design` plan-review prompts unchanged — ship and revisit only if monitoring shows chronic NOT_SUBSTANTIVE rate. `docs/external-reviewers.md` "Output Validation" rewritten as two layers (default sentinel/non-empty/retry vs opt-in substantive check) with a per-skill opt-in matrix; `skills/shared/external-reviewers.md` gets a cross-reference note; `scripts/collect-reviewer-results.sh` header drops `/research`-only scoping language. Closes #661.
+
 ## [7.16.11] - 2026-04-26
 
 ### Fixed
