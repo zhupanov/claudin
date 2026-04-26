@@ -25,12 +25,65 @@ Parse the output for `NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DE
 
 If the script exits non-zero or emits an `ERROR=` line, print the error and abort.
 
-## Step 2 — Validate Arguments
+## Step 1.4 — Capture Raw Description to Tmpfile
 
-Invoke the validator. Include `--plugin` only when `PLUGIN=true`:
+`parse-args.sh`'s `DESCRIPTION` field is the space-joined remainder reconstructed via `"$*"`. SKILL.md Step 1's invocation passes `$ARGUMENTS` UNQUOTED to `parse-args.sh`, so word-splitting on whitespace can flatten embedded newlines from a multi-line user description before the parser sees them. For the synthesis path to handle the multi-line case from #549 reproducibly, the orchestrator must capture the user's ORIGINAL raw description (the LLM-side view of `$ARGUMENTS` before shell flattening) to a tmpfile.
+
+Use the Write tool to create `$RAW_DESC_FILE` (mktemp under the orchestrator's working tmpdir, e.g. `/tmp/create-skill-raw-desc-<random>.txt`) and write the LLM's view of the raw description portion of `$ARGUMENTS` to it. If the original input was already a clean single-line description (the common case), the file is byte-identical to `$DESCRIPTION` from Step 1. If the original was multi-line, the tmpfile preserves the newlines that `parse-args.sh` may have flattened.
+
+Save the path as `$RAW_DESC_FILE` for the next step.
+
+## Step 1.5 — Validate Raw Description
+
+Invoke the coordinator script. Include `--plugin` only when `PLUGIN=true`:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/validate-args.sh --name "$NAME" --description "$DESCRIPTION" [--plugin]
+${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/prepare-description.sh --name "$NAME" --description-file "$RAW_DESC_FILE" [--plugin]
+```
+
+Parse the output for `MODE`. The full stdout grammar, synthesis-trigger error literals, F9 pre-synthesis security scan rule, and edit-in-sync obligations live in the sibling contract at `${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/prepare-description.md`.
+
+Branch on `MODE`:
+
+- **`MODE=verbatim`**: read `$RAW_DESC_FILE` content into `$FRONTMATTER_DESCRIPTION` (used by `render-skill-md.sh --description` in Step 3) AND into `$FEATURE_SPEC` (forwarded as the `/im` feature brief in Step 3). Both equal the original raw description on this path. **Skip Step 1.6.** Proceed to Step 2.
+- **`MODE=needs-synthesis`**: also parse `REASON` (`newlines-or-control-chars` or `length-exceeds-cap`). Distill a single-line `Use when…` frontmatter from `$RAW_DESC_FILE`'s content (LLM-side reasoning):
+  - Extract the imperative kernel of the spec.
+  - Prefix with `Use when` followed by a space (lowercase 'when'); cap at one line; ASCII-recommended.
+  - MUST NOT contain XML tags, backticks, `$(`, control characters, or any standalone heredoc/frontmatter token (`EOF`, `HEREDOC`, `---`).
+  - **Name-echo guard**: the synthesized line MUST NOT start with the lowercased `$NAME`. If it does, generate a SECOND synthesized line. If the second also fails the name-echo guard, abort with `**⚠ Step 1.5 — synthesis loop: name-echo guard rejected both attempts. Aborting.**`
+  - Save the accepted synthesized line as `$SYNTHESIZED_LINE`.
+  - Capture `$FEATURE_SPEC` from `$RAW_DESC_FILE`'s content NOW (read the file). This binding is final for the rest of the run — Step 1.6 must NOT overwrite `$FEATURE_SPEC`.
+  - Proceed to Step 1.6.
+- **`MODE=abort`**: print `ERROR` and stop.
+
+## Step 1.6 — Re-validate Synthesized Line
+
+Runs only on the `MODE=needs-synthesis` branch from Step 1.5.
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/prepare-description.sh --name "$NAME" --description "$SYNTHESIZED_LINE" [--plugin]
+```
+
+Parse the output for `MODE`. Branch:
+
+- **`MODE=verbatim`**: synthesized line passed validation. Set `$FRONTMATTER_DESCRIPTION = $SYNTHESIZED_LINE`. **`$FEATURE_SPEC` stays as the original raw description** (set in Step 1.5; never overwritten). Print `> Synthesized frontmatter description: $SYNTHESIZED_LINE` so the operator sees what landed in the scaffold. Proceed to Step 2.
+- **`MODE=needs-synthesis`** OR **`MODE=abort`**: synthesis failed re-validation (e.g., the LLM's synthesized line introduced a banned token, or somehow still has newlines). Print `**⚠ Step 1.6 — synthesized line failed re-validation: <ERROR>. Aborting.**` and stop. **No further retry.**
+
+### State machine (cap reference)
+
+| Stage | What happens | Bash calls so far |
+|---|---|---|
+| Step 1.5 | Initial probe via `prepare-description.sh --description-file` | 1 |
+| Orchestrator synthesis (LLM-side) | Distill 1 line + name-echo guard. On name-echo violation: 1 retry. Two violations → abort. No Bash call. | 1 (no Bash call) |
+| Step 1.6 (only on `MODE=needs-synthesis`) | Re-validate synthesized line via `prepare-description.sh --description` | 2 max |
+| Step 1.6 failure (`MODE=abort` or `needs-synthesis`) | Abort with validator's last `ERROR`. No further retry. | 2 (terminal) |
+
+## Step 2 — Validate Arguments
+
+Defense-in-depth re-validation on `$FRONTMATTER_DESCRIPTION` (the validated value from Step 1.5 verbatim path or Step 1.6 synthesized path). Idempotent on both paths — guards against bugs in `prepare-description.sh`. Include `--plugin` only when `PLUGIN=true`:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/validate-args.sh --name "$NAME" --description "$FRONTMATTER_DESCRIPTION" [--plugin]
 ```
 
 Parse the output for `VALID`. If `VALID=false` or the script exits non-zero, print the `ERROR=` message and abort.
@@ -47,7 +100,7 @@ Before scaffolding, ask yourself:
 
 - **Before picking `--multi-step` vs minimal:** does the new skill have ≥2 distinct phases that each need their own `## Step N` heading, or is it a single-call forwarder? One-shot delegators read cleaner as `minimal`; the `multi-step` template only earns its scaffolding when there is genuine sequencing.
 - **Before choosing a name:** will this name graze a harness keyword? `validate-args.sh` probes the Anthropic/larch-static list + plugin skills + local `.claude/skills/` — but a name that approximates a common verb (`review`, `test`, `run`) or an Anthropic-adjacent prefix (`claude-*`) risks ambiguous `Skill` permission matching even when the static check passes.
-- **Before writing the description:** will `description` alone disambiguate this skill from every other installed skill the harness might surface? In typical agent/skill UIs the harness matches triggers against the description first; a vague or name-echo description is the #1 cause of a skill that installs but never fires.
+- **Before writing the description:** are you giving a one-line *frontmatter trigger* or a *feature spec*? They are TWO DISTINCT CONCEPTS in `/create-skill`. The frontmatter `description:` is a single-line YAML field used by the harness for trigger matching; the feature spec is the freeform brief forwarded to `/im` describing what the new skill should do. If your input is a multi-line spec or exceeds 1024 chars (with no other anti-patterns), Step 1.5 will trigger LLM-side synthesis: you'll see the synthesized one-liner echoed before delegation, and the original spec will reach `/im` as the feature brief. If your input is a single-line `Use when…` trigger, both the frontmatter and the feature brief will use it verbatim. Mixed inputs (multi-line spec containing XML tags / backticks / `$(` / heredoc tokens) will abort cleanly via the Step 1.5 pre-synthesis security scan rather than synthesizing around banned content.
 - **Before inlining prompt logic:** would a shared script at `${CLAUDE_PLUGIN_ROOT}/scripts/` or a skill-private `scripts/` file be a better home? Mechanical rule A (see Principles) says non-trivial shell logic always belongs in a `.sh`. Inline Bash in `SKILL.md` is the #1 source of copy-paste drift across sibling skills.
 - **Before forwarding to `/im`:** is the scaffold complete enough to merge, or does the new skill still need a follow-up PR to land its real logic? `/im` auto-merges — a half-scaffolded skill becomes a live trigger the moment the PR lands.
 
@@ -61,6 +114,9 @@ Before scaffolding, ask yourself:
 - **NEVER** reuse a kebab name whose sibling just retired. **Why**: `validate-args.sh` scans `${CLAUDE_PLUGIN_ROOT}/skills/*` at scaffold time but does NOT see in-flight PRs or recently-deleted directories still on origin — the resulting double-merge conflict surfaces only in CI, after the PR has been opened.
 - **NEVER** forward `--merge` through `/create-skill` expecting it to be a hard gate. **Why**: `/im` already auto-merges; `--merge` on `/create-skill` is a no-op retained for backward compat. Treating it as load-bearing leads to surprise when callers omit it and merge still happens.
 - **NEVER** rewrite the Step 3 `/im` feature-description template as freeform prose. **Why**: the literal `render-skill-md.sh --name … --description …` invocation shape keeps argument binding explicit for the `/im` implementing agent — deterministic name/description/target/plugin-token wiring. Freeform prose forces the agent to reconstruct those bindings from narrative and measurably raises the risk of a silently-wrong scaffold.
+- **NEVER** synthesize a frontmatter description for any validator failure other than the synthesis-trigger classes (`Description contains newlines or control characters` or `Description length (...) exceeds 1024 characters`). **Why**: synthesis on XML-tag / backtick / `$(` / heredoc-token / name-related failures would silently launder banned content into an opaque paraphrase, replacing an explicit, evidenced refusal in `validate-args.sh` with an LLM guess. Step 1.5's pre-synthesis security scan additionally aborts when a synthesis-trigger class co-occurs with any banned-token class — preserving every existing safety guarantee. Narrow gating + mixed-input scan are non-negotiable.
+- **NEVER** reference `$DESCRIPTION` (the raw remainder from Step 1) downstream of Step 1.5. **Why**: after Step 1.5 the orchestrator carries TWO distinct values — `$FRONTMATTER_DESCRIPTION` (validated single-line, fed to `render-skill-md.sh --description`) and `$FEATURE_SPEC` (original raw, forwarded as the `/im` feature brief). On the synthesis path these are different content; falling back to `$DESCRIPTION` silently routes raw input to either the renderer or the validator and breaks the two-concept contract.
+- **NEVER** overwrite `$FEATURE_SPEC` from Step 1.6's `prepare-description.sh` output. **Why**: Step 1.6 receives the synthesized one-liner as `--description`; on `MODE=verbatim` (synthesized line passes), the script's classification only confirms validity — it does not redefine `$FEATURE_SPEC`. The orchestrator captured `$FEATURE_SPEC` from the original raw description in Step 1.5 (`MODE=needs-synthesis` branch) before invoking Step 1.6, and that binding is final. Overwriting from Step 1.6 would route the synthesized one-liner to `/im`'s feature brief and lose the operator's full feature spec.
 
 ## Principles
 
@@ -116,18 +172,23 @@ Construct a concise feature description for `/im`:
 - Plugin path token (always): `${CLAUDE_PLUGIN_ROOT}`
 - Template: `multi-step` if `MULTI_STEP=true`, else `minimal`.
 
-Feature description template (fill placeholders from the parsed values):
+Feature description template (fill placeholders from the parsed values; note `<FRONTMATTER_DESCRIPTION>` is the validated single-line frontmatter from Step 1.5/1.6 and `<FEATURE_SPEC>` is the original raw description carried as a feature brief — these are TWO DISTINCT slots):
 
 ```
-Scaffold new skill /<NAME> at <TARGET_DIR>. Description: "<DESCRIPTION>". Path mode: <plugin-dev|consumer>. Template: <minimal|multi-step>.
+Scaffold new skill /<NAME> at <TARGET_DIR>. Frontmatter description: "<FRONTMATTER_DESCRIPTION>". Path mode: <plugin-dev|consumer>. Template: <minimal|multi-step>.
+
+Feature spec for the new skill (verbatim user input — multi-line allowed):
+<FEATURE_SPEC>
 
 Use ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/render-skill-md.sh to write the scaffold:
-  render-skill-md.sh --name "<NAME>" --description "<DESCRIPTION>" \
+  render-skill-md.sh --name "<NAME>" --description "<FRONTMATTER_DESCRIPTION>" \
     --target-dir "<TARGET_DIR>" \
     --local-token "<LOCAL_TOKEN>" --plugin-token "${CLAUDE_PLUGIN_ROOT}" \
     --multi-step <MULTI_STEP>
 
 After scaffolding, run ${CLAUDE_PLUGIN_ROOT}/skills/create-skill/scripts/post-scaffold-hints.sh --target-dir "<TARGET_DIR>" --plugin <PLUGIN>. The hints script is the single source of truth for the post-scaffold doc-sync checklist — execute every reminder it emits verbatim (including README Skills catalog row + the docs/configuration-and-permissions.md "Strict-permissions consumers — Skill permission entries" subsection pointer, .claude/settings.json dual-form Skill permission entries with `sort -u`, docs/workflow-lifecycle.md orchestration/delegation/standalone updates, docs/agents.md, docs/review-agents.md, AGENTS.md Canonical sources, and any additional lines the hints script prints). Include the hints output verbatim in the PR body under a "Post-scaffold sync checklist" section.
+
+When implementing the new skill's body to match the feature spec above, use <FEATURE_SPEC> as the authoritative intent (it carries the operator's full freeform description); use <FRONTMATTER_DESCRIPTION> ONLY for the YAML frontmatter `description:` field via `render-skill-md.sh --description`. On the verbatim path the two slots carry the same string; on the synthesis path <FRONTMATTER_DESCRIPTION> is a one-line `Use when…` distillation of <FEATURE_SPEC>, both validated.
 
 MUST read ${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md (full file) before writing any code. Section III mechanical rules A/B/C below override Section IV writing-style guidance on conflict:
   A. Content and logic live in .sh scripts — shared at ${CLAUDE_PLUGIN_ROOT}/scripts/ when reusable, private at ${CLAUDE_PLUGIN_ROOT}/skills/<NAME>/scripts/ otherwise. Grep existing scripts/ before creating a new one.

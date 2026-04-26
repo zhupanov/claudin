@@ -404,6 +404,12 @@ exclude = [
   # scripts/test-parse-args.md (sibling contract), matching the same
   # Makefile-only pattern as the other test-* harnesses above.
   "scripts/test-parse-args.sh",
+  # scripts/test-prepare-description.sh is the regression harness for
+  # skills/create-skill/scripts/prepare-description.sh (the Step 1.5 / Step 1.6
+  # synthesis-flow coordinator added for #549). Invoked only from Makefile
+  # (test-prepare-description target); same Makefile-only pattern as the
+  # test-parse-args entry above.
+  "scripts/test-prepare-description.sh",
   "scripts/test-loop-improve-skill-halt-rate.sh",
   "scripts/lib-loop-improve-halt-ledger.sh",
   "scripts/test-lib-loop-improve-halt-ledger.sh",
