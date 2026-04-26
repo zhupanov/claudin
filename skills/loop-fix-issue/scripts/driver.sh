@@ -257,18 +257,23 @@ for (( ITER=1; ITER<=MAX_ITERATIONS; ITER++ )); do
 
   # Termination check: did /fix-issue reach Step 1 (i.e., did Step 0 lock work)?
   # When the success sentinel is absent, /fix-issue Step 0 emits one of three
-  # distinct literals (exit 1 / 2 / 3 per /fix-issue SKILL.md Step 0). Map each
-  # to its own termination reason and preserve LOOP_TMPDIR on the non-clean
-  # paths so per-iteration artifacts remain available for inspection.
+  # documented literals (exit 1 / 2 / 3 per /fix-issue SKILL.md Step 0); a
+  # defensive fallback handles any unrecognized Step 0 stdout. Map each to its
+  # own termination reason and preserve LOOP_TMPDIR on the non-clean paths so
+  # per-iteration artifacts remain available for inspection.
+  #
+  # Each sub-sentinel is anchored with the literal `0: find & lock — ` step
+  # prefix so user-data-bearing $ERROR text in one branch (e.g., the exit-3
+  # message body) cannot accidentally trigger a different branch's keyword.
   if ! grep -F -q "$SETUP_SENTINEL" "$ITER_OUT_FILE"; then
-    if grep -F -q 'find & lock — no approved issues found' "$ITER_OUT_FILE"; then
+    if grep -F -q '0: find & lock — no approved issues found' "$ITER_OUT_FILE"; then
       breadcrumb_done "3: iteration ${ITER} — /fix-issue reported no work to do. Loop complete."
       TERMINATION_REASON="no eligible issues (clean exhaustion)"
-    elif grep -F -q 'find & lock — error:' "$ITER_OUT_FILE"; then
+    elif grep -F -q '0: find & lock — error:' "$ITER_OUT_FILE"; then
       breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 reported an error; retaining LOOP_TMPDIR for inspection. Stopping loop."
       LOOP_PRESERVE_TMPDIR="true"
       TERMINATION_REASON="Step 0 error (likely transient)"
-    elif grep -F -q 'find & lock — lock failed' "$ITER_OUT_FILE"; then
+    elif grep -F -q '0: find & lock — lock failed' "$ITER_OUT_FILE"; then
       breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 lock acquisition failed; retaining LOOP_TMPDIR for inspection. Stopping loop."
       LOOP_PRESERVE_TMPDIR="true"
       TERMINATION_REASON="Step 0 lock failure (concurrent runner or partial-state)"
