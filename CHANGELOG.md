@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.1] - 2026-04-25
+
+### Changed
+
+- `scripts/test-implement-structure.sh` header refreshed to reflect the 13 structural invariants the body actually implements: line 3 count word "10"→"13", line 19 count word "Ten"→"Thirteen", and the enumeration extended past `(10)` with summaries of `(11)` Phase 5 rebase-rebump-subprocedure.md reference set with sub-assertions `(11a)–(11d)`, `(12)` Phase 5 single-source-of-truth invariant for `SECTION_MARKERS` with sub-assertions `(12a)–(12b)`, and `(13)` orchestrator-judgment-bail invariant. Pure documentation drift fix — no behavioral change; the PASS line at the end of the script already correctly said "all 13 structural invariants hold". Closes #556.
+
 ## [7.10.4] - 2026-04-25
 
 ### Changed
