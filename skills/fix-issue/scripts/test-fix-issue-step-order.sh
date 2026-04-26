@@ -22,14 +22,19 @@
 #  (10) Step 0 (Find and Lock) block contains the find-lock-issue.sh invocation.
 #  (11) Step 0 block does NOT contain `session-setup.sh` (operational ordering).
 #  (12) Step 1 (Setup) block contains the session-setup.sh invocation.
-#  (13) Top-of-file Anti-halt rule is broadened to cover Bash tool calls
+#  (13) File-preamble Anti-halt rule is broadened to cover Bash tool calls
 #       in addition to Skill calls (closes #530). The literal phrase
 #       "child Bash tool calls into the canonical" is the load-bearing
 #       broadening token — its presence proves the rule is no longer
-#       Skill-only. Without this broadening, the Step 6 → Step 7 → Step 8
-#       Bash-only chain (and the parallel Step 3 / Step 5b chains) sits
-#       outside the rule's scope, leaving the orchestrator vulnerable to
-#       the post-Bash-call halt observed in production prior to #530.
+#       Skill-only. The check is scoped to the preamble (start of file
+#       through the first `##` heading) to enforce the locational claim,
+#       not just substring presence anywhere in the file. Without this
+#       broadening, the Step 6 → Step 7 → Step 8 Skill-free terminal
+#       chain (and the parallel close/announce/cleanup tails in Step 3's
+#       not-material closure flow and Step 6b → Step 7b → Step 8 NON_PR
+#       close path) sits outside the rule's scope, leaving the
+#       orchestrator vulnerable to the post-Bash-call halt observed in
+#       production prior to #530.
 #
 # Block extraction boundaries (assertions 10-12): `## Step 0 — Find and Lock`
 # (start, exact line match) through `## Step 1 — Setup` (end, exact line
@@ -141,7 +146,40 @@ if ! grep -qF -- 'session-setup.sh --prefix claude-fix-issue --skip-branch-check
 fi
 
 # (13) Anti-halt rule broadened to cover Bash tool calls (closes #530).
-assert_contains 'child Bash tool calls into the canonical' '(13) anti-halt rule covers Bash tool calls in addition to Skill calls'
+# Scope to the file preamble — everything from the start of the file up to
+# (but not including) the first `##` heading. This rules out a future edit
+# that moves the broadening token to a deep-in-file location while still
+# satisfying a whole-file substring match, and matches the locational claim
+# made in this harness's sibling .md contract. The exit-then-print rule
+# order ensures the heading line itself is excluded — `exit` halts the
+# awk pass before the `{ print }` rule fires for that record, regardless
+# of whether the heading happens to land on line 1 (frontmatter-less
+# files) or later.
+# Diagnose three distinct boundary failures separately so a future regression
+# points at the actual cause:
+#   - no `## ` heading anywhere in the file: preamble has no end boundary;
+#     awk would silently fall back to whole-file output, defeating the
+#     locational claim.
+#   - first `## ` heading is on line 1: preamble is empty (file starts with
+#     a section heading, no preamble exists).
+#   - heading exists somewhere past line 1, preamble extracted but missing
+#     the broadening token.
+if ! grep -qE '^## ' "$SKILL_MD"; then
+    echo 'FAIL: (13) no `## ` heading found anywhere in SKILL.md — preamble end boundary missing' >&2
+    fail=1
+else
+    PREAMBLE_BLOCK=$(awk '
+        /^## / { exit }
+        { print }
+    ' "$SKILL_MD")
+    if [[ -z "$PREAMBLE_BLOCK" ]]; then
+        echo 'FAIL: (13) preamble is empty — SKILL.md begins with a `## ` heading; the anti-halt rule must appear before the first section heading' >&2
+        fail=1
+    elif ! grep -qF -- 'child Bash tool calls into the canonical' <<<"$PREAMBLE_BLOCK"; then
+        echo 'FAIL: (13) anti-halt rule in file preamble does not cover Bash tool calls (missing literal: child Bash tool calls into the canonical)' >&2
+        fail=1
+    fi
+fi
 
 if [[ $fail -ne 0 ]]; then
     echo "test-fix-issue-step-order: FAILED" >&2
