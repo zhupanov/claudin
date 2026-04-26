@@ -584,7 +584,7 @@ Print: `✅ 3: report — complete (<elapsed>)`
 
 ### Budget-abort prelude (when `BUDGET_ABORTED=true`)
 
-If `BUDGET_ABORTED=true` (set by any of the budget gates after Steps 1, 2, or 2.5), Step 3 was skipped — no `## Research Report` was rendered. Print: `**Step 3 skipped (aborted: --token-budget exceeded). Partial telemetry follows.**` so the operator sees the cause clearly.
+If `BUDGET_ABORTED=true` (set by any of the budget gates after Steps 1, 2.5, or 2.8), Step 3 was skipped — no `## Research Report` was rendered. Print: `**Step 3 skipped (aborted: --token-budget exceeded). Partial telemetry follows.**` so the operator sees the cause clearly.
 
 ### Token Spend report (always)
 

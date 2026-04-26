@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.7] - 2026-04-26
+
+### Fixed
+
+- `skills/research/SKILL.md` line 587 (Step 4 Budget-abort prelude) now reads `set by any of the budget gates after Steps 1, 2.5, or 2.8` instead of the stale `Steps 1, 2, or 2.5`. The prelude both named a non-existent post-Step-2 gate (relocated to post-Step-2.8 by #517) and omitted the actual post-Step-2.8 gate that sets `BUDGET_ABORTED=true` and skips Step 3. Mirrors the sibling fix #574 (PR #591) which corrected the line-56 measurable-lanes inventory after the same #517 relocation. Closes #575.
+
 ## [7.13.6] - 2026-04-26
 
 ### Fixed
