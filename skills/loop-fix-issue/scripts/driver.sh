@@ -53,9 +53,14 @@
 #     the cleanup warning names the iter-*-out.txt and iter-*-out.txt.stderr
 #     artifact glob patterns so they can be located without consulting docs.
 #
-# LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE is an advisory env var used ONLY by
-# tests to redirect `claude -p` invocations at a stub shim. Documented in
-# SECURITY.md as test-only; never set in production.
+# LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE is an advisory env var reserved for
+# forthcoming Tier-2 stub-shim integration tests in
+# scripts/test-loop-fix-issue-driver.sh; the shipped Tier-1 structural test
+# only references the env-var name (assertion K) and does not exercise the
+# override at runtime. Documented in skills/loop-fix-issue/scripts/driver.md
+# as test-only; SECURITY.md registration is deferred until Tier-2 stub-shim
+# coverage lands (mirrors the LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE precedent at
+# SECURITY.md line 97). Never set in production.
 
 set -euo pipefail
 
