@@ -34,7 +34,7 @@ The script enforces that CWD is a larch plugin repo by checking for **both**:
 - `.claude-plugin/plugin.json`
 - `skills/implement/SKILL.md`
 
-This matches the gate in `skills/create-skill/scripts/validate-args.sh`. The skill is only meaningful inside the plugin source tree (or a checkout of it) because the research prompt's "repo-local survey" step depends on `skills/` and `.claude/skills/` being present.
+The two-file predicate is the same one `skills/create-skill/scripts/validate-args.sh` applies inside its plugin-mode CWD check (grep the create-skill script for `.claude-plugin/plugin.json` to find the block), but `/skill-evolver` enforces it on **every** invocation while `/create-skill` only enforces it when `--plugin` is set. Locating the create-skill block by name rather than line number keeps this cross-reference stable across edits to create-skill. The skill is only meaningful inside the plugin source tree (or a checkout of it) because the research prompt's "repo-local survey" step depends on `skills/` and `.claude/skills/` being present.
 
 ## Stdout grammar
 
@@ -79,7 +79,7 @@ Update this contract in the same PR as any of the following edits to `validate-a
 - Change to the CWD precondition or skill-existence search order.
 - Change to the ERROR message text.
 
-The orchestrator (`skills/skill-evolver/SKILL.md` Step 1) parses the four `VALID=true` keys (`SKILL_NAME`, `SKILL_DIR`, `DEBUG`) and the `ERROR` key on the failure path. Adding a new key without updating SKILL.md silently drops the value; removing a parsed key breaks Step 2.
+The orchestrator (`skills/skill-evolver/SKILL.md` Step 1) parses the four success-path KV lines (`VALID`, `SKILL_NAME`, `SKILL_DIR`, `DEBUG`) and the `ERROR` line on the failure path. Adding a new key without updating SKILL.md silently drops the value; removing a parsed key breaks Step 2.
 
 ## Test posture
 
