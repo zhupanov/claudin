@@ -68,7 +68,7 @@ for i in $(seq 0 $((PIECES_TOTAL - 1))); do
   fi
   bad_deps=$(jq -r --argjson idx "$i" '
     .[$idx].depends_on // [] |
-    map(select((type != "number") or (. < 1) or (. > $idx))) |
+    map(select((type != "number") or (. != (. | floor)) or (. < 1) or (. > $idx))) |
     @csv
   ' "$PIECES_FILE")
   if [ -n "$bad_deps" ] && [ "$bad_deps" != '""' ]; then
