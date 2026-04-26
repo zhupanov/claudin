@@ -83,11 +83,11 @@ Create one or more GitHub issues with LLM-based semantic duplicate detection. Tw
 
 ## `/loop-fix-issue`
 
-**Arguments**: `[--debug] [--max-iterations N] [--no-slack]`
+**Arguments**: `[--debug] [--max-iterations N] [--no-slack] [--no-admin-fallback]`
 
 **Source**: [`skills/loop-fix-issue/SKILL.md`](../skills/loop-fix-issue/SKILL.md)
 
-Repeatedly invoke `/fix-issue` (one approved GitHub issue per iteration) until the open backlog is empty. `/fix-issue` is a single-iteration design; this skill is the caller responsible for repeated execution. Thin SKILL.md delegates to `${CLAUDE_PLUGIN_ROOT}/skills/loop-fix-issue/scripts/driver.sh`, which loops `claude -p /fix-issue` per iteration with a `--max-iterations` safety cap (default 50). Termination signal: absence of the fixed substring `find & lock — found and locked` in the iteration's captured stdout — `/fix-issue` Step 0 exit 0 mandates printing that literal on the success path; exits 1/2/3 (no eligible / error / lock-failed-mid-sequence) print different literals. `--no-slack` is forwarded to each `/fix-issue` invocation. Halt class eliminated by construction: each per-iteration `/fix-issue` runs as its own `claude -p` subprocess.
+Repeatedly invoke `/fix-issue` (one approved GitHub issue per iteration) until the open backlog is empty. `/fix-issue` is a single-iteration design; this skill is the caller responsible for repeated execution. Thin SKILL.md delegates to `${CLAUDE_PLUGIN_ROOT}/skills/loop-fix-issue/scripts/driver.sh`, which loops `claude -p /fix-issue` per iteration with a `--max-iterations` safety cap (default 50). Termination signal: absence of the fixed substring `find & lock — found and locked` in the iteration's captured stdout — `/fix-issue` Step 0 exit 0 mandates printing that literal on the success path; exits 1/2/3 (no eligible / error / lock-failed-mid-sequence) print different literals. `--no-slack` is forwarded to each `/fix-issue` invocation. `--no-admin-fallback` is forwarded to each `/fix-issue` invocation as well, so every iteration's delegated `/implement` run bails to Step 12d on branch-protection denial instead of silently retrying with `--admin`. Halt class eliminated by construction: each per-iteration `/fix-issue` runs as its own `claude -p` subprocess.
 
 ## `/loop-improve-skill`
 

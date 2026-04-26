@@ -127,12 +127,14 @@ invoke_claude_p_skill() {
 
 DEBUG_FLAG="false"
 NO_SLACK_FLAG="false"
+NO_ADMIN_FALLBACK_FLAG="false"
 MAX_ITERATIONS=50
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --debug) DEBUG_FLAG="true"; shift ;;
     --no-slack) NO_SLACK_FLAG="true"; shift ;;
+    --no-admin-fallback) NO_ADMIN_FALLBACK_FLAG="true"; shift ;;
     --max-iterations)
       shift
       if [[ $# -eq 0 || "$1" =~ ^- ]]; then
@@ -148,7 +150,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --) shift; break ;;
     *)
-      breadcrumb_warn "1: parse args — unknown argument '$1'. Valid: --debug, --max-iterations N, --no-slack."
+      breadcrumb_warn "1: parse args — unknown argument '$1'. Valid: --debug, --max-iterations N, --no-slack, --no-admin-fallback."
       exit 1
       ;;
   esac
@@ -171,7 +173,7 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-breadcrumb_done "1: parse args — debug=${DEBUG_FLAG}, max-iterations=${MAX_ITERATIONS}, no-slack=${NO_SLACK_FLAG}"
+breadcrumb_done "1: parse args — debug=${DEBUG_FLAG}, max-iterations=${MAX_ITERATIONS}, no-slack=${NO_SLACK_FLAG}, no-admin-fallback=${NO_ADMIN_FALLBACK_FLAG}"
 
 # --------------------------------------------------------------------------
 # Step 2 — Session setup (LOOP_TMPDIR)
@@ -224,11 +226,14 @@ SETUP_SENTINEL='find & lock — found and locked'
 
 # Compose the per-iteration prompt once (identical across iterations).
 PROMPT_FILE="$LOOP_TMPDIR/fix-issue-prompt.txt"
+FIX_ISSUE_FLAGS=""
 if [[ "$NO_SLACK_FLAG" == "true" ]]; then
-  printf '/fix-issue --no-slack\n' > "$PROMPT_FILE"
-else
-  printf '/fix-issue\n' > "$PROMPT_FILE"
+  FIX_ISSUE_FLAGS+=" --no-slack"
 fi
+if [[ "$NO_ADMIN_FALLBACK_FLAG" == "true" ]]; then
+  FIX_ISSUE_FLAGS+=" --no-admin-fallback"
+fi
+printf '/fix-issue%s\n' "$FIX_ISSUE_FLAGS" > "$PROMPT_FILE"
 
 ITERATIONS_RUN=0
 TERMINATION_REASON=""

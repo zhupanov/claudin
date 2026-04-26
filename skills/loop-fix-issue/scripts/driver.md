@@ -9,12 +9,13 @@
 ## Invocation
 
 ```
-driver.sh [--debug] [--max-iterations N] [--no-slack]
+driver.sh [--debug] [--max-iterations N] [--no-slack] [--no-admin-fallback]
 ```
 
 - `--debug`: optional flag (currently no-op; reserved for future verbosity control).
 - `--max-iterations N`: positive integer safety cap on the loop. Default `50`. The loop terminates earlier on the natural termination signal below; this cap protects against pathological cases (e.g., an issue that is being re-locked endlessly by an external runner).
 - `--no-slack`: forwarded to `/fix-issue` each iteration (which forwards it to `/implement`). When omitted, Slack announcements run per `/fix-issue`'s default-on behavior (gated on Slack env vars).
+- `--no-admin-fallback`: forwarded to `/fix-issue` each iteration (which forwards it to `/implement`). When set, every iteration's `/implement` run instructs `merge-pr.sh` to emit `MERGE_RESULT=policy_denied` instead of retrying with `--admin` once the admin-eligible gate is reached, and bails to Step 12d on branch-protection denial. When omitted, default `--admin` retry behavior applies per iteration.
 
 ## Topology
 
@@ -28,16 +29,19 @@ driver.sh [--debug] [--max-iterations N] [--no-slack]
 
 ## Per-iteration `claude -p` invocation contract
 
-The driver writes the STDIN prompt to `$LOOP_TMPDIR/fix-issue-prompt.txt` once before the loop. It is identical across iterations and is one of two literals:
+The driver writes the STDIN prompt to `$LOOP_TMPDIR/fix-issue-prompt.txt` once before the loop. It is identical across iterations. The prompt is composed by appending optional flags to `/fix-issue` based on the driver's argv:
+
+- Base: `/fix-issue`
+- Append `--no-slack` (preceded by a single space) if `--no-slack` was passed.
+- Append `--no-admin-fallback` (preceded by a single space) if `--no-admin-fallback` was passed.
+
+Concrete examples (concatenation of optional-flag suffixes; flags appear in argv-parser order):
 
 ```
 /fix-issue
-```
-
-or, when `--no-slack` was passed:
-
-```
 /fix-issue --no-slack
+/fix-issue --no-admin-fallback
+/fix-issue --no-slack --no-admin-fallback
 ```
 
 Each iteration invokes:

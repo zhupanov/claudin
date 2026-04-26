@@ -1,7 +1,7 @@
 ---
 name: loop-fix-issue
 description: "Use when systematically closing the open GitHub issue backlog by repeatedly invoking /fix-issue. Bash driver loops a claude -p subprocess each iteration and terminates when no actionable issues remain."
-argument-hint: "[--debug] [--max-iterations N] [--no-slack]"
+argument-hint: "[--debug] [--max-iterations N] [--no-slack] [--no-admin-fallback]"
 allowed-tools: Bash, Monitor
 ---
 
@@ -18,6 +18,7 @@ Execution is delegated to the bash driver at `${CLAUDE_PLUGIN_ROOT}/skills/loop-
 - `--debug`: forwarded to the driver (currently no-op; reserved for future verbosity control).
 - `--max-iterations N`: positive integer safety cap on the loop. Default `50`. The loop terminates earlier on the natural termination signal below; this cap protects against pathological cases (e.g., an issue being re-locked endlessly by an external runner).
 - `--no-slack`: forwarded to the driver, which forwards it to each iteration's `/fix-issue` invocation.
+- `--no-admin-fallback`: forwarded to the driver, which forwards it to each iteration's `/fix-issue` invocation. Each `/fix-issue` then forwards it to the delegated `/implement` run, where `merge-pr.sh` returns `MERGE_RESULT=policy_denied` instead of retrying with `--admin` once the admin-eligible gate is reached. Applies to every iteration of the sweep — without this flag, individual iterations may silently bypass branch protection via `--admin` retry.
 
 ## Termination
 
