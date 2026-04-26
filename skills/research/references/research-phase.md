@@ -66,6 +66,131 @@ Capture stdout. The script writes ONLY machine output to stdout (`COUNT=<N>` + `
 
 The fallback is deliberate: a planner-quality failure must NEVER block research. The same fallback path applies when the Agent subagent itself times out or returns no output — in that case, `$RESEARCH_TMPDIR/planner-raw.txt` is empty or missing, and the validator script reports `REASON=empty_input`.
 
+### 1.1.c — Interactive review checkpoint (optional)
+
+Gated on `RESEARCH_PLAN_INTERACTIVE=true` (resolved in `${CLAUDE_PLUGIN_ROOT}/skills/research/SKILL.md` "Interactive review — TTY + flag-composition rules" section, which already enforced TTY-presence and `--plan` requirement before Step 1.1 ran). When the gate is closed, **skip this entire step** and proceed to Step 1.2.
+
+When the gate is open, after Step 1.1.b's exit-0 path persists `subquestions.txt`, present the proposed subquestions to the operator and let them proceed, edit, or abort before Step 1.2 consumes the file. Step 1.2's lane assignment (deep-mode ring rotation included) stays mechanical; the operator confirms only the subquestion list itself.
+
+The checkpoint runs fully inline in this reference (no new helper script). Per the dialectic resolution recorded under issue #522, TTY/editor/stdin orchestration UX is harness-exempt and the existing `run-research-planner.sh` validator is reused for re-validation of operator-edited input. Keeping the validator authoritative ensures operator edits face the same `?`-suffix, 2-4 count, and `||` rejection rules as planner output.
+
+Print: `> **🔶 1.1.c: interactive-review**`
+
+```bash
+echo
+echo "📋 Proposed subquestions:"
+nl -ba "$RESEARCH_TMPDIR/subquestions.txt"
+echo
+printf "[Enter] proceed  /  edit  /  abort: "
+IFS= read -r CHOICE || CHOICE="abort"
+# Case-fold via ${var,,} (Bash 4+; matches the project's existing Bash-4 conventions)
+case "${CHOICE,,}" in
+  "")
+    # Enter — proceed to Step 1.2 unchanged.
+    echo "✅ 1.1.c: interactive-review — operator confirmed planner subquestions"
+    ;;
+  abort)
+    echo "**⚠ /research: aborted by operator at Step 1.1.c.**"
+    # Early-exit cleanup — distinct from Step 4's tail phase, which assumes a successful run produced a report and (optionally) a sidecar.
+    "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$RESEARCH_TMPDIR"
+    echo "✅ /research: early-exit cleanup complete (aborted at Step 1.1.c)"
+    exit 0
+    ;;
+  edit)
+    # Fall through to the edit subroutine below.
+    : ;;
+  *)
+    echo "**⚠ /research: invalid choice '$CHOICE' (expected Enter, edit, or abort). Aborting.**"
+    "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$RESEARCH_TMPDIR"
+    exit 1
+    ;;
+esac
+```
+
+**Edit subroutine** (entered when `${CHOICE,,}` is `edit`). The orchestrator runs the loop body up to twice in total (initial edit + one bounded retry on validation failure). Track a counter `EDIT_ATTEMPT` initialized to 0; the loop increments it at entry and aborts when it reaches 2 on a failed re-validation.
+
+```bash
+EDIT_ATTEMPT=0
+while :; do
+  EDIT_ATTEMPT=$((EDIT_ATTEMPT + 1))
+
+  # Initialize the edit working file. On first pass copy the canonical subquestions.txt;
+  # on retry leave the operator's prior $EDITOR session intact OR truncate the stdin-fallback
+  # file so the operator types a fresh full list (avoids `>>` doubling on retry).
+  if [[ ! -f "$RESEARCH_TMPDIR/subquestions-edit.txt" ]]; then
+    cp "$RESEARCH_TMPDIR/subquestions.txt" "$RESEARCH_TMPDIR/subquestions-edit.txt"
+  fi
+
+  if [[ -n "${EDITOR:-}" ]]; then
+    # $EDITOR branch — supports multi-word values like "code --wait" or "emacsclient -t".
+    # $EDITOR is intentionally UNQUOTED so Bash word-splits its value through the operator's shell;
+    # the trust model matches the operator's interactive shell (the variable is operator-controlled).
+    cp "$RESEARCH_TMPDIR/subquestions-edit.txt" "$RESEARCH_TMPDIR/subquestions-edit.bak"
+    if ! $EDITOR "$RESEARCH_TMPDIR/subquestions-edit.txt"; then
+      EDITOR_STATUS=$?
+      echo "**⚠ /research: \$EDITOR exited non-zero (status=$EDITOR_STATUS). Restoring pre-edit state.**"
+      cp "$RESEARCH_TMPDIR/subquestions-edit.bak" "$RESEARCH_TMPDIR/subquestions-edit.txt"
+      printf "[edit again | abort]: "
+      IFS= read -r RECHOICE || RECHOICE="abort"
+      case "${RECHOICE,,}" in
+        edit*) continue ;;
+        *)
+          echo "**⚠ /research: aborted after \$EDITOR failure.**"
+          "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$RESEARCH_TMPDIR"
+          exit 0
+          ;;
+      esac
+    fi
+  else
+    # stdin fallback — truncate the working file so retry passes start clean (no `>>` doubling).
+    : > "$RESEARCH_TMPDIR/subquestions-edit.txt"
+    echo "📝 Enter revised subquestions, one per line. Terminate with an empty line:"
+    while IFS= read -r LINE; do
+      [[ -z "$LINE" ]] && break
+      printf '%s\n' "$LINE" >> "$RESEARCH_TMPDIR/subquestions-edit.txt"
+    done
+  fi
+
+  # Re-validate via the existing planner validator. Reuses the ?-suffix, 2-4 count, and || rejection
+  # rules so operator edits face the same gate as planner output (single source of truth).
+  if VALIDATOR_OUT=$("${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/run-research-planner.sh" \
+        --raw "$RESEARCH_TMPDIR/subquestions-edit.txt" \
+        --output "$RESEARCH_TMPDIR/subquestions.txt" 2>&1); then
+    # Parse COUNT= from stdout via prefix-strip.
+    RESEARCH_PLAN_N=$(printf '%s\n' "$VALIDATOR_OUT" | sed -n 's/^COUNT=//p' | head -1)
+    echo "✅ 1.1.c: interactive-review — operator-edited subquestions accepted, $RESEARCH_PLAN_N retained"
+    break
+  fi
+
+  # Validator failed. Print the REASON token and the operator-typed contents so they can fix typos.
+  REASON=$(printf '%s\n' "$VALIDATOR_OUT" | sed -n 's/^REASON=//p' | head -1)
+  echo "**⚠ /research: edited subquestions failed validation (REASON=$REASON).**"
+  echo "Edited file contents (subquestions-edit.txt):"
+  nl -ba "$RESEARCH_TMPDIR/subquestions-edit.txt"
+
+  if (( EDIT_ATTEMPT >= 2 )); then
+    echo "**⚠ /research: operator-edited subquestions failed validation twice. Aborting.**"
+    "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$RESEARCH_TMPDIR"
+    exit 0
+  fi
+
+  printf "[edit again | abort]: "
+  IFS= read -r RECHOICE || RECHOICE="abort"
+  case "${RECHOICE,,}" in
+    edit*) continue ;;
+    *)
+      echo "**⚠ /research: aborted after validation failure.**"
+      "${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh" --dir "$RESEARCH_TMPDIR"
+      exit 0
+      ;;
+  esac
+done
+```
+
+**SIGINT divergence (Ctrl-C)**: The interactive prompt does NOT install a Bash `trap` for SIGINT. If the operator presses Ctrl-C during the prompt, the orchestrator terminates without running the cleanup recipe — `$RESEARCH_TMPDIR` may be left behind for inspection. Only typed `abort` (or a double-failed re-validation) runs cleanup. This divergence is intentional: adding a `trap` would risk intercepting other signal-handling needs of the parent process. Operators wanting cleanup on Ctrl-C should use the typed `abort` path instead.
+
+After the edit subroutine returns successfully (validator accepted), `subquestions.txt` reflects the operator-approved list and `RESEARCH_PLAN_N` matches the new count. Proceed to Step 1.2 with no behavioral change — Step 1.2 reads `subquestions.txt` and runs the per-scale lane-assignment math (including deep-mode ring rotation) mechanically over whichever subquestions the file currently contains.
+
 ## 1.2 — Lane Assignment (optional)
 
 Gated on `RESEARCH_PLAN=true` AND `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN_N>0` (i.e., Step 1.1 succeeded). When the gate is closed, **skip this entire step** and proceed to Step 1.3 with no per-lane suffix.

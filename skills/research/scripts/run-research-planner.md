@@ -34,6 +34,7 @@ Both flags are required. `--raw` is the captured Agent subagent output. `--outpu
   - `empty_input` — `--raw` file missing or zero-byte (exit 1).
   - `count_below_minimum` — fewer than 2 question-shaped lines retained after sanitization (exit 1). Includes the case where ALL lines are dropped (e.g., a planner reply that is entirely prose with no `?`-terminated lines).
   - `count_above_maximum` — more than 4 question-shaped lines retained (exit 1).
+  - `delimiter_collision` — at least one retained line contains the literal substring `||`, which would corrupt deep-mode `lane-assignments.txt` rehydration (research-phase.md §1.2.b uses unquoted `||` as the in-cell delimiter with plain prefix-strip + `||`-split rehydration; embedded `||` would silently mis-split). Runs BEFORE the count gate so this token surfaces when both `||` and an out-of-range count apply (exit 1).
   - `missing_arg` — `--raw` or `--output` not provided, or unknown argument (exit 2).
   - `bad_path` — `--output`'s parent directory does not exist (exit 2).
 
@@ -61,17 +62,29 @@ Applied in order; the first failing rule short-circuits.
    - Trim leading and trailing whitespace.
 3. **Empty-line drop**: lines empty after sanitization are dropped (NOT counted).
 4. **Question heuristic — fail-closed**: lines that do NOT end with `?` (after trim) are dropped (NOT counted). This is the primary defense against prose preambles like "Here are the subquestions:" — such lines never carry a trailing `?` and are silently filtered out before counting.
-5. **Count gate**: retained lines must satisfy `2 ≤ count ≤ 4`. Below minimum → `REASON=count_below_minimum`. Above maximum → `REASON=count_above_maximum`.
+5. **Lane-delimiter rejection**: no retained line may contain the literal substring `||`. Violation → `REASON=delimiter_collision`. Runs BEFORE the count gate so this token surfaces when both `||` and an out-of-range count apply (the operator gets the more actionable token).
+6. **Count gate**: retained lines must satisfy `2 ≤ count ≤ 4`. Below minimum → `REASON=count_below_minimum`. Above maximum → `REASON=count_above_maximum`.
+
+## Caller contexts
+
+This script is invoked from two distinct caller contexts in `/research`. Both share the same input/output contract above, but the orchestrator's disposition on non-zero exit differs:
+
+- **Step 1.1.b — Planner-output validation** (every `--plan` run). The orchestrator captures the planner Agent subagent's response to `$RESEARCH_TMPDIR/planner-raw.txt` and invokes this script with `--raw` pointed at that file. Disposition on non-zero exit: **fall back to single-question mode** (`RESEARCH_PLAN=false`, see "Fallback semantics" below). All `REASON` tokens — including `delimiter_collision` — route to the same fallback path; planner-quality failure must NEVER block research.
+- **Step 1.1.c — Operator re-validation** (only when `RESEARCH_PLAN_INTERACTIVE=true`). The orchestrator writes operator-edited subquestions to `$RESEARCH_TMPDIR/subquestions-edit.txt` and re-invokes this script with `--raw` pointed at that file. Disposition on non-zero exit: **bounded retry** (one re-edit attempt, then abort). Same `REASON` tokens as Step 1.1.b but the orchestrator-side handler is different — see `skills/research/references/research-phase.md` §1.1.c.
+
+Both callers parse `REASON=<token>` from stdout via prefix-strip and surface the token in a visible warning line. The token vocabulary is identical; only the orchestrator's downstream handling differs.
 
 ## Fallback semantics
 
-The orchestrator treats ANY non-zero exit (any `REASON=*` value) as a signal to fall back to single-question mode: each lane runs with its angle base prompt (Lane 1/Cursor → `RESEARCH_PROMPT_ARCH`, Lane 2/Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`, Lane 3/Claude inline → `RESEARCH_PROMPT_SEC`), keyed on the parent `RESEARCH_QUESTION`, with no per-lane subquestion suffix appended. The orchestrator parses `REASON=<token>` from stdout via prefix-strip and substitutes the token into a visible warning line:
+For the Step 1.1.b caller context: the orchestrator treats ANY non-zero exit (any `REASON=*` value) as a signal to fall back to single-question mode: each lane runs with its angle base prompt (Lane 1/Cursor → `RESEARCH_PROMPT_ARCH`, Lane 2/Codex → `RESEARCH_PROMPT_EDGE` by default or `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`, Lane 3/Claude inline → `RESEARCH_PROMPT_SEC`), keyed on the parent `RESEARCH_QUESTION`, with no per-lane subquestion suffix appended. The orchestrator parses `REASON=<token>` from stdout via prefix-strip and substitutes the token into a visible warning line:
 
 ```
 **⚠ 1.1: planner — fallback to single-question mode (<token>).**
 ```
 
 This is the same fallback path as a planner Agent subagent timeout (in which case the orchestrator itself synthesizes `REASON=empty_input` without calling this script, since the script would observe the same empty raw file).
+
+For the Step 1.1.c caller context: see `skills/research/references/research-phase.md` §1.1.c "Edit subroutine" for the bounded-retry handler.
 
 ## Security
 

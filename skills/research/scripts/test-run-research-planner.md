@@ -16,8 +16,8 @@ Exits 0 if every case passes; exits 1 with a `FAIL: ...` diagnostic on stderr ot
 
 The harness exercises:
 
-- **Success path** (count 2 / 3 / 4 plain; leading bullets `-` and `*` stripped; whitespace-only padding trimmed; empty lines dropped between question lines; prose preamble line dropped because it lacks `?`; numeric-prefix text preserved as a deliberate defensive simplification; control characters stripped).
-- **Validation failure path** (empty file → `REASON=empty_input`; whitespace-only → `REASON=count_below_minimum`; count=1 → `REASON=count_below_minimum`; count=5 / count=6 → `REASON=count_above_maximum`; pure prose with no `?` → `REASON=count_below_minimum`).
+- **Success path** (count 2 / 3 / 4 plain; leading bullets `-` and `*` stripped; whitespace-only padding trimmed; empty lines dropped between question lines; prose preamble line dropped because it lacks `?`; numeric-prefix text preserved as a deliberate defensive simplification; control characters stripped; single `|` allowed).
+- **Validation failure path** (empty file → `REASON=empty_input`; whitespace-only → `REASON=count_below_minimum`; count=1 → `REASON=count_below_minimum`; count=5 / count=6 → `REASON=count_above_maximum`; pure prose with no `?` → `REASON=count_below_minimum`; literal `||` in any retained line → `REASON=delimiter_collision`; `||` rejection precedes the count gate so the more actionable token surfaces when both rules apply).
 - **Argument-error path** (missing `--raw` → `REASON=missing_arg`, exit 2; missing `--output` → `REASON=missing_arg`, exit 2; nonexistent `--raw` file → `REASON=empty_input`, exit 1; missing `--output` parent directory → `REASON=bad_path`, exit 2).
 - **Output content** (after a known-good run, `--output` file contains exactly the retained question lines, one per line, with a trailing newline).
 
