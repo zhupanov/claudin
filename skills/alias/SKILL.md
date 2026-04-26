@@ -13,8 +13,9 @@ Create an alias skill that forwards to an existing larch skill with preset flags
 
 **Target directory** is resolved automatically:
 
+- A **git repository is required** — the helper (`skills/alias/scripts/resolve-target.sh`) anchors all paths at `git rev-parse --show-toplevel` and fail-closes outside a git working tree. Run `git init` first if you want to use `/alias` in a fresh project.
 - Inside a Claude plugin source repo (detected via the two-file predicate `.claude-plugin/plugin.json` AND `skills/implement/SKILL.md` at the git repo root, matching `validate-args.sh`), the alias is generated under `skills/<alias-name>/SKILL.md` (exported plugin skill, ships with the plugin).
-- Anywhere else (consumer repos, ad-hoc projects), the alias is generated under `.claude/skills/<alias-name>/SKILL.md` (dev-only repo-private skill).
+- In any other git repository (consumer repos with their own larch installation), the alias is generated under `.claude/skills/<alias-name>/SKILL.md` (dev-only repo-private skill).
 - `--private` forces `.claude/skills/<alias-name>/` even inside a plugin repo (escape hatch when the operator wants a private alias in plugin source). In non-plugin repos `--private` is a no-op.
 
 Example (in a plugin source repo): `/alias i implement --merge` creates `<repo-root>/skills/i/SKILL.md` so that `/i <feature>` is equivalent to `/implement --merge <feature>`.
@@ -140,7 +141,7 @@ One conceptual rule — "alias cannot shadow any larch skill" — replacing the 
 ### Before delegating, ask
 
 - **What does `/implement` need to build this deterministically?** `/implement` has no codebase context about `/alias` — it will research and guess unless the feature description cites the generator script path, its required flags, the version source, and the write target. The explicit recipe below supplies all four.
-- **What could make the Step 4 verification silently pass when it shouldn't?** Nothing — the `verify-skill-called.sh --sentinel-file` gate reads a child-produced artifact (`.claude/skills/<alias-name>/SKILL.md`) that the outer orchestrator cannot synthesize. A parent-writable gate would not be load-bearing.
+- **What could make the Step 4 verification silently pass when it shouldn't?** Nothing — the `verify-skill-called.sh --sentinel-file` gate reads a child-produced artifact at `$TARGET_DIR/SKILL.md` (resolved at Step 2 from the `resolve-target.sh` helper) that the outer orchestrator cannot synthesize. A parent-writable gate would not be load-bearing.
 - **Why no retry on `VERIFIED=false`?** Under `--merge` the PR may already be merged by the time control returns; any automated retry would create a divergent PR. Step 4 surfaces branch-specific diagnostic messages instead, leaving recovery to human judgment.
 
 Construct an explicit feature description for `/implement`. The description MUST cite the generator script path, its required flags, the version source, and the write target so `/implement` has a complete, deterministic build recipe — no codebase research required. The write target uses the `$TARGET_DIR` resolved at the top of Step 2 (NOT a hardcoded `.claude/skills/<alias-name>` path — see NEVER #6):

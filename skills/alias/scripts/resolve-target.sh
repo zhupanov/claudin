@@ -26,7 +26,14 @@ PRIVATE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --alias-name) NAME="$2"; shift 2 ;;
+    --alias-name)
+      # Arity guard: under `set -u`, dereferencing $2 without a value would
+      # trip the unbound-variable error before our friendly --alias-name-required
+      # message at the bottom can fire. Emit the documented ERROR contract instead.
+      [[ $# -ge 2 ]] || { echo "ERROR: --alias-name requires a value" >&2; exit 1; }
+      NAME="$2"
+      shift 2
+      ;;
     --private)    PRIVATE=true; shift ;;
     *) echo "ERROR: Unknown argument: $1" >&2; exit 1 ;;
   esac

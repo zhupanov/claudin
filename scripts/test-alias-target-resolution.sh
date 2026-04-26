@@ -168,6 +168,21 @@ err=$(cat "$TMPROOT/case-validation.err")
 assert_contains "Validation: ERROR on stderr" "ERROR" "$err"
 
 # ---------------------------------------------------------------------------
+# Arity guard: --alias-name with no value emits the documented ERROR
+# message (not bash's nounset 'unbound variable'). Regression for the
+# review-finding fix.
+# ---------------------------------------------------------------------------
+dir=$(make_repo case-arity without-plugin)
+set +e
+out=$( cd "$dir" && "$SCRIPT" --alias-name 2>"$TMPROOT/case-arity.err" )
+rc=$?
+set -e
+assert_eq "Arity: exit 1 when --alias-name has no value" "1" "$rc"
+err=$(cat "$TMPROOT/case-arity.err")
+assert_contains "Arity: documented ERROR message on stderr (not nounset crash)" \
+  "ERROR: --alias-name requires a value" "$err"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo "test-alias-target-resolution.sh: $PASS passed, $FAIL failed"
