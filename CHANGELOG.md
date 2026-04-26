@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.1] - 2026-04-26
+
+### Changed
+
+- `.claude/skills/umbrella/SKILL.md` now uses portable path tokens — `${CLAUDE_PLUGIN_ROOT}/…` for plugin-shipped references (`skills/shared/skill-design-principles.md`, `skills/shared/subskill-invocation.md`, `scripts/cleanup-tmpdir.sh`) and `$PWD/.claude/skills/umbrella/…` for the five dev-only umbrella scripts (`parse-args.sh`, `render-batch-input.sh`, `render-umbrella-body.sh`, `helpers.sh` ×2). Replaces 8 hardcoded `/Users/zhupanov/larch1/…` and `/Users/zhupanov/larch5/…` absolute paths that had been baked into the dev-only skill, restoring portability for any contributor whose checkout is not at one of those exact paths. AGENTS.md path-convention split (`${CLAUDE_PLUGIN_ROOT}` for plugin-shipped, `$PWD` for dev-only `.claude/skills/`) is now respected uniformly. Pure prompt-text edit; no behavior change. Closes #569.
+
 ## [7.13.0] - 2026-04-26
 
 ### Changed
