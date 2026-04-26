@@ -284,8 +284,13 @@ REQUIRED_MARKERS=(
   '### Architectural patterns'
   '### Risks and feasibility'
 )
+# Use pure-bash substring match instead of `echo | grep -Fq`. With `set -euo
+# pipefail` and §1.5 growing past the OS pipe buffer (issue #520 K-vote
+# additions), `echo`'s SIGPIPE on early `grep -q` exit propagates as a non-zero
+# pipeline exit and produces false-negative test failures in CI. The glob form
+# is subprocess-free and immune to SIGPIPE.
 for marker in "${REQUIRED_MARKERS[@]}"; do
-  if echo "$SECTION_15_FULL" | grep -Fq "$marker"; then
+  if [[ "$SECTION_15_FULL" == *"$marker"* ]]; then
     PASS=$((PASS + 1))
   else
     fail "[markers] §1.5 must mandate body marker '$marker' in synthesis subagent prompt prose (#507 5-marker contract)"
@@ -293,7 +298,7 @@ for marker in "${REQUIRED_MARKERS[@]}"; do
 done
 
 # Per-subquestion regex anchor mandated for plan branches.
-if echo "$SECTION_15_FULL" | grep -Fq '^### Subquestion [0-9]+:'; then
+if [[ "$SECTION_15_FULL" == *'^### Subquestion [0-9]+:'* ]]; then
   PASS=$((PASS + 1))
 else
   fail "[markers] §1.5 must mandate the anchored regex '^### Subquestion [0-9]+:' for RESEARCH_PLAN=true branches (#507 anchored-count rule)"
