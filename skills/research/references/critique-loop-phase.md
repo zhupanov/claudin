@@ -156,7 +156,13 @@ ${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/validate-citations.sh \
 
 The script overwrites `citation-validation.md` in place (per dialectic DECISION_3 — no per-iteration archive). Iteration N+1's critique pass (back at 2.8.3) consumes the freshly-overwritten sidecar via the `<reviewer_citation_validation>` block.
 
-The script always exits 0 (fail-soft contract — same as Step 2.7). Step 2.8 does NOT emit the standard 2.7 completion breadcrumb here (which would visually duplicate the original Step 2.7 output and confuse operators about which step is running). OOS_1 in the plan-review batch tracks an optional follow-up to introduce a Step-2.8-scoped breadcrumb form like `✅ 2.8 [iter <iter>]: citation-revalidation — ...`; until that lands, the re-run is silent.
+The script always exits 0 (fail-soft contract — same as Step 2.7). After each in-loop re-run, parse the validator's last stdout line `SUMMARY=PASS=<n> FAIL=<n> UNKNOWN=<n> TOTAL=<n>` (same parsing as Step 2.7's completion-breadcrumb path in SKILL.md) and emit a Step-2.8-scoped per-iteration breadcrumb namespaced under the iteration index:
+
+```
+✅ 2.8 [iter <iter>]: citation-revalidation — <pass> PASS, <fail> FAIL, <unknown> UNKNOWN (<total> claims) (<elapsed>)
+```
+
+`<elapsed>` is timed from this iteration's `validate-citations.sh` invocation start. The breadcrumb mirrors Step 2.7's completion-breadcrumb shape but is namespaced under `2.8 [iter <iter>]` so operators can attribute each in-loop revalidation result to its iteration without confusing it with the original Step 2.7 output. This is a per-iteration intermediate breadcrumb owned by this reference file; the SKILL.md ownership rule ("SKILL.md is the sole owner of Step 2.8 entry and completion breadcrumbs") is unaffected — entry and completion breadcrumbs for the step as a whole remain in SKILL.md. No advisory FAIL/UNKNOWN warnings are emitted here (unlike Step 2.7's terminal path): the loop's next critique pass already consumes the refreshed sidecar via the `<reviewer_citation_validation>` block, so per-claim signal is acted on rather than surfaced.
 
 ### 2.8.7 — Byte-equal idle-cycle guard
 
