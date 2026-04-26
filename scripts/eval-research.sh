@@ -17,10 +17,11 @@
 #
 # Flags:
 #   --id <id>             Run only the entry with this id (debugging).
-#   --scale <s>           Forwarded to /research as --scale=<s> (manual override
-#                         of adaptive auto-classification — issue #513). The same
-#                         value is also recorded in baseline JSON metadata so the
-#                         scale field accurately reflects the runtime scale.
+#   --scale <s>           Forwarded to /larch:research as --scale=<s>, manually
+#                         overriding the adaptive scale classifier (issue #513).
+#                         When --write-baseline is used, the same value is also
+#                         recorded in the produced JSON's top-level scale field
+#                         so the field accurately reflects the runtime scale.
 #                         Default: standard.
 #   --baseline <ref>      Pre-fetches the eval-baseline.json file from the
 #                         given git ref (sha, tag, or branch) into $WORK_DIR
