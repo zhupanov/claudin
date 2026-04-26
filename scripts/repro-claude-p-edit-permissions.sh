@@ -189,6 +189,12 @@ preflight() {
     exit 2
   fi
 
+  # Variants C and D mutate .claude/settings.json in place; require it to exist.
+  if [[ "$VARIANT" == "C" || "$VARIANT" == "D" ]] && [[ ! -f .claude/settings.json ]]; then
+    echo "ERROR: .claude/settings.json is required for Variant $VARIANT but not found" >&2
+    exit 2
+  fi
+
   # defaultMode-vs-Variant-A consistency warning.
   if [[ "$VARIANT" == "A" && -f .claude/settings.json ]]; then
     local default_mode

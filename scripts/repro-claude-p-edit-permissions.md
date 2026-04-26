@@ -100,7 +100,7 @@ The script `cd`s to `git rev-parse --show-toplevel` and uses `pwd -P` to resolve
 |------|---------|
 | 0    | Variant's expected outcome was observed (or Variant C — observational_only — exits 0 unconditionally). |
 | 1    | Observed RESULT diverged from EXPECTED for Variant A/B/D. |
-| 2    | Preflight failure: missing binary, dirty working tree, bad argument, edit target absent or untracked. |
+| 2    | Preflight failure: missing binary, dirty working tree, bad argument, edit target absent or untracked, or `.claude/settings.json` absent when running Variants C or D (which mutate it). |
 | 3    | `PROBE_STATUS=skipped_no_claude` — `claude` binary not on PATH. Treat like a no-op. |
 
 ## Manual recovery (`kill -9` aftermath)
