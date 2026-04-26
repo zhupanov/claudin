@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.1] - 2026-04-25
+
+### Changed
+
+- Broaden `/fix-issue` SKILL.md top-of-file Anti-halt continuation reminder to cover Bash tool calls in addition to child Skill tool calls. Production runs were observed halting after Bash returns in the terminal Step 6 → Step 7 → Step 8 sequence (which runs entirely on Bash invocations into `issue-lifecycle.sh`, `tracking-issue-write.sh`, `post-issue-slack.sh`, and `cleanup-tmpdir.sh`, with no intervening Skill tool call); the same gap applied to Step 3's not-material closure flow and the Step 6b → Step 7b → Step 8 NON_PR close path. The broadened rule names the canonical `/fix-issue` script set as the always-covered minimum and extends uniformly to any Bash tool call invoked as part of a `/fix-issue` step's primary work (including Step 5b's inline `gh` queries and ad-hoc Bash). The shared canonical rule at `skills/shared/subskill-invocation.md` remains scoped to Skill tool calls only — the broader Bash-call coverage is `/fix-issue`-local. `scripts/test-fix-issue-step-order.sh` adds a 13th preamble-scoped assertion pinning the literal broadening token `child Bash tool calls into the canonical` (closes #530).
+
 ## [7.9.0] - 2026-04-25
 
 ### Added
