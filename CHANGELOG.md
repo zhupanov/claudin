@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.8] - 2026-04-26
+
+### Fixed
+
+- `skills/implement/scripts/check-review-changes.sh` — replace the union-of-untracked detection (which flipped `FILES_CHANGED=true` on ANY pre-existing untracked file in the working tree) with a sorted pre-/review baseline + post-/review delta computed via `comm -23 | sed '/^$/d'`. The script now emits two stable-order stdout keys — `FILES_CHANGED=true|false` and `UNTRACKED_BASELINE=present|missing` — and degrades gracefully on bad CLI input (parse errors emit `ERROR=…` on stderr and route to the missing-baseline path on stdout, preserving the always-2-keys, exit-0 contract). `skills/implement/SKILL.md` Step 5 captures the baseline once via `set -o pipefail` subshell with on-failure cleanup of any stale prior baseline; Step 6 passes `--baseline` and logs to Warnings on `UNTRACKED_BASELINE=missing`. New sibling contract `check-review-changes.md` and 8-case offline regression harness `test-check-review-changes.sh` (wired via `Makefile` and excluded from `agent-lint.toml`) pin the new behavior including the empty-vs-missing distinction and the `echo ""` → `comm` → `sed` safety net. Closes #651.
+
 ## [7.16.7] - 2026-04-26
 
 ### Fixed
