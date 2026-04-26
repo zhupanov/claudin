@@ -62,7 +62,7 @@ else
   fi
 fi
 
-# --- Assertion B: LOOP_FIX_ISSUE_DRIVER_LOG_FILE + /tmp validation ---
+# --- Assertion B: LOOP_FIX_ISSUE_DRIVER_LOG_FILE + /tmp prefix and .. path-component validation ---
 if ! grep -qF 'LOOP_FIX_ISSUE_DRIVER_LOG_FILE' "$SKILL_MD"; then
   fail "B: SKILL.md missing LOOP_FIX_ISSUE_DRIVER_LOG_FILE env-overridable default"
 else
