@@ -57,7 +57,7 @@ After the sentinel file exists, the output is validated:
 
 ## Timeout Handling
 
-External reviewers have configurable timeouts (typically 600-900 seconds). If a reviewer exceeds its timeout:
+External reviewers have configurable timeouts (typically 1200 seconds for voting and 1800 seconds for code review). If a reviewer exceeds its timeout:
 
 - The process is killed by the wrapper script
 - The sentinel file records a non-zero exit code
