@@ -9,10 +9,18 @@
 #   - The checked-write + atomic-rename happy path: writable tmpdir + valid
 #     inputs produces a non-empty $TMPDIR/umbrella-body.md, exit 0, both
 #     success KVs, and no leftover umbrella-body.md.* mktemp partial.
-#   - The mv-failure branch: when $TMPDIR/umbrella-body.md exists as a
-#     directory, mv into it fails uniformly across BSD/GNU mv, producing
-#     ERROR=failed to write umbrella body: <path> on stderr, exit 1, and no
-#     success KVs.
+#   - The mv-failure branch: a PATH-injected fake `mv` that always exits 1
+#     forces the script's `mv "$OUT_TMP" "$OUT" || { ... }` guard to fire,
+#     producing ERROR=failed to write umbrella body: <path> on stderr,
+#     exit 1, and no success KVs. PATH-injection is used because BSD and
+#     GNU `mv` differ on what makes a same-directory rename fail (e.g.,
+#     dest-as-empty-dir succeeds on BSD by moving source inside, fails
+#     with EISDIR on GNU); mocking `mv` removes that platform divergence.
+#   - The dest-as-directory branch: $OUT pre-existing as a directory triggers
+#     the pre-rename `[ -e "$OUT" ] && [ ! -f "$OUT" ]` guard (added to fix
+#     the BSD `mv source dir/` silent-nesting bug — same #645 class).
+#   - The mktemp-failure branch: PATH-injected fake `mktemp` that always
+#     exits 1 forces the `mktemp ... || { ... }` guard to fire.
 #   - The existing children-TSV malformed path: a malformed children.tsv
 #     produces ERROR=children.tsv malformed on stderr, exit 1.
 #
@@ -189,6 +197,45 @@ assert_exit_nonzero "case 3: exit non-zero"
 assert_stderr_contains "case 3: stderr ERROR=failed to write umbrella body:" "ERROR=failed to write umbrella body:"
 assert_stdout_lacks "case 3: stdout no UMBRELLA_BODY_FILE=" "UMBRELLA_BODY_FILE="
 assert_stdout_lacks "case 3: stdout no UMBRELLA_TITLE_HINT=" "UMBRELLA_TITLE_HINT="
+
+# -----------------------------------------------------------------------------
+# Case 3b — Pre-existing $OUT as a directory. On BSD/macOS, `mv source dir/`
+# silently nests source inside dir and exits 0 — same #645 failure-as-success
+# class on a different surface. The script's pre-rename guard (`[ -e "$OUT" ]
+# && [ ! -f "$OUT" ]`) must reject this before mv runs.
+# -----------------------------------------------------------------------------
+echo "Case 3b: dest pre-existing as directory → ERROR=failed to write, no success KVs"
+DESTDIR="$TMP/destdir"
+mkdir -p "$DESTDIR/umbrella-body.md"
+run_script --tmpdir "$DESTDIR" --summary-file "$INPUTS/summary.txt" --children-file "$INPUTS/children.tsv"
+assert_exit_nonzero "case 3b: exit non-zero"
+assert_stderr_contains "case 3b: stderr ERROR=failed to write umbrella body:" "ERROR=failed to write umbrella body:"
+assert_stdout_lacks "case 3b: stdout no UMBRELLA_BODY_FILE=" "UMBRELLA_BODY_FILE="
+assert_stdout_lacks "case 3b: stdout no UMBRELLA_TITLE_HINT=" "UMBRELLA_TITLE_HINT="
+
+# -----------------------------------------------------------------------------
+# Case 3c — mktemp failure. PATH-injected fake `mktemp` that always exits 1
+# forces the script's `mktemp ... || { ... }` guard to fire. Same pattern as
+# Case 3.
+# -----------------------------------------------------------------------------
+echo "Case 3c: mktemp failure (PATH-injected fake mktemp) → ERROR=failed to write, no success KVs"
+MKTEMP_FAIL="$TMP/mktemp-fail"
+mkdir -p "$MKTEMP_FAIL"
+FAKE_BIN_MKTEMP="$TMP/fake-bin-mktemp"
+mkdir -p "$FAKE_BIN_MKTEMP"
+cat > "$FAKE_BIN_MKTEMP/mktemp" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$FAKE_BIN_MKTEMP/mktemp"
+set +e
+PATH="$FAKE_BIN_MKTEMP:$PATH" bash "$SCRIPT" --tmpdir "$MKTEMP_FAIL" --summary-file "$INPUTS/summary.txt" --children-file "$INPUTS/children.tsv" >"$STDOUT_FILE" 2>"$STDERR_FILE"
+EXIT_CODE=$?
+set -e
+assert_exit_nonzero "case 3c: exit non-zero"
+assert_stderr_contains "case 3c: stderr ERROR=failed to write umbrella body:" "ERROR=failed to write umbrella body:"
+assert_stdout_lacks "case 3c: stdout no UMBRELLA_BODY_FILE=" "UMBRELLA_BODY_FILE="
+assert_stdout_lacks "case 3c: stdout no UMBRELLA_TITLE_HINT=" "UMBRELLA_TITLE_HINT="
 
 # -----------------------------------------------------------------------------
 # Case 4 — Existing children-TSV malformed path (regression check on the

@@ -83,6 +83,13 @@ OUT_TMP=$(mktemp "$TMPDIR/umbrella-body.md.XXXXXX") || {
 if [ ! -s "$OUT_TMP" ]; then
   echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
 fi
+# Reject pre-existing non-regular $OUT (e.g., a directory). On BSD/macOS,
+# `mv source dir/` succeeds by moving the source INTO the directory and
+# returns 0, which would otherwise re-introduce failure-as-success masking
+# (the same #645 bug class on a different surface).
+if [ -e "$OUT" ] && [ ! -f "$OUT" ]; then
+  echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
+fi
 mv "$OUT_TMP" "$OUT" || {
   echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
 }
