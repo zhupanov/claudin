@@ -17,11 +17,11 @@
 #
 # Flags:
 #   --id <id>             Run only the entry with this id (debugging).
-#   --scale <s>           Forward-compat metadata recorded in baseline JSON;
-#                         /research does NOT yet accept --scale (issue #418
-#                         tracks adding it). When #418 lands, flip the
-#                         CLAUDE_SCALE_PASSTHROUGH variable in the
-#                         build_research_prompt function. Default: standard.
+#   --scale <s>           Forwarded to /research as --scale=<s> (manual override
+#                         of adaptive auto-classification — issue #513). The same
+#                         value is also recorded in baseline JSON metadata so the
+#                         scale field accurately reflects the runtime scale.
+#                         Default: standard.
 #   --baseline <ref>      Pre-fetches the eval-baseline.json file from the
 #                         given git ref (sha, tag, or branch) into $WORK_DIR
 #                         for manual diffing. Inline delta columns are NOT
@@ -324,9 +324,11 @@ printf 'eval-research: work dir = %s\n' "$WORK_DIR"
 # accommodate /research's composite budget).
 build_research_prompt() {
   local question="$1"
-  # CLAUDE_SCALE_PASSTHROUGH: when /research accepts --scale (issue #418),
-  # change the next line to: printf '/larch:research --scale=%s %s\n' "$SCALE" "$question"
-  printf '/larch:research %s\n' "$question"
+  # Forward --scale=$SCALE so /research's adaptive classifier (issue #513) is
+  # bypassed and the harness deterministically tests the labeled scale. Without
+  # this forwarding, baseline runs labeled $SCALE could silently execute at a
+  # different scale via auto-classification, breaking baseline comparability.
+  printf '/larch:research --scale=%s %s\n' "$SCALE" "$question"
 }
 
 run_one_research() {

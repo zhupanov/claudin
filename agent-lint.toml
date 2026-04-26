@@ -377,6 +377,14 @@ exclude = [
   # contract), matching the same Makefile-only pattern as the other test-*
   # harnesses above.
   "skills/research/scripts/test-standard-angle-prompts.sh",
+  # skills/research/scripts/test-classify-research-scale.sh is the structural
+  # regression guard for the /research Step 0.5 deterministic shell classifier
+  # introduced by #513 (adaptive scaling — replaces manual --scale with auto-
+  # classification). Referenced only from Makefile (test-classify-research-scale
+  # target) and skills/research/scripts/test-classify-research-scale.md
+  # (sibling contract), matching the same Makefile-only pattern as the other
+  # test-* harnesses above.
+  "skills/research/scripts/test-classify-research-scale.sh",
   "scripts/test-anti-halt-banners.sh",
   "scripts/test-design-structure.sh",
   "scripts/test-implement-rebase-macro.sh",
@@ -513,6 +521,7 @@ exclude = [
   "skills/fix-issue/scripts/test-fix-issue-step-order.md",
   "skills/fix-issue/scripts/test-find-lock-issue.md",
   "skills/research/scripts/test-standard-angle-prompts.md",
+  "skills/research/scripts/test-classify-research-scale.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
 ]
