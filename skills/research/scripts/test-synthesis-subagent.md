@@ -2,7 +2,7 @@
 
 **Consumer**: `make lint` (via the `test-synthesis-subagent` Makefile target).
 
-**Purpose**: offline structural pin for the /research Step 1.5 synthesis-subagent contract introduced by issue #507 and the Step 2 Finalize Validation revision-subagent contract. The harness greps `skills/research/references/research-phase.md` and `skills/research/references/validation-phase.md` for the load-bearing prose introduced by #507; it does NOT execute the subagents (that requires a live Claude Agent context that CI cannot reach).
+**Purpose**: offline structural pin for the /research Step 1.5 synthesis-subagent contract introduced by issue #507 and the Step 2 Finalize Validation revision-subagent contract. Issue #520 extends the harness with TWO new positive Quick profiles (Quick-vote + Quick-fallback) replacing the prior Pin 5 negative pin (which asserted Quick stays inline). The harness greps `skills/research/references/research-phase.md` and `skills/research/references/validation-phase.md` for the load-bearing prose; it does NOT execute the subagents (that requires a live Claude Agent context that CI cannot reach).
 
 **Wired into**: `Makefile` `test-harnesses` target via `test-synthesis-subagent` target. Both `.PHONY` (line 4) and the `test-harnesses` dependency list (line 14) carry the target name.
 
@@ -10,7 +10,11 @@
 
 1. **Subagent invocation in 4 non-quick branches** — Standard `RESEARCH_PLAN=false`, Standard `RESEARCH_PLAN=true`, Deep `RESEARCH_PLAN=false`, Deep `RESEARCH_PLAN=true` MUST each contain (a) "synthesis subagent" / "Agent subagent" / "Invoke the synthesis subagent" prose, (b) a `compute-degraded-banner.sh` fork reference, (c) "structural validator" gate prose, (d) "fallback" / "falling back to inline" prose.
 
-2. **Quick branch unchanged** — §1.5 Quick branch MUST NOT contain Agent invocation or validator prose; MUST retain the "Single-lane confidence" disclaimer.
+2. **Quick branch is now SPLIT into 3 #### sub-subsections** (issue #520) — §1.5 Quick MUST contain three `#### When LANES_SUCCEEDED ...` sub-subsections:
+   - **Quick-vote profile** (`LANES_SUCCEEDED >= 2`): MUST invoke the synthesis subagent + apply a structural validator + mandate the 3 vote markers (`### Consensus`, `### Divergence`, `### Correlated-error caveat`) + reference "K-lane voting confidence" framing.
+   - **Quick-fallback profile** (`LANES_SUCCEEDED == 1`): MUST NOT invoke a synthesis subagent or validator + MUST reference "Single-lane confidence" disclaimer + MUST reference `quick-disclaimer-fallback.txt`.
+   - **Quick no-lane hard-fail** (`LANES_SUCCEEDED == 0`): MUST NOT invoke a synthesis subagent + MUST contain explicit "research-phase failed" / "lanes returned empty" / "hard-fail" prose.
+   - **Negative pin**: §1.5 Quick branch MUST NOT contain "independent reviewers" anywhere (issue #520 failure-mode mitigation — overstates K-lane voting as cross-tool diversity).
 
 3. **5 body markers mandated** — §1.5 prose MUST mandate the 5 body markers (`### Agreements`, `### Divergences`, `### Significance`, `### Architectural patterns`, `### Risks and feasibility`).
 
