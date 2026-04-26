@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.11] - 2026-04-26
+
+### Changed
+
+- `/review --create-issues <description>` now activates slice mode with the trailing positional remainder as `SLICE_TEXT` (equivalent to `/review --slice "<description>" --create-issues`). Previously this invocation hard-aborted with `**⚠ --create-issues requires --slice or --slice-file. Aborting.**`, even though it is the most natural human-typed form. `--slice <text>` and `--slice-file <path>` remain unchanged; the positional form is gated on `--create-issues` and mutually exclusive with the two flag forms. New abort message names all three activation forms when the slice description is truly absent. Six prose edits to `skills/review/SKILL.md` (argument-hint, Flags paragraph, `--create-issues` bullet, Mutual exclusion section, `## Slice Mode` header, Step 1 slice-resolve, both Step 1 subheadings, Diff mode bullet) plus one to `skills/review/references/voting.md` (Diff/Slice mode definitions now reference SKILL.md's three-way activation rule instead of flag presence, so positional-slice runs are correctly routed away from the `oos-accepted-review.md` staging artifact). The `/loop-review` driver (uses `--slice-file`) and `/implement` Step 5 (no `--create-issues`) are unaffected. Closes #630.
+
 ## [7.14.10] - 2026-04-26
 
 ### Fixed
