@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.4] - 2026-04-27
+
+### Changed
+
+- `skills/issue/SKILL.md` — replaced the stale `since j < i` justification in Step 6's `DUPLICATE_OF_ITEM=<j>` paragraph with topological-schedule wording. After issue #546 the batch create order is topological, not input-index order, so `j` may exceed `i` in input order yet still be processed first via the synthetic `j → i` prerequisite edge. The new phrasing matches the language already used at line 312 for `BLOCKED_BY=ITEM_<j>` edges. Documentation-only. Closes #742.
+
 ## [7.17.3] - 2026-04-27
 
 ### Fixed
