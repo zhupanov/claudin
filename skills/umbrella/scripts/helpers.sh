@@ -28,6 +28,17 @@
 #                 behind any EDGES_SKIPPED_API_UNAVAILABLE bulk-skip; see helpers.md),
 #               BACKLINKS_POSTED, BACKLINKS_SKIPPED_EXISTING.
 #
+#   prefix-titles --umbrella N --children-file F --repo R [--dry-run]
+#       Prepend "(Umbrella: <N>) " to the title of every issue listed in
+#       CHILDREN_FILE. Idempotent: a title that already starts with the exact
+#       "(Umbrella: <N>) " prefix is left alone (TITLES_SKIPPED_EXISTING).
+#       Best-effort gh issue edit per row; failures are bucketed in
+#       TITLES_FAILED with one redacted stderr warning per failure.
+#       Caller is expected to filter CHILDREN_FILE down to newly-created
+#       children only (dedup'd / failed / dry-run children must not be passed
+#       in — they belong to other umbrellas or do not exist on GitHub).
+#       Stdout: TITLES_RENAMED=N, TITLES_SKIPPED_EXISTING=N, TITLES_FAILED=N.
+#
 #   emit-output  --kv-file FILE
 #       Validate the LLM-supplied KV file (well-formed KEY=VALUE lines, no embedded newlines
 #       in values, no duplicate keys) and stream it to stdout. The validator is a
@@ -777,6 +788,111 @@ case "$SUBCMD" in
     fi
     ;;
 
+  prefix-titles)
+    UMBRELLA=""
+    CHILDREN_FILE=""
+    REPO=""
+    DRY_RUN="false"
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --umbrella)       UMBRELLA="$2"; shift 2 ;;
+        --children-file)  CHILDREN_FILE="$2"; shift 2 ;;
+        --repo)           REPO="$2"; shift 2 ;;
+        --dry-run)        DRY_RUN="true"; shift ;;
+        *) echo "ERROR=Unknown flag for prefix-titles: $1" >&2; exit 1 ;;
+      esac
+    done
+    if [ -z "$UMBRELLA" ] || ! printf '%s' "$UMBRELLA" | grep -qE '^[1-9][0-9]*$'; then
+      echo "ERROR=prefix-titles requires --umbrella as a positive integer" >&2; exit 1
+    fi
+    if [ -z "$CHILDREN_FILE" ] || [ ! -f "$CHILDREN_FILE" ]; then
+      echo "ERROR=prefix-titles requires --children-file pointing to an existing file" >&2; exit 1
+    fi
+    if [ -z "$REPO" ]; then
+      echo "ERROR=prefix-titles requires --repo" >&2; exit 1
+    fi
+
+    TITLES_RENAMED=0
+    TITLES_SKIPPED_EXISTING=0
+    TITLES_FAILED=0
+
+    if [ "$DRY_RUN" = "true" ]; then
+      printf 'TITLES_RENAMED=0\nTITLES_SKIPPED_EXISTING=0\nTITLES_FAILED=0\n'
+      exit 0
+    fi
+
+    REDACT_SCRIPT="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)/scripts/redact-secrets.sh"
+    REDACT_FALLBACK_WARNED=0
+
+    emit_title_failure_warning() {
+      local num="$1" code="$2" raw="$3"
+      local flat redacted
+      flat=$(printf '%s' "$raw" | tr '\n\r' '  ' | head -c 200)
+      if [ -x "$REDACT_SCRIPT" ]; then
+        if redacted=$(printf '%s' "$flat" | "$REDACT_SCRIPT" 2>/dev/null); then
+          :
+        else
+          if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+            echo "**⚠ /umbrella: prefix-titles — redact-secrets.sh exited non-zero; suppressing reason text for safety**" >&2
+            REDACT_FALLBACK_WARNED=1
+          fi
+          redacted="<REDACTION_FAILED>"
+        fi
+      else
+        if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+          echo "**⚠ /umbrella: prefix-titles — redact-secrets.sh not found at $REDACT_SCRIPT; using inline-fallback scrub**" >&2
+          REDACT_FALLBACK_WARNED=1
+        fi
+        redacted="$flat"
+      fi
+      echo "**⚠ /umbrella: prefix-titles edit #${num} failed (${code}): ${redacted}**" >&2
+    }
+
+    prefix_marker="(Umbrella: ${UMBRELLA}) "
+
+    while IFS=$'\t' read -r child_num child_title _rest; do
+      # Empty rows (blank lines, trailing newlines) are silently skipped — they
+      # are the byte-exact shape an empty TSV produces and not a caller bug.
+      [ -z "$child_num" ] && continue
+      # Non-numeric or non-positive first column is a caller bug (the orchestrator
+      # filters /issue stdout for ISSUE_<i>_NUMBER, which is always a positive
+      # integer). Bucket as TITLES_FAILED with an input-class warning so the
+      # bug is visible rather than silently masked.
+      if ! printf '%s' "$child_num" | grep -qE '^[1-9][0-9]*$'; then
+        TITLES_FAILED=$((TITLES_FAILED + 1))
+        emit_title_failure_warning "$child_num" "input" "non-numeric or non-positive issue number column"
+        continue
+      fi
+      if [ -z "$child_title" ]; then
+        # Title column missing — refuse to rewrite blindly; bucket as failure.
+        TITLES_FAILED=$((TITLES_FAILED + 1))
+        emit_title_failure_warning "$child_num" "input" "missing title column for #${child_num}"
+        continue
+      fi
+      case "$child_title" in
+        "$prefix_marker"*)
+          TITLES_SKIPPED_EXISTING=$((TITLES_SKIPPED_EXISTING + 1))
+          continue
+          ;;
+      esac
+      new_title="${prefix_marker}${child_title}"
+      set +e
+      err_out=$(gh issue edit "$child_num" -R "$REPO" --title "$new_title" 2>&1 >/dev/null)
+      rc=$?
+      set -e
+      if [ "$rc" -eq 0 ]; then
+        TITLES_RENAMED=$((TITLES_RENAMED + 1))
+      else
+        TITLES_FAILED=$((TITLES_FAILED + 1))
+        emit_title_failure_warning "$child_num" "exit ${rc}" "${err_out:-no stderr captured}"
+      fi
+    done < "$CHILDREN_FILE"
+
+    printf 'TITLES_RENAMED=%d\n' "$TITLES_RENAMED"
+    printf 'TITLES_SKIPPED_EXISTING=%d\n' "$TITLES_SKIPPED_EXISTING"
+    printf 'TITLES_FAILED=%d\n' "$TITLES_FAILED"
+    ;;
+
   emit-output)
     KV_FILE=""
     while [ "$#" -gt 0 ]; do
@@ -806,13 +922,14 @@ case "$SUBCMD" in
   ""|--help|-h)
     cat <<'EOF'
 Usage: helpers.sh <subcommand> [options]
-  check-cycle  --existing-edges FILE --candidate BLOCKER:BLOCKED
-  wire-dag     --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run] [--no-backlinks]
-  emit-output  --kv-file FILE
+  check-cycle    --existing-edges FILE --candidate BLOCKER:BLOCKED
+  wire-dag       --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run] [--no-backlinks]
+  prefix-titles  --umbrella N --children-file F --repo R [--dry-run]
+  emit-output    --kv-file FILE
 EOF
     ;;
 
   *)
-    echo "ERROR=Unknown subcommand: $SUBCMD (try check-cycle / wire-dag / emit-output)" >&2; exit 1
+    echo "ERROR=Unknown subcommand: $SUBCMD (try check-cycle / wire-dag / prefix-titles / emit-output)" >&2; exit 1
     ;;
 esac

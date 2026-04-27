@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # test-helpers.sh — regression harness for /umbrella's helpers.sh subcommands.
-# Currently covers `check-cycle` (pure logic, no network).
+# Covers `check-cycle` (pure logic, no network), `wire-dag` (PATH-stub gh,
+# no real network), and `prefix-titles` (PATH-stub gh, no real network).
 # Run manually: bash skills/umbrella/scripts/test-helpers.sh
 # Wire into make lint via a `test-umbrella-helpers` target alongside existing test-* harnesses.
 
@@ -243,6 +244,47 @@ case "$1 $_stub_url" in
       printf 'comment-call\n' >> "$STUB_COMMENT_LOG"
     fi
     exit 0
+    ;;
+  "issue edit")
+    # Title-rename POST for `helpers.sh prefix-titles`. Behavior controlled by:
+    #   STUB_EDIT_RC               — exit code (default: 0)
+    #   STUB_EDIT_STDERR           — stderr message (default: empty)
+    #   STUB_EDIT_LOG              — when set, append one line per call:
+    #                                "<number>\t<new-title>" so tests can
+    #                                assert which titles were rewritten and
+    #                                which children were skipped.
+    if [ -n "${STUB_EDIT_LOG:-}" ]; then
+      # Walk argv via shift so we never need eval/indirect-expansion. The
+      # invocation shape is: gh issue edit <num> -R <repo> --title <title>.
+      # `shift 2` drops "issue edit"; the loop then collects the first
+      # numeric-looking token (the issue number) and the value after --title.
+      _stub_num=""
+      _stub_title=""
+      shift 2 2>/dev/null || true
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --title)
+            _stub_title="${2:-}"
+            shift 2
+            ;;
+          -R|--repo)
+            shift 2
+            ;;
+          [0-9]*)
+            [ -z "$_stub_num" ] && _stub_num="$1"
+            shift
+            ;;
+          *)
+            shift
+            ;;
+        esac
+      done
+      printf '%s\t%s\n' "$_stub_num" "$_stub_title" >> "$STUB_EDIT_LOG"
+    fi
+    if [ -n "${STUB_EDIT_STDERR:-}" ]; then
+      printf '%s\n' "$STUB_EDIT_STDERR" >&2
+    fi
+    exit "${STUB_EDIT_RC:-0}"
     ;;
   *)
     echo "stub gh: unrecognized argv: $*" >&2
@@ -1192,6 +1234,243 @@ echo "test-helpers.sh: wire-dag Bash 3.2-safe cache regressions (issue #744)"
   fi
   unset STUB_BLOCKED_BY_1 STUB_BLOCKED_BY_11 STUB_BLOCKED_BY_100
 }
+
+echo ""
+echo "test-helpers.sh: prefix-titles subcommand (PATH-stub gh, no network)"
+
+# Reset edit-stub state across tests.
+unset STUB_EDIT_RC STUB_EDIT_STDERR STUB_EDIT_LOG
+
+# Helper: run prefix-titles against a freshly-prepared children file. Returns
+# combined stdout/stderr in echoed form via the named output files.
+prepare_children() {
+  local file="$1"; shift
+  : > "$file"
+  while [ "$#" -gt 0 ]; do
+    printf '%s\n' "$1" >> "$file"
+    shift
+  done
+}
+
+# (pt-a) Empty children file → all zeros, no gh edit calls.
+{
+  pt_children="$TMP/pt-a-children.tsv"
+  pt_log="$TMP/pt-a-edit-log"
+  : > "$pt_children"
+  : > "$pt_log"
+  pt_out=$(STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r 2>&1)
+  if printf '%s\n' "$pt_out" | grep -qE '^TITLES_RENAMED=0$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_SKIPPED_EXISTING=0$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_FAILED=0$' \
+     && [ ! -s "$pt_log" ]; then
+    printf '  ✅ empty children file → all-zero counters, no gh edit calls\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ empty children file unexpected behavior\n     stdout:\n'
+    printf '%s\n' "$pt_out" | sed 's/^/       /'
+    printf '     edit-log:\n'
+    sed 's/^/       /' "$pt_log"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-b) Single child, fresh title → renamed, edit log shows new title.
+{
+  pt_children="$TMP/pt-b-children.tsv"
+  pt_log="$TMP/pt-b-edit-log"
+  prepare_children "$pt_children" $'42\tAdd foo support\thttps://x/42'
+  : > "$pt_log"
+  pt_out=$(STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r 2>&1)
+  if printf '%s\n' "$pt_out" | grep -qE '^TITLES_RENAMED=1$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_SKIPPED_EXISTING=0$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_FAILED=0$' \
+     && grep -qE $'^42\t\\(Umbrella: 100\\) Add foo support$' "$pt_log"; then
+    printf '  ✅ single fresh child → renamed with (Umbrella: 100) prefix\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ single fresh child unexpected behavior\n     stdout:\n'
+    printf '%s\n' "$pt_out" | sed 's/^/       /'
+    printf '     edit-log:\n'
+    sed 's/^/       /' "$pt_log"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-c) Idempotent: title already prefixed with the SAME umbrella → skip.
+{
+  pt_children="$TMP/pt-c-children.tsv"
+  pt_log="$TMP/pt-c-edit-log"
+  prepare_children "$pt_children" $'42\t(Umbrella: 100) Add foo support\thttps://x/42'
+  : > "$pt_log"
+  pt_out=$(STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r 2>&1)
+  if printf '%s\n' "$pt_out" | grep -qE '^TITLES_RENAMED=0$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_SKIPPED_EXISTING=1$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_FAILED=0$' \
+     && [ ! -s "$pt_log" ]; then
+    printf '  ✅ same-umbrella prefix already present → skipped, no gh edit call\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ same-umbrella idempotency unexpected behavior\n     stdout:\n'
+    printf '%s\n' "$pt_out" | sed 's/^/       /'
+    printf '     edit-log:\n'
+    sed 's/^/       /' "$pt_log"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-d) Different-umbrella prefix → NOT idempotent (layered on top).
+# Documents the deliberate design: helper has no way to know the prior prefix
+# is trustworthy, and stripping unknown leading parens text would be a footgun.
+{
+  pt_children="$TMP/pt-d-children.tsv"
+  pt_log="$TMP/pt-d-edit-log"
+  prepare_children "$pt_children" $'42\t(Umbrella: 99) Add foo support\thttps://x/42'
+  : > "$pt_log"
+  pt_out=$(STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r 2>&1)
+  if printf '%s\n' "$pt_out" | grep -qE '^TITLES_RENAMED=1$' \
+     && grep -qE $'^42\t\\(Umbrella: 100\\) \\(Umbrella: 99\\) Add foo support$' "$pt_log"; then
+    printf '  ✅ different-umbrella prefix → layered (not stripped — design intent)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ different-umbrella layering unexpected behavior\n     stdout:\n'
+    printf '%s\n' "$pt_out" | sed 's/^/       /'
+    printf '     edit-log:\n'
+    sed 's/^/       /' "$pt_log"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-e) gh issue edit fails → TITLES_FAILED + redacted stderr warning.
+{
+  pt_children="$TMP/pt-e-children.tsv"
+  pt_log="$TMP/pt-e-edit-log"
+  pt_err="$TMP/pt-e-err"
+  prepare_children "$pt_children" $'42\tAdd foo support\thttps://x/42'
+  : > "$pt_log"
+  STUB_EDIT_LOG="$pt_log" STUB_EDIT_RC=22 STUB_EDIT_STDERR="HTTP 403: forbidden" \
+    PATH="$STUB_BIN:$PATH" bash "$HELPERS" prefix-titles --umbrella 100 \
+      --children-file "$pt_children" --repo o/r > "$TMP/pt-e-out" 2> "$pt_err" || true
+  if grep -qE '^TITLES_FAILED=1$' "$TMP/pt-e-out" \
+     && grep -qE '^TITLES_RENAMED=0$' "$TMP/pt-e-out" \
+     && grep -qE '⚠ /umbrella: prefix-titles edit #42 failed' "$pt_err"; then
+    printf '  ✅ gh edit failure → TITLES_FAILED + stderr warning\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ gh edit failure unexpected behavior\n     stdout:\n'
+    sed 's/^/       /' "$TMP/pt-e-out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$pt_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_EDIT_RC STUB_EDIT_STDERR
+}
+
+# (pt-f) Multiple children, mixed: one fresh, one same-prefix, one different-prefix.
+{
+  pt_children="$TMP/pt-f-children.tsv"
+  pt_log="$TMP/pt-f-edit-log"
+  : > "$pt_log"
+  printf '10\tFirst child\thttps://x/10\n'                       >  "$pt_children"
+  printf '11\t(Umbrella: 100) Second child\thttps://x/11\n'      >> "$pt_children"
+  printf '12\t(Umbrella: 99) Third child\thttps://x/12\n'        >> "$pt_children"
+  pt_out=$(STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r 2>&1)
+  if printf '%s\n' "$pt_out" | grep -qE '^TITLES_RENAMED=2$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_SKIPPED_EXISTING=1$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_FAILED=0$' \
+     && grep -qE $'^10\t\\(Umbrella: 100\\) First child$' "$pt_log" \
+     && grep -qE $'^12\t\\(Umbrella: 100\\) \\(Umbrella: 99\\) Third child$' "$pt_log" \
+     && [ "$(wc -l < "$pt_log" | tr -d ' ')" = "2" ]; then
+    printf '  ✅ mixed children → 2 renamed + 1 skipped, log has only the 2 edited rows\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ mixed children unexpected behavior\n     stdout:\n'
+    printf '%s\n' "$pt_out" | sed 's/^/       /'
+    printf '     edit-log:\n'
+    sed 's/^/       /' "$pt_log"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-g) --dry-run → all zeros, no gh edit calls.
+{
+  pt_children="$TMP/pt-g-children.tsv"
+  pt_log="$TMP/pt-g-edit-log"
+  prepare_children "$pt_children" $'42\tAdd foo support\thttps://x/42'
+  : > "$pt_log"
+  pt_out=$(STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r --dry-run 2>&1)
+  if printf '%s\n' "$pt_out" | grep -qE '^TITLES_RENAMED=0$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_SKIPPED_EXISTING=0$' \
+     && printf '%s\n' "$pt_out" | grep -qE '^TITLES_FAILED=0$' \
+     && [ ! -s "$pt_log" ]; then
+    printf '  ✅ --dry-run → all-zero counters, no gh edit calls\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ --dry-run unexpected behavior\n     stdout:\n'
+    printf '%s\n' "$pt_out" | sed 's/^/       /'
+    printf '     edit-log:\n'
+    sed 's/^/       /' "$pt_log"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-h) Missing-title row → bucketed as TITLES_FAILED with input warning.
+{
+  pt_children="$TMP/pt-h-children.tsv"
+  pt_log="$TMP/pt-h-edit-log"
+  pt_err="$TMP/pt-h-err"
+  : > "$pt_log"
+  printf '42\n' > "$pt_children"
+  STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r > "$TMP/pt-h-out" 2> "$pt_err" || true
+  if grep -qE '^TITLES_FAILED=1$' "$TMP/pt-h-out" \
+     && grep -qE '⚠ /umbrella: prefix-titles edit #42 failed \(input\)' "$pt_err" \
+     && [ ! -s "$pt_log" ]; then
+    printf '  ✅ missing-title row → TITLES_FAILED with input warning, no gh edit call\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ missing-title row unexpected behavior\n     stdout:\n'
+    sed 's/^/       /' "$TMP/pt-h-out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$pt_err"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-h2) Non-numeric first column → bucketed as TITLES_FAILED with input warning.
+{
+  pt_children="$TMP/pt-h2-children.tsv"
+  pt_log="$TMP/pt-h2-edit-log"
+  pt_err="$TMP/pt-h2-err"
+  : > "$pt_log"
+  printf 'NaN\tSome title\thttps://x/NaN\n' > "$pt_children"
+  STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r > "$TMP/pt-h2-out" 2> "$pt_err" || true
+  if grep -qE '^TITLES_FAILED=1$' "$TMP/pt-h2-out" \
+     && grep -qE '⚠ /umbrella: prefix-titles edit #NaN failed \(input\)' "$pt_err" \
+     && [ ! -s "$pt_log" ]; then
+    printf '  ✅ non-numeric child_num → TITLES_FAILED with input warning, no gh edit call\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ non-numeric child_num unexpected behavior\n     stdout:\n'
+    sed 's/^/       /' "$TMP/pt-h2-out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$pt_err"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-i) Input-validation errors: missing/invalid --umbrella, missing --children-file, missing --repo.
+assert_error "prefix-titles missing --umbrella"      prefix-titles --children-file "$TMP/pt-a-children.tsv" --repo o/r
+assert_error "prefix-titles non-numeric --umbrella"  prefix-titles --umbrella abc --children-file "$TMP/pt-a-children.tsv" --repo o/r
+assert_error "prefix-titles zero --umbrella"         prefix-titles --umbrella 0   --children-file "$TMP/pt-a-children.tsv" --repo o/r
+assert_error "prefix-titles missing --children-file" prefix-titles --umbrella 100 --repo o/r
+assert_error "prefix-titles missing --repo"          prefix-titles --umbrella 100 --children-file "$TMP/pt-a-children.tsv"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
