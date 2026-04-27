@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.12] - 2026-04-27
+
+### Changed
+
+- `skills/umbrella/scripts/helpers.sh` — refactored the four `wire-dag` per-run caches (`BLOCKER_ID_CACHE`, `BLOCKED_BY_CACHE`, `_WD_LOOKUP_FAILED`, and the local `_seen_set` inside `_wd_populate_existing_edges_transitively`) from `declare -A` (Bash 4+) to Bash 3.2-safe storage primitives matching `skills/issue/scripts/allocate-candidates.sh`. Value-bearing caches now use parallel indexed arrays (`BIC_KEYS[]`/`BIC_VALS[]` and `BBC_KEYS[]`/`BBC_VALS[]` with a colon-delimited `BBC_PRESENT` for `+x`-style presence semantics including empty-value caching); membership sets (`WDL_PRESENT`, the inline `_seen` colon-string) use the `case "$_seen" in *:"$key":*) ... esac` idiom from `allocate-candidates.sh`. Pre-existing test suite passes on stock macOS Bash 3.2.57 because numeric-only keys made the indexed-array fallback after silent `declare -A` failure happen to produce equivalent semantics — the refactor is invariant-preserving cleanup that brings `helpers.sh` into compliance with the documented cross-skill Bash 3.2 portability invariant in `skills/issue/scripts/allocate-candidates.md`. `skills/umbrella/scripts/test-helpers.sh` adds a static portability guard (mirroring `test-allocate-candidates.sh` Test 21 including the comment-line filter) plus two new behavioral tests pinning the warn-once invariant and the colon-string delimiter-collision safety (positive + negative cases for nodes 1 and 11). Sibling contracts `helpers.md` and `test-helpers.md` updated. Closes #744.
+
 ## [7.17.11] - 2026-04-27
 
 ### Fixed
