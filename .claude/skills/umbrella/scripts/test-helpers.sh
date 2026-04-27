@@ -169,8 +169,13 @@ case "$1 $_stub_url" in
           exit 0
         fi
       done
-      # Native check (jq with select).
-      printf '%s' "${STUB_NATIVE_CHECK_RESPONSE:-}"
+      # The legacy "native check" arm (jq with select) is dead since #716 —
+      # helpers.sh wire-dag's back-link loop no longer calls
+      # /dependencies/blocked_by --jq ".[] | select(.number == ${UMBRELLA})".
+      # Kept as an explicit "unreachable" branch returning empty so any
+      # accidental future reintroduction of the call is easy to diagnose
+      # (the assertion surface is empty rather than wedged-on-old-state).
+      printf ''
       exit 0
     else
       # Probe path (no POST, no --jq). After issue #728 the production probe
@@ -414,7 +419,6 @@ unset STUB_EXISTING_BLOCKERS
 export STUB_PROBE_RC=0
 export STUB_BLOCKER_ID=999001
 export STUB_BLOCKER_ID_RC=0
-export STUB_NATIVE_CHECK_RESPONSE=""
 export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
 export STUB_POST_RC=0
 
@@ -701,6 +705,44 @@ export STUB_POST_RC=0
   unset STUB_LIST_COMMENTS_RESPONSE STUB_COMMENT_LOG
 }
 
+# (t) Fail-open posture: STUB_LIST_COMMENTS_RC non-zero simulates a transient
+#     gh failure on the comments-list probe. helpers.sh should treat the probe
+#     as having found nothing and post the back-link comment.
+{
+  t_children="$TMP/children-t.tsv"
+  t_edges="$TMP/edges-t.tsv"
+  t_out="$TMP/wire-out-t"
+  t_err="$TMP/wire-err-t"
+  t_comment_log="$TMP/comment-log-t.txt"
+  : > "$t_comment_log"
+  printf '20\tsome-child\thttp://x\n' > "$t_children"
+  : > "$t_edges"
+  export STUB_LIST_COMMENTS_RESPONSE=""
+  export STUB_LIST_COMMENTS_RC=22
+  PATH="$STUB_BIN:$PATH" STUB_COMMENT_LOG="$t_comment_log" \
+    bash "$HELPERS" wire-dag \
+      --tmpdir "$TMP" --umbrella 1 --umbrella-title "Some title" \
+      --children-file "$t_children" --edges-file "$t_edges" \
+      --repo o/r > "$t_out" 2> "$t_err" || true
+  ok=1
+  grep -qE 'BACKLINKS_SKIPPED_EXISTING=0' "$t_out" || ok=0
+  grep -qE 'BACKLINKS_POSTED=1' "$t_out" || ok=0
+  comment_calls=$(wc -l < "$t_comment_log" | tr -d ' ')
+  [ "$comment_calls" = "1" ] || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ comments-list transient failure (RC=22) → fail-open, posts back-link\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ fail-open posture not honored\n     stdout:\n'
+    sed 's/^/       /' "$t_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$t_err"
+    printf '     comment log lines: %s\n' "$comment_calls"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_LIST_COMMENTS_RESPONSE STUB_LIST_COMMENTS_RC STUB_COMMENT_LOG
+}
+
 echo ""
 echo "test-helpers.sh: wire-dag --no-backlinks subcommand (created-eq-1 bypass; closes #717)"
 
@@ -709,8 +751,6 @@ echo "test-helpers.sh: wire-dag --no-backlinks subcommand (created-eq-1 bypass; 
 export STUB_PROBE_RC=0
 export STUB_BLOCKER_ID=999001
 export STUB_BLOCKER_ID_RC=0
-export STUB_EXISTING_BLOCKERS=""
-export STUB_NATIVE_CHECK_RESPONSE=""
 export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
 export STUB_POST_RC=0
 

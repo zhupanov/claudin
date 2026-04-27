@@ -45,6 +45,7 @@ Regression harness for `helpers.sh check-cycle` (pure logic, no network) and `he
 - existing back-link comment present: `STUB_LIST_COMMENTS_RESPONSE` returns a body containing `Part of umbrella #1 — Some title` (interleaved with unrelated comments) → assert `BACKLINKS_SKIPPED_EXISTING=1`, `BACKLINKS_POSTED=0`, and `STUB_COMMENT_LOG` records zero `gh issue comment` invocations.
 - no matching back-link present: `STUB_LIST_COMMENTS_RESPONSE` returns comments without the umbrella prefix → assert `BACKLINKS_SKIPPED_EXISTING=0`, `BACKLINKS_POSTED=1`, and `STUB_COMMENT_LOG` records exactly one `gh issue comment` invocation.
 - numeric prefix-collision guard: an unrelated `Part of umbrella #12 — ...` comment is present while looking up umbrella `#1` — assert the trailing ` — ` separator in the marker prevents the false-match (`BACKLINKS_POSTED=1`, exactly one post). Pins the literal-separator design from #716.
+- fail-open posture: `STUB_LIST_COMMENTS_RC=22` simulates a transient `gh api` failure on the comments-list probe → assert `BACKLINKS_POSTED=1`, `BACKLINKS_SKIPPED_EXISTING=0`, exactly one `gh issue comment` invocation. Pins the documented fail-open contract: a transient probe failure must NOT silently suppress the back-link comment.
 
 **Coverage** — `wire-dag --no-backlinks` (created-eq-1 bypass mode; closes #717):
 

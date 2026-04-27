@@ -622,8 +622,14 @@ case "$SUBCMD" in
       while IFS=$'\t' read -r child_num _title _url; do
         [ -z "$child_num" ] && continue
         existing="false"
-        if gh api "/repos/$REPO/issues/${child_num}/comments" --paginate --jq '.[].body' 2>/dev/null \
-             | grep -qF "$backlink_marker"; then
+        # Idempotency probe: extract the FIRST LINE of each comment body
+        # (`split("\n")[0]`) and grep with `^` anchor for the marker. This
+        # matches only comments whose body starts with the canonical prefix
+        # (the exact shape helpers.sh emits at the comment-post site below)
+        # — a discussion comment that quotes or mentions the marker mid-prose
+        # will not false-match (issue #716 review FINDING — Codex).
+        if gh api "/repos/$REPO/issues/${child_num}/comments" --paginate --jq '.[].body | split("\n")[0]' 2>/dev/null \
+             | grep -qE "^${backlink_marker}"; then
           existing="true"
         fi
         if [ "$existing" = "true" ]; then

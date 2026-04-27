@@ -659,12 +659,26 @@ if [[ -n "$ISSUE_ARG" ]]; then
                 # handle_umbrella dispatches them) — not deadlocked. Only
                 # blockers that are NOT parsed children of this umbrella
                 # count as umbrella-blockers.
-                BLOCKERS=$(all_open_blockers "$ISSUE_NUM")
-                if [ -n "$BLOCKERS" ]; then
-                    UMBRELLA_CHILDREN=$("$UMBRELLA_HANDLER" list-children --issue "$ISSUE_NUM" 2>/dev/null \
-                        | awk -F= '/^CHILDREN=/ { v=$2 } END { print v }')
-                    FILTERED=""
-                    for b in $BLOCKERS; do
+                #
+                # Bypass `all_open_blockers` here: it short-circuits on
+                # any native blocker without ever consulting prose blockers
+                # (see all_open_blockers comment block above), which would
+                # let an umbrella with native child-blockers + a separate
+                # prose blocker pass our filter and dispatch incorrectly.
+                # Fetch native and prose independently, filter children
+                # only from native, then union before deciding eligibility.
+                NATIVE_BLOCKERS=$(native_open_blockers "$ISSUE_NUM")
+                if [ -n "$NATIVE_BLOCKERS" ]; then
+                    set +e
+                    LIST_CHILDREN_OUT=$("$UMBRELLA_HANDLER" list-children --issue "$ISSUE_NUM" 2>/dev/null)
+                    LIST_CHILDREN_EXIT=$?
+                    set -e
+                    if [ "$LIST_CHILDREN_EXIT" -ne 0 ]; then
+                        echo "WARNING: list-children failed for umbrella #$ISSUE_NUM (exit $LIST_CHILDREN_EXIT) — children-filter degraded; native blockers not filtered" >&2
+                    fi
+                    UMBRELLA_CHILDREN=$(echo "$LIST_CHILDREN_OUT" | awk -F= '/^CHILDREN=/ { v=$2 } END { print v }')
+                    FILTERED_NATIVE=""
+                    for b in $NATIVE_BLOCKERS; do
                         is_child="false"
                         for c in $UMBRELLA_CHILDREN; do
                             if [ "$b" = "$c" ]; then
@@ -673,11 +687,17 @@ if [[ -n "$ISSUE_ARG" ]]; then
                             fi
                         done
                         if [ "$is_child" = "false" ]; then
-                            FILTERED="$FILTERED $b"
+                            FILTERED_NATIVE="$FILTERED_NATIVE $b"
                         fi
                     done
-                    BLOCKERS=$(echo "$FILTERED" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                    NATIVE_BLOCKERS=$(echo "$FILTERED_NATIVE" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
                 fi
+                PROSE_BLOCKERS=$(prose_open_blockers "$ISSUE_NUM")
+                # Union + dedupe (sort -u tolerates leading/trailing space and
+                # an empty-line input from concatenated empty sets).
+                BLOCKERS=$(printf '%s %s' "$NATIVE_BLOCKERS" "$PROSE_BLOCKERS" \
+                    | tr ' ' '\n' | grep -v '^$' | sort -u -n | tr '\n' ' ' \
+                    | sed 's/[[:space:]]*$//')
                 if [ -n "$BLOCKERS" ]; then
                     FORMATTED=$(echo "$BLOCKERS" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
                     echo "ELIGIBLE=false"
