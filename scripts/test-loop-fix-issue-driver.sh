@@ -28,6 +28,10 @@
 #      - --plugin-dir "$CLAUDE_PLUGIN_ROOT" (FINDING_7)
 #      - prompt-file on STDIN via < $prompt_file (FINDING_9)
 #      - stderr to <out>.stderr sidecar via 2> $stderr_file (FINDING_10)
+#      - --output-format stream-json --verbose (NDJSON capture so every
+#        assistant turn — including Step 0's success breadcrumb — reaches
+#        iter-N-out.txt; default-mode claude -p would emit only the final
+#        assistant message text and miss the Step 0 sentinel)
 #   H) SETUP_SENTINEL is assigned the literal `find & lock — found and locked`
 #      on a single line. Anchored on the executable assignment line, not the
 #      header comments where the same prose appears (driver.sh:27, :231).
@@ -139,6 +143,28 @@ if grep -qE '2> "\$stderr_file"' "$DRIVER_SH"; then
   pass "G: driver.sh uses stderr sidecar via 2> \"\$stderr_file\" (FINDING_10)"
 else
   fail "G: driver.sh missing stderr sidecar (FINDING_10)"
+fi
+# G-stream-json: NDJSON capture so every assistant turn (Step 0 success
+# breadcrumb included) reaches iter-N-out.txt. Default-mode claude -p emits
+# only the final assistant message text and misses the Step 0 sentinel.
+# Anchored on the live invocation line — the regex pins `$claude_bin` (the
+# bash variable holding the claude binary, only on the executable argv line)
+# followed by the flag, so a regression that removes the flag from argv but
+# leaves it in a comment fails the assertion. Bare substring matching would
+# false-pass against the comments at driver.sh:103-117 and 124-129 which
+# also mention the flags. Mirrors assertion H's "anchor on live code, not
+# comments" rule.
+# shellcheck disable=SC2016  # single quotes intentional — byte-literal regex pattern.
+if grep -qE '\$claude_bin.*--output-format stream-json' "$DRIVER_SH"; then
+  pass "G: driver.sh passes --output-format stream-json on the live claude -p argv line"
+else
+  fail "G: driver.sh missing --output-format stream-json on the live claude -p argv line (only mentioned in comments?)"
+fi
+# shellcheck disable=SC2016
+if grep -qE '\$claude_bin.*--verbose' "$DRIVER_SH"; then
+  pass "G: driver.sh passes --verbose on the live claude -p argv line (required by claude -p stream-json mode)"
+else
+  fail "G: driver.sh missing --verbose on the live claude -p argv line (only mentioned in comments?)"
 fi
 
 # --- Assertion H: SETUP_SENTINEL live assignment line (anchors on the

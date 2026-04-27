@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.28] - 2026-04-26
+
+### Fixed
+
+- `skills/loop-fix-issue/scripts/driver.sh` — pass `--output-format stream-json --verbose` to the per-iteration `claude -p /fix-issue` invocation in `invoke_claude_p_skill`. Default-mode `claude -p` emits only the FINAL assistant message text on stdout, so the driver's grep for `/fix-issue`'s Step 0 success sentinel `find & lock — found and locked` was always missing the breadcrumb — even when `/fix-issue` actually shipped a PR and merged. The loop halted with `Step 0 unknown short-circuit (sentinel mismatch)` after one productive iteration. Stream-json mode emits one JSON object per assistant turn / tool_use / system / result event, with the breadcrumb text appearing verbatim somewhere in the NDJSON sidecar (typically inside an `assistant`-typed turn's text content); `&` and the em-dash stay as raw UTF-8 (no `&` / `—` escaping by Anthropic's encoder), so the existing literal-substring grep keeps matching against the file. Switches the four `grep -F -q` calls to `grep -aF -q` for binary-mode safety on the NDJSON sidecar. Adds `scripts/test-loop-fix-issue-driver-behavior.sh` — a Tier-2 fixture using `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` + a stub `CLAUDE_PLUGIN_ROOT` tree + a PATH-mocked `gh` to exercise three scenarios (success / no-eligible / no-sentinel) end-to-end against canned NDJSON, plus 2 new structural pins in `test-loop-fix-issue-driver.sh` (count 20→22) anchored on the live `$claude_bin` invocation line. Doc/contract sync across `driver.md`, `SKILL.md`, `SECURITY.md` (NDJSON sidecars carry richer trace data on retained paths), `docs/workflow-lifecycle.md`, and `docs/linting.md`. Closes #708.
+
 ## [7.16.27] - 2026-04-26
 
 ### Added

@@ -424,6 +424,22 @@ exclude = [
   # test-* harnesses above.
   "skills/research/scripts/test-classify-research-scale.sh",
   "scripts/test-anti-halt-banners.sh",
+  # scripts/test-loop-fix-issue-driver-behavior.sh is the Tier-2 NDJSON
+  # behavior fixture for skills/loop-fix-issue/scripts/driver.sh (companion
+  # to scripts/test-loop-fix-issue-driver.sh, which is the Tier-1 structural
+  # harness — already structurally referenced via the existing test-* pattern
+  # below). The behavior fixture exercises the live driver against canned
+  # NDJSON via LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE plus a stub plugin tree
+  # (override CLAUDE_PLUGIN_ROOT to a tmpdir with stub session-setup.sh and
+  # cleanup-tmpdir.sh) and a PATH-mocked gh. Three scenarios: success
+  # (sentinel detected on iter 1, no-eligible on iter 2), no-eligible
+  # (clean exit on iter 1), and no-sentinel (defensive-fallback halts loop,
+  # retains LOOP_TMPDIR). Referenced only from Makefile
+  # (test-loop-fix-issue-driver-behavior target) and
+  # scripts/test-loop-fix-issue-driver-behavior.md (sibling contract),
+  # matching the same Makefile-only pattern as the other test-* harnesses
+  # above.
+  "scripts/test-loop-fix-issue-driver-behavior.sh",
   # scripts/test-alias-target-resolution.sh is the regression harness for
   # skills/alias/scripts/resolve-target.sh (closes the alias target-routing
   # rework — adds plugin-repo detection + --private flag). Referenced only
