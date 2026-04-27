@@ -124,7 +124,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 | `skills/research/references/eval-baseline.json` | Schema-only stub today (`entries: []`). Operator runs `bash scripts/eval-research.sh --write-baseline <file>` to populate. |
 | `scripts/test-eval-set-structure.sh` | Offline structural regression. Asserts entry count, category coverage, schema validity, and invokes `--smoke-test` for round-trip verification. |
 | `scripts/test-eval-set-structure.md` | Sibling contract for the test harness. |
-| `scripts/test-eval-research-baseline-flag.sh` | Standalone offline regression harness for the `--baseline` flag handling (closes #441; extended for #477). PATH-stubs `claude` and `jq` so it runs without the real binaries. Exercises the flag-state paths: no-flag, valid-ref, bad-ref, and trailing-flag-with-no-value. |
+| `scripts/test-eval-research-baseline-flag.sh` | Standalone offline regression harness for the `--baseline` flag handling (closes #441; extended for #477 and #780). PATH-stubs `claude` and `jq` so it runs without the real binaries. Exercises the flag-state paths: no-flag, valid-ref, bad-ref, trailing-flag-with-no-value, and value-taking-flag-followed-by-another-flag. |
 | `scripts/test-eval-research-baseline-flag.md` | Sibling contract for the `--baseline` flag test harness. |
 | `Makefile` | Adds `eval-research`, `test-eval-set-structure`, and `test-eval-research-baseline-flag` standalone targets. NONE is a `test-harnesses` prerequisite. |
 | `agent-lint.toml` | Excludes `scripts/eval-research.sh`, `scripts/test-eval-set-structure.sh`, and `scripts/test-eval-research-baseline-flag.sh` from dead-script checks (all are Makefile-only references). |
@@ -137,7 +137,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 
 - `0` — harness ran. Per-entry timeouts and parse failures are reported in the `status` column / `research_status` JSON field, not the exit code.
 - `1` — schema validation of `eval-set.md` or `eval-baseline.json` failed.
-- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, baseline ref that cannot be resolved via `git show`, or a value-taking flag with no following value — e.g. a trailing `--baseline` — which previously aborted with code 1 under `set -e` and collided with the schema-validation code; issue #477 separated the two).
+- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, baseline ref that cannot be resolved via `git show`, a value-taking flag with no following value — e.g. a trailing `--baseline` — which previously aborted with code 1 under `set -e` and collided with the schema-validation code; issue #477 separated the two, or a value-taking flag followed by another long option — e.g. `--baseline --scale standard` — which would otherwise silently bind the next flag's name as the value because the validity regex permits hyphens; issue #780 extended `require_value` to reject `--*` candidate values).
 - `3` — required tooling missing. `jq` and `awk` are required in all modes (including `--smoke-test`); `claude` is required in non-smoke-test runs.
 
 ## Security

@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 # test-eval-research-baseline-flag.sh — Regression harness for the
-# `--baseline` flag handling in scripts/eval-research.sh (issue #441).
+# `--baseline` flag handling in scripts/eval-research.sh (issues #441,
+# #477, #780).
 #
-# Pins the post-#441 behavior:
+# Pins behavior:
 #   1. `--baseline` not set → no PREVIEW MODE banner on stdout.
 #   2. `--baseline <valid-ref>` → exit 0; PREVIEW MODE banner on stdout;
 #      cached baseline JSON exists at $WORK_DIR/baseline-rows.json.
 #   3. `--baseline <bogus-ref>` → exit 2; ERROR with the ref + git stderr
 #      tail on stderr; no cache file left behind.
+#   4. trailing `--baseline` with no value → exit 2; --baseline named
+#      on stderr as missing its value (issue #477).
+#   5. `--baseline --<other-flag>` → exit 2; --baseline named on stderr
+#      as missing its value (issue #780; the validity regex would
+#      otherwise accept the next flag's name as the value).
 #
 # Runs offline by PATH-stubbing `claude` and `jq` so the harness exercises
 # the baseline block without needing either real binary on PATH (CI's
@@ -198,6 +204,37 @@ if grep -q -- '--baseline requires a value' "$sub4_stderr"; then
   pass "Sub-4: stderr names --baseline as the flag missing a value"
 else
   fail "Sub-4: stderr does not name --baseline (full stderr: $(cat "$sub4_stderr"))"
+fi
+
+# -----------------------------------------------------------------------
+# Sub-5: --baseline followed by another flag → exit 2 with clean error.
+# Pre-fix behavior (issue #780): `require_value` only checked `(( $# < 2 ))`,
+# so `eval-research.sh --baseline --scale standard` left $# = 3 at the
+# --baseline case, the check passed, and BASELINE_REF was silently set to
+# "--scale" (the regex `^[0-9A-Za-z._/-]+$` permits "--scale" because
+# hyphens are allowed). `git show --scale:skills/...` then produced a
+# confusing git error rather than a clean missing-value message. The fix
+# extends require_value to take a third arg (the candidate value) and
+# reject when it starts with `--`. Mirrors take_value in
+# scripts/render-reviewer-prompt.sh.
+# -----------------------------------------------------------------------
+
+echo "--- Sub-5: --baseline followed by another flag (--scale) ---"
+sub5_stdout="$fixture_tmp/sub5.stdout"
+sub5_stderr="$fixture_tmp/sub5.stderr"
+sub5_rc=0
+PATH="$stub_dir:$PATH" bash "$SCRIPT" --id nonexistent-id-zzz --baseline --scale standard \
+  >"$sub5_stdout" 2>"$sub5_stderr" || sub5_rc=$?
+
+if [[ "$sub5_rc" == "2" ]]; then
+  pass "Sub-5: exit 2 when --baseline is followed by another flag"
+else
+  fail "Sub-5: expected exit 2, got $sub5_rc (stderr: $(tail -n 5 "$sub5_stderr"))"
+fi
+if grep -q -- '--baseline requires a value' "$sub5_stderr"; then
+  pass "Sub-5: stderr names --baseline as the flag missing a value"
+else
+  fail "Sub-5: stderr does not name --baseline (full stderr: $(cat "$sub5_stderr"))"
 fi
 
 # -----------------------------------------------------------------------
