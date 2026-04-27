@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.20] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/test-fix-issue-bail-detection.md` — aligned the intro sentence and edit-in-sync footer with the harness it documents. The .md previously opened with "six load-bearing literals (five conceptual checks)" but `test-fix-issue-bail-detection.sh` runs eight literal assertions (`a1`–`a4`, `b`–`e`) covering six conceptual checks. Updated the count to "eight literal assertions covering six conceptual checks", added the missing `--no-admin-fallback` SIMPLE/HARD bullet pair (issue #559 — branch-protection bypass safety flag) so the bullet list matches the harness's checks, and updated the closing edit-in-sync line. Doc-only correction; the harness itself and runtime behavior are unchanged. Closes #763.
+
 ## [7.17.19] - 2026-04-27
 
 ### Fixed
