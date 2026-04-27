@@ -20,6 +20,9 @@ done
 if [ -z "$TMPDIR" ] || [ ! -d "$TMPDIR" ]; then
   echo "ERROR=--tmpdir is required and must exist" >&2; exit 1
 fi
+if [ ! -w "$TMPDIR" ]; then
+  echo "ERROR=tmpdir not writable: $TMPDIR" >&2; exit 1
+fi
 if [ -z "$PIECES_FILE" ] || [ ! -s "$PIECES_FILE" ]; then
   echo "ERROR=--pieces-file is required and must be non-empty" >&2; exit 1
 fi
