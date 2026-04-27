@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.19] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/finalize-umbrella.md` — correct the "Caller contract" Edit-in-sync count from THREE to FOUR (the bullet enumerated four sites — Step 0, Step 3, Step 5a, Step 6 — but stated "THREE call sites"). Reorder the enumeration to match SKILL.md flow order and tighten the "AND ... AND" phrasing to a clean comma-separated list. Closes #757.
+
 ## [7.17.18] - 2026-04-27
 
 ### Fixed
