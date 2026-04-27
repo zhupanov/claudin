@@ -155,6 +155,34 @@ case "$SUBCMD" in
     # not `issue_number` (display number) — see add-blocked-by.sh:170.
     declare -A BLOCKER_ID_CACHE 2>/dev/null || true
 
+    # Per-run cache for blocked_by lookups (issue #718). Key: node display number;
+    # value: space-separated blocker numbers, OR the literal sentinel "_GH_FAIL_"
+    # when the lookup transiently failed.
+    declare -A BLOCKED_BY_CACHE 2>/dev/null || true
+
+    # Per-node lookup-failure flag: suppresses repeat warnings on cache reuse.
+    declare -A _WD_LOOKUP_FAILED 2>/dev/null || true
+
+    # Set when the transitive traversal hit WIRE_DAG_TRAVERSAL_NODE_CAP. When 1,
+    # the per-edge cycle-check loop routes any CYCLE=false candidate to
+    # EDGES_FAILED with reason "bound-exhausted" (DECISION_1, voted 3-0):
+    # the negative cycle answer cannot be trusted on a known-incomplete TSV.
+    _wd_traversal_truncated=0
+
+    # Per-run cap on distinct nodes the BFS may materialize. Override via
+    # WIRE_DAG_TRAVERSAL_NODE_CAP. Total gh API calls across the run are
+    # bounded by min(cap, |reachable closure|) once BLOCKED_BY_CACHE de-dups
+    # repeat queries (DECISION_2, voted 2-1). Validate the override is a
+    # positive integer (FINDING_2): a non-numeric or zero value would trip the
+    # `-gt` integer comparison under `set -e` and abort wire-dag with no
+    # documented `EDGES_FAILED` signal. On invalid input, emit a one-time
+    # stderr warning and fall back to the default 200.
+    WD_NODE_CAP="${WIRE_DAG_TRAVERSAL_NODE_CAP:-200}"
+    if ! printf '%s' "$WD_NODE_CAP" | grep -qE '^[1-9][0-9]*$'; then
+      echo "**⚠ /umbrella: wire-dag — WIRE_DAG_TRAVERSAL_NODE_CAP=\"$WD_NODE_CAP\" is not a positive integer; falling back to default 200**" >&2
+      WD_NODE_CAP=200
+    fi
+
     EXISTING_EDGES_TSV="$TMPDIR/existing-edges.tsv"
     : > "$EXISTING_EDGES_TSV"
 
@@ -197,16 +225,128 @@ case "$SUBCMD" in
       echo "**⚠ /umbrella: wire-dag edge ${blocker}->${blocked} failed (HTTP ${code}): ${redacted}**" >&2
     }
 
-    if [ "$api_available" = "true" ]; then
-      # Probe existing blocked_by edges for each child. The endpoint returns an array of
-      # issue objects that are currently blocking the issue; we collect (blocker -> blocked).
-      while IFS=$'\t' read -r blocked _title _url; do
-        [ -z "$blocked" ] && continue
-        existing_blockers=$(gh api "/repos/$REPO/issues/$blocked/dependencies/blocked_by" --jq '.[].number' 2>/dev/null || true)
-        for blocker in $existing_blockers; do
-          printf '%s\t%s\n' "$blocker" "$blocked" >> "$EXISTING_EDGES_TSV"
-        done
+    # _wd_blocked_by_lookup <node>
+    # Returns space-separated blocker numbers for <node>, or empty on either
+    # "no blockers" or "transient lookup failure". Caches per run. On gh failure
+    # caches the literal sentinel "_GH_FAIL_" and emits a one-time stderr
+    # warning per failed node (residual fail-open posture acknowledged in
+    # helpers.md; FINDING_5 was exonerated 2-1 — preserves the existing
+    # individual-API-blip fail-open posture).
+    _wd_blocked_by_lookup() {
+      local node="$1"
+      if [ -n "${BLOCKED_BY_CACHE[$node]+x}" ]; then
+        local cached="${BLOCKED_BY_CACHE[$node]}"
+        if [ "$cached" = "_GH_FAIL_" ]; then
+          printf ''
+        else
+          printf '%s' "$cached"
+        fi
+        return 0
+      fi
+      local raw rc
+      set +e
+      raw=$(gh api "/repos/$REPO/issues/${node}/dependencies/blocked_by" --paginate --jq '.[].number' 2>/dev/null)
+      rc=$?
+      set -e
+      if [ "$rc" -ne 0 ]; then
+        BLOCKED_BY_CACHE[$node]="_GH_FAIL_"
+        if [ -z "${_WD_LOOKUP_FAILED[$node]+x}" ]; then
+          _WD_LOOKUP_FAILED[$node]=1
+          echo "**⚠ /umbrella: wire-dag blocked_by lookup failed for #${node} — treating as no edges**" >&2
+        fi
+        printf ''
+        return 0
+      fi
+      # Convert newline-delimited gh output to a space-separated string suitable
+      # for unquoted iteration via `for b in ${BLOCKED_BY_CACHE[$node]}` (per
+      # FINDING_1 — pinning the capture/iterate mechanism explicitly).
+      local flat
+      flat=$(printf '%s' "$raw" | tr '\n' ' ')
+      flat="${flat% }"
+      BLOCKED_BY_CACHE[$node]="$flat"
+      printf '%s' "$flat"
+    }
+
+    # _wd_populate_existing_edges_transitively <existing_edges_tsv>
+    # Worklist BFS over blocked_by. Seed worklist with children + both endpoints
+    # of every row in EDGES_FILE. Bounded by WD_NODE_CAP distinct nodes; sets
+    # _wd_traversal_truncated=1 if the cap fires. Issue #718.
+    #
+    # Invariant (FINDING_3): when dequeuing `node`, for every blocker `b`
+    # returned by _wd_blocked_by_lookup(node):
+    #   (a) ALWAYS append `b\tnode` to the TSV regardless of seen-set state,
+    #   (b) only mark seen and enqueue `b` if not yet in _seen_set.
+    # The seen-set guards re-querying only — it MUST NOT short-circuit append.
+    _wd_populate_existing_edges_transitively() {
+      local existing_tsv="$1"
+      declare -A _seen_set 2>/dev/null || true
+      local queue=()
+      local distinct_count=0
+      local start_ts="$SECONDS"
+
+      # Seed from CHILDREN_FILE (one issue per line, tab-separated columns).
+      while IFS=$'\t' read -r child_num _title _url; do
+        [ -z "$child_num" ] && continue
+        if [ -z "${_seen_set[$child_num]+x}" ]; then
+          _seen_set[$child_num]=1
+          queue+=("$child_num")
+          distinct_count=$((distinct_count + 1))
+        fi
       done < "$CHILDREN_FILE"
+
+      # Seed from EDGES_FILE endpoints (both blocker AND blocked).
+      while IFS=$'\t' read -r blocker blocked; do
+        [ -z "$blocker" ] || [ -z "$blocked" ] && continue
+        for endpoint in "$blocker" "$blocked"; do
+          if [ -z "${_seen_set[$endpoint]+x}" ]; then
+            _seen_set[$endpoint]=1
+            queue+=("$endpoint")
+            distinct_count=$((distinct_count + 1))
+          fi
+        done
+      done < "$EDGES_FILE"
+
+      # Post-seed cap check (FINDING_1). If the seed set already exceeds the
+      # cap, no BFS expansion is safe — set the truncated flag and emit the
+      # cap warning before any candidate processing. Without this, an over-cap
+      # seed would silently bypass the fail-closed posture because the in-loop
+      # check below only fires when a NEW blocker is discovered.
+      if [ "$distinct_count" -gt "$WD_NODE_CAP" ]; then
+        _wd_traversal_truncated=1
+        echo "**⚠ /umbrella: wire-dag traversal cap reached (cap=${WD_NODE_CAP}, queue=${#queue[@]}, elapsed=0s) — seed set already over-cap; pending candidates will fail closed**" >&2
+        return 0
+      fi
+
+      while [ "${#queue[@]}" -gt 0 ]; do
+        local node="${queue[0]}"
+        queue=("${queue[@]:1}")
+        local blockers
+        blockers=$(_wd_blocked_by_lookup "$node")
+        for b in $blockers; do
+          [ -z "$b" ] && continue
+          # Append unconditionally (FINDING_3).
+          printf '%s\t%s\n' "$b" "$node" >> "$existing_tsv"
+          if [ -z "${_seen_set[$b]+x}" ]; then
+            _seen_set[$b]=1
+            distinct_count=$((distinct_count + 1))
+            if [ "$distinct_count" -gt "$WD_NODE_CAP" ]; then
+              _wd_traversal_truncated=1
+              local elapsed=$((SECONDS - start_ts))
+              echo "**⚠ /umbrella: wire-dag traversal cap reached (cap=${WD_NODE_CAP}, queue=${#queue[@]}, elapsed=${elapsed}s) — pending candidates will fail closed**" >&2
+              return 0
+            fi
+            queue+=("$b")
+          fi
+        done
+      done
+    }
+
+    if [ "$api_available" = "true" ]; then
+      # Issue #718: build EXISTING_EDGES_TSV from the full reachable blocked_by
+      # subgraph (children + both endpoints of every proposed edge), not just
+      # children's direct blocked_by. Cycles closing through non-child
+      # intermediaries are now visible to check-cycle. Bounded by WD_NODE_CAP.
+      _wd_populate_existing_edges_transitively "$EXISTING_EDGES_TSV"
 
       # Walk proposed edges, cycle-check each, add survivors.
       while IFS=$'\t' read -r blocker blocked; do
@@ -220,6 +360,15 @@ case "$SUBCMD" in
         cycle_result=$("$0" check-cycle --existing-edges "$EXISTING_EDGES_TSV" --candidate "${blocker}:${blocked}" | sed -n 's/^CYCLE=//p')
         if [ "$cycle_result" = "true" ]; then
           EDGES_REJECTED_CYCLE=$((EDGES_REJECTED_CYCLE + 1))
+          continue
+        fi
+        # Cap-hit fail-closed (DECISION_1, voted 3-0): when the transitive
+        # traversal truncated, the existing-edges TSV is known-incomplete, so a
+        # CYCLE=false answer cannot be trusted. Bucket the candidate as
+        # EDGES_FAILED with reason "bound-exhausted" rather than POSTing.
+        if [ "$_wd_traversal_truncated" = "1" ]; then
+          EDGES_FAILED=$((EDGES_FAILED + 1))
+          emit_edge_failure_warning "$blocker" "$blocked" "bound-exhausted" "traversal cap reached during populate; CYCLE=false on incomplete TSV cannot be trusted"
           continue
         fi
 
