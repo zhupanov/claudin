@@ -19,7 +19,11 @@
 # issues blocked by other open issues (via GitHub's native issue dependencies
 # and prose blockers), excludes issues whose titles start with a managed
 # lifecycle prefix ([IN PROGRESS], [DONE], [STALLED]), and emits the first
-# match (oldest first).
+# match. Selection order is two-key: titles matching the whole word "urgent"
+# (case-insensitive, word-boundary regex — does NOT match "non-urgent")
+# come first, then within each tier oldest-first by issue number. The
+# preference is a soft re-ordering, not an eligibility filter — a non-
+# Urgent issue is still picked when no Urgent eligible candidate exists.
 #
 # With --issue: targets a specific issue (by number or GitHub URL), verifies
 # it is open, does not carry a managed lifecycle title prefix, has "GO" as
@@ -758,7 +762,8 @@ if [[ -n "$ISSUE_ARG" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Auto-pick mode (no --issue): scan open issues oldest-first
+# Auto-pick mode (no --issue): scan open issues — Urgent-first, then
+# oldest-first within each tier (see the two-key sort comment below).
 #
 # Use `gh api --paginate` so there is no fixed cap — `gh issue list --limit N`
 # has no "unlimited" sentinel (0 and -1 are rejected), and a hardcoded ceiling
@@ -777,17 +782,25 @@ ISSUES_JSONL=$(gh api --paginate "repos/${REPO}/issues?state=open&per_page=100" 
 # `--jq '.[]'` into an array so we can sort it.
 #
 # Sort keys (jq sorts arrays lexicographically; false < true for booleans):
-#   1. (title | ascii_downcase | contains("urgent") | not) — Urgent-tagged
-#      issues (substring match anywhere in the title, case-insensitive) get
-#      `false` and sort BEFORE non-Urgent issues. This implements the
-#      "prefer Urgent" preference among otherwise-eligible candidates.
+#   1. (title | test("(?<![-A-Za-z0-9_])urgent(?![-A-Za-z0-9_])"; "i") | not)
+#      — Urgent-tagged issues (case-insensitive whole-word match anywhere in
+#      the title, with hyphens treated as word-internal so "non-urgent" is
+#      NOT a match) get `false` and sort BEFORE non-Urgent issues. The
+#      explicit lookaround character class `[-A-Za-z0-9_]` is required
+#      because jq's Oniguruma regex (a) does not accept `\w` inside a
+#      lookbehind ("invalid pattern in look-behind"), and (b) jq's `\b`
+#      word boundary treats `-` as a non-word char, so `\burgent\b` would
+#      match "non-urgent" — producing the wrong tier. The class is
+#      deliberately broader than `\b`: it rejects compound forms like
+#      "non-urgent", "insurgent", and "urgently" (the last because the
+#      following `l` is in the class, so the lookahead fails).
 #   2. .number ascending — within each preference tier, fall back to the
 #      pre-existing oldest-first selection order.
 #
 # The preference is a soft signal: it only changes the order in which
 # candidates are evaluated, not which candidates are eligible. A non-Urgent
 # eligible issue is still picked when no Urgent eligible issue exists.
-SORTED=$(echo "$ISSUES_JSONL" | jq -s -c 'sort_by([(.title // "" | ascii_downcase | contains("urgent") | not), .number]) | .[]')
+SORTED=$(echo "$ISSUES_JSONL" | jq -s -c 'sort_by([((.title // "") | test("(?<![-A-Za-z0-9_])urgent(?![-A-Za-z0-9_])"; "i") | not), .number]) | .[]')
 
 if [ -z "$SORTED" ]; then
     echo "ELIGIBLE=false"
