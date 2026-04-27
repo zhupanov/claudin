@@ -364,6 +364,43 @@ export STUB_POST_RC=0
   unset STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_21 STUB_BLOCKED_BY_50
 }
 
+# (m2) EDGES_FILE-only seeding regression: the cycle-closing intermediary is
+#      reachable ONLY via an EDGES_FILE endpoint that is NOT in CHILDREN_FILE.
+#      CHILDREN_FILE contains only the blocked endpoint (20); the proposed-edge
+#      blocker (21) appears only in EDGES_FILE and seeds the BFS via the
+#      EDGES_FILE-specific seeding loop at helpers.sh:290-299. STUB_BLOCKED_BY
+#      maps reproduce the same cycle as test (m): 21 blocked-by 50, 50
+#      blocked-by 20. Without the EDGES_FILE seeding, the BFS would never
+#      enqueue 21 and would miss the cycle. Pins the EDGES_FILE seeding branch
+#      specifically (FINDING_6 from the design-phase #718 review).
+{
+  m2_children="$TMP/children-m2.tsv"
+  m2_edges="$TMP/edges-m2.tsv"
+  m2_out="$TMP/wire-out-m2"
+  m2_err="$TMP/wire-err-m2"
+  printf '20\tonly_child\thttp://x\n' > "$m2_children"
+  printf '21\t20\n' > "$m2_edges"
+  unset STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_21 STUB_BLOCKED_BY_50
+  export STUB_BLOCKED_BY_20=""
+  export STUB_BLOCKED_BY_21="50"
+  export STUB_BLOCKED_BY_50="20"
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$m2_children" --edges-file "$m2_edges" \
+    --repo o/r > "$m2_out" 2> "$m2_err" || true
+  if grep -qE 'EDGES_REJECTED_CYCLE=1' "$m2_out" && grep -qE 'EDGES_ADDED=0' "$m2_out"; then
+    printf '  ✅ EDGES_FILE-only seeding closes cycle (#718 FINDING_6)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ EDGES_FILE-only seeding did not close cycle\n     stdout:\n'
+    sed 's/^/       /' "$m2_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$m2_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_21 STUB_BLOCKED_BY_50
+}
+
 # (n) Bound exhaustion: tiny cap forces _wd_traversal_truncated=1, then the
 #     per-edge cycle-check loop routes the candidate to EDGES_FAILED with
 #     reason "bound-exhausted" (DECISION_1, voted 3-0).

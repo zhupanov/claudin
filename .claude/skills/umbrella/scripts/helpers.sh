@@ -172,8 +172,16 @@ case "$SUBCMD" in
     # Per-run cap on distinct nodes the BFS may materialize. Override via
     # WIRE_DAG_TRAVERSAL_NODE_CAP. Total gh API calls across the run are
     # bounded by min(cap, |reachable closure|) once BLOCKED_BY_CACHE de-dups
-    # repeat queries (DECISION_2, voted 2-1).
+    # repeat queries (DECISION_2, voted 2-1). Validate the override is a
+    # positive integer (FINDING_2): a non-numeric or zero value would trip the
+    # `-gt` integer comparison under `set -e` and abort wire-dag with no
+    # documented `EDGES_FAILED` signal. On invalid input, emit a one-time
+    # stderr warning and fall back to the default 200.
     WD_NODE_CAP="${WIRE_DAG_TRAVERSAL_NODE_CAP:-200}"
+    if ! printf '%s' "$WD_NODE_CAP" | grep -qE '^[1-9][0-9]*$'; then
+      echo "**⚠ /umbrella: wire-dag — WIRE_DAG_TRAVERSAL_NODE_CAP=\"$WD_NODE_CAP\" is not a positive integer; falling back to default 200**" >&2
+      WD_NODE_CAP=200
+    fi
 
     EXISTING_EDGES_TSV="$TMPDIR/existing-edges.tsv"
     : > "$EXISTING_EDGES_TSV"
@@ -297,6 +305,17 @@ case "$SUBCMD" in
           fi
         done
       done < "$EDGES_FILE"
+
+      # Post-seed cap check (FINDING_1). If the seed set already exceeds the
+      # cap, no BFS expansion is safe — set the truncated flag and emit the
+      # cap warning before any candidate processing. Without this, an over-cap
+      # seed would silently bypass the fail-closed posture because the in-loop
+      # check below only fires when a NEW blocker is discovered.
+      if [ "$distinct_count" -gt "$WD_NODE_CAP" ]; then
+        _wd_traversal_truncated=1
+        echo "**⚠ /umbrella: wire-dag traversal cap reached (cap=${WD_NODE_CAP}, queue=${#queue[@]}, elapsed=0s) — seed set already over-cap; pending candidates will fail closed**" >&2
+        return 0
+      fi
 
       while [ "${#queue[@]}" -gt 0 ]; do
         local node="${queue[0]}"
