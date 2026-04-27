@@ -1,6 +1,6 @@
 # test-umbrella-emit-output-contract.sh — sibling contract
 
-Structural regression harness for `/umbrella` SKILL.md Step 2 (input-file dry-run-safe distinct-count rule — added in #724), Step 3B.2 (created-eq-1 bypass branch — added in #717), Step 3B.3 (dry-run skip directive — added in #719), Step 3B.4 (dry-run skip directive — pre-existing, pinned as the matched pair with 3B.3), Step 4 (Emit Output) prose including the dry-run child shape contract (added in #726), and the `emit-output` subcommand subsection of `helpers.md`. Closes #602 — out-of-scope observation surfaced during /implement for #571 (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to pin the new Step 3B.3 dry-run guard (`d1`–`d3`) and the matched-pair Step 3B.4 guard (`e1`–`e2`) so the two parallel dry-run gates cannot drift apart silently. Extended for #724 to pin the Step 2 dry-run-safe distinct-count rule (`f1`–`f4`) as authoritative for any caller of `/umbrella --input-file`. Extended for #717 to pin the new Step 3B.2 created-eq-1 bypass branch (`g1`–`g4`) and the new Step 4 bypass breadcrumb (`c8`) plus the broadened UMBRELLA_DOWNGRADE schema parenthetical (`a3`/`a3b`/`a3c`). Extended for #726 to pin the Step 4 dry-run child shape contract (`h1`–`h4`): `CHILD_<i>_DRY_RUN=true` line literal + per-key omission annotations on `CHILD_<i>_NUMBER` and `CHILD_<i>_URL`, with the `h3`/`h4` split anchoring each annotation to its specific key line so asymmetric drift cannot pass. The intent is a cheap CI guard against regression of the same drift; `test-helpers.sh` explicitly leaves `emit-output` out of scope.
+Structural regression harness for `/umbrella` SKILL.md Step 2 (input-file dry-run-safe distinct-count rule — added in #724), Step 3B.2 (created-eq-1 bypass branch — added in #717), Step 3B.3 (dry-run skip directive — added in #719), Step 3B.4 (dry-run skip directive — pre-existing, pinned as the matched pair with 3B.3; extended for #728 to also pin the wire-dag PROBE_FAILED parse-only key + retry policy + transient-probe stderr literal — `i1`–`i6`), Step 4 (Emit Output) prose including the dry-run child shape contract (added in #726), and the `emit-output` subcommand subsection of `helpers.md`. Closes #602 — out-of-scope observation surfaced during /implement for #571 (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to pin the new Step 3B.3 dry-run guard (`d1`–`d3`) and the matched-pair Step 3B.4 guard (`e1`–`e2`) so the two parallel dry-run gates cannot drift apart silently. Extended for #724 to pin the Step 2 dry-run-safe distinct-count rule (`f1`–`f4`) as authoritative for any caller of `/umbrella --input-file`. Extended for #717 to pin the new Step 3B.2 created-eq-1 bypass branch (`g1`–`g4`) and the new Step 4 bypass breadcrumb (`c8`) plus the broadened UMBRELLA_DOWNGRADE schema parenthetical (`a3`/`a3b`/`a3c`). Extended for #726 to pin the Step 4 dry-run child shape contract (`h1`–`h4`): `CHILD_<i>_DRY_RUN=true` line literal + per-key omission annotations on `CHILD_<i>_NUMBER` and `CHILD_<i>_URL`, with the `h3`/`h4` split anchoring each annotation to its specific key line so asymmetric drift cannot pass. Extended for #728 to pin the Step 3B.4 wire-dag probe classification prose (`i1`–`i6`): `PROBE_FAILED` parse-only key declaration, the `0`/`1` semantics, the retry policy (one initial attempt + one retry on 5xx or empty-status only), the transient-probe stderr literal `wire-dag probe failed (HTTP STATUS): REASON`, and the EDGES_SKIPPED_API_UNAVAILABLE semantic-preservation note. The intent is a cheap CI guard against regression of the same drift; `test-helpers.sh` explicitly leaves `emit-output` out of scope.
 
 This is a *structural* test (literal-substring assertions on `awk`-extracted blocks), not a runtime conformance test of `helpers.sh emit-output` (which remains exercised indirectly via SKILL.md integration). Pattern matches `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh`.
 
@@ -10,7 +10,7 @@ This is a *structural* test (literal-substring assertions on `awk`-extracted blo
 
 ## Coverage
 
-Thirty-four assertions, fail-fast on first miss.
+Forty assertions, fail-fast on first miss.
 
 ### Step 2 block (extracted from SKILL.md) — added in #724
 
@@ -68,6 +68,17 @@ The Step 4 grammar block now documents two child variants: resolved/non-dry-run 
 - (h3) Step 4 grammar contains the per-key omission annotation on `CHILD_<i>_NUMBER`: ``CHILD_<i>_NUMBER=<N>         (only on resolved/non-dry-run children)``. Anchored to the key line specifically (the literal includes the key name) so an asymmetric drift on the URL line cannot pass.
 - (h4) Step 4 grammar contains the per-key omission annotation on `CHILD_<i>_URL`: ``CHILD_<i>_URL=<url>          (only on resolved/non-dry-run children)``. The `h3`/`h4` split is load-bearing — a single shared-substring assertion would pass even if one of the two annotations was reworded or dropped, because `grep -qF` is order-agnostic. Splitting per key closes that gap.
 
+### Step 3B.4 block — wire-dag PROBE_FAILED + retry policy (added in #728)
+
+The Step 3B.4 block now documents the three-way wire-dag probe classification (issue #728): `PROBE_FAILED=0` for confirmed feature-missing OR no-probe-attempted; `PROBE_FAILED=1` for transient/operational probe failure. The `i*` family pins both the parse-only key declaration and the surrounding semantic prose so a future SKILL.md edit can't silently drop the parse-only key from the orchestrator contract or alter the documented retry policy.
+
+- (i1) Step 3B.4 grammar contains the `PROBE_FAILED` parse-only key declaration: `` `PROBE_FAILED` (parse-only, 0 or 1, issue #728) ``.
+- (i2) Step 3B.4 documents the `PROBE_FAILED=0` semantics (feature-missing OR no-probe): `` `0` = confirmed feature-missing (probe got a fingerprinted 404) OR no probe attempted ``.
+- (i3) Step 3B.4 documents the `PROBE_FAILED=1` semantics (transient/operational): `` `1` = transient/operational probe failure (5xx + retry also failed, or HTTP response other than 2xx/fingerprinted-404) ``.
+- (i4) Step 3B.4 documents the retry policy: `one initial attempt plus one retry on 5xx or empty-status only`.
+- (i5) Step 3B.4 documents the new transient-probe stderr literal: `/umbrella: wire-dag probe failed (HTTP STATUS): REASON`.
+- (i6) Step 3B.4 documents the EDGES_SKIPPED_API_UNAVAILABLE semantic-preservation note: `` `EDGES_SKIPPED_API_UNAVAILABLE` semantics are intentionally preserved as broad "repo-wide skip" ``.
+
 ### emit-output subsection (extracted from helpers.md)
 
 - (b1) `stderr` is reserved for parse/validation/usage errors only.
@@ -101,6 +112,7 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 - Reword to either skip-line breadcrumb literal (3B.3's `d2` folded form, or 3B.4's `e2` wiring/back-links form): update the assertion literal here in the same PR.
 - Any change to SKILL.md Step 2's dry-run-safe distinct-count rule (heading suffix `(dry-run-safe)`, the `ISSUE_<i>_DRY_RUN=true` count-as-1 sentence, the `count_of_dry_run_items` formula, or the caller-agnostic authoritativeness note) requires a same-PR update to the corresponding `(f1)`–`(f4)` assertion literal here.
 - Any change to SKILL.md Step 4's dry-run child shape grammar (the `CHILD_<i>_DRY_RUN=true` line, its omission-semantics annotation, or the per-key `(only on resolved/non-dry-run children)` annotations on `CHILD_<i>_NUMBER` and `CHILD_<i>_URL`) requires a same-PR update to the corresponding `(h1)`–`(h4)` assertion literal here. The `h3`/`h4` per-key split is load-bearing — do NOT collapse them back into a single shared-substring assertion, because `grep -qF` is order-agnostic and an asymmetric drift would pass.
+- Any change to SKILL.md Step 3B.4's wire-dag probe-classification prose (the `PROBE_FAILED` parse-only key declaration, the `0`/`1` semantics, the retry policy phrasing, the transient-probe stderr literal, or the EDGES_SKIPPED_API_UNAVAILABLE semantic-preservation note) requires a same-PR update to the corresponding `(i1)`–`(i6)` assertion literal here.
 
 ## Out of scope
 

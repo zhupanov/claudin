@@ -19,6 +19,8 @@
 # Extended for #726 to pin the Step 4 dry-run child shape contract (h1–h4):
 # CHILD_<i>_DRY_RUN=true and per-key omission annotations on CHILD_<i>_NUMBER
 # and CHILD_<i>_URL.
+# Extended for #728 to pin the Step 3B.4 wire-dag PROBE_FAILED parse-only key
+# + retry policy + transient-probe stderr literal (i1–i6).
 # The intent is a cheap CI guard against regression of the same drift;
 # test-helpers.sh explicitly leaves emit-output out of scope (see
 # test-helpers.md "Out of scope").
@@ -344,6 +346,28 @@ assert_contains "g3: 3B.2 created-eq-1 bypass precedence note" \
 assert_contains "g4: 3B.2 created-eq-1 bypass forbids re-running Step 3A" \
     'Do NOT execute Step 3A on this path — children were already created in Step 3B.2; re-invoking `/issue` would double-create' \
     "$STEP3B2_BLOCK"
+
+# (i*) Issue #728 PROBE_FAILED parse-only key + retry policy literals. Pins the
+# Step 3B.4 prose update so a future SKILL.md edit can't silently drop the
+# parse-only key from the orchestrator contract.
+assert_contains "i1: 3B.4 PROBE_FAILED parse-only key declaration" \
+    '`PROBE_FAILED` (parse-only, 0 or 1, issue #728)' \
+    "$STEP3B4_BLOCK"
+assert_contains "i2: 3B.4 PROBE_FAILED=0 semantics (feature-missing OR no probe)" \
+    '`0` = confirmed feature-missing (probe got a fingerprinted 404) OR no probe attempted' \
+    "$STEP3B4_BLOCK"
+assert_contains "i3: 3B.4 PROBE_FAILED=1 semantics (transient/operational)" \
+    '`1` = transient/operational probe failure (5xx + retry also failed, or HTTP response other than 2xx/fingerprinted-404)' \
+    "$STEP3B4_BLOCK"
+assert_contains "i4: 3B.4 retry policy (one retry, scoped to 5xx + empty-status)" \
+    'one initial attempt plus one retry on 5xx or empty-status only' \
+    "$STEP3B4_BLOCK"
+assert_contains "i5: 3B.4 transient-probe stderr warning literal" \
+    '/umbrella: wire-dag probe failed (HTTP STATUS): REASON' \
+    "$STEP3B4_BLOCK"
+assert_contains "i6: 3B.4 EDGES_SKIPPED_API_UNAVAILABLE semantic-preservation note" \
+    '`EDGES_SKIPPED_API_UNAVAILABLE` semantics are intentionally preserved as broad "repo-wide skip"' \
+    "$STEP3B4_BLOCK"
 
 echo
 echo "All $PASS_COUNT assertions passed."

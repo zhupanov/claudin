@@ -106,9 +106,18 @@ cat > "$GH_STUB" <<'STUB'
 #                                 gh failure for that node.
 #   STUB_NATIVE_CHECK_RESPONSE  — value to print for the native blocked_by check (back-link branch)
 set -e
-case "$1 $2" in
+# Resolve the request URL by scanning args (handles `gh api -i URL` from the
+# new probe (issue #728) where the URL is at $3, AND the legacy
+# `gh api URL ...` shape where the URL is at $2).
+_stub_url=""
+for arg in "$@"; do
+  case "$arg" in
+    /repos/*/issues/*) _stub_url="$arg" ;;
+  esac
+done
+case "$1 $_stub_url" in
   "api /repos/"*"/issues/"*"/dependencies/blocked_by")
-    # Could be: probe (--silent), existing-edges (--jq), native check (--jq with select),
+    # Could be: probe (--silent or -i), existing-edges (--jq), native check (--jq with select),
     # or per-edge POST (-X POST -i).
     has_post=0
     has_dash_i=0
@@ -151,8 +160,49 @@ case "$1 $2" in
       printf '%s' "${STUB_NATIVE_CHECK_RESPONSE:-}"
       exit 0
     else
-      # Probe (--silent).
-      exit "${STUB_PROBE_RC:-0}"
+      # Probe path (no POST, no --jq). After issue #728 the production probe
+      # uses `gh api -i` (status-aware classifier with retry). Behavior:
+      #   - If PROBE_CALL_COUNT_FILE is set, increment it and use per-attempt
+      #     STUB_PROBE_RESPONSE_<N> / STUB_PROBE_RC_<N>. This lets tests
+      #     simulate "first 5xx, retry 200 OK" sequencing.
+      #   - Else, fall back to STUB_PROBE_RESPONSE / STUB_PROBE_RC (single-shot).
+      #   - Default fallback: emit a 200 OK HTTP response so probe succeeds in
+      #     tests that don't explicitly configure a response (preserves the
+      #     pre-#728 "STUB_PROBE_RC=0 → probe ok" backward-compat shorthand).
+      attempt=1
+      if [ -n "${PROBE_CALL_COUNT_FILE:-}" ]; then
+        prev=0
+        if [ -f "$PROBE_CALL_COUNT_FILE" ]; then
+          prev=$(cat "$PROBE_CALL_COUNT_FILE")
+        fi
+        attempt=$((prev + 1))
+        echo "$attempt" > "$PROBE_CALL_COUNT_FILE"
+      fi
+      resp_var="STUB_PROBE_RESPONSE_${attempt}"
+      rc_var="STUB_PROBE_RC_${attempt}"
+      if declare -p "$resp_var" >/dev/null 2>&1; then
+        eval "probe_resp=\${$resp_var}"
+        if declare -p "$rc_var" >/dev/null 2>&1; then
+          eval "probe_rc=\${$rc_var}"
+        else
+          probe_rc=0
+        fi
+      elif [ -n "${STUB_PROBE_RESPONSE:-}" ]; then
+        probe_resp="$STUB_PROBE_RESPONSE"
+        probe_rc="${STUB_PROBE_RC:-0}"
+      elif [ "${STUB_PROBE_RC:-0}" != "0" ]; then
+        # Legacy backward-compat path: non-zero RC + no body. Production probe
+        # interprets this as empty status_code → retry → empty → PROBE_FAILED=1.
+        probe_resp=""
+        probe_rc="$STUB_PROBE_RC"
+      else
+        # Default success — 200 OK so existing tests with STUB_PROBE_RC=0
+        # continue to see api_available=true on the new status-aware probe.
+        probe_resp=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n[]\n'
+        probe_rc=0
+      fi
+      printf '%s' "$probe_resp"
+      exit "$probe_rc"
     fi
     ;;
   "api /repos/"*"/issues/"*)
@@ -257,10 +307,34 @@ export STUB_POST_RC=22
 assert_wire_dag "422 non-idempotent → EDGES_FAILED" 'EDGES_FAILED=1' 1
 
 # (i) Probe failure → existing repo-wide path (all proposed edges → EDGES_SKIPPED_API_UNAVAILABLE).
+# Counter behavior is unchanged after issue #728; the new PROBE_FAILED=1 stdout
+# line and the new "wire-dag probe failed" stderr warning are pinned in the
+# probe-classification suite below — this assertion only checks the legacy
+# counter and the absence of per-edge "wire-dag edge" stderr lines.
 export STUB_PROBE_RC=22
 export STUB_POST_RESPONSE=""
 export STUB_POST_RC=0
 assert_wire_dag "probe failure → repo-wide skip" 'EDGES_SKIPPED_API_UNAVAILABLE=1' 0
+# (i.1) The same probe-failure run now also emits PROBE_FAILED=1 (issue #728).
+{
+  i1_children="$TMP/children-i1.tsv"
+  i1_edges="$TMP/edges-i1.tsv"
+  i1_out="$TMP/wire-out-i1"
+  printf '20\tsome-child\thttp://x\n' > "$i1_children"
+  printf '10\t20\n' > "$i1_edges"
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$i1_children" --edges-file "$i1_edges" \
+    --repo o/r > "$i1_out" 2>/dev/null || true
+  if grep -qE '^PROBE_FAILED=1$' "$i1_out"; then
+    printf '  ✅ probe failure → PROBE_FAILED=1 (#728)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ probe failure expected PROBE_FAILED=1 (#728)\n     stdout:\n'
+    sed 's/^/       /' "$i1_out"
+    FAIL=$((FAIL + 1))
+  fi
+}
 export STUB_PROBE_RC=0
 
 # (j) Dry-run → stdout includes EDGES_FAILED=0.
@@ -527,25 +601,73 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# (o) --no-backlinks + probe failure → mode-aware stderr message ("Back-links suppressed (--no-backlinks)").
-export STUB_PROBE_RC=22
+# (o) Split into two scenarios after issue #728's three-way probe classification:
+# (o.1) --no-backlinks + feature-missing probe → legacy "Back-links suppressed (--no-backlinks)" warning.
+# (o.2) --no-backlinks + transient probe failure → new "wire-dag probe failed" warning, legacy SUPPRESSED.
+
+# (o.1) Feature-missing 404 (fingerprinted body) → PROBE_FAILED=0, legacy warning fires.
+export STUB_PROBE_RESPONSE_1=$'HTTP/2 404 Not Found\r\nContent-Type: application/json\r\n\r\n{"message":"The dependencies feature is not found on this repository","status":"404"}\n'
+export STUB_PROBE_RC_1=22
 : > "$COMMENT_LOG"
 rm -f "$PROBE_TARGET_FILE"
-PATH="$STUB_BIN:$PATH" UMBRELLA_PROBE_TARGET_FILE="$PROBE_TARGET_FILE" STUB_COMMENT_LOG="$COMMENT_LOG" \
+rm -f "$TMP/probe-call-count.o1"
+PATH="$STUB_BIN:$PATH" UMBRELLA_PROBE_TARGET_FILE="$PROBE_TARGET_FILE" \
+  STUB_COMMENT_LOG="$COMMENT_LOG" PROBE_CALL_COUNT_FILE="$TMP/probe-call-count.o1" \
   bash "$HELPERS" wire-dag --no-backlinks \
     --tmpdir "$TMP" --umbrella '' --umbrella-title "" \
     --children-file "$TMP/children.tsv" --edges-file "$TMP/edges.tsv" \
-    --repo o/r > "$TMP/wire-out.nbl-fail" 2> "$TMP/wire-err.nbl-fail" || true
-if grep -q 'Back-links suppressed (--no-backlinks)' "$TMP/wire-err.nbl-fail" \
-     && ! grep -q 'Back-links posted via comments' "$TMP/wire-err.nbl-fail"; then
-  printf '  ✅ --no-backlinks + probe-fail → mode-aware stderr message\n'
+    --repo o/r > "$TMP/wire-out.nbl-fmiss" 2> "$TMP/wire-err.nbl-fmiss" || true
+if grep -q 'Back-links suppressed (--no-backlinks)' "$TMP/wire-err.nbl-fmiss" \
+     && ! grep -q 'Back-links posted via comments' "$TMP/wire-err.nbl-fmiss" \
+     && grep -qE '^PROBE_FAILED=0$' "$TMP/wire-out.nbl-fmiss"; then
+  printf '  ✅ --no-backlinks + feature-missing → legacy mode-aware stderr + PROBE_FAILED=0\n'
   PASS=$((PASS + 1))
 else
-  printf '  ❌ --no-backlinks + probe-fail expected mode-aware stderr; got:\n'
-  sed 's/^/       /' "$TMP/wire-err.nbl-fail"
+  printf '  ❌ --no-backlinks + feature-missing expected legacy stderr + PROBE_FAILED=0\n     stdout:\n'
+  sed 's/^/       /' "$TMP/wire-out.nbl-fmiss"
+  printf '     stderr:\n'
+  sed 's/^/       /' "$TMP/wire-err.nbl-fmiss"
   FAIL=$((FAIL + 1))
 fi
-export STUB_PROBE_RC=0
+unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RC_1
+
+# (o.2) Transient probe failure: 5xx on both attempts → PROBE_FAILED=1, new warning fires, legacy SUPPRESSED.
+export STUB_PROBE_RESPONSE_1=$'HTTP/2 502 Bad Gateway\r\n\r\n{"message":"Bad Gateway"}\n'
+export STUB_PROBE_RC_1=22
+export STUB_PROBE_RESPONSE_2=$'HTTP/2 502 Bad Gateway\r\n\r\n{"message":"Bad Gateway"}\n'
+export STUB_PROBE_RC_2=22
+: > "$COMMENT_LOG"
+rm -f "$PROBE_TARGET_FILE"
+rm -f "$TMP/probe-call-count.o2"
+PATH="$STUB_BIN:$PATH" UMBRELLA_PROBE_TARGET_FILE="$PROBE_TARGET_FILE" \
+  STUB_COMMENT_LOG="$COMMENT_LOG" PROBE_CALL_COUNT_FILE="$TMP/probe-call-count.o2" \
+  bash "$HELPERS" wire-dag --no-backlinks \
+    --tmpdir "$TMP" --umbrella '' --umbrella-title "" \
+    --children-file "$TMP/children.tsv" --edges-file "$TMP/edges.tsv" \
+    --repo o/r > "$TMP/wire-out.nbl-pfail" 2> "$TMP/wire-err.nbl-pfail" || true
+if grep -q 'wire-dag probe failed (HTTP 502)' "$TMP/wire-err.nbl-pfail" \
+     && ! grep -q 'Back-links suppressed (--no-backlinks)' "$TMP/wire-err.nbl-pfail" \
+     && ! grep -q 'Back-links posted via comments' "$TMP/wire-err.nbl-pfail" \
+     && grep -qE '^PROBE_FAILED=1$' "$TMP/wire-out.nbl-pfail"; then
+  printf '  ✅ --no-backlinks + transient probe-fail → new probe-failed stderr + PROBE_FAILED=1\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ❌ --no-backlinks + transient probe-fail expected new stderr + PROBE_FAILED=1\n     stdout:\n'
+  sed 's/^/       /' "$TMP/wire-out.nbl-pfail"
+  printf '     stderr:\n'
+  sed 's/^/       /' "$TMP/wire-err.nbl-pfail"
+  FAIL=$((FAIL + 1))
+fi
+# Verify the probe was actually attempted twice (retry on 5xx).
+if [ -f "$TMP/probe-call-count.o2" ] && [ "$(cat "$TMP/probe-call-count.o2")" = "2" ]; then
+  printf '  ✅ --no-backlinks + 5xx → probe retried exactly once (2 attempts)\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ❌ --no-backlinks + 5xx expected 2 probe attempts, got %s\n' \
+    "$(cat "$TMP/probe-call-count.o2" 2>/dev/null || echo 'missing')"
+  FAIL=$((FAIL + 1))
+fi
+unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RC_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_2
 unset STUB_COMMENT_LOG
 
 # (p) --umbrella '' WITHOUT --no-backlinks must error.
@@ -564,6 +686,201 @@ else
     FAIL=$((FAIL + 1))
   fi
 fi
+
+echo ""
+echo "test-helpers.sh: wire-dag probe classification (issue #728)"
+
+# Reset stub state for the probe-classification suite.
+unset STUB_PROBE_RESPONSE STUB_PROBE_RC
+unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_1 STUB_PROBE_RC_2
+export STUB_BLOCKER_ID=999001
+export STUB_BLOCKER_ID_RC=0
+export STUB_EXISTING_BLOCKERS=""
+export STUB_NATIVE_CHECK_RESPONSE=""
+export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+export STUB_POST_RC=0
+
+# t_probe_404_feature_missing — fingerprinted 404 → api_available=false,
+# PROBE_FAILED=0, repo-wide "API not available" stderr fires.
+run_probe_test() {
+  local label="$1" probe_response_1="$2" probe_rc_1="$3" probe_response_2="$4" probe_rc_2="$5"
+  local expect_probe_failed="$6" expect_legacy_warning="$7" expect_new_warning="$8" expect_calls="$9"
+  local children="$TMP/children-pt.tsv"
+  local edges="$TMP/edges-pt.tsv"
+  local out_file="$TMP/wire-out-pt"
+  local err_file="$TMP/wire-err-pt"
+  local count_file="$TMP/probe-call-count-pt"
+  printf '20\tsome-child\thttp://x\n' > "$children"
+  printf '10\t20\n' > "$edges"
+  rm -f "$count_file"
+  unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_1 STUB_PROBE_RC_2
+  export STUB_PROBE_RESPONSE_1="$probe_response_1"
+  export STUB_PROBE_RC_1="$probe_rc_1"
+  if [ -n "$probe_response_2" ] || [ -n "$probe_rc_2" ]; then
+    export STUB_PROBE_RESPONSE_2="$probe_response_2"
+    export STUB_PROBE_RC_2="$probe_rc_2"
+  fi
+  PATH="$STUB_BIN:$PATH" PROBE_CALL_COUNT_FILE="$count_file" \
+    bash "$HELPERS" wire-dag \
+      --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+      --children-file "$children" --edges-file "$edges" \
+      --repo o/r > "$out_file" 2> "$err_file" || true
+  local ok=1
+  if ! grep -qE "^PROBE_FAILED=${expect_probe_failed}$" "$out_file"; then ok=0; fi
+  if [ "$expect_legacy_warning" = "yes" ]; then
+    grep -q 'GitHub blocked-by dependency API not available' "$err_file" || ok=0
+  else
+    grep -q 'GitHub blocked-by dependency API not available' "$err_file" && ok=0
+  fi
+  if [ "$expect_new_warning" = "yes" ]; then
+    grep -q 'wire-dag probe failed (HTTP' "$err_file" || ok=0
+  else
+    grep -q 'wire-dag probe failed (HTTP' "$err_file" && ok=0
+  fi
+  local got_calls
+  got_calls=$(cat "$count_file" 2>/dev/null || echo 0)
+  if [ "$got_calls" != "$expect_calls" ]; then ok=0; fi
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ %s\n' "$label"
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ %s — PROBE_FAILED=%s expected, got %s; legacy=%s new=%s calls=%s/%s\n     stdout:\n' \
+      "$label" "$expect_probe_failed" \
+      "$(grep -oE '^PROBE_FAILED=[0-9]+$' "$out_file" || echo NONE)" \
+      "$(grep -q 'API not available' "$err_file" && echo seen || echo absent)" \
+      "$(grep -q 'wire-dag probe failed' "$err_file" && echo seen || echo absent)" \
+      "$got_calls" "$expect_calls"
+    sed 's/^/       /' "$out_file"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$err_file"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_1 STUB_PROBE_RC_2
+}
+
+# Canonical fixture bodies.
+PROBE_BODY_FEATURE_MISSING_404=$'HTTP/2 404 Not Found\r\nContent-Type: application/json\r\n\r\n{"message":"The dependencies feature is not found on this repository","status":"404"}\n'
+PROBE_BODY_AMBIGUOUS_404=$'HTTP/2 404 Not Found\r\nContent-Type: application/json\r\n\r\n{"message":"Issue 99999 not found","status":"404"}\n'
+PROBE_BODY_502=$'HTTP/2 502 Bad Gateway\r\n\r\n{"message":"Bad Gateway"}\n'
+PROBE_BODY_200=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n[]\n'
+PROBE_BODY_403=$'HTTP/2 403 Forbidden\r\n\r\n{"message":"Resource not accessible by integration"}\n'
+PROBE_BODY_429=$'HTTP/2 429 Too Many Requests\r\nRetry-After: 60\r\n\r\n{"message":"API rate limit exceeded"}\n'
+
+# t_probe_404_feature_missing
+run_probe_test "probe 404 feature-missing → PROBE_FAILED=0, legacy warning fires (1 attempt)" \
+  "$PROBE_BODY_FEATURE_MISSING_404" 22 "" "" 0 yes no 1
+
+# t_probe_5xx_then_200 — first 502, retry 200 OK → api_available=true, PROBE_FAILED=0, no warning.
+run_probe_test "probe 502 then 200 → PROBE_FAILED=0, no warning, 2 attempts" \
+  "$PROBE_BODY_502" 22 "$PROBE_BODY_200" 0 0 no no 2
+
+# t_probe_5xx_twice — 502 on both attempts → PROBE_FAILED=1, new warning, no legacy warning.
+run_probe_test "probe 502 twice → PROBE_FAILED=1, new probe-failed warning, 2 attempts" \
+  "$PROBE_BODY_502" 22 "$PROBE_BODY_502" 22 1 no yes 2
+
+# t_probe_no_status_then_no_status — empty body, non-zero rc, both attempts → PROBE_FAILED=1.
+run_probe_test "probe empty-status twice → PROBE_FAILED=1, new warning, 2 attempts" \
+  "" 22 "" 22 1 no yes 2
+
+# t_probe_403_no_retry — 403 on first attempt → PROBE_FAILED=1, exactly 1 attempt (no retry).
+run_probe_test "probe 403 → PROBE_FAILED=1, no retry (1 attempt)" \
+  "$PROBE_BODY_403" 22 "" "" 1 no yes 1
+
+# t_probe_429_no_retry — 429 (any) → PROBE_FAILED=1, exactly 1 attempt (no retry per DECISION_1 simplification).
+run_probe_test "probe 429 → PROBE_FAILED=1, no retry (1 attempt)" \
+  "$PROBE_BODY_429" 22 "" "" 1 no yes 1
+
+# t_probe_ambiguous_404 — 404 without fingerprint body → PROBE_FAILED=1.
+run_probe_test "probe 404 ambiguous → PROBE_FAILED=1, new warning, 1 attempt" \
+  "$PROBE_BODY_AMBIGUOUS_404" 22 "" "" 1 no yes 1
+
+# t_probe_5xx_then_404_feature_missing — first 502, retry fingerprinted 404 → PROBE_FAILED=0, legacy warning.
+run_probe_test "probe 502 then feature-missing 404 → PROBE_FAILED=0, legacy warning, 2 attempts" \
+  "$PROBE_BODY_502" 22 "$PROBE_BODY_FEATURE_MISSING_404" 22 0 yes no 2
+
+unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_1 STUB_PROBE_RC_2
+
+# t_probe_no_backlinks_first_child_404_ambiguous — --no-backlinks first-child probe gets
+# a stale-child 404 (non-fingerprint) → PROBE_FAILED=1 (operational, not feature-off).
+{
+  pchildren="$TMP/children-pt-nbl.tsv"
+  pedges="$TMP/edges-pt-nbl.tsv"
+  pout="$TMP/wire-out-pt-nbl"
+  perr="$TMP/wire-err-pt-nbl"
+  pcount="$TMP/probe-call-count-pt-nbl"
+  printf '20\tsome-child\thttp://x\n' > "$pchildren"
+  printf '10\t20\n' > "$pedges"
+  rm -f "$pcount"
+  export STUB_PROBE_RESPONSE_1="$PROBE_BODY_AMBIGUOUS_404"
+  export STUB_PROBE_RC_1=22
+  PATH="$STUB_BIN:$PATH" PROBE_CALL_COUNT_FILE="$pcount" \
+    bash "$HELPERS" wire-dag --no-backlinks \
+      --tmpdir "$TMP" --umbrella '' --umbrella-title "" \
+      --children-file "$pchildren" --edges-file "$pedges" \
+      --repo o/r > "$pout" 2> "$perr" || true
+  if grep -qE '^PROBE_FAILED=1$' "$pout" \
+       && grep -q 'wire-dag probe failed (HTTP 404)' "$perr" \
+       && [ "$(cat "$pcount" 2>/dev/null || echo 0)" = "1" ]; then
+    printf '  ✅ --no-backlinks ambiguous-404 first-child → PROBE_FAILED=1 (stale child not feature-off)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ --no-backlinks ambiguous-404 first-child unexpected behavior\n     stdout:\n'
+    sed 's/^/       /' "$pout"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$perr"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RC_1
+}
+
+# t_probe_empty_target — --no-backlinks with empty CHILDREN_FILE → no probe attempted,
+# api_available=false, PROBE_FAILED=0, no probe stderr.
+{
+  pchildren="$TMP/children-pt-empty.tsv"
+  pedges="$TMP/edges-pt-empty.tsv"
+  pout="$TMP/wire-out-pt-empty"
+  perr="$TMP/wire-err-pt-empty"
+  pcount="$TMP/probe-call-count-pt-empty"
+  : > "$pchildren"
+  : > "$pedges"
+  rm -f "$pcount"
+  PATH="$STUB_BIN:$PATH" PROBE_CALL_COUNT_FILE="$pcount" \
+    bash "$HELPERS" wire-dag --no-backlinks \
+      --tmpdir "$TMP" --umbrella '' --umbrella-title "" \
+      --children-file "$pchildren" --edges-file "$pedges" \
+      --repo o/r > "$pout" 2> "$perr" || true
+  if grep -qE '^PROBE_FAILED=0$' "$pout" \
+       && ! grep -q 'wire-dag probe failed' "$perr" \
+       && { [ ! -f "$pcount" ] || [ "$(cat "$pcount" 2>/dev/null || echo 0)" = "0" ]; }; then
+    printf '  ✅ --no-backlinks empty CHILDREN_FILE → no probe attempted, PROBE_FAILED=0\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ --no-backlinks empty CHILDREN_FILE unexpected behavior\n     stdout:\n'
+    sed 's/^/       /' "$pout"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$perr"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# t_probe_dry_run_includes_probe_failed — dry-run output must include PROBE_FAILED=0
+# (initialized before DRY_RUN early-exit so set -u cannot trip the printf).
+{
+  printf '20\tsome-child\thttp://x\n' > "$TMP/children.tsv"
+  printf '10\t20\n' > "$TMP/edges.tsv"
+  DRY_OUT=$(PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$TMP/children.tsv" --edges-file "$TMP/edges.tsv" \
+    --repo o/r --dry-run 2>&1) || true
+  if printf '%s\n' "$DRY_OUT" | grep -qE '^PROBE_FAILED=0$'; then
+    printf '  ✅ dry-run includes PROBE_FAILED=0\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ dry-run did not include PROBE_FAILED=0\n     stdout:\n'
+    printf '%s\n' "$DRY_OUT" | sed 's/^/       /'
+    FAIL=$((FAIL + 1))
+  fi
+}
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
