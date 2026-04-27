@@ -51,7 +51,7 @@ If the comment-stream probe itself fails (transient `gh` API blip), the helper t
 
 - **Sentinel marker literal** (`<!-- larch:fix-issue:umbrella-finalized -->`) is byte-pinned in this script and the test harness. The marker is part of the public stdout-and-comment contract; renaming it requires a coordinated update to `test-finalize-umbrella.sh` and any future caller that reads it. The marker is intentionally an HTML comment (renders invisibly on the GitHub web UI but is part of the comment body for marker-detection).
 - **Closing comment template** ("All tracked issues are closed. Marking umbrella as DONE and closing.") is documentation-grade prose; minor edits are allowed but the marker MUST remain on its own first line so the marker-detection regex (substring containment) keeps working regardless of comment-body formatting.
-- **Caller contract**: the helper is invoked from THREE call sites in `skills/fix-issue/SKILL.md`: Step 0 (exit-4 from `find-lock-issue.sh`), Step 6 after the just-closed child was the umbrella's last open child, AND Step 5a's adopted-issue-closed bailout (FINDING_8) AND Step 3's not-material close (FINDING_7 — ordering: AFTER child rename, BEFORE Slack). Adding new call sites requires verifying that the idempotency guard handles the new context.
+- **Caller contract**: the helper is invoked from FOUR call sites in `skills/fix-issue/SKILL.md`: Step 0 (exit-4 from `find-lock-issue.sh`), Step 3's not-material close (FINDING_7 — ordering: AFTER child rename, BEFORE Slack), Step 5a's adopted-issue-closed bailout (FINDING_8), and Step 6 after the just-closed child was the umbrella's last open child. Adding new call sites requires verifying that the idempotency guard handles the new context.
 
 ## Test harness
 
