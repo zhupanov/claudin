@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.28] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/umbrella-handler.md` — aligned the `pick-child` contract with the implementation. Line 27 previously stated "`pick-child` does NOT consult the blocker helpers (those live in `find-lock-issue.sh`)", contradicting `umbrella-handler.sh`'s `child_native_blockers` (called from `child_eligible`, invoked by `pick-child`). Reworded line 27 to distinguish the native-only filter owned by `pick-child` from the full `all_open_blockers` (native + prose) pass owned by `find-lock-issue.sh`; updated the matching Edit-in-sync rule near line 61 and added the missing `child_native_blockers` bullet to the "Per-child eligibility" list; synced the corresponding header comment block in `umbrella-handler.sh` (lines 37-46). Documentation-only correction; runtime behavior unchanged. Closes #764.
+
 ## [7.17.27] - 2026-04-27
 
 ### Fixed
