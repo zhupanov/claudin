@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.1] - 2026-04-27
+
+### Changed
+
+- `skills/review/SKILL.md` — replaced four stale `/issue` references with `/umbrella` in slice-mode descriptions (frontmatter `description:`, Slice Mode bullet, voting.md slice-mode-bypass note, and Step 4 heading) so the documentation matches the actual Step 4b runtime, which has invoked `/umbrella` (wrapping `/issue` for batch creation) since the umbrella was introduced. Documentation-only — runtime behavior unchanged. Surviving `/issue` mentions intentionally remain to describe `/umbrella`'s wrapping of `/issue` and the underlying OOS-format parser. Closes #739.
+
 ## [7.17.0] - 2026-04-27
 
 ### Changed
