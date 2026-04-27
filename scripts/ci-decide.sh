@@ -7,7 +7,7 @@
 # Merge is always allowed when CI passes and branch is up-to-date,
 # regardless of safety limits. Safety limits only block non-merge actions:
 #   - iteration >= 50: bail (timeout)
-#   - rebase_count >= 5: bail (too many rebases)
+#   - rebase_count >= 20: bail (too many rebases)
 #   - fix_attempts >= 3: bail (too many fixes)
 #
 # Decision matrix (when no safety limit triggers):
@@ -110,9 +110,9 @@ if [[ "$ITERATION" -ge 50 ]]; then
     exit 0
 fi
 
-if [[ "$REBASE_COUNT" -ge 5 ]]; then
+if [[ "$REBASE_COUNT" -ge 20 ]]; then
     echo "ACTION=bail"
-    echo "BAIL_REASON=Too many rebases (5) without converging — main branch too active"
+    echo "BAIL_REASON=Too many rebases (20) without converging — main branch too active"
     exit 0
 fi
 
