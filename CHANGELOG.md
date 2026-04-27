@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.31] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/SKILL.md` Step 3B.3 — short-circuit `DRY_RUN=true` BEFORE umbrella-body rendering. The previous code only skipped Step 3B.4 (DAG wiring + back-links) on `--dry-run`; Step 3B.3 still ran and crashed because `/issue --dry-run` does not emit real issue numbers, so `children.tsv`'s numeric-first-column invariant could not hold and `render-umbrella-body.sh`'s validator at lines 38–42 hard-failed with `ERROR=children.tsv malformed at line N`. The multi-piece `--dry-run` path was therefore unusable end-to-end. The fix mirrors Step 3B.4's existing `Skip this entire sub-step when DRY_RUN=true` pattern, prepending the same directive at the top of Step 3B.3 with a folded skip-line breadcrumb (`⏭️ /umbrella: umbrella body + umbrella create + dependency wiring + back-links skipped (--dry-run)`) that subsumes 3B.4's wiring/back-links message on the dry-run path because the orchestrator never enters 3B.4 from this gate. Step 4's emit-output renders the canonical multi-piece dry-run breadcrumb (`ℹ /umbrella: dry-run — would file umbrella with <N> children`) using `<N> = CHILDREN_CREATED` from session state. `render-umbrella-body.sh` and `/issue` are deliberately unchanged — preserves the renderer's strict numeric-first-column invariant (still load-bearing for real runs) and avoids teaching shared code paths about a special dry-run format. Also updates the Step 1 `--dry-run` flags-table row, adds a qualifying sentence to Step 3B's "Four sub-steps run in order" framing, and rewords Step 3B.2's parenthetical to reflect that dry-run items now skip both 3B.3 and 3B.4. Regression: extends `test-umbrella-emit-output-contract.sh` to 18 assertions (5 new: `d1`–`d3` for Step 3B.3 + `e1`–`e2` for Step 3B.4) pinning the shared dry-run skip directive prefix in BOTH blocks plus each block's skip-line breadcrumb — the matched-pair invariant prevents the two parallel dry-run gates from drifting apart. `docs/linting.md` row updated to reflect the new assertion count and scope. Closes #719.
+
 ## [7.16.30] - 2026-04-26
 
 ### Changed
