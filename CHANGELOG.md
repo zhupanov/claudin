@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.29] - 2026-04-26
+
+### Changed
+
+- `scripts/test-research-structure.md` and `scripts/test-research-structure.sh` — refresh stale opener prose/comments to describe the 5-reference progressive-disclosure topology (`research-phase.md`, `validation-phase.md`, `adjudication-phase.md`, `citation-validation-phase.md`, `critique-loop-phase.md`) and the all-four-others `Do NOT load` reciprocal-guard structure. The `.sh` harness has enforced 5 references since #516 / #517 added `critique-loop-phase.md` (lines 41-47, 62, 122-126, 140; fail message at line 118 explicitly names "5-reference symmetric topology — #517"), but the sibling `.md`'s line-3 contract paragraph still said "4-reference progressive-disclosure topology" with only four files in the parenthetical and Check 3's prose said "**both** other references"; the `.sh` header comments lines 3-9 still said "4-reference symmetric topology" / "ALL THREE other references", lines 65-76 (Check 3 inline comments + procedure block) repeated "ALL THREE" / "OTHER three", and `check_mandatory_topology`'s `local -a others` comment said "the other three filenames". All five surfaces now read "5-reference" / "all four other references" / "ALL FOUR" / "OTHER four" / "the other four filenames". Doc-only change; harness behavior unchanged (still asserts "all 54 structural invariants hold"). Closes #714.
+
 ## [7.16.28] - 2026-04-26
 
 ### Fixed

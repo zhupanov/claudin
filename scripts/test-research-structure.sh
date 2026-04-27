@@ -1,11 +1,12 @@
 #!/bin/bash
 # Structural regression test for /research skill progressive-disclosure refactor.
-# Asserts that the skill's 4-reference symmetric topology survives edits:
+# Asserts that the skill's 5-reference symmetric topology survives edits:
 #  - skills/research/references/research-phase.md, validation-phase.md,
-#    adjudication-phase.md, and citation-validation-phase.md all exist
+#    adjudication-phase.md, citation-validation-phase.md, and critique-loop-phase.md
+#    all exist
 #  - Each appears on a 'MANDATORY — READ ENTIRE FILE' line in skills/research/SKILL.md,
 #    and the SAME line also carries reciprocal 'Do NOT load <each-other-reference>'
-#    guards naming ALL THREE other references (line-scoped so a future edit cannot
+#    guards naming ALL FOUR other references (line-scoped so a future edit cannot
 #    split the MANDATORY and the Do-NOT-load directives into different paragraphs
 #    without the harness catching the drift). Order-agnostic: the harness uses
 #    per-substring grep loops so minor reordering of unrelated lines does NOT
@@ -63,20 +64,20 @@ fail() {
 
 # Check 3: Each reference file is named on a MANDATORY — READ ENTIRE FILE line in SKILL.md
 #          AND that same line carries reciprocal 'Do NOT load <each-other>' guards naming
-#          ALL THREE other references. Line-scoped by construction so a future edit that
+#          ALL FOUR other references. Line-scoped by construction so a future edit that
 #          splits the directive across lines fails. Order-agnostic via per-substring grep
-#          loops: each MANDATORY line is extracted, then asserted to contain ALL THREE
+#          loops: each MANDATORY line is extracted, then asserted to contain ALL FOUR
 #          'Do NOT load <each-other>' substrings (presence-not-order — minor reordering of
 #          unrelated lines must NOT break the check).
 #
 # Procedure per reference X:
 #   1. Find the line in SKILL.md that contains 'MANDATORY — READ ENTIRE FILE' AND <X>.
-#   2. For each of the OTHER three references Y, assert the line ALSO contains
+#   2. For each of the OTHER four references Y, assert the line ALSO contains
 #      'Do NOT load' followed by <Y> somewhere later on the same line.
 check_mandatory_topology() {
     local target="$1"  # filename basename of the reference being asserted
     shift
-    local -a others=("$@")  # the other three filenames
+    local -a others=("$@")  # the other four filenames
     # Find the canonical MANDATORY line: it begins with the literal '**MANDATORY'
     # token and names the target reference EARLIER in the line than any 'Do NOT load'
     # clause. The reference-of-record for the line is the one named between the
