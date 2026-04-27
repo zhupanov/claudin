@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.22] - 2026-04-27
+
+### Fixed
+
+- `skills/skill-evolver/SKILL.md` — fix `--debug` placement on the `/research` (line 86) and `/umbrella` (line 108) invocation lines. The skill previously documented "append `--debug` only if `DEBUG=true`", but both downstream skills parse flags from the start of `$ARGUMENTS` and stop at the first non-flag token (`skills/research/SKILL.md:21`, `.claude/skills/umbrella/SKILL.md:24`), so an appended `--debug` would be swallowed into the research question / umbrella task description instead of enabling debug mode. Move `[--debug]` to the front of each documented args spec and rewrite the trailing prose ("prepend" instead of "append") with an inline rationale citing the downstream parsers. Closes #690.
+
 ## [7.16.21] - 2026-04-26
 
 ### Fixed
