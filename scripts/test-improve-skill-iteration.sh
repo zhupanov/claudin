@@ -417,6 +417,23 @@ HEREDOC_EOF" \
     "printf 'Some output but no canonical completion line.\n'" \
     "im_verification_failed"
 
+  # Fixture 4b — issue #755: a valid plan whose body contains a line that
+  # matches the refusal regex (e.g. "Cannot run in parallel ...") must NOT be
+  # classified as design_refusal. The fix narrows refusal detection to the
+  # first non-empty line; the canonical `## Implementation Plan` header
+  # explicit-search establishes plan presence robustly. Expected flow:
+  # plan_ok → /im → im_verification_failed (the gate is "anything except
+  # design_refusal" — im_verification_failed is the closest reachable terminal
+  # status given the /im stub's non-canonical output).
+  run_fixture \
+    "issue_755_refusal_phrase_in_plan_body" \
+    "cat <<'HEREDOC_EOF'
+$NON_A_JUDGE
+HEREDOC_EOF" \
+    "printf '## Implementation Plan\n\n- Add retry handler.\nCannot run in parallel — must serialize.\n- Add tests.\n'" \
+    "printf 'Some output but no canonical completion line.\n'" \
+    "im_verification_failed"
+
   # Fixture 5 — issue #399: subprocess failure triggers diagnostics dump +
   # work-dir retention. The judge stub exits non-zero with stderr content;
   # iteration.sh's invoke_claude_p must (a) dump a redacted ── subprocess
