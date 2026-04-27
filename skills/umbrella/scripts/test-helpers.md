@@ -1,6 +1,6 @@
 # test-helpers.sh — sibling contract
 
-Regression harness for `helpers.sh check-cycle` (pure logic, no network) and `helpers.sh wire-dag` (PATH-stub `gh`, no real network). Self-contained: creates an ephemeral `mktemp` dir for edge fixtures and a stub `gh` script, runs each assertion, prints a `✅`/`❌` line, exits non-zero on any failure.
+Regression harness for `helpers.sh check-cycle` (pure logic, no network), `helpers.sh wire-dag` (PATH-stub `gh`, no real network), and `helpers.sh prefix-titles` (PATH-stub `gh`, no real network). Self-contained: creates an ephemeral `mktemp` dir for edge fixtures and a stub `gh` script, runs each assertion, prints a `✅`/`❌` line, exits non-zero on any failure.
 
 **Run manually**: `bash skills/umbrella/scripts/test-helpers.sh`.
 
@@ -88,6 +88,21 @@ The wire-dag tests use a PATH-stub `gh` script written into `$TMP/bin/gh`, prepe
 - **Warn-once invariant**: when `STUB_BLOCKED_BY_99_RC=22` and EDGES_FILE references node 99 in multiple rows (`99\t20`, `99\t30`, `40\t99`), assert exactly one stderr `wire-dag blocked_by lookup failed for #99` line. Pins the BFS seen-set + `WDL_PRESENT` warn-once contract under the new colon-string membership form.
 - **Delimiter-collision (positive + negative cases)**: nodes 1 and 11 with distinct `STUB_BLOCKED_BY_<N>` outcomes (`STUB_BLOCKED_BY_1=""`, `STUB_BLOCKED_BY_11=100`) must produce a clean `EXISTING_EDGES_TSV` containing a `100\t11` row AND no row ending with `\t1` (separator-anchored grep). Pins both the negative case (`bbc_has 1` does not false-match the `:11:` substring) AND the positive case (`bbc_has 11` after `bbc_set 11 …` correctly returns true). Test fixture uses a separate sub-tmpdir so the resulting `existing-edges.tsv` is inspectable.
 
-**Edit-in-sync**: any change to `helpers.sh check-cycle` or `wire-dag` stdout grammar / stderr contract requires a same-PR update to the assertion expectations here. Cycle-check semantic changes also require regenerating `test-helpers.sh` expectations. The Bash 3.2 portability guard regex pattern is intentionally identical to `skills/issue/scripts/test-allocate-candidates.sh` Test 21 — drift between the two harnesses should be deliberate and documented in the same PR.
+**Coverage** — `prefix-titles` (PATH-stub `gh`):
+
+- empty children file → `TITLES_RENAMED=0` / `TITLES_SKIPPED_EXISTING=0` / `TITLES_FAILED=0`, no `gh issue edit` call recorded in `STUB_EDIT_LOG`.
+- single fresh child → `TITLES_RENAMED=1`; `STUB_EDIT_LOG` records exactly one row whose new title starts with the literal <code>(Umbrella: &lt;N&gt;) </code> marker (trailing space included).
+- same-umbrella prefix already present → `TITLES_SKIPPED_EXISTING=1`, no `gh issue edit` call (idempotency for resume / re-run cases).
+- different-umbrella prefix already present → `TITLES_RENAMED=1` (layered `(Umbrella: 100) (Umbrella: 99) ...` — pins the deliberate non-strip design).
+- `gh issue edit` exits non-zero → `TITLES_FAILED=1` plus one redacted `⚠ /umbrella: prefix-titles edit #N failed (exit RC)` stderr warning.
+- multi-row mixed file (one fresh, one same-prefix, one different-prefix) → `TITLES_RENAMED=2`, `TITLES_SKIPPED_EXISTING=1`; the edit log contains exactly two rows (the skipped child is absent).
+- `--dry-run` → all-zero counters, no `gh issue edit` call (mirrors `wire-dag`'s dry-run early-exit posture for non-existent children).
+- missing-title row (one-column TSV) → `TITLES_FAILED=1` with `(input)` warning code, no `gh issue edit` call (defensive against caller bugs that pass malformed children files).
+- non-numeric / non-positive first column (e.g., `NaN`, `0`, `-1`) → `TITLES_FAILED=1` with `(input)` warning code, no `gh issue edit` call. Pins the symmetry with missing-title: caller bugs that produce non-Issue-shaped first columns surface loudly rather than silent-skip.
+- input-validation: missing / non-numeric / zero `--umbrella`, missing `--children-file`, missing `--repo` → script aborts non-zero with `ERROR=` line.
+
+The `gh issue edit` arm is dispatched in the PATH-stub `gh` script via the `"$1 $_stub_url"` case statement matching `"issue edit"` (the `_stub_url` resolution falls back to `$2` when no `/repos/.../issues/...` path is in argv, same shorthand the existing `"issue comment"` arm uses). Stub behavior controlled by `STUB_EDIT_RC` (exit code, default 0), `STUB_EDIT_STDERR` (stderr message, default empty), and `STUB_EDIT_LOG` (path; when set, the stub appends `<number>\t<new-title>` rows for each invocation so tests can assert which titles the loop actually rewrote).
+
+**Edit-in-sync**: any change to `helpers.sh check-cycle`, `wire-dag`, or `prefix-titles` stdout grammar / stderr contract requires a same-PR update to the assertion expectations here. Cycle-check semantic changes also require regenerating `test-helpers.sh` expectations. The Bash 3.2 portability guard regex pattern is intentionally identical to `skills/issue/scripts/test-allocate-candidates.sh` Test 21 — drift between the two harnesses should be deliberate and documented in the same PR.
 
 **Out of scope**: `emit-output` subcommand. `emit-output` is a thin awk validator covered indirectly by SKILL.md integration; its Step 4 prose contract (orchestrator-attribution, single-emission-point, canonical breadcrumb shapes, stderr discipline) is structurally pinned by `test-umbrella-emit-output-contract.sh`.
