@@ -23,8 +23,9 @@
 #   Tier 2 — Behavioral (best-effort smoke tests with stubbed claude + gh):
 #     Stubs `claude` and `gh` on PATH under a mktemp'd fixture skill dir and
 #     invokes iteration.sh with --work-dir set, asserting on the KV footer
-#     emitted on stdout. Four cases cover: grade_a, no_plan, design_refusal,
-#     im_verification_failed.
+#     emitted on stdout. Fixtures cover grade_a, no_plan, design_refusal,
+#     im_verification_failed, issue_755_refusal_phrase_in_plan_body, and
+#     judge_subprocess_failure (issue #399 retention path).
 #
 # Invoked via:  bash scripts/test-improve-skill-iteration.sh
 # Wired into:   make lint (via the test-improve-skill-iteration target).
@@ -414,6 +415,23 @@ HEREDOC_EOF" \
 $NON_A_JUDGE
 HEREDOC_EOF" \
     "printf '## Implementation Plan\n\n- Step one\n- Step two\n'" \
+    "printf 'Some output but no canonical completion line.\n'" \
+    "im_verification_failed"
+
+  # Fixture 4b — issue #755: a valid plan whose body contains a line that
+  # matches the refusal regex (e.g. "Cannot run in parallel ...") must NOT be
+  # classified as design_refusal. The fix narrows refusal detection to the
+  # first non-empty line; the canonical `## Implementation Plan` header
+  # explicit-search establishes plan presence robustly. Expected flow:
+  # plan_ok → /im → im_verification_failed (the gate is "anything except
+  # design_refusal" — im_verification_failed is the closest reachable terminal
+  # status given the /im stub's non-canonical output).
+  run_fixture \
+    "issue_755_refusal_phrase_in_plan_body" \
+    "cat <<'HEREDOC_EOF'
+$NON_A_JUDGE
+HEREDOC_EOF" \
+    "printf '## Implementation Plan\n\n- Add retry handler.\nCannot run in parallel — must serialize.\n- Add tests.\n'" \
     "printf 'Some output but no canonical completion line.\n'" \
     "im_verification_failed"
 

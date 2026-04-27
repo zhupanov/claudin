@@ -643,12 +643,26 @@ detect_plan_status() {
     printf 'no_plan\n'
     return 0
   fi
-  if LC_ALL=C grep -qiE '^(error:|error -|refus(ed|al)|cannot (run|proceed|execute)|/design (failed|could not run|is unavailable))' "$design_out"; then
+  # Refusal detection: scan only the first non-empty line, not the whole file.
+  # A heading like `## Error: Handling Approach` or a quoted error excerpt
+  # appearing inside a valid plan body must NOT trigger design_refusal
+  # (issue #755).
+  local first_raw first_line
+  first_raw="$(awk 'NF {print; exit}' "$design_out")"
+  if printf '%s\n' "$first_raw" \
+    | LC_ALL=C grep -qiE '^(error:|error -|refus(ed|al)|cannot (run|proceed|execute)|/design (failed|could not run|is unavailable))'; then
     printf 'design_refusal\n'
     return 0
   fi
-  local first_line
-  first_line="$(awk 'NF {print; exit}' "$design_out" \
+  # Plan presence: prefer the canonical `## Implementation Plan` header
+  # (any markdown heading level 2-6, case-insensitive). Robust against
+  # /design preludes preceding the plan and against unrelated headings the
+  # prior coarse structural-marker grep would have matched (issue #755).
+  if LC_ALL=C grep -qiE '^#{2,6}[[:space:]]+implementation[[:space:]]+plan([[:space:]]|$)' "$design_out"; then
+    printf 'plan_ok\n'
+    return 0
+  fi
+  first_line="$(printf '%s' "$first_raw" \
     | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' \
     | tr '[:upper:]' '[:lower:]')"
   first_line="$(printf '%s' "$first_line" | sed -E 's/^[*_]+//; s/[*_]+$//')"
@@ -662,16 +676,10 @@ detect_plan_status() {
         break ;;
     esac
   done
-  local has_structural="no"
-  if LC_ALL=C grep -qE '^#{1,6}[[:space:]]|^[1-9][0-9]?\.[[:space:]]|^[-*+][[:space:]]' "$design_out"; then
-    has_structural="yes"
-  fi
   case "$first_line" in
     "no plan"|"no improvements"|"nothing to improve"|"already optimal"|"skill is already high quality")
-      if [[ "$has_structural" == "no" ]]; then
-        printf 'no_plan\n'
-        return 0
-      fi
+      printf 'no_plan\n'
+      return 0
       ;;
   esac
   printf 'plan_ok\n'

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.15] - 2026-04-27
+
+### Fixed
+
+- `skills/improve-skill/scripts/iteration.sh` — narrow `detect_plan_status` refusal detection to the first non-empty line of the design output (was a whole-file `grep -qiE` that silently misclassified valid plans as `design_refusal` whenever any body line — e.g. a discussion line beginning `Cannot run in parallel …` or a quoted error excerpt — matched the refusal regex). Plan presence is now established by an explicit search for the canonical `## Implementation Plan` markdown header, replacing the prior coarse structural-marker grep that could match unrelated headings. New regression fixture `issue_755_refusal_phrase_in_plan_body` in `scripts/test-improve-skill-iteration.sh` exercises the bug-fix gate. Sibling `iteration.md` gains a "Design output classification" subsection documenting the decision order. Closes #755.
+
 ## [7.17.14] - 2026-04-27
 
 ### Changed

@@ -62,6 +62,18 @@ Emitted via `trap emit_kv_footer EXIT` — guarantees the footer is present on e
 | `ITERATION_TMPDIR` | absolute path | Work-dir actually used (caller-supplied in loop mode; fresh in standalone). |
 | `ISSUE_NUM` | integer | Tracking issue number (adopted or created). |
 
+## Design output classification (`detect_plan_status`)
+
+Classifies the `/design` artifact into one of `plan_ok` / `no_plan` / `design_refusal` (consumed by the post-`/design` switch on `PLAN_STATUS`). Decision order:
+
+1. Empty file → `no_plan`.
+2. **First non-empty line** matches the refusal regex (`^(error:|error -|refus(ed|al)|cannot (run|proceed|execute)|/design (failed|could not run|is unavailable))`, case-insensitive) → `design_refusal`. Refusal detection is intentionally scoped to the leading line so a heading or quoted excerpt deeper in a valid plan does not trigger a false positive (issue #755).
+3. The canonical `## Implementation Plan` header (markdown level 2-6, case-insensitive) appears anywhere in the file → `plan_ok`. This explicit-header probe replaces the prior coarse structural-marker grep that could match unrelated headings (issue #755).
+4. The cleaned first line equals one of the no-plan sentinels (`no plan`, `no improvements`, `nothing to improve`, `already optimal`, `skill is already high quality`) → `no_plan`.
+5. Otherwise → `plan_ok` (lenient default — the rescue path at `iteration.sh` re-invokes `/design --auto` when `plan_ok` is paired with no structural markers at all).
+
+The classification rules are load-bearing for `/loop-improve-skill/scripts/driver.sh`'s terminal-status break logic (any non-`ok` ITER_STATUS terminates the loop). Behavioral changes here propagate into the test fixtures pinned by `scripts/test-improve-skill-iteration.sh` Tier 2.
+
 ## Stdout discipline
 
 Stdout is reserved for:
