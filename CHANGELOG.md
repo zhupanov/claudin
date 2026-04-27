@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.22] - 2026-04-27
+
+### Fixed
+
+- `scripts/test-loop-fix-issue-driver.md:7` — replaced the stale "Tier-2 stub-shim coverage is future work / out of scope for the current PR" framing with a pointer to the live behavior fixture `scripts/test-loop-fix-issue-driver-behavior.sh` (also wired into `make lint`), enumerating the three NDJSON scenarios it exercises (success, no-eligible-issues, sentinel-mismatch). Updated `skills/loop-fix-issue/scripts/driver.md`'s `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` paragraph in sync to list all three scenarios — round-1 review caught the previous wording, which mentioned only success and no-eligible-issues. Closes #762.
+
 ## [7.17.21] - 2026-04-27
 
 ### Fixed
