@@ -349,9 +349,11 @@ case "$SUBCMD" in
     # bbc_has key  -> 0 if key recorded (any value, including empty), else 1.
     # bbc_get key  -> echoes stored value (empty for both not-recorded AND
     #                 empty-value-recorded; callers must use bbc_has to disambiguate).
-    # bbc_set key value  -> records presence in BBC_PRESENT AND stores value
-    #                       unconditionally, including empty/sentinel values
-    #                       (issue #744 FINDING_5).
+    # bbc_set key value  -> records presence in BBC_PRESENT (on first set only)
+    #                       AND stores value unconditionally on every call,
+    #                       including empty/sentinel values (issue #744
+    #                       FINDING_5). Re-setting an existing key updates
+    #                       BBC_VALS in place without re-appending to BBC_PRESENT.
     bbc_has() {
       case "$BBC_PRESENT" in
         *:"$1":*) return 0 ;;
