@@ -1152,5 +1152,94 @@ echo "$SECTION_1_4_QUICK" | grep -Fq "$QUICK_TRUNCATE_PIN" \
 echo "$SECTION_1_4_QUICK" | grep -Eq "$QUICK_BREADCRUMB_PIN" \
   || fail "references/research-phase.md Step 1.4 ### Quick subsection must document the per-lane breadcrumb shape ('lane \$k: NOT_SUBSTANTIVE') (#543 Check 52)"
 
-echo "PASS: test-research-structure.sh — all 52 structural invariants hold"
+# Check 53 (#671 / supersedes #665): the two phase reference files
+# 'adjudication-phase.md' and 'citation-validation-phase.md' must use the
+# canonical tmpdir artifact name 'research-report.txt' AND must NOT carry
+# the historical 'research-synthesis.txt' name (#665 — silent doc-drift
+# regression where adjudication-phase.md referenced a nonexistent artifact).
+# The .txt suffix scoping prevents false positives on legitimate prose like
+# '## Research Synthesis' section headers or 'research-synthesis critique'
+# mentions elsewhere in the doc tree.
+for ref_file in "$ADJUDICATION_MD" "$CITATION_MD"; do
+  if grep -Fq "research-synthesis.txt" "$ref_file"; then
+    fail "$(basename "$ref_file") must NOT carry the historical artifact name 'research-synthesis.txt' — use 'research-report.txt' (#671 Check 53 / supersedes #665)"
+  fi
+  grep -Fq "research-report.txt" "$ref_file" \
+    || fail "$(basename "$ref_file") must reference the canonical tmpdir artifact 'research-report.txt' at least once (#671 Check 53 / positive pin)"
+done
+
+# Check 54a (#671 / supersedes #666): the two skip preconditions in
+# citation-validation-phase.md § 2.7.1 must be evaluated in the order
+# 'Budget-abort gate (evaluated FIRST → proceed to Step 4)' BEFORE
+# 'Empty-synthesis gate (evaluated SECOND → proceed to Step 3)' — matching
+# SKILL.md Step 2.7's 'emitted FIRST' wording. #666 was a silent inversion
+# of this order. Section-scoped via awk windowing (parallel to Check 32 /
+# Check 52). Singleton anchor sanity guards against duplicated headings
+# silently picking the wrong window (parallel to Check 50).
+CITATION_271_HEADING_COUNT=$(grep -c "^### 2\.7\.1 — Skip preconditions" "$CITATION_MD" || true)
+[[ "$CITATION_271_HEADING_COUNT" == "1" ]] \
+  || fail "references/citation-validation-phase.md must contain exactly one heading matching prefix '### 2.7.1 — Skip preconditions' (actual on-disk heading: '### 2.7.1 — Skip preconditions (input gate)'); found $CITATION_271_HEADING_COUNT (#671 Check 54a)"
+
+SECTION_271=$(awk '
+  /^### 2\.7\.1 — Skip preconditions/ { f=1; next }
+  f && /^###/ { exit }
+  f { print }
+' "$CITATION_MD")
+[[ -n "$SECTION_271" ]] \
+  || fail "references/citation-validation-phase.md § 2.7.1 section extraction yielded empty content (#671 Check 54a)"
+
+CITATION_BUDGET_COUNT=$(echo "$SECTION_271" | grep -cF "Budget-abort gate (evaluated FIRST" || true)
+CITATION_EMPTY_COUNT=$(echo "$SECTION_271"  | grep -cF "Empty-synthesis gate (evaluated SECOND" || true)
+[[ "$CITATION_BUDGET_COUNT" == "1" ]] \
+  || fail "references/citation-validation-phase.md § 2.7.1 must contain exactly one 'Budget-abort gate (evaluated FIRST' anchor; found $CITATION_BUDGET_COUNT (#671 Check 54a / supersedes #666)"
+[[ "$CITATION_EMPTY_COUNT" == "1" ]] \
+  || fail "references/citation-validation-phase.md § 2.7.1 must contain exactly one 'Empty-synthesis gate (evaluated SECOND' anchor; found $CITATION_EMPTY_COUNT (#671 Check 54a / supersedes #666)"
+
+CITATION_BUDGET_LINENO=$(echo "$SECTION_271" | grep -nF "Budget-abort gate (evaluated FIRST" | head -n 1 | cut -d: -f1)
+CITATION_EMPTY_LINENO=$(echo "$SECTION_271"  | grep -nF "Empty-synthesis gate (evaluated SECOND" | head -n 1 | cut -d: -f1)
+[[ "$CITATION_BUDGET_LINENO" -lt "$CITATION_EMPTY_LINENO" ]] \
+  || fail "references/citation-validation-phase.md § 2.7.1: Budget-abort gate (line $CITATION_BUDGET_LINENO) must precede Empty-synthesis gate (line $CITATION_EMPTY_LINENO) — matches SKILL.md Step 2.7 'emitted FIRST' wording (#671 Check 54a / supersedes #666)"
+
+# Check 54b (#671 / supersedes #666 — SKILL.md side): SKILL.md Step 2.7's
+# 'Skip preconditions' paragraph must order the budget-abort skip breadcrumb
+# BEFORE the empty-synthesis skip breadcrumb. Anchored on the unique
+# '**Skip preconditions** (emitted FIRST' opener — Step 2.8 uses '(also
+# emitted', so this anchor disambiguates Step 2.7 from Step 2.8.
+# Paragraph-scoped (paragraph boundary = next blank line) so the check is
+# resilient to a future reformat from single-line to multi-line layout —
+# parallel to Check 54a's section-scoped pattern. Compares byte-offsets of
+# the two unique skip-breadcrumb literals via bash parameter expansion
+# (no awk -v shell-string-escape hazard).
+SKILL_271_ANCHOR_COUNT=$(grep -cF "**Skip preconditions** (emitted FIRST" "$SKILL_MD" || true)
+[[ "$SKILL_271_ANCHOR_COUNT" == "1" ]] \
+  || fail "SKILL.md must contain exactly one '**Skip preconditions** (emitted FIRST' line (the canonical Step 2.7 skip-preconditions opener); found $SKILL_271_ANCHOR_COUNT (#671 Check 54b)"
+
+SKILL_271_PARA=$(awk '
+  /^\*\*Skip preconditions\*\* \(emitted FIRST/ { f=1 }
+  f && /^$/ { exit }
+  f { print }
+' "$SKILL_MD")
+[[ -n "$SKILL_271_PARA" ]] \
+  || fail "SKILL.md Step 2.7 'Skip preconditions' paragraph extraction yielded empty content (#671 Check 54b)"
+
+SKILL_271_BUDGET_BC="2.7: citation-validation — skipped (--token-budget aborted upstream)"
+SKILL_271_EMPTY_BC="2.7: citation-validation — skipped (no synthesis to validate)"
+
+SKILL_271_BUDGET_BC_COUNT=$(echo "$SKILL_271_PARA" | grep -cF "$SKILL_271_BUDGET_BC" || true)
+SKILL_271_EMPTY_BC_COUNT=$(echo "$SKILL_271_PARA"  | grep -cF "$SKILL_271_EMPTY_BC" || true)
+[[ "$SKILL_271_BUDGET_BC_COUNT" == "1" ]] \
+  || fail "SKILL.md Step 2.7 'Skip preconditions' paragraph must contain exactly one budget-abort breadcrumb '$SKILL_271_BUDGET_BC'; found $SKILL_271_BUDGET_BC_COUNT (#671 Check 54b / supersedes #666)"
+[[ "$SKILL_271_EMPTY_BC_COUNT" == "1" ]] \
+  || fail "SKILL.md Step 2.7 'Skip preconditions' paragraph must contain exactly one empty-synthesis breadcrumb '$SKILL_271_EMPTY_BC'; found $SKILL_271_EMPTY_BC_COUNT (#671 Check 54b / supersedes #666)"
+
+# Compute byte offsets via bash parameter expansion (no awk -v shell-string
+# escape hazard). ${var%%"pattern"*} returns the prefix before the first
+# occurrence of the literal pattern (when quoted); ${#prefix} is the
+# byte-offset of the pattern's start.
+PRE_BUDGET="${SKILL_271_PARA%%"$SKILL_271_BUDGET_BC"*}"
+PRE_EMPTY="${SKILL_271_PARA%%"$SKILL_271_EMPTY_BC"*}"
+[[ "${#PRE_BUDGET}" -lt "${#PRE_EMPTY}" ]] \
+  || fail "SKILL.md Step 2.7 'Skip preconditions' paragraph: budget-abort breadcrumb (offset ${#PRE_BUDGET}) must precede empty-synthesis breadcrumb (offset ${#PRE_EMPTY}) — emitted-FIRST/empty-second ordering (#671 Check 54b / supersedes #666)"
+
+echo "PASS: test-research-structure.sh — all 54 structural invariants hold"
 exit 0
