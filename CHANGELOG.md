@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.18] - 2026-04-27
+
+### Fixed
+
+- `scripts/post-issue-slack.md` — refreshed stale call-site step numbers to match the current `/fix-issue` SKILL.md numbering: not-material close moved from Step 4 to Step 3 (triage sub-flow), NON_PR Slack announce moved from Step 8b to Step 7b, and the PR-path Slack-skip note moved from Step 8a to Step 7. Mechanical text-only fix; no behavior change. Closes #751.
+
 ## [7.17.17] - 2026-04-27
 
 ### Fixed
