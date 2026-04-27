@@ -114,13 +114,21 @@ cat > "$GH_STUB" <<'STUB'
 set -e
 # Resolve the request URL by scanning args (handles `gh api -i URL` from the
 # new probe (issue #728) where the URL is at $3, AND the legacy
-# `gh api URL ...` shape where the URL is at $2).
+# `gh api URL ...` shape where the URL is at $2). For non-API commands
+# (e.g., `gh issue comment ...`), the args contain no /repos/.../issues/...
+# path; fall back to $2 so the legacy `case "$1 $2"` arms (notably
+# `"issue comment"`) keep matching — without this fallback the matched
+# string would be `"issue "` (with empty `_stub_url`) and `gh issue comment`
+# would fall through to the default arm and exit 99.
 _stub_url=""
 for arg in "$@"; do
   case "$arg" in
     /repos/*/issues/*) _stub_url="$arg" ;;
   esac
 done
+if [ -z "$_stub_url" ]; then
+  _stub_url="${2:-}"
+fi
 case "$1 $_stub_url" in
   "api /repos/"*"/issues/"*"/comments")
     # Back-link comment-existence probe (issue #716). Placed BEFORE the
