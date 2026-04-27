@@ -33,10 +33,10 @@ If the comment-stream probe itself fails (transient `gh` API blip), the helper t
 | Key | Emitted when | Value |
 |-----|--------------|-------|
 | `FINALIZED` | always | `true` (executed path success) or `false` (idempotency hit OR error) |
-| `ALREADY_FINALIZED` | only on idempotency hit | `true` |
-| `REASON` | only on idempotency hit | `already CLOSED` / `title already prefixed [DONE]` / `existing closing-comment marker detected` |
-| `RENAMED` | executed path only | `true` (rename succeeded) or `false` (best-effort failure) |
-| `CLOSED` | executed path only | `true` (close succeeded) or `false` (close failed → `FINALIZED=false`) |
+| `ALREADY_FINALIZED` | only on strict short-circuit (state=CLOSED) | `true` |
+| `REASON` | only when `ALREADY_FINALIZED=true` | `already CLOSED` |
+| `RENAMED` | executed-path only | `true` / `false` (including the close-only retry path where it may be `false`) |
+| `CLOSED` | executed-path only | `true` / `false` |
 | `ERROR` | only on `FINALIZED=false` non-idempotent failure | one-line reason |
 
 ## Exit codes
