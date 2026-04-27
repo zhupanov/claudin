@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.23] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-umbrella-body.sh` — install a narrow `trap 'rm -f "$OUT_TMP" 2>/dev/null || true' EXIT` immediately after the `OUT_TMP=$(mktemp ...)` block so the three subsequent error-exit branches (empty staged body, pre-existing non-regular `$OUT`, `mv` failure) no longer leak `umbrella-body.md.*` partials into the caller's `--tmpdir` across retries or CI reruns. On the success path the trap is a no-op because `mv` has already moved the partial. Sibling `render-umbrella-body.md` updated in sync to document the new contract. Closes #694.
+
 ## [7.16.22] - 2026-04-27
 
 ### Fixed
