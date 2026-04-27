@@ -10,10 +10,16 @@
 #   wire-dag     --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run]
 #       Best-effort GitHub blocked-by wiring + back-link comments.
 #       Probes whether the GitHub issue-dependency API is available on the repo.
-#       Skips silently per-edge with EDGES_SKIPPED_API_UNAVAILABLE if the API surface is missing
+#       Skips silently per-edge with EDGES_SKIPPED_API_UNAVAILABLE for true feature-missing
 #       (the surface evolved during 2024-2026; this is fail-open by design).
+#       Distinguishes operational failures (rate-limit, permission denied, ambiguous 404,
+#       5xx, request-shape mismatches, network) under EDGES_FAILED with one redacted
+#       stderr warning per failed edge (issue #720). Idempotent 422 already-exists
+#       responses land in EDGES_SKIPPED_EXISTING. Per-edge POST body uses the canonical
+#       {"issue_id": <internal numeric id>} shape matching add-blocked-by.sh; blocker
+#       internal ids are resolved via gh api and cached per run.
 #       Stdout: EDGES_ADDED=N, EDGE_<j>_BLOCKER, EDGE_<j>_BLOCKED, EDGES_REJECTED_CYCLE,
-#               EDGES_SKIPPED_EXISTING, EDGES_SKIPPED_API_UNAVAILABLE,
+#               EDGES_SKIPPED_EXISTING, EDGES_SKIPPED_API_UNAVAILABLE, EDGES_FAILED,
 #               BACKLINKS_POSTED, BACKLINKS_SKIPPED_NATIVE.
 #
 #   emit-output  --kv-file FILE
@@ -130,18 +136,66 @@ case "$SUBCMD" in
     EDGES_REJECTED_CYCLE=0
     EDGES_SKIPPED_EXISTING=0
     EDGES_SKIPPED_API_UNAVAILABLE=0
+    EDGES_FAILED=0
     BACKLINKS_POSTED=0
     BACKLINKS_SKIPPED_NATIVE=0
     edge_lines=""
     j=0
 
+    # One-time guard for redact-secrets.sh fallback (issue #720, FINDING_6).
+    # Set to 1 after the first stderr notice so the per-edge loop does not spam.
+    REDACT_FALLBACK_WARNED=0
+    # Resolve canonical secret-scrubber relative to this script's location.
+    # helpers.sh is at .claude/skills/umbrella/scripts/helpers.sh — climb four
+    # levels to reach the repo root that owns scripts/redact-secrets.sh.
+    REDACT_SCRIPT="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)/scripts/redact-secrets.sh"
+
+    # Per-run cache mapping blocker display number -> blocker internal numeric id.
+    # The GitHub Issue Dependencies POST body requires `issue_id` (internal id),
+    # not `issue_number` (display number) — see add-blocked-by.sh:170.
+    declare -A BLOCKER_ID_CACHE 2>/dev/null || true
+
     EXISTING_EDGES_TSV="$TMPDIR/existing-edges.tsv"
     : > "$EXISTING_EDGES_TSV"
 
     if [ "$DRY_RUN" = "true" ]; then
-      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_NATIVE=0\n'
+      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_NATIVE=0\n'
       exit 0
     fi
+
+    # Emit one redacted stderr warning per EDGES_FAILED event (issue #720).
+    # Pipes captured response through scripts/redact-secrets.sh when present;
+    # falls back to inline tr+head with a one-time process-local notice when
+    # missing (degraded-layout safety). Format aligns the new warning with the
+    # existing repo-wide warning prefix at the bottom of this branch — both use
+    # the `/umbrella:` namespace so log triage stays consistent.
+    emit_edge_failure_warning() {
+      local blocker="$1" blocked="$2" code="$3" raw="$4"
+      local flat redacted
+      flat=$(printf '%s' "$raw" | tr '\n\r' '  ' | head -c 200)
+      if [ -x "$REDACT_SCRIPT" ]; then
+        if redacted=$(printf '%s' "$flat" | "$REDACT_SCRIPT" 2>/dev/null); then
+          : # success path
+        else
+          # Redactor exists but exited non-zero — fail closed: do NOT print the
+          # raw flattened body, which could leak secrets the redactor would
+          # have caught. Substitute a constant placeholder and warn once
+          # (issue #720 FINDING_4).
+          if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+            echo "**⚠ /umbrella: wire-dag — redact-secrets.sh exited non-zero; suppressing reason text for safety**" >&2
+            REDACT_FALLBACK_WARNED=1
+          fi
+          redacted="<REDACTION_FAILED>"
+        fi
+      else
+        if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+          echo "**⚠ /umbrella: wire-dag — redact-secrets.sh not found at $REDACT_SCRIPT; using inline-fallback scrub**" >&2
+          REDACT_FALLBACK_WARNED=1
+        fi
+        redacted="$flat"
+      fi
+      echo "**⚠ /umbrella: wire-dag edge ${blocker}->${blocked} failed (HTTP ${code}): ${redacted}**" >&2
+    }
 
     if [ "$api_available" = "true" ]; then
       # Probe existing blocked_by edges for each child. The endpoint returns an array of
@@ -168,17 +222,81 @@ case "$SUBCMD" in
           EDGES_REJECTED_CYCLE=$((EDGES_REJECTED_CYCLE + 1))
           continue
         fi
-        # Add the edge.
-        if gh api "/repos/$REPO/issues/${blocked}/dependencies/blocked_by" -X POST -f issue_number="$blocker" --silent 2>/dev/null; then
-          EDGES_ADDED=$((EDGES_ADDED + 1))
-          j=$((j + 1))
-          edge_lines="${edge_lines}EDGE_${j}_BLOCKER=${blocker}"$'\n'"EDGE_${j}_BLOCKED=${blocked}"$'\n'
-          printf '%s\t%s\n' "$blocker" "$blocked" >> "$EXISTING_EDGES_TSV"
-        else
-          # Adding failed despite probe success — likely a per-issue permission or shape
-          # mismatch. Fail-open: skip with warning category.
-          EDGES_SKIPPED_API_UNAVAILABLE=$((EDGES_SKIPPED_API_UNAVAILABLE + 1))
+
+        # Resolve the blocker's internal numeric id (cached per run). The Issue
+        # Dependencies POST body shape is {"issue_id": <id>}, NOT issue_number
+        # — see add-blocked-by.sh:170. The previous shape silently 422'd here
+        # and the ambiguous failure was bucketed as "API unavailable" (#720).
+        blocker_id="${BLOCKER_ID_CACHE[$blocker]:-}"
+        if [ -z "$blocker_id" ]; then
+          set +e
+          blocker_id=$(gh api "/repos/$REPO/issues/$blocker" --jq '.id' 2>/dev/null)
+          lookup_rc=$?
+          set -e
+          if [ "$lookup_rc" -ne 0 ] || [ -z "$blocker_id" ] || ! printf '%s' "$blocker_id" | grep -qE '^[0-9]+$'; then
+            EDGES_FAILED=$((EDGES_FAILED + 1))
+            emit_edge_failure_warning "$blocker" "$blocked" "id-lookup" "blocker-id resolution failed for #$blocker"
+            continue
+          fi
+          BLOCKER_ID_CACHE[$blocker]="$blocker_id"
         fi
+
+        # POST {"issue_id": <id>} with -i so we can classify by HTTP status.
+        # Wrap in set +e/-e so gh's non-zero exit on >=400 does not abort.
+        # Stderr is dropped (NOT merged via 2>&1): gh may emit deprecation
+        # notices or auth-token warnings before the HTTP response, which would
+        # otherwise corrupt the first-line status parse and pollute body
+        # content scanned by the feature-missing fingerprint regex (issue #720
+        # FINDING_1). The non-zero exit on 4xx/5xx still propagates through
+        # the subshell exit status — set +e absorbs it.
+        body_json=$(jq -nc --argjson id "$blocker_id" '{issue_id: $id}')
+        set +e
+        resp=$(printf '%s' "$body_json" | gh api "/repos/$REPO/issues/${blocked}/dependencies/blocked_by" -X POST --input - -i 2>/dev/null)
+        set -e
+
+        # Status from first line; body skips HTTP headers (split at first blank
+        # line) so the feature-missing regex cannot match a header value.
+        status_code=$(printf '%s\n' "$resp" | awk 'NR==1{print $2; exit}')
+        body=$(printf '%s\n' "$resp" | awk 'BEGIN{skip=1} /^[[:space:]]*\r?$/{skip=0;next} !skip{print}')
+
+        case "$status_code" in
+          2*)
+            EDGES_ADDED=$((EDGES_ADDED + 1))
+            j=$((j + 1))
+            edge_lines="${edge_lines}EDGE_${j}_BLOCKER=${blocker}"$'\n'"EDGE_${j}_BLOCKED=${blocked}"$'\n'
+            printf '%s\t%s\n' "$blocker" "$blocked" >> "$EXISTING_EDGES_TSV"
+            ;;
+          404)
+            # Conservative: BOTH a "dependencies / blocked_by / sub-issue" keyword
+            # AND a "not found / does not exist / no longer (available|supported)"
+            # phrase must appear in the body before we credit "feature missing".
+            # Ambiguous 404s (e.g., stale child issue) fall to EDGES_FAILED so
+            # operators see a real diagnostic instead of a silent skip.
+            if printf '%s' "$body" | grep -qiE '(dependencies|blocked_by|sub.?issue)' \
+                 && printf '%s' "$body" | grep -qiE 'not (be )?found|does not exist|no longer (available|supported)'; then
+              EDGES_SKIPPED_API_UNAVAILABLE=$((EDGES_SKIPPED_API_UNAVAILABLE + 1))
+            else
+              EDGES_FAILED=$((EDGES_FAILED + 1))
+              emit_edge_failure_warning "$blocker" "$blocked" "$status_code" "$body"
+            fi
+            ;;
+          422)
+            # Idempotent already-exists per add-blocked-by.sh:193-196. Race-safe:
+            # another runner can add the edge between our existing-edges read and
+            # our POST; treating that as success keeps the counter honest.
+            if printf '%s' "$body" | grep -qiE 'already (exists|tracked|added)|duplicate dependency'; then
+              EDGES_SKIPPED_EXISTING=$((EDGES_SKIPPED_EXISTING + 1))
+              printf '%s\t%s\n' "$blocker" "$blocked" >> "$EXISTING_EDGES_TSV"
+            else
+              EDGES_FAILED=$((EDGES_FAILED + 1))
+              emit_edge_failure_warning "$blocker" "$blocked" "$status_code" "$body"
+            fi
+            ;;
+          ""|*)
+            EDGES_FAILED=$((EDGES_FAILED + 1))
+            emit_edge_failure_warning "$blocker" "$blocked" "${status_code:-network}" "$body"
+            ;;
+        esac
       done < "$EDGES_FILE"
     else
       # API surface unavailable repo-wide: skip all proposed edges.
@@ -210,6 +328,7 @@ case "$SUBCMD" in
     printf 'EDGES_REJECTED_CYCLE=%d\n' "$EDGES_REJECTED_CYCLE"
     printf 'EDGES_SKIPPED_EXISTING=%d\n' "$EDGES_SKIPPED_EXISTING"
     printf 'EDGES_SKIPPED_API_UNAVAILABLE=%d\n' "$EDGES_SKIPPED_API_UNAVAILABLE"
+    printf 'EDGES_FAILED=%d\n' "$EDGES_FAILED"
     printf 'BACKLINKS_POSTED=%d\n' "$BACKLINKS_POSTED"
     printf 'BACKLINKS_SKIPPED_NATIVE=%d\n' "$BACKLINKS_SKIPPED_NATIVE"
     if [ -n "$edge_lines" ]; then
