@@ -26,7 +26,7 @@
 #               EDGES_SKIPPED_EXISTING, EDGES_SKIPPED_API_UNAVAILABLE, EDGES_FAILED,
 #               PROBE_FAILED (parse-only, 0|1, issue #728 — disambiguates the cause
 #                 behind any EDGES_SKIPPED_API_UNAVAILABLE bulk-skip; see helpers.md),
-#               BACKLINKS_POSTED, BACKLINKS_SKIPPED_NATIVE.
+#               BACKLINKS_POSTED, BACKLINKS_SKIPPED_EXISTING.
 #
 #   emit-output  --kv-file FILE
 #       Validate the LLM-supplied KV file (well-formed KEY=VALUE lines, no embedded newlines
@@ -282,7 +282,7 @@ case "$SUBCMD" in
     EDGES_SKIPPED_API_UNAVAILABLE=0
     EDGES_FAILED=0
     BACKLINKS_POSTED=0
-    BACKLINKS_SKIPPED_NATIVE=0
+    BACKLINKS_SKIPPED_EXISTING=0
     edge_lines=""
     j=0
 
@@ -330,7 +330,7 @@ case "$SUBCMD" in
     : > "$EXISTING_EDGES_TSV"
 
     if [ "$DRY_RUN" = "true" ]; then
-      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nPROBE_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_NATIVE=0\n'
+      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nPROBE_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_EXISTING=0\n'
       exit 0
     fi
 
@@ -597,24 +597,43 @@ case "$SUBCMD" in
       EDGES_SKIPPED_API_UNAVAILABLE=$(awk 'NF >= 2 { c++ } END { print c+0 }' "$EDGES_FILE")
     fi
 
-    # Back-links: post a comment on each child unless GitHub natively renders the umbrella
-    # relationship. We treat the dependency-API child-of relationship as the "native" surface;
-    # if the child's blocked_by list contains the umbrella we skip the comment.
+    # Back-links: post a comment on each child unless an existing back-link
+    # comment is already present. The previous implementation probed the
+    # child's blocked_by list for the umbrella (intended to detect GitHub's
+    # native umbrella-rendering surface), but no path in the skill ever
+    # creates the umbrella↔child native edge in the direction that probe
+    # tested, so the check was unreachable and re-runs accumulated duplicate
+    # comments (issue #716). The new check scans the child's existing
+    # comments for the literal prefix `Part of umbrella #${UMBRELLA} — `
+    # (the exact prefix the tool itself emits at line 507; the trailing
+    # ` — ` separator prevents prefix-collision on numeric umbrella numbers
+    # — e.g., `#1` would otherwise false-match `#12`). Matches both
+    # newly-posted and operator-edited variants (anything that begins with
+    # the canonical prefix counts as already-linked). The check runs
+    # unconditionally — independent of `api_available`, since the comments
+    # API is a separate GitHub surface from the dependencies API; on `gh
+    # api` failure the existing flag stays false (fail-open: post the
+    # comment, matching the rest of wire-dag's fail-open posture).
     #
     # On --no-backlinks (created-eq-1 bypass), the entire loop is skipped: there is
-    # no umbrella, so the native-detection jq selector and the comment body — both
-    # of which reference $UMBRELLA — would be malformed.
+    # no umbrella, so the comment body — which references $UMBRELLA — would be malformed.
     if [ "$NO_BACKLINKS" != "true" ]; then
+      backlink_marker="Part of umbrella #${UMBRELLA} — "
       while IFS=$'\t' read -r child_num _title _url; do
         [ -z "$child_num" ] && continue
-        native="false"
-        if [ "$api_available" = "true" ]; then
-          if gh api "/repos/$REPO/issues/${child_num}/dependencies/blocked_by" --paginate --jq ".[] | select(.number == ${UMBRELLA})" 2>/dev/null | grep -q .; then
-            native="true"
-          fi
+        existing="false"
+        # Idempotency probe: extract the FIRST LINE of each comment body
+        # (`split("\n")[0]`) and grep with `^` anchor for the marker. This
+        # matches only comments whose body starts with the canonical prefix
+        # (the exact shape helpers.sh emits at the comment-post site below)
+        # — a discussion comment that quotes or mentions the marker mid-prose
+        # will not false-match (issue #716 review FINDING — Codex).
+        if gh api "/repos/$REPO/issues/${child_num}/comments" --paginate --jq '.[].body | split("\n")[0]' 2>/dev/null \
+             | grep -qE "^${backlink_marker}"; then
+          existing="true"
         fi
-        if [ "$native" = "true" ]; then
-          BACKLINKS_SKIPPED_NATIVE=$((BACKLINKS_SKIPPED_NATIVE + 1))
+        if [ "$existing" = "true" ]; then
+          BACKLINKS_SKIPPED_EXISTING=$((BACKLINKS_SKIPPED_EXISTING + 1))
           continue
         fi
         backlink_body="Part of umbrella #${UMBRELLA} — ${UMBRELLA_TITLE}"
@@ -631,7 +650,7 @@ case "$SUBCMD" in
     printf 'EDGES_FAILED=%d\n' "$EDGES_FAILED"
     printf 'PROBE_FAILED=%d\n' "$PROBE_FAILED"
     printf 'BACKLINKS_POSTED=%d\n' "$BACKLINKS_POSTED"
-    printf 'BACKLINKS_SKIPPED_NATIVE=%d\n' "$BACKLINKS_SKIPPED_NATIVE"
+    printf 'BACKLINKS_SKIPPED_EXISTING=%d\n' "$BACKLINKS_SKIPPED_EXISTING"
     if [ -n "$edge_lines" ]; then
       printf '%s' "$edge_lines"
     fi
