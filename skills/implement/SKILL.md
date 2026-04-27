@@ -418,7 +418,7 @@ Each step covered by the accumulation mechanism writes its fragment to `$IMPLEME
 
 | Step | Section-ID |
 |------|------------|
-| Step 1 (after `/design` plan + test plan visible) | `plan-goals-test` |
+| Step 1 (after `/design`'s `## Implementation Plan` visible — or `## Revised Implementation Plan` when superseded by plan review) | `plan-goals-test` |
 | Step 1 tail (after `/design` voting tally visible) | `plan-review-tally` |
 | Step 2 (after each Q/A append — progressive upsert) | `execution-issues` |
 | Step 5 (after `/review` voting tally visible, or after quick-mode loop) | `code-review-tally` |
@@ -507,7 +507,7 @@ Parse `BRANCH=<name>` and save as `BRANCH_NAME`. Referenced by Step 14 (`local-c
 
 Write two anchor fragments from `/design`'s visible output. See Step 0.5 "Anchor-section accumulation" for the mechanism.
 
-1. **`plan-goals-test` fragment** — compose from `/design`'s `## Goal` and `## Test plan` sections (or their quick-mode inline equivalents). Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-goals-test.md`.
+1. **`plan-goals-test` fragment** — compose by synthesizing two paragraphs: the `## Goal` paragraph summarizes the high-level objective from `/design`'s plan body (Approach and lead-in content); the `## Test plan` paragraph summarizes `/design`'s Testing strategy content. **If `## Revised Implementation Plan` appears in conversation context, use that block as the synthesis source; otherwise use `## Implementation Plan`.** Quick-mode's inline plan path (Step 1 quick mode "Inline design") prints under `## Implementation Plan` as well, so the synthesis source is identical across modes. Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-goals-test.md`.
 2. **`plan-review-tally` fragment** — compose from the plan review voting tally + Reviewer Competition Scoreboard visible in conversation context (or `"Voting was skipped (insufficient voters)."` / `"No findings were raised — voting was not needed."` / `"Quick mode — no plan review voting."` as appropriate). Write to `$IMPLEMENT_TMPDIR/anchor-sections/plan-review-tally.md`.
 3. If `$ISSUE_NUMBER` is set (any of: Branch 1 sentinel reuse, Branch 2 `--issue` adoption, Branch 3 PR-body recovery, Branch 4 success), assemble the anchor body and invoke `upsert-anchor`. If `deferred=true` (Branch 4 create-issue/anchor/sentinel failure) or `repo_unavailable=true`, skip the upsert.
 

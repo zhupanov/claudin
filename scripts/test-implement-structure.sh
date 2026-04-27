@@ -16,7 +16,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Fifteen assertions:
+# Sixteen assertions:
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -103,6 +103,29 @@
 #      this SKILL.md), so the assertion is unambiguous. A future edit that
 #      drops either flag, or splits the invocation across lines, fails
 #      closed under `set -o pipefail`.
+# (16) Cross-skill plan-heading drift-prevention pin (closes #749): the
+#      `plan-goals-test` anchor fragment composed by /implement Step 1
+#      must agree with /design's emitted plan heading. /design Step 2b
+#      prints under `## Implementation Plan` (and plan-review.md prints
+#      `## Revised Implementation Plan` when superseded). The legacy
+#      consumer instruction at SKILL.md:510 directed composition from
+#      `## Goal` and `## Test plan` sections — headings /design never
+#      emitted — so the fragment was structurally non-extractable.
+#      (16a) Producer pin: skills/design/SKILL.md contains `## Implementation Plan`;
+#            skills/design/references/plan-review.md contains `## Revised Implementation Plan`.
+#      (16b) Consumer positive pin (scoped): the line range from `### Anchor-section fragments`
+#            to the next `### ` heading in skills/implement/SKILL.md must contain
+#            `## Implementation Plan` — scoping isolates the rewritten line 510
+#            from the unrelated quick-mode `## Implementation Plan` reference at
+#            skills/implement/SKILL.md:480 (Step 1 quick-mode "Inline design"),
+#            which would false-pass a whole-file grep.
+#      (16c) Anchor-template positive pin: skills/implement/references/anchor-comment-template.md
+#            placeholder prose references `## Implementation Plan` (synthesis source).
+#      (16d) Negative pin (broken-pattern): the literal pair `` `## Goal` `` AND `` `## Test plan` ``
+#            (with single backticks as they actually appear in the broken state) MUST NOT
+#            both appear on the same line in skills/implement/SKILL.md. The pre-fix line 510
+#            wrapped both heading literals in backticks; the rewritten line drops both, so
+#            this negative pin fails closed on broken main and passes on the fixed branch.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
@@ -445,5 +468,71 @@ grep 'collect-reviewer-results.sh' "$SKILL_MD" \
   | grep -Fq -- '--validation-mode' \
   || fail "(15) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
 
-echo "PASS: test-implement-structure.sh — all 15 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (16) Cross-skill plan-heading drift-prevention pin (closes #749). /design's
+#      Step 2b prints the implementation plan under `## Implementation Plan`,
+#      and plan-review.md prints `## Revised Implementation Plan` when the plan
+#      is revised by accepted findings. /implement's Step 1 plan-goals-test
+#      fragment must synthesize from those headings — the legacy consumer
+#      instruction at SKILL.md:510 directed composition from `## Goal` and
+#      `## Test plan` sections that /design never emitted, leaving the fragment
+#      structurally non-extractable on every path. (16a) producer pin —
+#      design/SKILL.md and plan-review.md carry their respective heading
+#      literals. (16b) consumer scoped positive pin — line range from
+#      `### Anchor-section fragments` to next `### ` in implement/SKILL.md
+#      must reference `## Implementation Plan`; whole-file grep would
+#      false-pass via the unrelated quick-mode "Inline design" reference
+#      elsewhere in SKILL.md, so scoping isolates the rewritten plan-goals-test
+#      composition bullet. (16c) anchor-template positive pin —
+#      anchor-comment-template.md placeholder prose references
+#      `## Implementation Plan` as the synthesis source. (16d) broken-pattern
+#      negative pin — the legacy contiguous phrase `\`/design\`'s \`## Goal\`
+#      and \`## Test plan\` sections` (with backticks as it actually appeared
+#      in pre-fix line 510) must NOT appear in implement/SKILL.md. The fix
+#      removes that exact substring from line 510 while preserving `## Goal`
+#      and `## Test plan` separately (they remain the anchor body's rendered
+#      target headings). The negative pin fails closed on broken main and
+#      passes on the fixed branch.
+# ---------------------------------------------------------------------------
+DESIGN_SKILL_MD="$REPO_ROOT/skills/design/SKILL.md"
+PLAN_REVIEW_MD="$REPO_ROOT/skills/design/references/plan-review.md"
+ANCHOR_TEMPLATE_MD="$REFS_DIR/anchor-comment-template.md"
+
+[[ -f "$DESIGN_SKILL_MD" ]] || fail "(16a) skills/design/SKILL.md missing: $DESIGN_SKILL_MD"
+[[ -f "$PLAN_REVIEW_MD" ]] || fail "(16a) skills/design/references/plan-review.md missing: $PLAN_REVIEW_MD"
+[[ -f "$ANCHOR_TEMPLATE_MD" ]] || fail "(16c) skills/implement/references/anchor-comment-template.md missing: $ANCHOR_TEMPLATE_MD"
+
+grep -Fq '## Implementation Plan' "$DESIGN_SKILL_MD" \
+  || fail "(16a) skills/design/SKILL.md missing producer heading literal '## Implementation Plan' — /design must print the plan under this heading for the /implement plan-goals-test consumer to synthesize from (closes #749)"
+grep -Fq '## Revised Implementation Plan' "$PLAN_REVIEW_MD" \
+  || fail "(16a) skills/design/references/plan-review.md missing producer heading literal '## Revised Implementation Plan' — plan-review.md must print the revised plan under this heading when findings are accepted by vote (closes #749)"
+
+# (16b) Consumer scoped positive pin: extract the line range from
+#       `### Anchor-section fragments` (open) to the next `### ` heading
+#       (exclusive). The awk pattern `flag=1; next` skips the open heading
+#       itself; `/^### /{flag=0}` clears the flag at the next heading without
+#       printing it. Whole-file grep would false-pass via the unrelated
+#       quick-mode reference at SKILL.md:480.
+section_anchor_fragments=$(awk '
+  /^### Anchor-section fragments/ { flag=1; next }
+  /^### / { flag=0 }
+  flag { print }
+' "$SKILL_MD")
+printf '%s\n' "$section_anchor_fragments" | grep -Fq '## Implementation Plan' \
+  || fail "(16b) skills/implement/SKILL.md '### Anchor-section fragments' section does not reference '## Implementation Plan' — the plan-goals-test composition bullet must direct synthesis from /design's actual emitted heading (closes #749)"
+
+# (16c) Anchor-template placeholder prose references the synthesis source heading.
+grep -Fq '## Implementation Plan' "$ANCHOR_TEMPLATE_MD" \
+  || fail "(16c) skills/implement/references/anchor-comment-template.md missing '## Implementation Plan' reference — placeholder prose under <!-- section:plan-goals-test --> must name the synthesis source heading from /design (closes #749)"
+
+# (16d) Broken-pattern negative pin: the contiguous legacy phrase must not
+#       appear in implement/SKILL.md. Backticks are escaped with backslashes
+#       inside the double-quoted string so they are literal (no command
+#       substitution).
+NEGATIVE_PHRASE_16D="\`/design\`'s \`## Goal\` and \`## Test plan\` sections"
+if grep -Fq -- "$NEGATIVE_PHRASE_16D" "$SKILL_MD"; then
+  fail "(16d) skills/implement/SKILL.md still contains the legacy plan-goals-test composition phrase (\`/design\`'s \`## Goal\` and \`## Test plan\` sections) — /design never emits those sections; rewrite the plan-goals-test composition bullet to synthesize from /design's '## Implementation Plan' (closes #749)"
+fi
+
+echo "PASS: test-implement-structure.sh — all 16 structural invariants hold"
 exit 0
