@@ -321,6 +321,7 @@ printf '%s\n' "$FINDINGS_TRIMMED" | awk -v items_path="$ITEMS_FILE" -v count_pat
     in_fence = 0
     mode = ""    # "" / "numbered" / "bulleted" / "paragraph"
     current = ""
+    base_indent = 0    # leading-whitespace byte count of the first top-level marker; reset on flush
     # First pass-equivalent: detect tier by examining each line outside fences.
   }
   {
@@ -341,28 +342,42 @@ printf '%s\n' "$FINDINGS_TRIMMED" | awk -v items_path="$ITEMS_FILE" -v count_pat
     # They flush any in-progress item without becoming items themselves.
     if (line ~ /^####/) {
       if (current != "") { emit_item(current); current = "" }
+      base_indent = 0
       next
     }
     is_numbered = (line ~ /^[[:space:]]*[0-9]+\.[[:space:]]/)
     is_bulleted = (line ~ /^[[:space:]]{0,2}[-*][[:space:]]/)
+    # Byte-count leading whitespace; guard BSD awk RLENGTH=-1 on no-match.
+    current_indent = (match(line, /^[[:space:]]+/) ? RLENGTH : 0)
     if (mode == "") {
       if (is_numbered) {
-        mode = "numbered"; current = line; next
+        mode = "numbered"; current = line; base_indent = current_indent; next
       } else if (is_bulleted) {
-        mode = "bulleted"; current = line; next
+        mode = "bulleted"; current = line; base_indent = current_indent; next
       } else if (NF > 0) {
         mode = "paragraph"; current = line; next
       } else {
         next
       }
     }
-    # Adaptive: in any mode, a fresh top-level numbered/bulleted item flushes
-    # the current item and starts a new one. This handles planner-mode
-    # paragraphs interleaved with numbered lists, and lists following prose.
-    if (is_numbered || is_bulleted) {
+    # Post-flush re-init: after a #### or paragraph blank-line flush, current is
+    # empty but mode/base_indent may be stale from a prior block. Always treat
+    # the first list marker after such a flush as a fresh top-level item.
+    if (current == "" && (is_numbered || is_bulleted)) {
+      current = line
+      mode = is_numbered ? "numbered" : "bulleted"
+      base_indent = current_indent
+      next
+    }
+    # Adaptive: a fresh top-level numbered/bulleted marker (at-or-shallower than
+    # the captured baseline) flushes the current item and starts a new one. A
+    # deeper-indented marker is a nested sublist and falls through to the
+    # continuation branch below.
+    if ((is_numbered || is_bulleted) && current_indent <= base_indent) {
       if (current != "") { emit_item(current) }
       current = line
       mode = is_numbered ? "numbered" : "bulleted"
+      base_indent = current_indent
       next
     }
     # Continuation: blank lines flush in paragraph mode; in list modes blank
@@ -370,6 +385,7 @@ printf '%s\n' "$FINDINGS_TRIMMED" | awk -v items_path="$ITEMS_FILE" -v count_pat
     if (mode == "paragraph") {
       if (NF == 0) {
         if (current != "") { emit_item(current); current = "" }
+        base_indent = 0
       } else {
         if (current == "") current = line
         else current = current "\n" line

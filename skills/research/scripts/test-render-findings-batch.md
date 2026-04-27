@@ -10,7 +10,7 @@ This harness depends on `skills/issue/scripts/parse-input.sh` being present and 
 
 ## Fixtures
 
-12 cases:
+15 cases (numeric IDs match the comment-tagged `# Case N` markers in the harness; cases 13 and 14 land before case 12 in source order due to staged additions, and case 15 was added per #745):
 
 1. **Numbered list** — three findings; round-trip ITEMS_TOTAL=3.
 2. **Bulleted list** — two findings; round-trip ITEMS_TOTAL=2.
@@ -24,6 +24,9 @@ This harness depends on `skills/issue/scripts/parse-input.sh` being present and 
 10. **Quick-disclaimer** — same fixture as #1 but with `--quick-disclaimer` set; assertion: each item body contains the disclaimer literal.
 11. **Special characters** — backticks, dollars, asterisks, single/double quotes preserved verbatim in body.
 12. **Multi-line bulleted continuation** — bullet item with a continuation line stays one item.
+13. **Tab-after-`###` body escape** (#510 review FINDING_2) — body lines matching `^###[[:space:]]` (space OR tab) are backslash-escaped.
+14. **Indented fence with `### inside`** (#510 review FINDING_5) — 3-space-prefixed fenced block toggles `IN_FENCE` correctly so its inner `### Foo` line is not misclassified.
+15. **Nested-numbered sublist** (#745) — finding body containing an indented `1.` / `2.` enumeration; the indent-gate keeps the nested lines as continuation; round-trip ITEMS_TOTAL=1.
 
 ## Assertions per case
 

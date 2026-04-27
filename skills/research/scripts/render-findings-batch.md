@@ -62,11 +62,11 @@ The slicer is **fence-aware**: lines matching `^[[:space:]]*` followed by three 
 
 Applied to the Findings Summary slice:
 
-1. **Numbered list** — lines matching `^[[:space:]]*[0-9]+\.[[:space:]]` start new items.
-2. **Top-level bulleted** — lines matching `^[[:space:]]{0,2}[-*][[:space:]]` start new items.
+1. **Numbered list** — lines matching `^[[:space:]]*[0-9]+\.[[:space:]]` are candidate item markers.
+2. **Top-level bulleted** — lines matching `^[[:space:]]{0,2}[-*][[:space:]]` are candidate item markers.
 3. **Paragraph-per-item** — paragraphs separated by blank lines.
 
-Modes are **adaptive**: a top-level numbered or bulleted line ALWAYS starts a new item, regardless of which mode the parser entered first. This handles planner-mode where a `#### Subquestion 1: ...` heading-paragraph precedes a numbered list. Sub-headings (lines beginning with <code>#### </code>) are skipped entirely — they flush the current item but are NOT emitted as items themselves.
+Modes are **adaptive and indent-gated** (#745). When the parser first enters numbered or bulleted mode, it captures the leading-whitespace byte-count of that line as `base_indent`. A subsequent numbered/bulleted candidate marker starts a new item only when `current_indent <= base_indent`; deeper-indented candidates are absorbed into the current item's body as continuation. After a `####` flush or paragraph blank-line flush leaves `current = ""`, the next list marker — at any indent — re-captures `base_indent` and starts a fresh top-level item (post-flush re-init). This handles planner-mode where a `#### Subquestion 1: ...` heading-paragraph precedes a numbered list. Sub-headings (lines beginning with <code>#### </code>) are skipped entirely — they flush the current item but are NOT emitted as items themselves.
 
 ## Title extraction
 
@@ -105,6 +105,8 @@ The metadata `**Source**:` / `**Risk**:` / etc. lines (no leading <code>- </code
 ## Known limitations
 
 - **Odd fence count leaves IN_FENCE stuck through EOF** (#510 review FINDING_8): if the input has an odd number of `^[[:space:]]*\`\`\`` lines (an opening fence with no closing fence in the slice), the toggle leaves `in_fence=1` for every subsequent line, suppressing header detection until end-of-input. The `### Findings Summary` section bound by named next-headers may be over-extended in this case. The synthesis prompt produces well-formed fenced blocks in practice; this is a defensive note for unusual inputs.
+- **Same-indent sibling list ambiguity** (#745): the indent-gate cannot distinguish "two distinct top-level findings the LLM uniformly indented" from "one finding with a same-indent continuation list" when both share the same column. The first marker after a flush sets `base_indent`, and subsequent markers at the same column flush as siblings — matching the dominant `/research` shape (column-0 numbered findings) but potentially over-splitting if a producer ever emits one finding whose body contains a same-indent (not deeper) numbered enumeration.
+- **Mixed tab/space indentation** (#745): `current_indent` is the byte length of the leading-whitespace run; a tab counts as 1 byte regardless of editor tabstop width. Mixing tabs and spaces in indentation within a single findings block is unsupported and may produce incorrect splits. The producer (`/research`) emits spaces in practice; the harness fixtures use ASCII spaces only.
 
 ## Other limitations
 
