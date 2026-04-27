@@ -64,15 +64,15 @@ fail() {
 
 # Check 3: Each reference file is named on a MANDATORY — READ ENTIRE FILE line in SKILL.md
 #          AND that same line carries reciprocal 'Do NOT load <each-other>' guards naming
-#          ALL THREE other references. Line-scoped by construction so a future edit that
+#          ALL FOUR other references. Line-scoped by construction so a future edit that
 #          splits the directive across lines fails. Order-agnostic via per-substring grep
-#          loops: each MANDATORY line is extracted, then asserted to contain ALL THREE
+#          loops: each MANDATORY line is extracted, then asserted to contain ALL FOUR
 #          'Do NOT load <each-other>' substrings (presence-not-order — minor reordering of
 #          unrelated lines must NOT break the check).
 #
 # Procedure per reference X:
 #   1. Find the line in SKILL.md that contains 'MANDATORY — READ ENTIRE FILE' AND <X>.
-#   2. For each of the OTHER three references Y, assert the line ALSO contains
+#   2. For each of the OTHER four references Y, assert the line ALSO contains
 #      'Do NOT load' followed by <Y> somewhere later on the same line.
 check_mandatory_topology() {
     local target="$1"  # filename basename of the reference being asserted
