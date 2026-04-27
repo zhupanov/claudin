@@ -260,7 +260,7 @@ Iterate over `order[0..ITEMS_TOTAL-1]` (each iteration's value is one original i
   - `ISSUE_<i>_TITLE=<title>`
   - Increment `ISSUES_DEDUPLICATED`. Do NOT call create-one.sh.
 
-- If `ITEM_<i>_VERDICT=DUPLICATE` with `DUPLICATE_OF_ITEM=<j>`: resolve `j`'s eventual `ISSUE_<j>_NUMBER` / `ISSUE_<j>_URL` (these will have been emitted already since `j < i`). Emit:
+- If `ITEM_<i>_VERDICT=DUPLICATE` with `DUPLICATE_OF_ITEM=<j>`: resolve `j`'s eventual `ISSUE_<j>_NUMBER` / `ISSUE_<j>_URL` (these will have been emitted already since item `j` is ordered before item `i` in the topological schedule due to the DUPLICATE_OF_ITEM synthetic prerequisite edge `j → i`). Emit:
   - `ISSUE_<i>_DUPLICATE=true`
   - `ISSUE_<i>_DUPLICATE_OF_NUMBER=<j's number>`
   - `ISSUE_<i>_DUPLICATE_OF_URL=<j's url>`
