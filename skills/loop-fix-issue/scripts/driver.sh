@@ -39,10 +39,12 @@
 #     in LOOP_TMPDIR. The per-iteration `claude -p` runs with
 #     `--output-format stream-json --verbose`, so iter-N-out.txt is a newline-
 #     delimited stream of JSON objects (one JSON object per assistant turn /
-#     tool_use / system / result event). The breadcrumb text appears verbatim
-#     within `.message.content[0].text` of `assistant`-typed JSON lines, so the
-#     existing literal-substring grep keeps matching the Step 0 sentinel after
-#     the format switch. iter-N-out.txt.stderr captures raw stderr (including
+#     tool_use / system / result event). The Step 0 success breadcrumb text
+#     appears verbatim somewhere in the NDJSON sidecar (typically inside an
+#     `assistant`-typed turn's text content); the driver does NOT parse the
+#     JSON structure — it relies on the literal substring appearing anywhere
+#     in the file, which the `grep -aF` scan below detects regardless of
+#     which JSON event carries it. iter-N-out.txt.stderr captures raw stderr (including
 #     any `claude-iter-N: TIMED OUT after Xs` watcher diagnostic). Driver stdout
 #     (captured by the caller's `> LOG_PATH 2>&1` redirect) carries only
 #     driver-emitted breadcrumbs and the `LOOP_TMPDIR=` cleanup line — never
@@ -259,14 +261,16 @@ breadcrumb_done "2: session setup — LOOP_TMPDIR=${LOOP_TMPDIR}"
 # only an implicit progress-reporting convention.
 #
 # Format note: iter-N-out.txt is now newline-delimited JSON (stream-json mode;
-# see invoke_claude_p_skill above). The breadcrumb text appears verbatim
-# within `.message.content[0].text` on the JSON line for each `assistant`-
-# typed turn — `&` and the em-dash stay as raw UTF-8 (Anthropic's stream-json
-# encoder does not HTML-escape these), and the full per-turn text arrives in
-# one JSON object (not chunked across delta events). So `grep -aF` for the
-# literal substring still wins on the file even though the bytes around it are
-# JSON envelope. The `-a` flag is added below to force text-mode interpretation
-# in case grep mis-detects binary on the JSON sidecar.
+# see invoke_claude_p_skill above). The driver does NOT parse the JSON
+# structure — it relies on the breadcrumb literal appearing somewhere in the
+# file (typically inside an `assistant`-typed turn's text content, but the
+# match is positional-agnostic — any occurrence in the sidecar wins). `&`
+# and the em-dash stay as raw UTF-8 in Anthropic's stream-json encoder
+# output (no HTML-escaping observed), and the full per-turn text arrives in
+# one JSON object (not chunked across delta events), so `grep -aF` for the
+# literal substring still wins on the file even though the bytes around it
+# are JSON envelope. The `-a` flag is added below to force text-mode
+# interpretation in case grep mis-detects binary on the JSON sidecar.
 SETUP_SENTINEL='find & lock — found and locked'
 
 # Compose the per-iteration prompt once (identical across iterations).

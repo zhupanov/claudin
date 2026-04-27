@@ -147,17 +147,24 @@ fi
 # G-stream-json: NDJSON capture so every assistant turn (Step 0 success
 # breadcrumb included) reaches iter-N-out.txt. Default-mode claude -p emits
 # only the final assistant message text and misses the Step 0 sentinel.
-# Pinned via two independent grep checks so the order of flags in the live
-# argv may evolve without breaking the assertion.
-if grep -qF -- '--output-format stream-json' "$DRIVER_SH"; then
-  pass "G: driver.sh passes --output-format stream-json to claude -p"
+# Anchored on the live invocation line — the regex pins `$claude_bin` (the
+# bash variable holding the claude binary, only on the executable argv line)
+# followed by the flag, so a regression that removes the flag from argv but
+# leaves it in a comment fails the assertion. Bare substring matching would
+# false-pass against the comments at driver.sh:103-117 and 124-129 which
+# also mention the flags. Mirrors assertion H's "anchor on live code, not
+# comments" rule.
+# shellcheck disable=SC2016  # single quotes intentional — byte-literal regex pattern.
+if grep -qE '\$claude_bin.*--output-format stream-json' "$DRIVER_SH"; then
+  pass "G: driver.sh passes --output-format stream-json on the live claude -p argv line"
 else
-  fail "G: driver.sh missing --output-format stream-json on claude -p invocation"
+  fail "G: driver.sh missing --output-format stream-json on the live claude -p argv line (only mentioned in comments?)"
 fi
-if grep -qF -- '--verbose' "$DRIVER_SH"; then
-  pass "G: driver.sh passes --verbose to claude -p (required by claude -p stream-json mode)"
+# shellcheck disable=SC2016
+if grep -qE '\$claude_bin.*--verbose' "$DRIVER_SH"; then
+  pass "G: driver.sh passes --verbose on the live claude -p argv line (required by claude -p stream-json mode)"
 else
-  fail "G: driver.sh missing --verbose flag (required by claude -p stream-json mode)"
+  fail "G: driver.sh missing --verbose on the live claude -p argv line (only mentioned in comments?)"
 fi
 
 # --- Assertion H: SETUP_SENTINEL live assignment line (anchors on the
