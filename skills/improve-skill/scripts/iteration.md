@@ -9,8 +9,10 @@
 ## Invocation
 
 ```
-iteration.sh [--no-slack] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>
+iteration.sh [--no-slack] [--subordinate] [--issue <N>] [--breadcrumb-prefix <P>] [--work-dir <path>] [--iter-num <N>] <skill-name>
 ```
+
+`--subordinate` suppresses the standalone tracking-issue lifecycle management (EXIT-trap title rename + `on_success()` rename) when a loop driver owns the lifecycle. `driver.sh` passes it on every iteration so the driver alone holds the title-prefix transitions; standalone `/improve-skill` invocations omit it and let the kernel manage the lifecycle itself.
 
 ## Modes
 
