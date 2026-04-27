@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.23] - 2026-04-27
+
+### Fixed
+
+- `skills/research/references/research-phase.md` — corrected the `RESEARCH_SCALE=quick` bullet under "Baseline prompt" (line 309). It previously stated quick mode "the single inline Claude lane runs `RESEARCH_PROMPT_BASELINE` verbatim", contradicting the same file's K=3 homogeneous Claude Agent-tool lane contract at lines 5, 11, 13, 17, and the "### Quick" subsection (issue #520). Reworded so the bullet states that each of the K=3 quick lanes is a Claude Agent-tool subagent running `RESEARCH_PROMPT_BASELINE` verbatim, and that the orchestrator does not run a separate inline lane in quick mode. Doc-only correction; runtime behavior is unchanged. Closes #781.
+
 ## [7.17.22] - 2026-04-27
 
 ### Fixed
