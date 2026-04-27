@@ -32,6 +32,7 @@
   - State is `OPEN`.
   - Title does not start with a managed lifecycle prefix (`[IN PROGRESS]` / `[DONE]` / `[STALLED]`).
   - Last comment is NOT exactly `IN PROGRESS` (not locked by a concurrent `/fix-issue` runner).
+  - `child_native_blockers` returns empty — no open native GitHub dependency blockers (the native-only filter inside `child_eligible`, so `pick-child` iterates past natively-blocked siblings). Prose blockers are NOT checked here; the full `all_open_blockers` (native + prose) pass runs in `find-lock-issue.sh` once on the chosen child before locking.
 
   Children are walked in body order; the FIRST that passes eligibility wins. Deterministic try-one-then-fail — there is no fallback to a sibling on lock failure (the lock-failure path lives in `find-lock-issue.sh` and exits 3 with a clear umbrella-context error message).
 
@@ -58,7 +59,7 @@ KEY=value lines on stdout. Each subcommand emits its own keyset; auxiliary deleg
 - **Detection signals** (body literal, title prefix) are byte-pinned in `is_umbrella_body` / `is_umbrella_title`. If `/umbrella`'s `render-umbrella-body.sh` ever changes the body literal (`Umbrella tracking issue.`), update both files in the same PR AND update `test-umbrella-handler.sh`'s detect fixtures.
 - **Child grammar** (`^[[:space:]]*- \[[ xX]\] .*#([0-9]+)`) is byte-pinned in `parse_children_from_body`. If the grammar widens (e.g., to support tables), update this contract, the harness, and `skills/fix-issue/SKILL.md` Known Limitations together.
 - **Cross-repo strip**: the `[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+` sed pattern enforces same-repo-only at the parser layer. Edits that loosen this open the cross-repo dispatch surface and require a security review.
-- **`pick-child` eligibility checks** include the native-only blocker filter (`child_native_blockers` inlined in `umbrella-handler.sh`); the full `all_open_blockers` (native + prose) pass remains in `find-lock-issue.sh` and runs once on the chosen child before locking. Editing this rule requires updating both files.
+- **`pick-child` eligibility checks** include the native-only blocker filter (`child_native_blockers` defined in `umbrella-handler.sh` and called from `child_eligible`); the full `all_open_blockers` (native + prose) pass remains in `find-lock-issue.sh` and runs once on the chosen child before locking. Editing this rule requires updating both files.
 
 ## Test harness
 

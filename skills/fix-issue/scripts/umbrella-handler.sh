@@ -41,9 +41,12 @@
 #     ([IN PROGRESS] / [DONE] / [STALLED])
 #   - last comment is NOT exactly "IN PROGRESS" (not locked by a concurrent
 #     /fix-issue runner)
-#   - all_open_blockers is empty (delegated to find-lock-issue.sh's helpers via
-#     the caller — pick-child does NOT re-run blocker queries; the caller
-#     verifies eligibility by checking ENGAGED state via gh, then locks)
+#   - child_native_blockers is empty — the native-only blocker probe
+#     (defined below, called from child_eligible) so pick-child iterates past
+#     natively-blocked siblings to the next ready child. The full
+#     all_open_blockers (native + prose) pass is owned by find-lock-issue.sh
+#     and runs once on the chosen child before locking — defense in depth
+#     on top of the native-only filter inside pick-child.
 #
 # pick-child outcomes (one of three on stdout):
 #   CHILD_NUMBER=<C>
