@@ -91,6 +91,12 @@ check_contains '--permission-mode bypassPermissions'           'non-interactive 
 # FINDING_7: fully-qualified slash-command names for larch-shipped children.
 check_contains '/larch:design'                                 'fully-qualified /larch:design invocation'
 check_contains '/larch:im'                                     'fully-qualified /larch:im invocation'
+# Issue #758: primary /design and /im prompts MUST carry --auto so the
+# subprocess-driven /design and /im runs are non-interactive (matching the
+# rescue retry which already passes --auto). Without these pins, the fix in
+# iteration.sh could silently regress.
+check_contains '/larch:design --auto'                          'primary /larch:design --auto prompt (issue #758)'
+check_contains '/larch:im --auto'                              'primary /larch:im --auto prompt (issue #758)'
 # FINDING_10: stderr MUST NOT merge into stdout (which is posted publicly).
 # shellcheck disable=SC2016
 check_contains '2> "$stderr_file"'                             'stderr redirected to separate file (FINDING_10)'

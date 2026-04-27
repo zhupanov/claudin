@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.27] - 2026-04-27
+
+### Fixed
+
+- `skills/improve-skill/scripts/iteration.sh` — prepended `--auto` to the primary `/larch:design` invocation (line 833) and the primary `/larch:im` invocation (line 928), matching the rescue retry which already passed `--auto`. Without `--auto`, the iteration kernel's `claude -p` subprocesses had no interactive user but `/design` and `/implement` were free to invoke `AskUserQuestion` (`/design` Steps 1c, 1d, 3.5 when `auto_mode=false`), stalling the subprocess until the 3600s watchdog fired. Updated the sibling `iteration.md` contract with a new "Non-interactive `--auto` flag forwarding" subsection and added Tier 1 regression-guard pins (`/larch:design --auto`, `/larch:im --auto`) to `scripts/test-improve-skill-iteration.sh`. Closes #758 and the merged duplicate #761.
+
 ## [7.17.26] - 2026-04-27
 
 ### Fixed
