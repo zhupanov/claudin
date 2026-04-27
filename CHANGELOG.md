@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.27] - 2026-04-26
+
+### Added
+
+- `scripts/test-research-structure.sh` — Check 53 (artifact-filename alignment) and Check 54a/54b (skip-precondition order at /research Step 2.7). Check 53 asserts that `skills/research/references/adjudication-phase.md` and `skills/research/references/citation-validation-phase.md` do NOT carry the historical tmpdir artifact name `research-synthesis.txt` and DO reference the canonical `research-report.txt` at least once each. Check 54a section-scopes `citation-validation-phase.md` § 2.7.1 (singleton heading + `Budget-abort gate (evaluated FIRST` precedes `Empty-synthesis gate (evaluated SECOND`); Check 54b paragraph-scopes SKILL.md Step 2.7's `**Skip preconditions** (emitted FIRST` opener (singleton anchor + budget-abort skip breadcrumb byte-precedes empty-synthesis breadcrumb via bash parameter expansion). Bumps PASS message from "all 52 structural invariants hold" to "all 54". `scripts/test-research-structure.md` updated to document the new checks, edit-in-sync surfaces, and gate-count bump. Guards the bug class that surfaced as #665 (artifact name drift) and #666 (skip-order inversion); both underlying bugs are already fixed. Closes #671.
+
 ## [7.16.26] - 2026-04-26
 
 ### Fixed
