@@ -517,6 +517,43 @@ Yes
 EOF
 run_case "nested then top-level sibling (#745)" "$FIXTURE_NESTED_THEN_TOPLEVEL" "" 0 2
 
+# Case 17 (#746): a non-planner `#### Some heading` line inside a finding's
+# body must NOT be discarded by the splitter. Only `#### Subquestion <N>`
+# planner organizers should flush; all other `####` lines are body content.
+read -r -d '' FIXTURE_NONPLANNER_HASH <<'EOF' || true
+## Research Report
+
+### Findings Summary
+
+1. First finding with a subsection heading in its body:
+   #### Notes on the data
+   The notes section contains additional context that should not be lost.
+
+### Risk Assessment
+Low
+
+### Difficulty Estimate
+S
+
+### Feasibility Verdict
+Yes
+
+### Key Files and Areas
+- i.md
+
+### Open Questions
+EOF
+run_case "non-planner #### preserved (#746)" "$FIXTURE_NONPLANNER_HASH" "" 0 1
+# Post-condition (#746 FINDING_1): the `#### Notes on the data` heading must
+# literally survive in the rendered sidecar. `run_case` only checks COUNT and
+# round-trip ITEMS_TOTAL — neither catches data loss when a `####` line is
+# silently dropped from the body. A standalone grep against the output file
+# is the only path that traps the regression the fix targets.
+if ! grep -Fq "#### Notes on the data" "$TMPDIR_TEST/case${CASE_NUM}-out.md"; then
+  echo "FAIL [non-planner #### preserved (#746)]: '#### Notes on the data' missing from rendered sidecar" >&2
+  FAIL=$((FAIL + 1))
+fi
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
