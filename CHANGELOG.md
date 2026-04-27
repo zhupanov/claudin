@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.17] - 2026-04-27
+
+### Fixed
+
+- `skills/research/scripts/render-findings-batch.sh` — narrowed the `^####` flush branch in the awk splitter so it triggers only on planner-mode `#### Subquestion <N>` organizers (case-insensitive, whitespace-tolerant via `tolower(line) ~ /^####[[:space:]]+subquestion[[:space:]]+[0-9]+/` — BSD-awk portable). Other `####` headings (e.g., a `#### Notes on the data` subsection inside a finding's prose) now fall through to the existing list/paragraph branches and are preserved as ordinary body content. Adds Case 17 in `test-render-findings-batch.sh` exercising a column-0 non-planner `#### Notes on the data` heading inside a finding body, asserting `COUNT=1` plus a standalone `grep -Fq` post-condition that the heading literally survives in the rendered sidecar (verified to fail without the fix). Sibling contracts `render-findings-batch.md` (heuristic-ladder narrowed contract + Known Limitations on broader organizer scope for `### Cross-cutting findings` / `### Per-angle highlights`) and `test-render-findings-batch.md` (16→17 cases, Case 6 description aligned, Case 17 entry added) updated in sync per AGENTS.md. Closes #746.
+
 ## [7.17.16] - 2026-04-27
 
 ### Added

@@ -337,10 +337,13 @@ printf '%s\n' "$FINDINGS_TRIMMED" | awk -v items_path="$ITEMS_FILE" -v count_pat
       else current = current "\n" line
       next
     }
-    # Skip sub-headings (lines starting with `#### ` or deeper) — these are
-    # planner-mode section organizers (`#### Subquestion 1: ...`), not findings.
-    # They flush any in-progress item without becoming items themselves.
-    if (line ~ /^####/) {
+    # Skip planner-mode subquestion organizers (lines matching
+    # `^#### Subquestion <N>` — case-insensitive, whitespace-tolerant; produced
+    # by /research planner mode in the final-report assembly). They flush any
+    # in-progress item without becoming items themselves. All other `####`
+    # headings fall through to list-mode-continuation / paragraph-mode and are
+    # preserved as ordinary body content (#746).
+    if (tolower(line) ~ /^####[[:space:]]+subquestion[[:space:]]+[0-9]+/) {
       if (current != "") { emit_item(current); current = "" }
       base_indent = 0
       next
@@ -360,9 +363,10 @@ printf '%s\n' "$FINDINGS_TRIMMED" | awk -v items_path="$ITEMS_FILE" -v count_pat
         next
       }
     }
-    # Post-flush re-init: after a #### or paragraph blank-line flush, current is
-    # empty but mode/base_indent may be stale from a prior block. Always treat
-    # the first list marker after such a flush as a fresh top-level item.
+    # Post-flush re-init: after a `#### Subquestion <N>` planner-organizer flush
+    # or a paragraph blank-line flush, current is empty but mode/base_indent
+    # may be stale from a prior block. Always treat the first list marker after
+    # such a flush as a fresh top-level item.
     if (current == "" && (is_numbered || is_bulleted)) {
       current = line
       mode = is_numbered ? "numbered" : "bulleted"
