@@ -344,9 +344,9 @@ Parse `/umbrella`'s stdout. Map to the slice-result counters (per dialectic DECI
 
 - `ISSUES_CREATED` = `CHILDREN_CREATED` + (1 if `UMBRELLA_NUMBER` is non-empty else 0)
 - `ISSUES_DEDUPLICATED` = `CHILDREN_DEDUPLICATED`
-- `ISSUES_FAILED` = `CHILDREN_FAILED` + (1 if `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` is empty else 0).
+- `ISSUES_FAILED` = `CHILDREN_FAILED` + (1 if `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` is empty AND `CHILDREN_FAILED=0` else 0).
 
-The umbrella-failure structural signal is `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` empty — `/umbrella` documents that `UMBRELLA_FAILURE_REASON` may be omitted when the failure reason cannot be extracted, so we do NOT key off `UMBRELLA_FAILURE_REASON` presence. Save the mapped counters for the KV footer at Step 4d.
+The umbrella-failure structural signal is `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` empty AND `CHILDREN_FAILED=0` (umbrella creation was actually attempted and failed). The `CHILDREN_FAILED=0` gate is essential: per `/umbrella`'s Step 3B.2 abort condition (`.claude/skills/umbrella/SKILL.md`), when `ISSUES_FAILED >= 1` from the `/issue` batch, `/umbrella` skips Step 3B.3 entirely (umbrella creation never attempted) and emits `UMBRELLA_VERDICT=multi-piece` plus an empty `UMBRELLA_NUMBER`. Without the gate, `/review` would double-count: N child failures plus a phantom +1 for an umbrella that was never attempted. We do NOT key off `UMBRELLA_FAILURE_REASON` presence — `/umbrella` documents that field as optional even on real umbrella-create failures. Save the mapped counters for the KV footer at Step 4d.
 
 Print an informational line summarizing the outcome (above the KV footer): `filed N children + umbrella #M (<url>)` (when umbrella created), `filed N child issue(s)` (one-shot path), `all findings deduped to existing issues` (downgrade), or omit (empty batch).
 

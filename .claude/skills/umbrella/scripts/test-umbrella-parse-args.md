@@ -1,6 +1,13 @@
 # test-umbrella-parse-args.sh
 
-**Purpose**: regression harness for `.claude/skills/umbrella/scripts/parse-args.sh`. Pins the stdout grammar (`LABELS_COUNT` + indexed `LABEL_<i>`, `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN`, `GO`, `DEBUG`, `TASK`, `UMBRELLA_TMPDIR`), the frozen `ERROR=` template list, the quoting subset (single quotes, double quotes with `\"`/`\\`/`\$` escapes, outside-quote backslash escapes, space/tab/newline as unquoted separators), and the TASK byte-preservation contract documented in `parse-args.md` so downstream parsers (`SKILL.md` Step 0 + `/issue` forwarding prose in Steps 3A / 3B.2 / 3B.3) don't silently break on unrelated edits.
+**Purpose**: regression harness for `.claude/skills/umbrella/scripts/parse-args.sh`. Pins the stdout grammar (`LABELS_COUNT` + indexed `LABEL_<i>`, `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN`, `GO`, `DEBUG`, `INPUT_FILE`, `UMBRELLA_SUMMARY_FILE`, `TASK`, `UMBRELLA_TMPDIR`), the frozen `ERROR=` template list, the quoting subset (single quotes, double quotes with `\"`/`\\`/`\$` escapes, outside-quote backslash escapes, space/tab/newline as unquoted separators), the paired-flag and TASK-mutual-exclusion validation rules for `--input-file` / `--umbrella-summary-file`, and the TASK byte-preservation contract documented in `parse-args.md` so downstream parsers (`SKILL.md` Step 0 + `/issue` forwarding prose in Steps 3A / 3B.2 / 3B.3) don't silently break on unrelated edits.
+
+## Helpers
+
+- `run_parser` — runs the parser, captures stdout/stderr/exit code, removes the parser-owned `UMBRELLA_TMPDIR`, and `sed`-strips three lines from stdout: the `UMBRELLA_TMPDIR=...` line (always — non-deterministic across runs), the `INPUT_FILE=` line **only when its value is empty**, and the `UMBRELLA_SUMMARY_FILE=` line **only when its value is empty**. The empty-value strip preserves the byte-exact expected strings of the 25 pre-existing `assert_stdout` cases (which were authored before these flags existed) without churning every case body.
+- `assert_stdout LABEL ARGS EXPECTED` — asserts parser exits 0 and the stripped stdout equals EXPECTED. Used by all 25 pre-existing cases plus the cases that don't exercise the new flags.
+- `assert_raw_stdout_contains LABEL ARGS EXPECTED_LINE` — asserts parser exits 0 and the raw stdout (only `UMBRELLA_TMPDIR=` stripped, `INPUT_FILE=` / `UMBRELLA_SUMMARY_FILE=` preserved) contains EXPECTED_LINE as an exact full-line match. Used by new cases that verify the flag-emission KV lines.
+- `assert_error LABEL ARGS EXPECTED_SUBSTRING` — asserts parser exits non-zero and stderr contains EXPECTED_SUBSTRING.
 
 ## When to run
 
@@ -58,3 +65,10 @@ requires updating this harness in the same PR. Add new test cases before changin
 | 23 | Embedded newline in TASK → ERROR (post-Phase-2 guard; would break single-line KV grammar). |
 | 24 | Backslash-escaped newline in unquoted value → ERROR (distinct frozen template `embedded newline in unquoted value`; cases 18 and 25 carry the parallel `embedded newline in quoted value` template for genuinely quoted-value paths). |
 | 25 | Backslash-escaped newline INSIDE double-quoted value → ERROR (closes the double-quoted reader's `\\)` arm). |
+| 26 | Both `--input-file` AND `--umbrella-summary-file` set → `INPUT_FILE=<path>` emitted in raw stdout (assert_raw_stdout_contains). |
+| 26b | Both flags set → `UMBRELLA_SUMMARY_FILE=<path>` emitted in raw stdout (assert_raw_stdout_contains). |
+| 27 | Half-config: `--input-file` alone → ERROR `--input-file and --umbrella-summary-file must be passed together` (paired-flag validation). |
+| 28 | Half-config: `--umbrella-summary-file` alone → ERROR `--input-file and --umbrella-summary-file must be passed together` (symmetric direction of case 27). |
+| 29 | `--input-file` plus a positional TASK → ERROR `--input-file is mutually exclusive with positional TASK`. |
+| 30 | Missing value for `--input-file` → ERROR `--input-file requires a value` (frozen template). |
+| 31 | Missing value for `--umbrella-summary-file` → ERROR `--umbrella-summary-file requires a value` (frozen template). |

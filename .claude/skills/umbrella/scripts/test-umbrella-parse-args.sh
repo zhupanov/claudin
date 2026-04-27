@@ -2,9 +2,11 @@
 # test-umbrella-parse-args.sh — regression harness for /umbrella's parse-args.sh.
 #
 # Pins the stdout grammar (LABELS_COUNT + LABEL_<i>, TITLE_PREFIX, REPO,
-# CLOSED_WINDOW_DAYS, DRY_RUN, GO, DEBUG, TASK, UMBRELLA_TMPDIR), the frozen
-# ERROR= templates, the quoting subset, and TASK byte-preservation contract
-# documented in scripts/parse-args.md.
+# CLOSED_WINDOW_DAYS, DRY_RUN, GO, DEBUG, INPUT_FILE, UMBRELLA_SUMMARY_FILE,
+# TASK, UMBRELLA_TMPDIR), the frozen ERROR= templates, the quoting subset,
+# the paired-flag and TASK-mutual-exclusion validation rules for --input-file
+# / --umbrella-summary-file, and the TASK byte-preservation contract documented
+# in scripts/parse-args.md.
 #
 # Run manually:
 #   bash .claude/skills/umbrella/scripts/test-umbrella-parse-args.sh
