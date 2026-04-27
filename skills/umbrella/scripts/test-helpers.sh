@@ -1077,5 +1077,122 @@ unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_1 STUB_PROBE_RC_
 }
 
 echo ""
+echo "test-helpers.sh: Bash 3.2 portability guard (issue #744)"
+
+# Static guard: helpers.sh must not contain Bash 4+ constructs (declare -A,
+# mapfile, ${VAR,,} lowercasing). Mirrors test-allocate-candidates.sh Test 21
+# including the comment-line filter so explanatory comments mentioning the
+# banned constructs do not false-positive CI.
+{
+  HITS=$(grep -nE 'declare -A|mapfile|\$\{[A-Z_]+,,\}' "$HELPERS" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+  if [ -z "$HITS" ]; then
+    printf '  ✅ helpers.sh has no Bash 4+ constructs (comment lines excluded)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ helpers.sh contains Bash 4+ constructs (excluding comment lines):\n%s\n' "$HITS"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+echo ""
+echo "test-helpers.sh: wire-dag Bash 3.2-safe cache regressions (issue #744)"
+
+# (u) Warn-once invariant: when blocked_by lookup fails for node 99, exactly
+#     one stderr "wire-dag blocked_by lookup failed for #99" line appears per
+#     run regardless of how many EDGES_FILE rows mention node 99. BFS seen-set
+#     dedups at enqueue time so node 99 is looked up exactly once even when
+#     it appears as an endpoint in multiple EDGES_FILE rows; this test pins
+#     that behavior under the new colon-string seen-set.
+{
+  u_children="$TMP/children-u.tsv"
+  u_edges="$TMP/edges-u.tsv"
+  u_out="$TMP/wire-out-u"
+  u_err="$TMP/wire-err-u"
+  printf '20\tchild-u\thttp://x\n' > "$u_children"
+  # Node 99 appears as both blocker and blocked across multiple rows.
+  printf '99\t20\n' > "$u_edges"
+  printf '99\t30\n' >> "$u_edges"
+  printf '40\t99\n' >> "$u_edges"
+  unset STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_30 STUB_BLOCKED_BY_40 STUB_BLOCKED_BY_99
+  export STUB_BLOCKED_BY_99_RC=22  # transient gh failure for node 99
+  export STUB_BLOCKED_BY_20=""
+  export STUB_BLOCKED_BY_30=""
+  export STUB_BLOCKED_BY_40=""
+  export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+  export STUB_POST_RC=0
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$u_children" --edges-file "$u_edges" \
+    --repo o/r > "$u_out" 2> "$u_err" || true
+  warn_lines=$(grep -c 'wire-dag blocked_by lookup failed for #99' "$u_err" || true)
+  if [ "$warn_lines" = "1" ]; then
+    printf '  ✅ warn-once invariant: exactly one stderr line for #99 across multiple EDGES_FILE references\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ warn-once invariant: expected 1 stderr line for #99, got %s\n     stderr:\n' "$warn_lines"
+    sed 's/^/       /' "$u_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_BLOCKED_BY_99_RC STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_30 STUB_BLOCKED_BY_40
+}
+
+# (v) Delimiter-collision: nodes 1 and 11 with distinct stub outcomes must
+#     not bleed into each other through the colon-string membership tests.
+#     A buggy bbc_set or seen-set that produced colliding markers would let
+#     node 1 incorrectly inherit node 11's cache state (or vice versa).
+#     Pins both negative AND positive cases (issue #744 FINDING_10).
+{
+  v_children="$TMP/children-v.tsv"
+  v_edges="$TMP/edges-v.tsv"
+  v_out="$TMP/wire-out-v"
+  v_err="$TMP/wire-err-v"
+  v_existing="$TMP/existing-edges-v.tsv"
+  : > "$v_existing"
+  printf '1\tchild-v-one\thttp://x\n' > "$v_children"
+  printf '11\tchild-v-eleven\thttp://x\n' >> "$v_children"
+  : > "$v_edges"
+  unset STUB_BLOCKED_BY_1 STUB_BLOCKED_BY_11
+  # Node 1: zero blockers (empty blocked_by). Node 11: blocker 100.
+  export STUB_BLOCKED_BY_1=""
+  export STUB_BLOCKED_BY_11="100"
+  export STUB_BLOCKED_BY_100=""
+  export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+  export STUB_POST_RC=0
+  # Use TMPDIR override so populate writes existing-edges to a known path.
+  PATH="$STUB_BIN:$PATH" TMPDIR="$TMP/v-run" bash -c '
+    mkdir -p "$TMPDIR"
+    '"bash \"$HELPERS\""' wire-dag \
+      --tmpdir "$TMPDIR" --umbrella 1 --umbrella-title "T" \
+      --children-file "'"$v_children"'" --edges-file "'"$v_edges"'" \
+      --repo o/r
+  ' > "$v_out" 2> "$v_err" || true
+  ok=1
+  # Node 1 had zero blockers → no row in existing-edges with 1 as the blocked
+  # endpoint should exist. Node 11 had blocker 100 → row "100\t11" must exist.
+  populate_tsv="$TMP/v-run/existing-edges.tsv"
+  if [ -f "$populate_tsv" ]; then
+    grep -qE '^100	11$' "$populate_tsv" || ok=0
+    # Node 1 did NOT appear as a blocked endpoint anywhere; assert no row
+    # ending with `\t1` (separator-anchored to avoid matching `\t11`).
+    if grep -qE '	1$' "$populate_tsv"; then
+      ok=0
+    fi
+  else
+    ok=0
+  fi
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ delimiter-collision: nodes 1 and 11 cache state stays separate (positive + negative cases)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ delimiter-collision: node 1 and node 11 cache state mixed\n     populate tsv (%s):\n' "$populate_tsv"
+    [ -f "$populate_tsv" ] && sed 's/^/       /' "$populate_tsv"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$v_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_BLOCKED_BY_1 STUB_BLOCKED_BY_11 STUB_BLOCKED_BY_100
+}
+
+echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -293,18 +293,109 @@ case "$SUBCMD" in
     # may have already flipped it to 1 (one-time-per-run guard, issue #720
     # FINDING_6).
 
-    # Per-run cache mapping blocker display number -> blocker internal numeric id.
+    # Per-run caches for wire-dag (Bash 3.2-safe storage; issue #744).
+    #
+    # Bash 3.2 (stock macOS /bin/bash) does not support `declare -A`, so caches
+    # use parallel-array + colon-delimited present-string primitives matching
+    # skills/issue/scripts/allocate-candidates.sh. Cross-skill portability
+    # invariant; static-guard backstop in test-helpers.sh.
+    #
+    # BLOCKER_ID_CACHE: blocker display number -> blocker internal numeric id.
     # The GitHub Issue Dependencies POST body requires `issue_id` (internal id),
     # not `issue_number` (display number) — see add-blocked-by.sh:170.
-    declare -A BLOCKER_ID_CACHE 2>/dev/null || true
+    BIC_KEYS=()
+    BIC_VALS=()
 
-    # Per-run cache for blocked_by lookups (issue #718). Key: node display number;
-    # value: space-separated blocker numbers, OR the literal sentinel "_GH_FAIL_"
-    # when the lookup transiently failed.
-    declare -A BLOCKED_BY_CACHE 2>/dev/null || true
+    # BLOCKED_BY_CACHE (issue #718): node display number -> space-separated
+    # blocker numbers, the literal sentinel "_GH_FAIL_" on transient lookup
+    # failure, or empty on successful zero-blocker lookup. BBC_PRESENT records
+    # `+x`-style presence: presence is true even when the stored value is empty
+    # so a successful zero-blocker lookup does not re-fire on cache hit.
+    BBC_KEYS=()
+    BBC_VALS=()
+    BBC_PRESENT=":"
 
-    # Per-node lookup-failure flag: suppresses repeat warnings on cache reuse.
-    declare -A _WD_LOOKUP_FAILED 2>/dev/null || true
+    # _WD_LOOKUP_FAILED: per-node warn-once flag for transient blocked_by
+    # failures (membership-only).
+    WDL_PRESENT=":"
+
+    # bic_get key  -> echoes stored value (empty if not cached or empty value).
+    # bic_set key value  -> replace-on-duplicate-key; preserves associative-array
+    #                       assignment semantics (issue #744 FINDING_4).
+    bic_get() {
+      local k="$1" i=0
+      while [ "$i" -lt "${#BIC_KEYS[@]}" ]; do
+        if [ "${BIC_KEYS[$i]:-}" = "$k" ]; then
+          printf '%s' "${BIC_VALS[$i]:-}"
+          return 0
+        fi
+        i=$((i + 1))
+      done
+      printf ''
+    }
+    bic_set() {
+      local k="$1" v="$2" i=0
+      while [ "$i" -lt "${#BIC_KEYS[@]}" ]; do
+        if [ "${BIC_KEYS[$i]:-}" = "$k" ]; then
+          BIC_VALS[i]="$v"
+          return 0
+        fi
+        i=$((i + 1))
+      done
+      BIC_KEYS+=("$k")
+      BIC_VALS+=("$v")
+    }
+
+    # bbc_has key  -> 0 if key recorded (any value, including empty), else 1.
+    # bbc_get key  -> echoes stored value (empty for both not-recorded AND
+    #                 empty-value-recorded; callers must use bbc_has to disambiguate).
+    # bbc_set key value  -> records presence in BBC_PRESENT AND stores value
+    #                       unconditionally, including empty/sentinel values
+    #                       (issue #744 FINDING_5).
+    bbc_has() {
+      case "$BBC_PRESENT" in
+        *:"$1":*) return 0 ;;
+        *)        return 1 ;;
+      esac
+    }
+    bbc_get() {
+      local k="$1" i=0
+      while [ "$i" -lt "${#BBC_KEYS[@]}" ]; do
+        if [ "${BBC_KEYS[$i]:-}" = "$k" ]; then
+          printf '%s' "${BBC_VALS[$i]:-}"
+          return 0
+        fi
+        i=$((i + 1))
+      done
+      printf ''
+    }
+    bbc_set() {
+      local k="$1" v="$2" i=0
+      while [ "$i" -lt "${#BBC_KEYS[@]}" ]; do
+        if [ "${BBC_KEYS[$i]:-}" = "$k" ]; then
+          BBC_VALS[i]="$v"
+          return 0
+        fi
+        i=$((i + 1))
+      done
+      BBC_KEYS+=("$k")
+      BBC_VALS+=("$v")
+      BBC_PRESENT="${BBC_PRESENT}${k}:"
+    }
+
+    # wdl_marked key  -> 0 if marked, else 1.
+    # wdl_mark key    -> idempotent set-marker.
+    wdl_marked() {
+      case "$WDL_PRESENT" in
+        *:"$1":*) return 0 ;;
+        *)        return 1 ;;
+      esac
+    }
+    wdl_mark() {
+      if ! wdl_marked "$1"; then
+        WDL_PRESENT="${WDL_PRESENT}$1:"
+      fi
+    }
 
     # Set when the transitive traversal hit WIRE_DAG_TRAVERSAL_NODE_CAP. When 1,
     # the per-edge cycle-check loop routes any CYCLE=false candidate to
@@ -377,8 +468,9 @@ case "$SUBCMD" in
     # individual-API-blip fail-open posture).
     _wd_blocked_by_lookup() {
       local node="$1"
-      if [ -n "${BLOCKED_BY_CACHE[$node]+x}" ]; then
-        local cached="${BLOCKED_BY_CACHE[$node]}"
+      if bbc_has "$node"; then
+        local cached
+        cached=$(bbc_get "$node")
         if [ "$cached" = "_GH_FAIL_" ]; then
           printf ''
         else
@@ -392,21 +484,21 @@ case "$SUBCMD" in
       rc=$?
       set -e
       if [ "$rc" -ne 0 ]; then
-        BLOCKED_BY_CACHE[$node]="_GH_FAIL_"
-        if [ -z "${_WD_LOOKUP_FAILED[$node]+x}" ]; then
-          _WD_LOOKUP_FAILED[$node]=1
+        bbc_set "$node" "_GH_FAIL_"
+        if ! wdl_marked "$node"; then
+          wdl_mark "$node"
           echo "**⚠ /umbrella: wire-dag blocked_by lookup failed for #${node} — treating as no edges**" >&2
         fi
         printf ''
         return 0
       fi
       # Convert newline-delimited gh output to a space-separated string suitable
-      # for unquoted iteration via `for b in ${BLOCKED_BY_CACHE[$node]}` (per
-      # FINDING_1 — pinning the capture/iterate mechanism explicitly).
+      # for unquoted iteration via `for b in $(bbc_get $node)` (per FINDING_1 —
+      # pinning the capture/iterate mechanism explicitly).
       local flat
       flat=$(printf '%s' "$raw" | tr '\n' ' ')
       flat="${flat% }"
-      BLOCKED_BY_CACHE[$node]="$flat"
+      bbc_set "$node" "$flat"
       printf '%s' "$flat"
     }
 
@@ -418,11 +510,12 @@ case "$SUBCMD" in
     # Invariant (FINDING_3): when dequeuing `node`, for every blocker `b`
     # returned by _wd_blocked_by_lookup(node):
     #   (a) ALWAYS append `b\tnode` to the TSV regardless of seen-set state,
-    #   (b) only mark seen and enqueue `b` if not yet in _seen_set.
+    #   (b) only mark seen and enqueue `b` if not yet in _seen.
     # The seen-set guards re-querying only — it MUST NOT short-circuit append.
     _wd_populate_existing_edges_transitively() {
       local existing_tsv="$1"
-      declare -A _seen_set 2>/dev/null || true
+      # Bash 3.2-safe seen-set: colon-delimited present-string (issue #744).
+      local _seen=":"
       local queue=()
       local distinct_count=0
       local start_ts="$SECONDS"
@@ -430,22 +523,28 @@ case "$SUBCMD" in
       # Seed from CHILDREN_FILE (one issue per line, tab-separated columns).
       while IFS=$'\t' read -r child_num _title _url; do
         [ -z "$child_num" ] && continue
-        if [ -z "${_seen_set[$child_num]+x}" ]; then
-          _seen_set[$child_num]=1
-          queue+=("$child_num")
-          distinct_count=$((distinct_count + 1))
-        fi
+        case "$_seen" in
+          *:"$child_num":*) ;;
+          *)
+            _seen="${_seen}${child_num}:"
+            queue+=("$child_num")
+            distinct_count=$((distinct_count + 1))
+            ;;
+        esac
       done < "$CHILDREN_FILE"
 
       # Seed from EDGES_FILE endpoints (both blocker AND blocked).
       while IFS=$'\t' read -r blocker blocked; do
         [ -z "$blocker" ] || [ -z "$blocked" ] && continue
         for endpoint in "$blocker" "$blocked"; do
-          if [ -z "${_seen_set[$endpoint]+x}" ]; then
-            _seen_set[$endpoint]=1
-            queue+=("$endpoint")
-            distinct_count=$((distinct_count + 1))
-          fi
+          case "$_seen" in
+            *:"$endpoint":*) ;;
+            *)
+              _seen="${_seen}${endpoint}:"
+              queue+=("$endpoint")
+              distinct_count=$((distinct_count + 1))
+              ;;
+          esac
         done
       done < "$EDGES_FILE"
 
@@ -469,17 +568,20 @@ case "$SUBCMD" in
           [ -z "$b" ] && continue
           # Append unconditionally (FINDING_3).
           printf '%s\t%s\n' "$b" "$node" >> "$existing_tsv"
-          if [ -z "${_seen_set[$b]+x}" ]; then
-            _seen_set[$b]=1
-            distinct_count=$((distinct_count + 1))
-            if [ "$distinct_count" -gt "$WD_NODE_CAP" ]; then
-              _wd_traversal_truncated=1
-              local elapsed=$((SECONDS - start_ts))
-              echo "**⚠ /umbrella: wire-dag traversal cap reached (cap=${WD_NODE_CAP}, queue=${#queue[@]}, elapsed=${elapsed}s) — pending candidates will fail closed**" >&2
-              return 0
-            fi
-            queue+=("$b")
-          fi
+          case "$_seen" in
+            *:"$b":*) ;;
+            *)
+              _seen="${_seen}${b}:"
+              distinct_count=$((distinct_count + 1))
+              if [ "$distinct_count" -gt "$WD_NODE_CAP" ]; then
+                _wd_traversal_truncated=1
+                local elapsed=$((SECONDS - start_ts))
+                echo "**⚠ /umbrella: wire-dag traversal cap reached (cap=${WD_NODE_CAP}, queue=${#queue[@]}, elapsed=${elapsed}s) — pending candidates will fail closed**" >&2
+                return 0
+              fi
+              queue+=("$b")
+              ;;
+          esac
         done
       done
     }
@@ -519,7 +621,7 @@ case "$SUBCMD" in
         # Dependencies POST body shape is {"issue_id": <id>}, NOT issue_number
         # — see add-blocked-by.sh:170. The previous shape silently 422'd here
         # and the ambiguous failure was bucketed as "API unavailable" (#720).
-        blocker_id="${BLOCKER_ID_CACHE[$blocker]:-}"
+        blocker_id=$(bic_get "$blocker")
         if [ -z "$blocker_id" ]; then
           set +e
           blocker_id=$(gh api "/repos/$REPO/issues/$blocker" --jq '.id' 2>/dev/null)
@@ -530,7 +632,7 @@ case "$SUBCMD" in
             emit_edge_failure_warning "$blocker" "$blocked" "id-lookup" "blocker-id resolution failed for #$blocker"
             continue
           fi
-          BLOCKER_ID_CACHE[$blocker]="$blocker_id"
+          bic_set "$blocker" "$blocker_id"
         fi
 
         # POST {"issue_id": <id>} with -i so we can classify by HTTP status.
