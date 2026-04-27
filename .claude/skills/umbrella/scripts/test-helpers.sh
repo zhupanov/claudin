@@ -95,7 +95,15 @@ cat > "$GH_STUB" <<'STUB'
 #   STUB_BLOCKER_ID_RC          — exit code for blocker-id lookup (default: 0)
 #   STUB_POST_RESPONSE          — full -i blob to print on stdout for the POST
 #   STUB_POST_RC                — exit code for the POST (default: 0)
-#   STUB_EXISTING_BLOCKERS      — value to print for existing-edges lookup (per child)
+#   STUB_EXISTING_BLOCKERS      — legacy global default for blocked_by lookups
+#                                 (used when STUB_BLOCKED_BY_<N> is unset)
+#   STUB_BLOCKED_BY_<N>         — per-node response for the blocked_by lookup of
+#                                 issue number N (issue #718). Empty string is
+#                                 a distinct response from "unset"; unset falls
+#                                 through to STUB_EXISTING_BLOCKERS.
+#   STUB_BLOCKED_BY_<N>_RC      — per-node exit code for the blocked_by lookup
+#                                 (default: 0). Non-zero simulates a transient
+#                                 gh failure for that node.
 #   STUB_NATIVE_CHECK_RESPONSE  — value to print for the native blocked_by check (back-link branch)
 set -e
 case "$1 $2" in
@@ -117,7 +125,25 @@ case "$1 $2" in
       # Distinguish existing-edges lookup from native-check by argv flavor.
       for arg in "$@"; do
         if [ "$arg" = ".[].number" ]; then
-          printf '%s' "${STUB_EXISTING_BLOCKERS:-}"
+          # Per-node dispatch (issue #718): extract issue number from the URL
+          # path and look up STUB_BLOCKED_BY_<N>. Falls through to legacy
+          # STUB_EXISTING_BLOCKERS when the per-node var is unset.
+          node="${2#*/issues/}"
+          node="${node%/dependencies/blocked_by}"
+          rc_var="STUB_BLOCKED_BY_${node}_RC"
+          if declare -p "$rc_var" >/dev/null 2>&1; then
+            eval "rc=\${$rc_var}"
+            [ "$rc" -ne 0 ] && exit "$rc"
+          fi
+          var_name="STUB_BLOCKED_BY_${node}"
+          if declare -p "$var_name" >/dev/null 2>&1; then
+            eval "value=\${$var_name}"
+            # Convert space-separated multi-blocker lists to newline-separated
+            # so production --jq '.[].number' output shape matches.
+            printf '%s' "$value" | tr ' ' '\n'
+          else
+            printf '%s' "${STUB_EXISTING_BLOCKERS:-}"
+          fi
           exit 0
         fi
       done
@@ -273,6 +299,146 @@ else
 fi
 export STUB_BLOCKER_ID=999001
 export STUB_BLOCKER_ID_RC=0
+
+echo ""
+echo "test-helpers.sh: check-cycle non-child-intermediary regression (issue #718)"
+
+# Pure check-cycle pin: a cycle that closes through a non-child intermediary
+# is detectable by the awk BFS as long as the TSV captures the relevant edges.
+# Existing edges 10->30 and 30->20; candidate 20->10 closes the cycle through
+# the intermediate node 30. This pins the awk invariant the wire-dag fix
+# relies on for the issue #718 repro.
+assert_cycle "non-child intermediary cycle (#718)" $'10\t30\n30\t20\n' "20:10" "true"
+
+echo ""
+echo "test-helpers.sh: wire-dag transitive-closure regressions (issue #718)"
+
+# Reset stub to clean state. Crucially, clear STUB_EXISTING_BLOCKERS so the
+# per-node fall-through doesn't accidentally inject phantom edges from earlier
+# tests' global default.
+unset STUB_EXISTING_BLOCKERS
+export STUB_PROBE_RC=0
+export STUB_BLOCKER_ID=999001
+export STUB_BLOCKER_ID_RC=0
+export STUB_NATIVE_CHECK_RESPONSE=""
+export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+export STUB_POST_RC=0
+
+# (m) Non-child-intermediary cycle: candidate 21->20 (child_B blocks child_A).
+#     Existing graph: 50 blocks 21 (so 21's blocked_by includes 50),
+#                     20 blocks 50 (so 50's blocked_by includes 20).
+#     BFS seed: {20, 21} from CHILDREN_FILE; EDGES_FILE adds {21, 20} (already in).
+#     Dequeue 20: STUB_BLOCKED_BY_20="" → no rows.
+#     Dequeue 21: STUB_BLOCKED_BY_21="50" → row "50\t21". Enqueue 50.
+#     Dequeue 50: STUB_BLOCKED_BY_50="20" → row "20\t50". 20 already seen.
+#     Final TSV: 50\t21, 20\t50.
+#     check-cycle from 20 (cand_blocked) follows edges[20]=50, edges[50]=21
+#     reaches 21 (cand_blocker) → CYCLE=true. Assert EDGES_REJECTED_CYCLE=1.
+{
+  m_children="$TMP/children-m.tsv"
+  m_edges="$TMP/edges-m.tsv"
+  m_out="$TMP/wire-out-m"
+  m_err="$TMP/wire-err-m"
+  printf '20\tchild_A\thttp://x\n21\tchild_B\thttp://x\n' > "$m_children"
+  printf '21\t20\n' > "$m_edges"
+  unset STUB_BLOCKED_BY_20
+  unset STUB_BLOCKED_BY_21
+  unset STUB_BLOCKED_BY_50
+  export STUB_BLOCKED_BY_20=""
+  export STUB_BLOCKED_BY_21="50"
+  export STUB_BLOCKED_BY_50="20"
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$m_children" --edges-file "$m_edges" \
+    --repo o/r > "$m_out" 2> "$m_err" || true
+  if grep -qE 'EDGES_REJECTED_CYCLE=1' "$m_out" && grep -qE 'EDGES_ADDED=0' "$m_out"; then
+    printf '  ✅ non-child intermediary cycle rejected (#718)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ non-child intermediary cycle not rejected\n     stdout:\n'
+    sed 's/^/       /' "$m_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$m_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_21 STUB_BLOCKED_BY_50
+}
+
+# (n) Bound exhaustion: tiny cap forces _wd_traversal_truncated=1, then the
+#     per-edge cycle-check loop routes the candidate to EDGES_FAILED with
+#     reason "bound-exhausted" (DECISION_1, voted 3-0).
+{
+  n_children="$TMP/children-n.tsv"
+  n_edges="$TMP/edges-n.tsv"
+  n_out="$TMP/wire-out-n"
+  n_err="$TMP/wire-err-n"
+  printf '20\tsome-child\thttp://x\n' > "$n_children"
+  printf '10\t20\n' > "$n_edges"
+  unset STUB_BLOCKED_BY_10 STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_100
+  # Cap=2 with seeds {10, 20}: after dequeuing 20 and discovering blocker 100,
+  # distinct_count=3 > cap=2 → truncate.
+  export WIRE_DAG_TRAVERSAL_NODE_CAP=2
+  export STUB_BLOCKED_BY_20="100"
+  export STUB_BLOCKED_BY_10=""
+  export STUB_BLOCKED_BY_100="200"
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$n_children" --edges-file "$n_edges" \
+    --repo o/r > "$n_out" 2> "$n_err" || true
+  ok=1
+  grep -qE 'EDGES_FAILED=1' "$n_out" || ok=0
+  grep -q 'wire-dag traversal cap reached' "$n_err" || ok=0
+  grep -q 'wire-dag edge 10->20 failed (HTTP bound-exhausted)' "$n_err" || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ bound exhaustion → EDGES_FAILED with bound-exhausted reason\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ bound exhaustion did not fail closed correctly\n     stdout:\n'
+    sed 's/^/       /' "$n_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$n_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset WIRE_DAG_TRAVERSAL_NODE_CAP STUB_BLOCKED_BY_10 STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_100
+}
+
+# (o) Transient gh failure on a single node's blocked_by lookup: cached as
+#     _GH_FAIL_, one-time stderr warning emitted, treated as "no edges" for
+#     the rest of the run. EDGES_FAILED does NOT increment for the lookup
+#     failure (residual fail-open per FINDING_5 EXONERATE — preserves the
+#     existing individual-API-blip fail-open posture).
+{
+  o_children="$TMP/children-o.tsv"
+  o_edges="$TMP/edges-o.tsv"
+  o_out="$TMP/wire-out-o"
+  o_err="$TMP/wire-err-o"
+  printf '20\tsome-child\thttp://x\n' > "$o_children"
+  printf '10\t20\n' > "$o_edges"
+  unset STUB_BLOCKED_BY_10 STUB_BLOCKED_BY_20
+  export STUB_BLOCKED_BY_20_RC=22
+  export STUB_BLOCKED_BY_10=""
+  export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+  export STUB_POST_RC=0
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$o_children" --edges-file "$o_edges" \
+    --repo o/r > "$o_out" 2> "$o_err" || true
+  ok=1
+  grep -qE 'EDGES_ADDED=1' "$o_out" || ok=0
+  grep -qE 'EDGES_FAILED=0' "$o_out" || ok=0
+  grep -q 'wire-dag blocked_by lookup failed for #20' "$o_err" || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ transient blocked_by lookup failure → fail-open with one-time warning\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ transient lookup failure did not behave as expected\n     stdout:\n'
+    sed 's/^/       /' "$o_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$o_err"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_BLOCKED_BY_20_RC STUB_BLOCKED_BY_10
+}
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
