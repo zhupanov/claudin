@@ -363,9 +363,10 @@ printf '%s\n' "$FINDINGS_TRIMMED" | awk -v items_path="$ITEMS_FILE" -v count_pat
         next
       }
     }
-    # Post-flush re-init: after a #### or paragraph blank-line flush, current is
-    # empty but mode/base_indent may be stale from a prior block. Always treat
-    # the first list marker after such a flush as a fresh top-level item.
+    # Post-flush re-init: after a `#### Subquestion <N>` planner-organizer flush
+    # or a paragraph blank-line flush, current is empty but mode/base_indent
+    # may be stale from a prior block. Always treat the first list marker after
+    # such a flush as a fresh top-level item.
     if (current == "" && (is_numbered || is_bulleted)) {
       current = line
       mode = is_numbered ? "numbered" : "bulleted"
