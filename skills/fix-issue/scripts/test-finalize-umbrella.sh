@@ -5,20 +5,31 @@
 # `finalize` subcommand's idempotency guard (FINDING_2) and the rename →
 # close composition.
 #
-# Fixtures cover:
+# Fixtures cover (every fixture asserts exit code AND stderr behavior in
+# addition to the stdout key/value substring matches; see the helper set
+# `assert_eq_exit` / `assert_stderr_contains` / `assert_stderr_empty` and
+# the `run_script_capture` runner below):
 #   1. finalize-success — open umbrella, no marker comment → executes rename
-#      + close, emits FINALIZED=true RENAMED=true CLOSED=true.
-#   2. idempotent-when-marker-comment-exists (FINDING_2) — comment stream
-#      contains the literal marker, even though state=OPEN and title has no
-#      [DONE] prefix → emits FINALIZED=false ALREADY_FINALIZED=true REASON=
-#      existing closing-comment marker detected.
-#   3. idempotent-when-already-DONE-prefix — title starts with "[DONE] " →
-#      same idempotent emission.
-#   4. idempotent-when-already-CLOSED — state=CLOSED → same idempotent
-#      emission (regardless of title or comments).
-#   5. rename-failed-but-close-success — best-effort rename invariant: rename
-#      delegate fails, but close succeeds. FINALIZED=true RENAMED=false
-#      CLOSED=true; stderr WARNING surfaces the rename failure.
+#      + close. Exit 0; stdout FINALIZED=true RENAMED=true CLOSED=true;
+#      stderr empty.
+#   2. marker-present + state=OPEN (close-only retry, FINDING_3) — comment
+#      stream contains the literal marker, but state=OPEN means a prior
+#      attempt's close did not complete. Skip the comment-post step (avoid
+#      double-comment under concurrency) but DRIVE the close. Exit 0;
+#      stdout FINALIZED=true CLOSED=true and explicitly NOT
+#      ALREADY_FINALIZED=true; stderr empty.
+#   3. [DONE]-title + state=OPEN (close-only retry, skip rename) — title
+#      already starts with the managed prefix `[DONE] ` but state=OPEN
+#      means a prior attempt's close did not complete. Skip the rename API
+#      call but DRIVE the close. Exit 0; stdout FINALIZED=true RENAMED=false
+#      CLOSED=true and explicitly NOT ALREADY_FINALIZED=true; stderr empty.
+#   4. idempotent-when-already-CLOSED — state=CLOSED → strict short-circuit.
+#      Exit 0; stdout ALREADY_FINALIZED=true REASON=already CLOSED;
+#      stderr empty.
+#   5. rename-failed-but-close-success — best-effort rename invariant:
+#      rename delegate fails, but close succeeds. Exit 0; stdout
+#      FINALIZED=true RENAMED=false CLOSED=true; stderr contains the literal
+#      `WARNING: title rename to [DONE] failed`.
 #
 # Run manually:
 #   bash skills/fix-issue/scripts/test-finalize-umbrella.sh
@@ -206,8 +217,12 @@ run_script_capture() {
     # Runs the script under test capturing stdout, stderr, and exit code
     # separately into the caller's OUT / ERR / EC variables. Resilient to
     # set -e: the invocation tolerates non-zero exits via `|| EC=$?`.
+    # Canonical pairing is run_fixture (which creates $fixture_dir under
+    # $TMPROOT) followed by run_script_capture; the mkdir -p below is
+    # defensive in case a future fixture is added without that pairing.
     local fixture_dir="$1"
     shift
+    mkdir -p "$fixture_dir"
     local out_file="$fixture_dir/stdout.txt"
     local err_file="$fixture_dir/stderr.txt"
     EC=0
@@ -285,6 +300,7 @@ run_fixture "fixture-4"
 run_script_capture "$TMPROOT/fixture-4" finalize --issue 100
 assert_eq_exit 0 "$EC" "[4] exit 0 on already-CLOSED short-circuit"
 assert_stderr_empty "$ERR" "[4] stderr empty on already-CLOSED short-circuit"
+assert_contains "$OUT" "FINALIZED=false" "[4] FINALIZED=false on CLOSED short-circuit"
 assert_contains "$OUT" "ALREADY_FINALIZED=true" "[4] ALREADY_FINALIZED=true"
 assert_contains "$OUT" "already CLOSED" "[4] REASON identifies CLOSED state"
 
