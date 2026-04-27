@@ -158,6 +158,48 @@ assert_invalid_title() {
   PASS=$((PASS + 1))
 }
 
+# assert_unwritable_tmpdir — feed a valid pieces.json but point --tmpdir at a
+# directory whose write bit is cleared, and verify the script rejects it BEFORE
+# any redirect under $TMPDIR (which would otherwise produce a raw bash
+# "Permission denied" on `2>"$JQ_PARSE_ERR"` or `: > "$OUT"` and break the
+# documented `ERROR=... + exit 1` grammar). Mirrors the existing
+# render-umbrella-body.sh:28-30 guard. The cleanup must restore the writable
+# mode so the outer trap's `rm -rf "$TMP"` succeeds.
+assert_unwritable_tmpdir() {
+  local label="$1"
+  local sub="$TMP/unwritable-sub"
+  mkdir -p "$sub"
+  local pieces="$sub/pieces.json"
+  cat > "$pieces" <<'EOF'
+[
+  {"title": "First piece", "body": "First body content.", "depends_on": []},
+  {"title": "Second piece", "body": "Second body content.", "depends_on": [1]}
+]
+EOF
+  chmod 555 "$sub"
+  local stderr_file="$TMP/stderr.txt"
+  local exit_code=0
+  bash "$SCRIPT" --tmpdir "$sub" --pieces-file "$pieces" >/dev/null 2>"$stderr_file" || exit_code=$?
+  chmod 755 "$sub"
+
+  if [[ "$exit_code" -ne 1 ]]; then
+    printf '  ❌ %s — expected exit 1, got %d (stderr: %s)\n' \
+      "$label" "$exit_code" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  if ! grep -q '^ERROR=tmpdir not writable:' "$stderr_file"; then
+    printf '  ❌ %s — stderr missing "ERROR=tmpdir not writable:" line. Got: %s\n' \
+      "$label" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  printf '  ✅ %s — exit 1 + ERROR=tmpdir not writable: line present\n' "$label"
+  PASS=$((PASS + 1))
+}
+
 # assert_valid_baseline — feed valid 2-piece pieces.json and verify the script
 # succeeds (exit 0), prints BATCH_INPUT_FILE=, and writes the markdown output.
 # Confirms the new guard does not regress the happy path.
@@ -232,6 +274,12 @@ assert_invalid_depends_on "fractional depends_on" '[{"title":"a","body":"b","dep
 # into multiple physical stdout lines (closes #648). The JSON `\n` escape
 # materializes via jq -r as a real LF in the captured shell value.
 assert_invalid_title "embedded newline in title" '[{"title":"Multi\nline title","body":"b","depends_on":[]},{"title":"second","body":"c","depends_on":[]}]'
+
+# Unwritable --tmpdir: writability preflight must reject the directory BEFORE
+# any redirect under $TMPDIR (`2>"$JQ_PARSE_ERR"`, `: > "$OUT"`) produces a raw
+# bash "Permission denied" line that breaks the documented `ERROR=...` grammar
+# (closes #687). Same bug class as #645 on `render-umbrella-body.sh`.
+assert_unwritable_tmpdir "unwritable tmpdir"
 
 # Valid 2-piece baseline: confirms the new guard doesn't regress the happy path.
 assert_valid_baseline "valid 2-piece baseline"
