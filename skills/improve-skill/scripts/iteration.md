@@ -105,6 +105,10 @@ All `claude -p` child I/O stays in files under `$WORK_DIR` (via `invoke_claude_p
 
 **Minimum `claude` CLI version**: `--permission-mode bypassPermissions` is required CLI surface. Older `claude` binaries that do not recognize the flag fail-fast (subprocess returns non-zero, existing `dump_subprocess_diagnostics` captures stderr) — there is no silent corruption path. See `docs/installation-and-setup.md` for the documented minimum-version requirement.
 
+### Non-interactive `--auto` flag forwarding (issue #758)
+
+The primary `/larch:design` invocation (around the post-`/skill-judge` design phase) and the primary `/larch:im` invocation (im phase) both prepend `--auto` to the prompt. This is parallel to (and complements) the `bypassPermissions` mitigation above: `bypassPermissions` removes in-child *tool-permission* prompts, while `--auto` suppresses the in-child *`AskUserQuestion`* checkpoints that `/design` (Steps 1c, 1d, 3.5) and `/implement` would otherwise invoke when `auto_mode=false`. Without `--auto`, those checkpoints stall the non-interactive `claude -p` subprocess until the 3600s watchdog fires, wasting the iteration budget. The rescue re-invocation already passed `--auto`; the primary paths are now byte-parallel.
+
 ## Amended `/design` prompt — four-rule directive set
 
 The design phase emits four directive clauses (byte-parallel to pre-#273 driver.sh plus one new clause):

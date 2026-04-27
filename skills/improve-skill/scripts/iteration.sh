@@ -830,7 +830,7 @@ build_deficit_lines() {
 }
 
 {
-  printf '/larch:design Improve /%s at %s' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
+  printf '/larch:design --auto Improve /%s at %s' "${SKILL_NAME}" "${TARGET_SKILL_PATH}"
   if [[ "$KV_PARSE_STATUS" == "ok" && "$KV_GRADE_A" == "false" ]]; then
     printf ' focused on %s (the Non-A dimensions from this iteration'"'"'s /skill-judge).' "${KV_NON_A_DIMS}"
     printf '\n\nNon-A dimensions from this iteration'"'"'s /skill-judge: %s.\n' "${KV_NON_A_DIMS}"
@@ -925,7 +925,7 @@ IM_OUT="$WORK_DIR/iter-${ITER_NUM}-im.txt"
 # was passed to iteration.sh; default is to post per /implement's default-on
 # behavior (gated on Slack env vars).
 {
-  printf '/larch:im %s' "$NO_SLACK_FLAG"
+  printf '/larch:im --auto %s' "$NO_SLACK_FLAG"
   cat "$DESIGN_OUT"
 } > "$IM_PROMPT"
 
