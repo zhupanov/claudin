@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.14] - 2026-04-27
+
+### Changed
+
+- `scripts/ci-decide.sh` — bumped the rebase-count safety limit from 5 to 20 so /implement's CI+rebase+merge loop tolerates a much busier `main` before bailing on `BAIL_REASON=Too many rebases (...)`. Updated all three sites (header comment, the `-ge` guard at line 113, and the bail-reason text) in lock-step. The other safety limits (`iteration >= 50`, `fix_attempts >= 3`) are unchanged. Closes #799.
+
 ## [7.17.13] - 2026-04-27
 
 ### Fixed
