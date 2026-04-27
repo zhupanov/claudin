@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.7] - 2026-04-27
+
+### Fixed
+
+- `skills/skill-evolver/SKILL.md` — fixed the false-positive "filed as a single issue" message printed when `/umbrella`'s one-shot path deduplicates the would-be-new issue to an existing GitHub issue. The success branch now mutually-exclusively branches on `CHILDREN_CREATED=1` (filed) vs `CHILDREN_CREATED=0` AND `CHILDREN_DEDUPLICATED=1` (dedup'd), matching `/umbrella`'s own one-shot summary distinction at `skills/umbrella/SKILL.md:256`. The `created-eq-1` bypass case (where both counters can be `1` simultaneously) correctly falls into the filed branch. Updated the inline grammar reference and intro overview to mention dedup. Closes #771.
+
 ## [7.17.6] - 2026-04-27
 
 ### Changed
