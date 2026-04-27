@@ -174,7 +174,19 @@ case "$SUBCMD" in
       local flat redacted
       flat=$(printf '%s' "$raw" | tr '\n\r' '  ' | head -c 200)
       if [ -x "$REDACT_SCRIPT" ]; then
-        redacted=$(printf '%s' "$flat" | "$REDACT_SCRIPT" 2>/dev/null) || redacted="$flat"
+        if redacted=$(printf '%s' "$flat" | "$REDACT_SCRIPT" 2>/dev/null); then
+          : # success path
+        else
+          # Redactor exists but exited non-zero — fail closed: do NOT print the
+          # raw flattened body, which could leak secrets the redactor would
+          # have caught. Substitute a constant placeholder and warn once
+          # (issue #720 FINDING_4).
+          if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+            echo "**⚠ /umbrella: wire-dag — redact-secrets.sh exited non-zero; suppressing reason text for safety**" >&2
+            REDACT_FALLBACK_WARNED=1
+          fi
+          redacted="<REDACTION_FAILED>"
+        fi
       else
         if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
           echo "**⚠ /umbrella: wire-dag — redact-secrets.sh not found at $REDACT_SCRIPT; using inline-fallback scrub**" >&2
@@ -231,9 +243,15 @@ case "$SUBCMD" in
 
         # POST {"issue_id": <id>} with -i so we can classify by HTTP status.
         # Wrap in set +e/-e so gh's non-zero exit on >=400 does not abort.
+        # Stderr is dropped (NOT merged via 2>&1): gh may emit deprecation
+        # notices or auth-token warnings before the HTTP response, which would
+        # otherwise corrupt the first-line status parse and pollute body
+        # content scanned by the feature-missing fingerprint regex (issue #720
+        # FINDING_1). The non-zero exit on 4xx/5xx still propagates through
+        # the subshell exit status — set +e absorbs it.
         body_json=$(jq -nc --argjson id "$blocker_id" '{issue_id: $id}')
         set +e
-        resp=$(printf '%s' "$body_json" | gh api "/repos/$REPO/issues/${blocked}/dependencies/blocked_by" -X POST --input - -i 2>&1)
+        resp=$(printf '%s' "$body_json" | gh api "/repos/$REPO/issues/${blocked}/dependencies/blocked_by" -X POST --input - -i 2>/dev/null)
         set -e
 
         # Status from first line; body skips HTTP headers (split at first blank
