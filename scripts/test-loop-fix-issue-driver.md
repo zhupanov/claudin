@@ -4,7 +4,7 @@
 
 **Wired into**: `make lint` (via the `test-harnesses` aggregate) and the explicit `test-loop-fix-issue-driver` target.
 
-**Tier-1 vs Tier-2**: this script is Tier-1 (structural assertions only — file existence, contract-token grep, function definition presence). Tier-2 stub-shim integration tests using `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` are documented in `skills/loop-fix-issue/scripts/driver.md` as future work; they would require fixture stubs that emit canned `/fix-issue` stdout, which is more involved than the current PR's scope.
+**Tier-1 vs Tier-2**: this script is Tier-1 (structural assertions only — file existence, contract-token grep, function definition presence). Tier-2 stub-shim integration tests using `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` live in `scripts/test-loop-fix-issue-driver-behavior.sh` (also wired into `make lint`); that fixture exercises the live driver against canned NDJSON for the success, no-eligible-issues, and sentinel-mismatch paths, complementing the structural assertions here. The Tier-1 / Tier-2 split is documented from the driver side in `skills/loop-fix-issue/scripts/driver.md`'s `LARCH_LOOP_FIX_ISSUE_CLAUDE_OVERRIDE` paragraph.
 
 ## Assertions
 
