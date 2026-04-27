@@ -120,4 +120,4 @@ Runtime conformance of `helpers.sh emit-output` (KV grammar validation, duplicat
 
 ## Pattern reference
 
-Mirrors `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` (awk range extraction + literal-substring assertions + fail-fast). Path discovery uses umbrella-local style (`HERE=$(cd "$(dirname "$0")" && pwd)`) parallel to `test-umbrella-parse-args.sh`, not the `REPO_ROOT/../../..` math from `test-fix-issue-bail-detection.sh` (whose three-`..` segments do not reach the repo root from `skills/umbrella/scripts/`).
+Mirrors `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` (awk range extraction + literal-substring assertions + fail-fast). Path discovery uses umbrella-local style (`HERE=$(cd "$(dirname "$0")" && pwd)`) parallel to `test-umbrella-parse-args.sh`, resolving SKILL.md and helpers.md as `$HERE/../SKILL.md` and `$HERE/helpers.md` directly — not the `REPO_ROOT`-rooted lookup that `test-fix-issue-bail-detection.sh` performs against a fixed `skills/fix-issue/...` path.

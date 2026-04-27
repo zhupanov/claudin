@@ -35,10 +35,12 @@
 "Skill(larch:loop-review)",
 "Skill(larch:research)",
 "Skill(larch:review)",
+"Skill(larch:umbrella)",
 "Skill(loop-improve-skill)",
 "Skill(loop-review)",
 "Skill(research)",
-"Skill(review)"
+"Skill(review)",
+"Skill(umbrella)"
 ```
 
 Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, all `larch:`-prefixed entries sort **before** `Skill(loop-review)`, `Skill(research)`, and `Skill(review)` (whose first letters are `l`-then-`o`, `r`, and `r`). Sort the whole block with `sort -u` to verify if you extend it. This section reflects currently-documented Claude Code behavior; consult the upstream docs above if matching semantics change in a future release.

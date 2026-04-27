@@ -134,6 +134,12 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><code>[--debug] &lt;skill-name&gt;</code></td>
     </tr>
     <tr><td colspan="2">Evolve an existing larch skill by running <code>/research --scale=deep</code> against repo-local sibling skills and reputable external sources, then delegating any actionable findings to <code>/umbrella</code> (research-and-file-issues only — does not modify the target skill's files).</td></tr>
+    <tr><td colspan="2"><hr></td></tr>
+    <tr>
+      <td><a href="docs/skills.md#umbrella"><code>/umbrella</code></a></td>
+      <td><code>[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] &lt;task description or empty to deduce from context&gt;</code></td>
+    </tr>
+    <tr><td colspan="2">Plan-to-issues orchestrator: classifies a task description as one-shot or multi-piece, delegates GitHub issue creation to <code>/issue</code> (batch mode plus an umbrella tracking issue when multi-piece), and wires native blocked-by edges plus child→umbrella back-links. Typically invoked transitively by <code>/review --create-issues</code> and <code>/skill-evolver</code>.</td></tr>
   </tbody>
 </table>
 

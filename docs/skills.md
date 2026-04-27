@@ -16,6 +16,7 @@ Reference for every slash command shipped by the larch plugin. Each section belo
 - [`/research`](#research)
 - [`/review`](#review)
 - [`/simplify-skill`](#simplify-skill)
+- [`/umbrella`](#umbrella)
 
 ## `/alias`
 
@@ -175,3 +176,11 @@ Refactor an existing larch skill for stronger adherence to `skills/shared/skill-
 **Source**: [`skills/skill-evolver/SKILL.md`](../skills/skill-evolver/SKILL.md)
 
 Evolve an existing larch skill by researching concrete improvements and filing them as GitHub issues. Validates `<skill-name>` against `^[a-z][a-z0-9-]*$` and resolves it to `skills/<name>/SKILL.md` (plugin tree) or `.claude/skills/<name>/SKILL.md` (project-local fallback); aborts cleanly if the target does not exist. Then invokes `/research --scale=deep` with a templated prompt that asks the lane fan-out (5 research lanes + 5 validation lanes) to produce concrete actionable improvements with citations — repo-local sibling-skill comparisons via `file:line` references and reputable external sources (Anthropic / OpenAI / DeepMind / ≥500-star OSS) via URLs. If the research lane surfaces ≥1 actionable improvement, distills the findings into a task description and delegates to `/umbrella` with `--label evolved-by:skill-evolver --label skill:<name>` and `--title-prefix "[skill-evolver:<name>] "`. `/umbrella` runs its own one-shot-vs-multi-piece classifier on the distilled task description: multi-piece yields an umbrella tracking issue + one child per piece; one-shot yields a single issue (no umbrella). `/skill-evolver`'s `--label evolved-by:skill-evolver --label skill:<name>` and title-prefix tag whatever issue(s) `/umbrella` actually files (a single issue on the one-shot path; the umbrella plus all children on the multi-piece path). Zero improvements → clean exit, no issues filed. The skill itself does NOT modify the target skill's files — implementation lands later via `/fix-issue` (per child) or `/improve-skill` (judge-design-implement loop) or `/loop-improve-skill` (multi-round). Example: `/skill-evolver design`.
+
+## `/umbrella`
+
+**Arguments**: `[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] <task description or empty to deduce from context>`
+
+**Source**: [`skills/umbrella/SKILL.md`](../skills/umbrella/SKILL.md)
+
+Plan-to-issues orchestrator. Takes a task description (or deduces it from session context), classifies it as one-shot or multi-piece, and delegates GitHub issue creation to `/issue` — adding native blocked-by dependencies to form an execution DAG and back-linking children to the umbrella when multi-piece. Typically invoked transitively by `/review --create-issues` (slice-mode finding filing) and `/skill-evolver` (research-finding filing) rather than called directly by humans, though direct invocation is supported. The one-shot path emits a single child issue and skips umbrella creation; the multi-piece path emits an umbrella tracking issue plus one child per piece, with `Closes #<umbrella>` blocked-by edges wired between children and the umbrella. `--dry-run` previews the proposed batch without GitHub mutations; `--go` posts a `GO` sentinel comment on each successfully-created child to make them eligible for `/fix-issue` automation. Example: `/umbrella refactor the auth subsystem in three phases: schema, middleware, tests`.

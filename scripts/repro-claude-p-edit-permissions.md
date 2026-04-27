@@ -6,7 +6,7 @@ Sibling per-script-contract doc per `AGENTS.md`. Edit this file in lockstep with
 
 Isolated reproducer for the `claude -p` Edit-permission stall first observed in #566. Validates the kernel fix (#585) and the related settings audit independently of the full `/loop-improve-skill` pipeline.
 
-The script invokes a single `claude -p --plugin-dir "$REPO_ROOT"` subprocess against the project's permission stack (`.claude/settings.json` + `.claude/settings.local.json` + `hooks/hooks.json` PreToolUse hooks), asks the model to perform a trivial edit on a tracked file under `.claude/skills/**`, and classifies the outcome by combining a pinned stall-regex grep on combined stdout+stderr with a `git diff` ground-truth check on the edit target.
+The script invokes a single `claude -p --plugin-dir "$REPO_ROOT"` subprocess against the project's permission stack (`.claude/settings.json` + `.claude/settings.local.json` + `hooks/hooks.json` PreToolUse hooks), asks the model to perform a trivial edit on a tracked file under `skills/**`, and classifies the outcome by combining a pinned stall-regex grep on combined stdout+stderr with a `git diff` ground-truth check on the edit target.
 
 Opt-in operator instrumentation. NOT a CI gate. Depends on a real authenticated `claude` binary, costs API tokens, and is timing-sensitive. Same shape as `scripts/eval-research.sh` and `scripts/test-loop-improve-skill-halt-rate.sh`.
 
@@ -33,7 +33,7 @@ Variants A and B are read-only against the on-disk settings: they do NOT mutate 
 | C       | (empty)                                   | replace via `jq`        | staged aside        | `observational_only`  |
 | D       | `--permission-mode bypassPermissions`     | rename aside            | staged aside        | `edit_completed`      |
 
-Variant C's replacement settings JSON is built via `jq -n --arg p "$REPO_ROOT" '{permissions:{allow:["Read(\($p)/.claude/skills/**)","Edit(\($p)/.claude/skills/**)","Write(\($p)/.claude/skills/**)"]}}'` and atomically `mv`'d from `.claude/settings.json.repro.new` (same directory as the target, guaranteeing same-filesystem rename atomicity).
+Variant C's replacement settings JSON is built via `jq -n --arg p "$REPO_ROOT" '{permissions:{allow:["Read(\($p)/skills/**)","Edit(\($p)/skills/**)","Write(\($p)/skills/**)"]}}'` and atomically `mv`'d from `.claude/settings.json.repro.new` (same directory as the target, guaranteeing same-filesystem rename atomicity).
 
 Variant A reproduces the original #566 incident shape (current settings, no kernel flag) — meaningful even when the live `.claude/settings.json` has `defaultMode: bypassPermissions` because #566 reproduced on that exact shape. The script emits a preflight `**⚠ WARNING**` when this combination is detected so the operator interprets the result with context.
 
