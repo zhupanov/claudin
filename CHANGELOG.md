@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.36] - 2026-04-27
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/helpers.sh` — back-link branch's native-relationship probe now uses `gh api ... --paginate` so a child issue with more than one page of `blocked_by` entries (>30 by GitHub's default page size) is fully scanned. Without `--paginate`, the umbrella could appear on a later page and the script would either skip the back-link comment (treating the relationship as native when it wasn't visible) or post a redundant comment. Mirrors the existing `--paginate` idiom at `helpers.sh:280` (the `_wd_blocked_by_lookup` site fixed by #718). `helpers.md` updated in the same PR per repo edit-in-sync rule. Closes #731.
+
 ## [7.16.35] - 2026-04-26
 
 ### Fixed
