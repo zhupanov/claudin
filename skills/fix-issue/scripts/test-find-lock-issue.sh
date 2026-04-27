@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Eight executed fixtures plus one deferred-coverage
+# refactor (closes #496). Eleven executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -25,6 +25,15 @@
 #   9. explicit issue with a GHE-style host (host-generic URL parsing —
 #      closes #766) → exit 0; ISSUE_NUMBER=55 LOCK_ACQUIRED=true
 #      RENAMED=true (mirrors fixture 1's full success contract)
+#  10. explicit --issue + missing umbrella-handler.sh → exit 2;
+#      ELIGIBLE=false ERROR=umbrella-handler.sh not executable...
+#      (fail-closed, closes #765)
+#  11. explicit --issue + umbrella-handler.sh detect exits non-zero with
+#      ERROR= line → exit 2; helper's ERROR= re-emitted on stdout + stderr
+#      (fail-closed, closes #765)
+#  12. explicit --issue + umbrella-handler.sh detect exits non-zero with no
+#      output → exit 2; synthesized ERROR=umbrella-handler.sh detect
+#      exited 1 (no ERROR= line emitted) (fail-closed, closes #765)
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -561,6 +570,138 @@ assert_contains "$OUT" "ISSUE_NUMBER=55" "[9] ISSUE_NUMBER=55 on stdout"
 assert_contains "$OUT" "LOCK_ACQUIRED=true" "[9] LOCK_ACQUIRED=true on stdout"
 assert_contains "$OUT" "RENAMED=true" "[9] RENAMED=true on stdout (mirrors Fixture 1)"
 assert_not_contains "$OUT" "Cannot parse repository from issue URL" "[9] no parse-failure error"
+
+# ---------------------------------------------------------------------------
+# Fixtures 10-12: explicit --issue mode + umbrella-handler.sh failures
+# (fail-closed gate, closes #765).
+#
+# These fixtures hermetically isolate find-lock-issue.sh from its real
+# umbrella-handler.sh sibling by COPYING find-lock-issue.sh into a per-fixture
+# tmpdir and running the copy. Because find-lock-issue.sh resolves the helper
+# via `dirname "${BASH_SOURCE[0]}"`, the copy resolves the helper relative
+# to the tmpdir — letting us absent / stub the helper without touching the
+# tracked repo file. The chosen umbrella-detect-block sits BEFORE the lock /
+# rename / parse-prose-blockers delegate calls, so we do NOT need to copy
+# issue-lifecycle.sh / tracking-issue-write.sh / parse-prose-blockers.sh
+# into the fixture tmpdir — the script aborts at exit 2 inside the umbrella
+# block before any delegate is reached.
+# ---------------------------------------------------------------------------
+
+# Helper: copy find-lock-issue.sh into per-fixture tmpdir and `chmod +x`.
+copy_script_to_fixture() {
+    local fixture_name="$1"
+    local fixture_dir="$TMPROOT/$fixture_name"
+    mkdir -p "$fixture_dir"
+    cp "$SCRIPT" "$fixture_dir/find-lock-issue.sh"
+    chmod +x "$fixture_dir/find-lock-issue.sh"
+    echo "$fixture_dir/find-lock-issue.sh"
+}
+
+# ---------------------------------------------------------------------------
+# Fixture 10: explicit --issue + missing umbrella-handler.sh → exit 2.
+# ---------------------------------------------------------------------------
+echo "Fixture 10: explicit --issue + missing umbrella-handler.sh (fail-closed)"
+run_fixture "fixture-10"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Regular bug'"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+FIXTURE10_SCRIPT=$(copy_script_to_fixture "fixture-10")
+# DELIBERATELY do not copy umbrella-handler.sh — the missing-helper case.
+
+OUT_FILE="$TMPROOT/fixture-10/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-10/stderr.txt"
+EXIT_CODE=0
+"$FIXTURE10_SCRIPT" 50 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+ERR=$(cat "$ERR_FILE")
+
+assert_equal "$EXIT_CODE" "2" "[10] exit code 2 (fail-closed: helper missing)"
+assert_contains "$OUT" "ELIGIBLE=false" "[10] ELIGIBLE=false on stdout"
+assert_contains "$OUT" "ERROR=umbrella-handler.sh not executable" "[10] ERROR= identifies missing helper"
+assert_contains "$ERR" "umbrella-handler.sh not executable; cannot validate explicit issue. Aborting." "[10] stderr surfaces helper-missing diagnostic"
+assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[10] LOCK_ACQUIRED= absent (lock never attempted)"
+
+# ---------------------------------------------------------------------------
+# Fixture 11: explicit --issue + umbrella-handler.sh detect exits non-zero
+# with an ERROR= line → exit 2; helper's ERROR= re-emitted on stdout +
+# echoed on stderr.
+# ---------------------------------------------------------------------------
+echo "Fixture 11: explicit --issue + umbrella-handler.sh detect fails with ERROR= (fail-closed)"
+run_fixture "fixture-11"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Regular bug'"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+FIXTURE11_SCRIPT=$(copy_script_to_fixture "fixture-11")
+
+# Stub umbrella-handler.sh: prints `ERROR=Failed to fetch issue #50` on
+# stdout (matching the real helper's cmd_detect ERROR= contract) and exits
+# 1.
+cat > "$TMPROOT/fixture-11/umbrella-handler.sh" <<'STUB_HELPER_EOF'
+#!/usr/bin/env bash
+echo "ERROR=Failed to fetch issue #50"
+exit 1
+STUB_HELPER_EOF
+chmod +x "$TMPROOT/fixture-11/umbrella-handler.sh"
+
+OUT_FILE="$TMPROOT/fixture-11/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-11/stderr.txt"
+EXIT_CODE=0
+"$FIXTURE11_SCRIPT" 50 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+ERR=$(cat "$ERR_FILE")
+
+assert_equal "$EXIT_CODE" "2" "[11] exit code 2 (fail-closed: detect failed with ERROR=)"
+assert_contains "$OUT" "ELIGIBLE=false" "[11] ELIGIBLE=false on stdout"
+assert_contains "$OUT" "ERROR=Failed to fetch issue #50" "[11] helper's ERROR= re-emitted on stdout"
+assert_contains "$ERR" "umbrella-handler.sh detect failed for issue #50: Failed to fetch issue #50" "[11] stderr surfaces helper failure"
+assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[11] LOCK_ACQUIRED= absent (lock never attempted)"
+
+# ---------------------------------------------------------------------------
+# Fixture 12: explicit --issue + umbrella-handler.sh detect exits non-zero
+# with no output → exit 2; synthesized ERROR= line on stdout (covers the
+# fallback path for partial / signal-killed helper failures).
+# ---------------------------------------------------------------------------
+echo "Fixture 12: explicit --issue + umbrella-handler.sh detect fails silently (fail-closed)"
+run_fixture "fixture-12"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Regular bug'"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+FIXTURE12_SCRIPT=$(copy_script_to_fixture "fixture-12")
+
+# Stub umbrella-handler.sh: exits 1 with no output (no ERROR= line).
+cat > "$TMPROOT/fixture-12/umbrella-handler.sh" <<'STUB_HELPER_EOF'
+#!/usr/bin/env bash
+exit 1
+STUB_HELPER_EOF
+chmod +x "$TMPROOT/fixture-12/umbrella-handler.sh"
+
+OUT_FILE="$TMPROOT/fixture-12/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-12/stderr.txt"
+EXIT_CODE=0
+"$FIXTURE12_SCRIPT" 50 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+ERR=$(cat "$ERR_FILE")
+
+assert_equal "$EXIT_CODE" "2" "[12] exit code 2 (fail-closed: detect failed silently)"
+assert_contains "$OUT" "ELIGIBLE=false" "[12] ELIGIBLE=false on stdout"
+assert_contains "$OUT" "ERROR=umbrella-handler.sh detect exited 1 (no ERROR= line emitted)" "[12] synthesized ERROR= when helper produces no output"
+assert_contains "$ERR" "umbrella-handler.sh detect failed for issue #50" "[12] stderr surfaces helper failure"
+assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[12] LOCK_ACQUIRED= absent (lock never attempted)"
 
 # ---------------------------------------------------------------------------
 # Summary

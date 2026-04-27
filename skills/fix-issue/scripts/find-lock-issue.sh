@@ -646,18 +646,52 @@ if [[ -n "$ISSUE_ARG" ]]; then
         exit 2
     fi
 
-    # Umbrella detection (explicit-issue path only — auto-pick mode never
-    # runs this; per the design dialectic's DECISION_1, auto-pick keeps its
-    # GO-tail invariant). Detection runs BEFORE the GO-tail check so umbrella
-    # issues do NOT need a GO comment. The umbrella's body literal AND/OR
-    # title prefix is the approval signal — children inherit approval from the
-    # umbrella's existence.
+    # Umbrella detection (explicit-issue path only — auto-pick mode runs a
+    # SEPARATE umbrella-skip block at lines ~849-863 with intentionally fail-
+    # OPEN posture so a broken helper does not stall the queue). Detection
+    # here runs BEFORE the GO-tail check so umbrella issues do NOT need a GO
+    # comment. The umbrella's body literal AND/OR title prefix is the
+    # approval signal — children inherit approval from the umbrella's
+    # existence.
+    #
+    # Explicit mode is FAIL-CLOSED on the whole detect contract (closes
+    # #765): missing/non-executable helper, detect non-zero exit, AND
+    # detect exit-0 with no recognized IS_UMBRELLA= value all hard-abort
+    # with ELIGIBLE=false + ERROR= + exit 2. The operator named a specific
+    # issue, and we cannot prove it is NOT an umbrella without running
+    # detect successfully.
     UMBRELLA_HANDLER="$(dirname "${BASH_SOURCE[0]}")/umbrella-handler.sh"
-    if [[ -x "$UMBRELLA_HANDLER" ]]; then
-        UMBRELLA_DETECT_OUT=""
-        if UMBRELLA_DETECT_OUT=$("$UMBRELLA_HANDLER" detect --issue "$ISSUE_NUM" 2>&1); then
-            IS_UMBRELLA_DETECT=$(echo "$UMBRELLA_DETECT_OUT" | awk -F= '/^IS_UMBRELLA=/ { v=$2 } END { print v }')
-            if [ "$IS_UMBRELLA_DETECT" = "true" ]; then
+    if [[ ! -x "$UMBRELLA_HANDLER" ]]; then
+        echo "umbrella-handler.sh not executable; cannot validate explicit issue. Aborting." >&2
+        echo "ELIGIBLE=false"
+        echo "ERROR=umbrella-handler.sh not executable; cannot validate explicit issue."
+        exit 2
+    fi
+    set +e
+    UMBRELLA_DETECT_OUT=$("$UMBRELLA_HANDLER" detect --issue "$ISSUE_NUM" 2>&1)
+    UMBRELLA_DETECT_EXIT=$?
+    set -e
+    if [ "$UMBRELLA_DETECT_EXIT" -ne 0 ]; then
+        HELPER_ERROR=$(echo "$UMBRELLA_DETECT_OUT" | awk -F= '/^ERROR=/ { sub(/^ERROR=/, "", $0); v=$0 } END { print v }')
+        if [ -z "$HELPER_ERROR" ]; then
+            HELPER_ERROR="umbrella-handler.sh detect exited $UMBRELLA_DETECT_EXIT (no ERROR= line emitted)"
+        fi
+        echo "umbrella-handler.sh detect failed for issue #$ISSUE_NUM: $HELPER_ERROR" >&2
+        echo "ELIGIBLE=false"
+        echo "ERROR=$HELPER_ERROR"
+        exit 2
+    fi
+    IS_UMBRELLA_DETECT=$(echo "$UMBRELLA_DETECT_OUT" | awk -F= '/^IS_UMBRELLA=/ { v=$2 } END { print v }')
+    # FINDING_2: exit 0 but no recognized IS_UMBRELLA= value is also a
+    # detection failure (partial / buggy helper output). Fail-closed on
+    # the WHOLE detect contract, not only on non-zero exit.
+    if [ "$IS_UMBRELLA_DETECT" != "true" ] && [ "$IS_UMBRELLA_DETECT" != "false" ]; then
+        echo "umbrella-handler.sh detect succeeded but emitted no recognized IS_UMBRELLA= value; cannot validate explicit issue. Aborting." >&2
+        echo "ELIGIBLE=false"
+        echo "ERROR=umbrella-handler.sh detect emitted no recognized IS_UMBRELLA= value."
+        exit 2
+    fi
+    if [ "$IS_UMBRELLA_DETECT" = "true" ]; then
                 # Apply the umbrella's own blocker check (parallel to non-
                 # umbrella behavior — an umbrella that is itself blocked by
                 # an open issue should not dispatch). The umbrella's parsed
@@ -717,9 +751,9 @@ if [[ -n "$ISSUE_ARG" ]]; then
                 fi
                 handle_umbrella "$ISSUE_NUM" "$ISSUE_TITLE"
                 # terminal — exits 0/3/4/5
-            fi
-        fi
     fi
+    # IS_UMBRELLA_DETECT="false" → fall through to the GO-tail check below
+    # (regular non-umbrella issue; preserves the dominant production path).
 
     # Verify last comment is GO.
     # Using --slurp so `jq` sees a single array-of-arrays and can select the
