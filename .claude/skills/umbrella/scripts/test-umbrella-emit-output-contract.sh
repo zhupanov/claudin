@@ -82,6 +82,23 @@ if [[ -z "$STEP2_BLOCK" ]]; then
     exit 1
 fi
 
+# Extract the Step 3B.2 block from SKILL.md: from "### 3B.2 " (subheading prefix
+# match) up to (but not including) "### 3B.3 ". Pinned for the created-eq-1
+# bypass branch (closes #717): assertions (g1)–(g4) below.
+STEP3B2_BLOCK=$(awk '
+    /^### 3B\.2 / { in_block=1 }
+    /^### 3B\.3 / { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+if [[ -z "$STEP3B2_BLOCK" ]]; then
+    echo "FAIL: SKILL.md Step 3B.2 block extraction produced empty output." >&2
+    echo "  Boundary regexes: '^### 3B\\.2 ' (start) and '^### 3B\\.3 ' (end)." >&2
+    echo "  If Step 3B.2 or Step 3B.3's heading was renamed or renumbered, update both regexes" >&2
+    echo "  here AND in the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
+    exit 1
+fi
+
 # Extract the Step 3B.3 block from SKILL.md: from "### 3B.3 " (subheading prefix
 # match — tolerates subtitle changes) up to (but not including) "### 3B.4 ".
 STEP3B3_BLOCK=$(awk '
@@ -201,6 +218,27 @@ assert_contains "c6b: multi-piece partial — with UMBRELLA_FAILURE_REASON paren
 assert_contains "c7: multi-piece children-batch-failed (umbrella never attempted)" \
     '**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**' \
     "$STEP4_BLOCK"
+# (c8) created-eq-1 bypass breadcrumb (closes #717). Pinned so any future edit
+# that renames the bypass shape's "(multi-piece downgraded — created-eq-1, ...)"
+# parenthetical or its surrounding template breaks CI.
+assert_contains "c8: created-eq-1 bypass — multi-piece downgraded one-shot" \
+    '✅ /umbrella: filed #<N> — <url> (multi-piece downgraded — created-eq-1, <D> sibling(s) deduplicated to existing issues, no umbrella issue created)' \
+    "$STEP4_BLOCK"
+
+# (a3) Step 4 schema parenthetical for UMBRELLA_DOWNGRADE — must enumerate all 3
+# emission sites (decomposition-lt-2, input-file-distinct-lt-2, created-eq-1).
+# Pinned because the previous wording mentioned only Step 3B.1, which became
+# stale once `input-file-distinct-lt-2` (Step 2) and `created-eq-1` (Step 3B.2)
+# were added. Closes part of #717's review FINDING_4.
+assert_contains "a3: Step 4 UMBRELLA_DOWNGRADE schema lists decomposition-lt-2" \
+    'decomposition-lt-2' \
+    "$STEP4_BLOCK"
+assert_contains "a3b: Step 4 UMBRELLA_DOWNGRADE schema lists input-file-distinct-lt-2" \
+    'input-file-distinct-lt-2' \
+    "$STEP4_BLOCK"
+assert_contains "a3c: Step 4 UMBRELLA_DOWNGRADE schema lists created-eq-1" \
+    'created-eq-1' \
+    "$STEP4_BLOCK"
 
 # (b*) helpers.md emit-output subsection scopes stderr to validation errors
 # only and explicitly defers the human breadcrumb to the orchestrator.
@@ -262,6 +300,23 @@ assert_contains "f3: Step 2 distinct-count formula" \
 assert_contains "f4: Step 2 caller-agnostic authoritativeness note" \
     'authoritative for any caller of `/umbrella --input-file`' \
     "$STEP2_BLOCK"
+
+# (g*) Step 3B.2 created-eq-1 bypass branch (closes #717). Pins the load-bearing
+# literals of the new bypass condition + procedure so any future edit that
+# weakens the predicate, drops the precedence note, or removes the "no Step 3A"
+# guardrail breaks CI.
+assert_contains "g1: 3B.2 created-eq-1 bypass condition heading" \
+    '`created-eq-1` bypass condition' \
+    "$STEP3B2_BLOCK"
+assert_contains "g2: 3B.2 created-eq-1 bypass predicate (full conjunction)" \
+    '`INPUT_FILE` is empty AND `DRY_RUN=false` AND `ISSUES_FAILED=0` AND `ISSUES_CREATED=1`' \
+    "$STEP3B2_BLOCK"
+assert_contains "g3: 3B.2 created-eq-1 bypass precedence note" \
+    'failed batch (ISSUES_FAILED>=1) > created-eq-1 (normal mode, non-dry-run) > existing 3B.3 dispatch' \
+    "$STEP3B2_BLOCK"
+assert_contains "g4: 3B.2 created-eq-1 bypass forbids re-running Step 3A" \
+    'Do NOT execute Step 3A on this path — children were already created in Step 3B.2; re-invoking `/issue` would double-create' \
+    "$STEP3B2_BLOCK"
 
 echo
 echo "All $PASS_COUNT assertions passed."

@@ -7,8 +7,12 @@
 #       Stdout: CYCLE=true|false. Exit 0 always when input is valid; non-zero on input errors.
 #       (Tested by test-helpers.sh.)
 #
-#   wire-dag     --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run]
+#   wire-dag     --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run] [--no-backlinks]
 #       Best-effort GitHub blocked-by wiring + back-link comments.
+#       --no-backlinks (created-eq-1 bypass): omit back-link comments AND the
+#       umbrella-rooted API probe; probe the first child in CHILDREN_FILE for
+#       API availability instead. --umbrella may be empty when --no-backlinks
+#       is set; otherwise --umbrella is required.
 #       Probes whether the GitHub issue-dependency API is available on the repo.
 #       Skips silently per-edge with EDGES_SKIPPED_API_UNAVAILABLE for true feature-missing
 #       (the surface evolved during 2024-2026; this is fail-open by design).
@@ -103,6 +107,7 @@ case "$SUBCMD" in
     EDGES_FILE=""
     REPO=""
     DRY_RUN="false"
+    NO_BACKLINKS="false"
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --tmpdir)         TMPDIR="$2"; shift 2 ;;
@@ -112,13 +117,19 @@ case "$SUBCMD" in
         --edges-file)     EDGES_FILE="$2"; shift 2 ;;
         --repo)           REPO="$2"; shift 2 ;;
         --dry-run)        DRY_RUN="true"; shift ;;
+        --no-backlinks)   NO_BACKLINKS="true"; shift ;;
         *) echo "ERROR=Unknown flag for wire-dag: $1" >&2; exit 1 ;;
       esac
     done
-    if [ -z "$TMPDIR" ] || [ ! -d "$TMPDIR" ] || [ -z "$UMBRELLA" ] || [ -z "$REPO" ] \
+    # --umbrella is required UNLESS --no-backlinks is set (created-eq-1 bypass path
+    # has no umbrella issue; see SKILL.md Step 3B.2 created-eq-1 branch).
+    if [ -z "$TMPDIR" ] || [ ! -d "$TMPDIR" ] || [ -z "$REPO" ] \
        || [ -z "$CHILDREN_FILE" ] || [ ! -f "$CHILDREN_FILE" ] \
        || [ -z "$EDGES_FILE" ] || [ ! -f "$EDGES_FILE" ]; then
-      echo "ERROR=wire-dag requires --tmpdir, --umbrella, --repo, --children-file, --edges-file (all valid)" >&2; exit 1
+      echo "ERROR=wire-dag requires --tmpdir, --repo, --children-file, --edges-file (all valid)" >&2; exit 1
+    fi
+    if [ "$NO_BACKLINKS" != "true" ] && [ -z "$UMBRELLA" ]; then
+      echo "ERROR=wire-dag requires --umbrella (use --no-backlinks to omit it on the created-eq-1 bypass path)" >&2; exit 1
     fi
 
     # Feature-detect the GitHub blocked-by API surface. As of late-2024 / 2026 GitHub
@@ -126,10 +137,31 @@ case "$SUBCMD" in
     # but availability is org/feature-flag dependent. We probe with a HEAD/GET on the
     # umbrella's blocked_by collection; if it 404s we mark the surface unavailable and
     # skip per-edge add. Back-links via plain comments still work and always run.
+    #
+    # On --no-backlinks (created-eq-1 bypass), there is no umbrella to probe; fall
+    # back to probing the FIRST CHILD in CHILDREN_FILE (children always exist on
+    # the bypass path). Without this fallback, an empty $UMBRELLA would 404 and
+    # incorrectly mark the API unavailable repo-wide.
+    if [ "$NO_BACKLINKS" = "true" ]; then
+      probe_target=$(awk -F'\t' 'NR == 1 && $1 != "" { print $1; exit }' "$CHILDREN_FILE")
+      if [ -z "$probe_target" ]; then
+        # No children in CHILDREN_FILE — leave api_available=false (no edges to wire anyway).
+        probe_target=""
+      fi
+    else
+      probe_target="$UMBRELLA"
+    fi
     api_available="false"
-    api_probe=$(gh api "/repos/$REPO/issues/$UMBRELLA/dependencies/blocked_by" --silent 2>/dev/null && echo "ok" || echo "fail")
-    if [ "$api_probe" = "ok" ]; then
-      api_available="true"
+    if [ -n "$probe_target" ]; then
+      # Optional test-stub hook: when set, record the probe URL so test-helpers.sh
+      # can assert which issue was targeted. Production callers leave this unset.
+      if [ -n "${UMBRELLA_PROBE_TARGET_FILE:-}" ]; then
+        printf '/repos/%s/issues/%s/dependencies/blocked_by\n' "$REPO" "$probe_target" > "$UMBRELLA_PROBE_TARGET_FILE"
+      fi
+      api_probe=$(gh api "/repos/$REPO/issues/$probe_target/dependencies/blocked_by" --silent 2>/dev/null && echo "ok" || echo "fail")
+      if [ "$api_probe" = "ok" ]; then
+        api_available="true"
+      fi
     fi
 
     EDGES_ADDED=0
@@ -455,23 +487,29 @@ case "$SUBCMD" in
     # Back-links: post a comment on each child unless GitHub natively renders the umbrella
     # relationship. We treat the dependency-API child-of relationship as the "native" surface;
     # if the child's blocked_by list contains the umbrella we skip the comment.
-    while IFS=$'\t' read -r child_num _title _url; do
-      [ -z "$child_num" ] && continue
-      native="false"
-      if [ "$api_available" = "true" ]; then
-        if gh api "/repos/$REPO/issues/${child_num}/dependencies/blocked_by" --jq ".[] | select(.number == ${UMBRELLA})" 2>/dev/null | grep -q .; then
-          native="true"
+    #
+    # On --no-backlinks (created-eq-1 bypass), the entire loop is skipped: there is
+    # no umbrella, so the native-detection jq selector and the comment body — both
+    # of which reference $UMBRELLA — would be malformed.
+    if [ "$NO_BACKLINKS" != "true" ]; then
+      while IFS=$'\t' read -r child_num _title _url; do
+        [ -z "$child_num" ] && continue
+        native="false"
+        if [ "$api_available" = "true" ]; then
+          if gh api "/repos/$REPO/issues/${child_num}/dependencies/blocked_by" --jq ".[] | select(.number == ${UMBRELLA})" 2>/dev/null | grep -q .; then
+            native="true"
+          fi
         fi
-      fi
-      if [ "$native" = "true" ]; then
-        BACKLINKS_SKIPPED_NATIVE=$((BACKLINKS_SKIPPED_NATIVE + 1))
-        continue
-      fi
-      backlink_body="Part of umbrella #${UMBRELLA} — ${UMBRELLA_TITLE}"
-      if gh issue comment -R "$REPO" "$child_num" --body "$backlink_body" >/dev/null 2>&1; then
-        BACKLINKS_POSTED=$((BACKLINKS_POSTED + 1))
-      fi
-    done < "$CHILDREN_FILE"
+        if [ "$native" = "true" ]; then
+          BACKLINKS_SKIPPED_NATIVE=$((BACKLINKS_SKIPPED_NATIVE + 1))
+          continue
+        fi
+        backlink_body="Part of umbrella #${UMBRELLA} — ${UMBRELLA_TITLE}"
+        if gh issue comment -R "$REPO" "$child_num" --body "$backlink_body" >/dev/null 2>&1; then
+          BACKLINKS_POSTED=$((BACKLINKS_POSTED + 1))
+        fi
+      done < "$CHILDREN_FILE"
+    fi
 
     printf 'EDGES_ADDED=%d\n' "$EDGES_ADDED"
     printf 'EDGES_REJECTED_CYCLE=%d\n' "$EDGES_REJECTED_CYCLE"
@@ -484,7 +522,13 @@ case "$SUBCMD" in
       printf '%s' "$edge_lines"
     fi
     if [ "$api_available" = "false" ]; then
-      echo "**⚠ /umbrella: GitHub blocked-by dependency API not available on $REPO; skipped DAG wiring. Back-links posted via comments." >&2
+      if [ "$NO_BACKLINKS" = "true" ]; then
+        # On the created-eq-1 bypass path, back-links are intentionally suppressed —
+        # the legacy "Back-links posted via comments" tail would be factually false.
+        echo "**⚠ /umbrella: GitHub blocked-by dependency API not available on $REPO; skipped DAG wiring. Back-links suppressed (--no-backlinks)." >&2
+      else
+        echo "**⚠ /umbrella: GitHub blocked-by dependency API not available on $REPO; skipped DAG wiring. Back-links posted via comments." >&2
+      fi
     fi
     ;;
 
@@ -518,7 +562,7 @@ case "$SUBCMD" in
     cat <<'EOF'
 Usage: helpers.sh <subcommand> [options]
   check-cycle  --existing-edges FILE --candidate BLOCKER:BLOCKED
-  wire-dag     --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run]
+  wire-dag     --tmpdir DIR --umbrella N --umbrella-title T --children-file F --edges-file E --repo R [--dry-run] [--no-backlinks]
   emit-output  --kv-file FILE
 EOF
     ;;

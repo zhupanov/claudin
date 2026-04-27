@@ -161,7 +161,11 @@ case "$1 $2" in
     exit "${STUB_BLOCKER_ID_RC:-0}"
     ;;
   "issue comment")
-    # Back-link comment posting — always succeed silently.
+    # Back-link comment posting — always succeed silently. When STUB_COMMENT_LOG
+    # is set, record one line per invocation so tests can assert call count.
+    if [ -n "${STUB_COMMENT_LOG:-}" ]; then
+      printf 'comment-call\n' >> "$STUB_COMMENT_LOG"
+    fi
     exit 0
     ;;
   *)
@@ -476,6 +480,90 @@ export STUB_POST_RC=0
   fi
   unset STUB_BLOCKED_BY_20_RC STUB_BLOCKED_BY_10
 }
+
+echo ""
+echo "test-helpers.sh: wire-dag --no-backlinks subcommand (created-eq-1 bypass; closes #717)"
+
+# Reset stub state for the --no-backlinks suite — fresh probe-ok, blocker-id
+# resolves, no existing edges, 200 OK on per-edge POST.
+export STUB_PROBE_RC=0
+export STUB_BLOCKER_ID=999001
+export STUB_BLOCKER_ID_RC=0
+export STUB_EXISTING_BLOCKERS=""
+export STUB_NATIVE_CHECK_RESPONSE=""
+export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+export STUB_POST_RC=0
+
+# (m) --no-backlinks probes the FIRST CHILD, not the (empty) umbrella.
+# Set UMBRELLA_PROBE_TARGET_FILE to capture the probe URL helpers.sh emits.
+PROBE_TARGET_FILE="$TMP/probe-target.txt"
+COMMENT_LOG="$TMP/comment-log.txt"
+: > "$COMMENT_LOG"
+rm -f "$PROBE_TARGET_FILE"
+printf '20\tsome-child\thttp://x\n' > "$TMP/children.tsv"
+printf '10\t20\n' > "$TMP/edges.tsv"
+PATH="$STUB_BIN:$PATH" UMBRELLA_PROBE_TARGET_FILE="$PROBE_TARGET_FILE" STUB_COMMENT_LOG="$COMMENT_LOG" \
+  bash "$HELPERS" wire-dag --no-backlinks \
+    --tmpdir "$TMP" --umbrella '' --umbrella-title "" \
+    --children-file "$TMP/children.tsv" --edges-file "$TMP/edges.tsv" \
+    --repo o/r > "$TMP/wire-out.nbl" 2> "$TMP/wire-err.nbl" || true
+if [ -s "$PROBE_TARGET_FILE" ] && grep -q '/issues/20/dependencies/blocked_by' "$PROBE_TARGET_FILE" \
+     && ! grep -q '/issues/1/dependencies/blocked_by' "$PROBE_TARGET_FILE"; then
+  printf '  ✅ --no-backlinks probes first child (not umbrella)\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ❌ --no-backlinks should probe first child URL\n     probe-target.txt:\n'
+  if [ -e "$PROBE_TARGET_FILE" ]; then sed 's/^/       /' "$PROBE_TARGET_FILE"; else echo "       (file missing)"; fi
+  FAIL=$((FAIL + 1))
+fi
+
+# (n) --no-backlinks issues ZERO `gh issue comment` calls — entire back-link loop is skipped.
+COMMENT_COUNT=$(wc -l < "$COMMENT_LOG" | tr -d ' ')
+if [ "$COMMENT_COUNT" = "0" ]; then
+  printf '  ✅ --no-backlinks posts zero back-link comments\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ❌ --no-backlinks unexpectedly posted %s comment(s); expected 0\n' "$COMMENT_COUNT"
+  FAIL=$((FAIL + 1))
+fi
+
+# (o) --no-backlinks + probe failure → mode-aware stderr message ("Back-links suppressed (--no-backlinks)").
+export STUB_PROBE_RC=22
+: > "$COMMENT_LOG"
+rm -f "$PROBE_TARGET_FILE"
+PATH="$STUB_BIN:$PATH" UMBRELLA_PROBE_TARGET_FILE="$PROBE_TARGET_FILE" STUB_COMMENT_LOG="$COMMENT_LOG" \
+  bash "$HELPERS" wire-dag --no-backlinks \
+    --tmpdir "$TMP" --umbrella '' --umbrella-title "" \
+    --children-file "$TMP/children.tsv" --edges-file "$TMP/edges.tsv" \
+    --repo o/r > "$TMP/wire-out.nbl-fail" 2> "$TMP/wire-err.nbl-fail" || true
+if grep -q 'Back-links suppressed (--no-backlinks)' "$TMP/wire-err.nbl-fail" \
+     && ! grep -q 'Back-links posted via comments' "$TMP/wire-err.nbl-fail"; then
+  printf '  ✅ --no-backlinks + probe-fail → mode-aware stderr message\n'
+  PASS=$((PASS + 1))
+else
+  printf '  ❌ --no-backlinks + probe-fail expected mode-aware stderr; got:\n'
+  sed 's/^/       /' "$TMP/wire-err.nbl-fail"
+  FAIL=$((FAIL + 1))
+fi
+export STUB_PROBE_RC=0
+unset STUB_COMMENT_LOG
+
+# (p) --umbrella '' WITHOUT --no-backlinks must error.
+if bash "$HELPERS" wire-dag --tmpdir "$TMP" --umbrella '' \
+     --children-file "$TMP/children.tsv" --edges-file "$TMP/edges.tsv" \
+     --repo o/r > "$TMP/wire-out.bad" 2> "$TMP/wire-err.bad"; then
+  printf '  ❌ empty --umbrella without --no-backlinks should fail; got success\n'
+  FAIL=$((FAIL + 1))
+else
+  if grep -q 'use --no-backlinks to omit it on the created-eq-1 bypass path' "$TMP/wire-err.bad"; then
+    printf '  ✅ empty --umbrella without --no-backlinks errors with helpful message\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ expected helpful error message; got:\n'
+    sed 's/^/       /' "$TMP/wire-err.bad"
+    FAIL=$((FAIL + 1))
+  fi
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
