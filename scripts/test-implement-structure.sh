@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 15 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 16 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -121,11 +121,15 @@
 #            which would false-pass a whole-file grep.
 #      (16c) Anchor-template positive pin: skills/implement/references/anchor-comment-template.md
 #            placeholder prose references `## Implementation Plan` (synthesis source).
-#      (16d) Negative pin (broken-pattern): the literal pair `` `## Goal` `` AND `` `## Test plan` ``
-#            (with single backticks as they actually appear in the broken state) MUST NOT
-#            both appear on the same line in skills/implement/SKILL.md. The pre-fix line 510
-#            wrapped both heading literals in backticks; the rewritten line drops both, so
-#            this negative pin fails closed on broken main and passes on the fixed branch.
+#      (16d) Negative pin (broken-pattern): the contiguous legacy phrase
+#            `` `/design`'s `## Goal` and `## Test plan` sections `` (with single
+#            backticks as it actually appeared in pre-fix SKILL.md:510) MUST NOT
+#            appear in skills/implement/SKILL.md. Implementation is a single fixed-string
+#            grep against the full phrase (NOT two independent same-line checks);
+#            the rewritten line 510 drops the contiguous substring while preserving
+#            `## Goal` and `## Test plan` separately as the anchor body's rendered
+#            target headings, so this negative pin fails closed on broken main and
+#            passes on the fixed branch.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals
