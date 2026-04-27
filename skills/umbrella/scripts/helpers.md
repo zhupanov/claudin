@@ -1,6 +1,6 @@
 # helpers.sh — sibling contract
 
-Consolidated `/umbrella` helpers, exposed as three subcommands.
+Consolidated `/umbrella` helpers, exposed as four subcommands (`check-cycle`, `wire-dag`, `prefix-titles`, `emit-output`).
 
 ## `check-cycle --existing-edges FILE --candidate BLOCKER:BLOCKED`
 
@@ -45,9 +45,9 @@ Prepend the literal marker <code>(Umbrella: &lt;N&gt;) </code> (note the trailin
 
 Stdout grammar: `TITLES_RENAMED=<N>`, `TITLES_SKIPPED_EXISTING=<N>`, `TITLES_FAILED=<N>`. Always emitted in this order, on every successful (exit 0) invocation. Per-row idempotency uses a literal-prefix string match (case-sensitive, exact <code>(Umbrella: &lt;N&gt;) </code> including the trailing space). A title prefixed by a *different* umbrella (e.g., `(Umbrella: 99) X` when `--umbrella 100` is passed) does NOT match the idempotency check, so the new prefix is layered on top — this is intentional: the helper has no way to know the prior prefix is "trustworthy", and stripping unknown leading parens text would be a sharp footgun. The orchestrator filters dedup'd children out before invocation, so this layering only fires on edge cases (manual operator pre-prefixing, prior abandoned umbrella runs).
 
-Stderr: one redacted single-line warning per `TITLES_FAILED` event of the form `**⚠ /umbrella: prefix-titles edit #N failed (CODE): REASON**` where `CODE` is `exit <rc>` for `gh` non-zero exits (most operational failures: rate-limit, auth, 404, permission), or `input` for caller bugs (missing title column). The reason snippet is captured from `gh`'s combined stderr (max 200 bytes), flattened (newlines / CRs → spaces), and piped through `scripts/redact-secrets.sh` when present; degraded-layout fallback uses inline `tr | head -c 200` with a one-time process-local notice. The redaction discipline mirrors `wire-dag`'s — failure of `redact-secrets.sh` substitutes a constant `<REDACTION_FAILED>` placeholder rather than printing the raw flattened body.
+Stderr: one redacted single-line warning per `TITLES_FAILED` event of the form `**⚠ /umbrella: prefix-titles edit #N failed (CODE): REASON**` where `CODE` is `exit <rc>` for `gh` non-zero exits (most operational failures: rate-limit, auth, 404, permission), or `input` for caller bugs in the children file (missing title column, OR a non-numeric / non-positive issue-number column — both bucket as `input` because the `gh issue edit` was not attempted). The reason snippet is captured from `gh`'s combined stderr (max 200 bytes), flattened (newlines / CRs → spaces), and piped through `scripts/redact-secrets.sh` when present; degraded-layout fallback uses inline `tr | head -c 200` with a one-time process-local notice. The redaction discipline mirrors `wire-dag`'s — failure of `redact-secrets.sh` substitutes a constant `<REDACTION_FAILED>` placeholder rather than printing the raw flattened body.
 
-`--dry-run`: emit `TITLES_RENAMED=0`, `TITLES_SKIPPED_EXISTING=0`, `TITLES_FAILED=0`, exit 0. No `gh issue edit` calls. Used by SKILL.md Step 3B.4 when `DRY_RUN=true` (no real children exist; rename is logically a no-op).
+`--dry-run`: emit `TITLES_RENAMED=0`, `TITLES_SKIPPED_EXISTING=0`, `TITLES_FAILED=0`, exit 0. No `gh issue edit` calls. Provided for direct callers / regression tests / future callers that want to short-circuit the rename loop without a separate gate; the orchestrator path through SKILL.md Step 3B.4 itself does NOT exercise this flag — Step 3B.4 is fully skipped when `DRY_RUN=true` (no `wire-dag`, no `prefix-titles`), so the helper only sees a real-children invocation in production.
 
 ### Edit-in-sync rules
 

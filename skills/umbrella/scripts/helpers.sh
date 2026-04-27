@@ -851,9 +851,18 @@ case "$SUBCMD" in
     prefix_marker="(Umbrella: ${UMBRELLA}) "
 
     while IFS=$'\t' read -r child_num child_title _rest; do
+      # Empty rows (blank lines, trailing newlines) are silently skipped — they
+      # are the byte-exact shape an empty TSV produces and not a caller bug.
       [ -z "$child_num" ] && continue
-      # Only operate on numeric issue numbers — defensive against caller mistakes.
-      printf '%s' "$child_num" | grep -qE '^[1-9][0-9]*$' || continue
+      # Non-numeric or non-positive first column is a caller bug (the orchestrator
+      # filters /issue stdout for ISSUE_<i>_NUMBER, which is always a positive
+      # integer). Bucket as TITLES_FAILED with an input-class warning so the
+      # bug is visible rather than silently masked.
+      if ! printf '%s' "$child_num" | grep -qE '^[1-9][0-9]*$'; then
+        TITLES_FAILED=$((TITLES_FAILED + 1))
+        emit_title_failure_warning "$child_num" "input" "non-numeric or non-positive issue number column"
+        continue
+      fi
       if [ -z "$child_title" ]; then
         # Title column missing — refuse to rewrite blindly; bucket as failure.
         TITLES_FAILED=$((TITLES_FAILED + 1))

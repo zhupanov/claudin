@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # test-helpers.sh — regression harness for /umbrella's helpers.sh subcommands.
-# Currently covers `check-cycle` (pure logic, no network).
+# Covers `check-cycle` (pure logic, no network), `wire-dag` (PATH-stub gh,
+# no real network), and `prefix-titles` (PATH-stub gh, no real network).
 # Run manually: bash skills/umbrella/scripts/test-helpers.sh
 # Wire into make lint via a `test-umbrella-helpers` target alongside existing test-* harnesses.
 
@@ -253,25 +254,30 @@ case "$1 $_stub_url" in
     #                                assert which titles were rewritten and
     #                                which children were skipped.
     if [ -n "${STUB_EDIT_LOG:-}" ]; then
+      # Walk argv via shift so we never need eval/indirect-expansion. The
+      # invocation shape is: gh issue edit <num> -R <repo> --title <title>.
+      # `shift 2` drops "issue edit"; the loop then collects the first
+      # numeric-looking token (the issue number) and the value after --title.
       _stub_num=""
       _stub_title=""
-      # gh issue edit <num> -R <repo> --title <title>
-      _i=2
-      while [ "$_i" -le "$#" ]; do
-        eval "_stub_arg=\${$_i}"
-        case "$_stub_arg" in
+      shift 2 2>/dev/null || true
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
           --title)
-            _i=$((_i + 1))
-            eval "_stub_title=\${$_i}"
+            _stub_title="${2:-}"
+            shift 2
             ;;
           -R|--repo)
-            _i=$((_i + 1))
+            shift 2
             ;;
           [0-9]*)
-            [ -z "$_stub_num" ] && _stub_num="$_stub_arg"
+            [ -z "$_stub_num" ] && _stub_num="$1"
+            shift
+            ;;
+          *)
+            shift
             ;;
         esac
-        _i=$((_i + 1))
       done
       printf '%s\t%s\n' "$_stub_num" "$_stub_title" >> "$STUB_EDIT_LOG"
     fi
@@ -1430,6 +1436,29 @@ prepare_children() {
   else
     printf '  ❌ missing-title row unexpected behavior\n     stdout:\n'
     sed 's/^/       /' "$TMP/pt-h-out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$pt_err"
+    FAIL=$((FAIL + 1))
+  fi
+}
+
+# (pt-h2) Non-numeric first column → bucketed as TITLES_FAILED with input warning.
+{
+  pt_children="$TMP/pt-h2-children.tsv"
+  pt_log="$TMP/pt-h2-edit-log"
+  pt_err="$TMP/pt-h2-err"
+  : > "$pt_log"
+  printf 'NaN\tSome title\thttps://x/NaN\n' > "$pt_children"
+  STUB_EDIT_LOG="$pt_log" PATH="$STUB_BIN:$PATH" \
+    bash "$HELPERS" prefix-titles --umbrella 100 --children-file "$pt_children" --repo o/r > "$TMP/pt-h2-out" 2> "$pt_err" || true
+  if grep -qE '^TITLES_FAILED=1$' "$TMP/pt-h2-out" \
+     && grep -qE '⚠ /umbrella: prefix-titles edit #NaN failed \(input\)' "$pt_err" \
+     && [ ! -s "$pt_log" ]; then
+    printf '  ✅ non-numeric child_num → TITLES_FAILED with input warning, no gh edit call\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ non-numeric child_num unexpected behavior\n     stdout:\n'
+    sed 's/^/       /' "$TMP/pt-h2-out"
     printf '     stderr:\n'
     sed 's/^/       /' "$pt_err"
     FAIL=$((FAIL + 1))
