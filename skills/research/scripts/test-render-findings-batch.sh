@@ -461,6 +461,62 @@ Yes
 EOF
 run_case "multi-line bulleted continuation" "$FIXTURE_MULTILINE_BULLETS" "" 0 2
 
+# Case 15 (#745): finding body containing an indented nested 1./2. enumeration
+# must NOT promote the nested lines into separate top-level findings.
+read -r -d '' FIXTURE_NESTED_NUMBERED <<'EOF' || true
+## Research Report
+
+### Findings Summary
+
+1. First finding with a nested enumeration in its body:
+   1. nested step one
+   2. nested step two
+
+### Risk Assessment
+Low
+
+### Difficulty Estimate
+S
+
+### Feasibility Verdict
+Yes
+
+### Key Files and Areas
+- g.md
+
+### Open Questions
+EOF
+run_case "nested-numbered sublist (#745)" "$FIXTURE_NESTED_NUMBERED" "" 0 1
+
+# Case 16 (#745 follow-up): two top-level numbered findings where the first has
+# a nested 1./2. enumeration in its body. Verifies the post-flush re-init path:
+# nested lines stay as continuation, then the second top-level `2.` re-flushes.
+read -r -d '' FIXTURE_NESTED_THEN_TOPLEVEL <<'EOF' || true
+## Research Report
+
+### Findings Summary
+
+1. First finding with a nested enumeration in its body:
+   1. nested step one
+   2. nested step two
+2. Second top-level finding.
+
+### Risk Assessment
+Low
+
+### Difficulty Estimate
+S
+
+### Feasibility Verdict
+Yes
+
+### Key Files and Areas
+- h.md
+
+### Open Questions
+EOF
+run_case "nested then top-level sibling (#745)" "$FIXTURE_NESTED_THEN_TOPLEVEL" "" 0 2
+
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.9] - 2026-04-27
+
+### Fixed
+
+- `skills/research/scripts/render-findings-batch.sh` — awk splitter no longer promotes indented nested numbered/bulleted sublists into separate top-level findings. Tracks a per-block `base_indent` (captured at the first top-level marker after each flush) and gates the flush-and-start branch on `current_indent <= base_indent`; deeper-indented markers stay as continuation. Adds a high-priority post-flush re-init branch (`current == "" && (is_numbered || is_bulleted)`) so the next list marker after a `####` or paragraph blank-line flush captures a fresh baseline. BSD-awk-safe `match()` + `RLENGTH` indent computation (guards `RLENGTH=-1` on no-match). Adds Cases 15 and 16 in `test-render-findings-batch.sh` covering the nested-numbered sublist and the nested-then-top-level-sibling paths. Sibling contracts `render-findings-batch.md` (heuristic-ladder + Known Limitations on sibling-indentation drift and tab/space mixing) and `test-render-findings-batch.md` (fixture inventory) updated in sync per AGENTS.md. Closes #745.
+
 ## [7.17.8] - 2026-04-27
 
 ### Fixed
