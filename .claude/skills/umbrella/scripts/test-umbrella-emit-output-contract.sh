@@ -61,6 +61,24 @@ if [[ -z "$STEP4_BLOCK" ]]; then
     exit 1
 fi
 
+# Extract the Step 2 block from SKILL.md: from "## Step 2 — Classify One-Shot
+# vs Multi-Piece" up to (but not including) the next "## Step 3A" prefix match.
+# Step 2 owns the dry-run-safe distinct-resolved-child-count rule that governs
+# the input-file mode classification — pinned by (f1)–(f4) below for #724.
+STEP2_BLOCK=$(awk '
+    /^## Step 2 — Classify One-Shot vs Multi-Piece/ { in_block=1 }
+    /^## Step 3A/ { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+if [[ -z "$STEP2_BLOCK" ]]; then
+    echo "FAIL: SKILL.md Step 2 block extraction produced empty output." >&2
+    echo "  Boundary regexes: '^## Step 2 — Classify One-Shot vs Multi-Piece' (start) and '^## Step 3A' (end)." >&2
+    echo "  If Step 2's heading was renamed or renumbered, update both regexes here AND in" >&2
+    echo "  the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
+    exit 1
+fi
+
 # Extract the Step 3B.3 block from SKILL.md: from "### 3B.3 " (subheading prefix
 # match — tolerates subtitle changes) up to (but not including) "### 3B.4 ".
 STEP3B3_BLOCK=$(awk '
@@ -221,6 +239,26 @@ assert_contains "e1: 3B.4 dry-run skip directive prefix (matched pair with d1)" 
 assert_contains "e2: 3B.4 dry-run skip-line breadcrumb (existing pre-#719 wiring/back-links wording)" \
     '⏭️ /umbrella: dependency wiring + back-links skipped (--dry-run)' \
     "$STEP3B4_BLOCK"
+
+# (f*) Pin the load-bearing literals of the Step 2 dry-run-safe distinct-count
+# rule that governs `/umbrella --input-file` classification (closes #724). The
+# rule itself is the umbrella-layer authority for `/issue --input-file
+# --dry-run` interactions regardless of caller (`/review --create-issues`
+# today, future CI drivers exercising `/umbrella --input-file --dry-run`
+# tomorrow); pinning these literals prevents silent drift away from the
+# dry-run-safe contract.
+assert_contains "f1: Step 2 dry-run-safe rule heading" \
+    'Distinct-resolved-child-count rule** (dry-run-safe)' \
+    "$STEP2_BLOCK"
+assert_contains "f2: Step 2 ISSUE_<i>_DRY_RUN=true count-as-1 sentence" \
+    'If `ISSUE_<i>_DRY_RUN=true`: count this item as 1 prospective distinct child' \
+    "$STEP2_BLOCK"
+assert_contains "f3: Step 2 distinct-count formula" \
+    'len(set_of_numbers) + count_of_dry_run_items' \
+    "$STEP2_BLOCK"
+assert_contains "f4: Step 2 caller-agnostic authoritativeness note" \
+    'authoritative for any caller of `/umbrella --input-file`' \
+    "$STEP2_BLOCK"
 
 echo
 echo "All $PASS_COUNT assertions passed."
