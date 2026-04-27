@@ -517,17 +517,22 @@ Yes
 EOF
 run_case "nested then top-level sibling (#745)" "$FIXTURE_NESTED_THEN_TOPLEVEL" "" 0 2
 
-# Case 17 (#746): a non-planner `#### Some heading` line inside a finding's
-# body must NOT be discarded by the splitter. Only `#### Subquestion <N>`
-# planner organizers should flush; all other `####` lines are body content.
+# Case 17 (#746): a column-0 non-planner `#### Some heading` line inside a
+# finding's body must NOT be discarded by the splitter. Only `#### Subquestion
+# <N>` planner organizers should flush; all other `####` lines are body
+# content. Column-0 placement is essential — the old broad `^####` regex would
+# have matched a column-0 line and silently dropped it, splitting the finding
+# into two and corrupting COUNT. An indented `####` line never matched the old
+# regex, so an indented fixture would not exercise the regression path.
 read -r -d '' FIXTURE_NONPLANNER_HASH <<'EOF' || true
 ## Research Report
 
 ### Findings Summary
 
-1. First finding with a subsection heading in its body:
-   #### Notes on the data
-   The notes section contains additional context that should not be lost.
+1. First finding with a subsection heading in its body.
+
+#### Notes on the data
+The notes section contains additional context that should not be lost.
 
 ### Risk Assessment
 Low
