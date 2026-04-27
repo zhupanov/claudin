@@ -649,8 +649,11 @@ export STUB_POST_RC=0
   : > "$q_comment_log"
   printf '20\tsome-child\thttp://x\n' > "$q_children"
   : > "$q_edges"   # no DAG edges — back-link branch only
-  # Stub returns one matching body (other unrelated comments interleaved to
-  # exercise the substring-grep tolerance).
+  # Stub emits one first-line per "\n"-separated line (jq-output shape from
+  # the production pipeline `--jq '.[].body | split("\n")[0]'`). The matching
+  # first line "Part of umbrella #1 — Some title" begins with the marker at
+  # position 1, so the awk `index($0, m) == 1` probe matches; the unrelated
+  # first lines do not (preserves issue #716 line-start-anchor invariant).
   export STUB_LIST_COMMENTS_RESPONSE=$'unrelated comment\nPart of umbrella #1 — Some title\nanother comment\n'
   export STUB_LIST_COMMENTS_RC=0
   PATH="$STUB_BIN:$PATH" STUB_COMMENT_LOG="$q_comment_log" \
@@ -922,6 +925,89 @@ else
     FAIL=$((FAIL + 1))
   fi
 fi
+
+# (p2) --umbrella numeric grammar (closes #775 — input-boundary hardening).
+#      Non-empty UMBRELLA must match ^[1-9][0-9]*$; reject regex metacharacters
+#      ('1[', '[abc]'), embedded decimals ('1.2'), whitespace-padded values
+#      (' 5 '), and leading zeros ('01'). The CLI tightening applies on BOTH
+#      the normal path AND the --no-backlinks bypass path: junk on bypass
+#      was a latent contract gap (UMBRELLA is not used on bypass, but
+#      defense-in-depth is intentional). Empty UMBRELLA + --no-backlinks=true
+#      remains valid (covered by case (m) above and (p2-bypass) below).
+{
+  p2_children="$TMP/children-p2.tsv"
+  p2_edges="$TMP/edges-p2.tsv"
+  printf '20\tsome-child\thttp://x\n' > "$p2_children"
+  : > "$p2_edges"
+  # p2_reject: each invalid value must produce ERROR=wire-dag --umbrella ... .
+  for bad_umb in '1[' '[abc]' '1.2' ' 5 ' '01' '0'; do
+    out="$TMP/wire-out-p2-reject"
+    err="$TMP/wire-err-p2-reject"
+    if bash "$HELPERS" wire-dag \
+         --tmpdir "$TMP" --umbrella "$bad_umb" --umbrella-title "T" \
+         --children-file "$p2_children" --edges-file "$p2_edges" \
+         --repo o/r > "$out" 2> "$err"; then
+      printf '  ❌ --umbrella %q should fail; got success\n' "$bad_umb"
+      FAIL=$((FAIL + 1))
+    elif grep -q "must be a positive integer" "$err"; then
+      printf '  ✅ --umbrella %q rejected with numeric-grammar error\n' "$bad_umb"
+      PASS=$((PASS + 1))
+    else
+      printf '  ❌ --umbrella %q errored without expected message; stderr:\n' "$bad_umb"
+      sed 's/^/       /' "$err"
+      FAIL=$((FAIL + 1))
+    fi
+  done
+  # p2_no_backlinks_reject (F2 CLI tightening): non-empty non-numeric UMBRELLA
+  # is rejected even on the --no-backlinks bypass path, where UMBRELLA is
+  # otherwise unused. This is the explicit CLI-tightening test case.
+  out="$TMP/wire-out-p2-nb-reject"
+  err="$TMP/wire-err-p2-nb-reject"
+  if bash "$HELPERS" wire-dag \
+       --tmpdir "$TMP" --umbrella '[abc]' --no-backlinks \
+       --children-file "$p2_children" --edges-file "$p2_edges" \
+       --repo o/r > "$out" 2> "$err"; then
+    printf '  ❌ --no-backlinks --umbrella [abc] should fail; got success\n'
+    FAIL=$((FAIL + 1))
+  elif grep -q "must be a positive integer" "$err"; then
+    printf '  ✅ --no-backlinks --umbrella [abc] rejected (CLI tightening)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ --no-backlinks --umbrella [abc] unexpected stderr:\n'
+    sed 's/^/       /' "$err"
+    FAIL=$((FAIL + 1))
+  fi
+  # p2_valid: positive integer accepted (no error from arg parse).
+  # Stub response unset → no API calls succeed but arg-parse succeeds; we
+  # assert exit code propagation rather than a specific output value.
+  unset STUB_PROBE_RESPONSE STUB_LIST_COMMENTS_RESPONSE
+  out="$TMP/wire-out-p2-valid"
+  err="$TMP/wire-err-p2-valid"
+  if bash "$HELPERS" wire-dag \
+       --tmpdir "$TMP" --umbrella 12345 --umbrella-title "T" \
+       --children-file "$p2_children" --edges-file "$p2_edges" \
+       --repo o/r > "$out" 2> "$err"; then
+    if grep -q "must be a positive integer" "$err"; then
+      printf '  ❌ --umbrella 12345 produced numeric-grammar error unexpectedly:\n'
+      sed 's/^/       /' "$err"
+      FAIL=$((FAIL + 1))
+    else
+      printf '  ✅ --umbrella 12345 accepted (no numeric-grammar error)\n'
+      PASS=$((PASS + 1))
+    fi
+  else
+    # Non-zero exit may legitimately occur from downstream API stub absence,
+    # but the new arg-parse error must NOT be the cause.
+    if grep -q "must be a positive integer" "$err"; then
+      printf '  ❌ --umbrella 12345 rejected by numeric-grammar guard:\n'
+      sed 's/^/       /' "$err"
+      FAIL=$((FAIL + 1))
+    else
+      printf '  ✅ --umbrella 12345 passed numeric-grammar guard (downstream exit unrelated)\n'
+      PASS=$((PASS + 1))
+    fi
+  fi
+}
 
 echo ""
 echo "test-helpers.sh: wire-dag probe classification (issue #728)"

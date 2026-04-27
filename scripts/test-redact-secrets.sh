@@ -356,6 +356,89 @@ zero_err_line=$(printf '%s\n' "$zero_out" | grep '^ISSUE_ERROR=' || true)
 assert_contains "$zero_err_line" '<REDACTED-TOKEN>' '[edge] no-URL branch redacts stderr token'
 assert_not_contains "$zero_err_line" "${SK_TOKEN:0:35}" '[edge] no-URL branch does not leak sk-ant'
 
+# --- 4e: label-existence probe with regex metacharacters (closes #775) ---
+# Pre-fix: `grep -qx -- "$L"` interprets $L as BRE. A label `bug.feature`
+# would match a sibling label like `bug-feature` because BRE `.` matches any
+# single character → silent false-positive accept. Post-fix: `grep -Fqx --`
+# is byte-exact whole-line match. The fake gh emits a label list containing
+# `bug-feature` (no dot), and create-one.sh is invoked with `--label
+# bug.feature` (with dot). The probe must REJECT `bug.feature` (it does NOT
+# exist as an exact label name) and emit the standard WARN line.
+LABEL_DIR="$TMPROOT/stub-label-metachar"
+mkdir -p "$LABEL_DIR"
+cat > "$LABEL_DIR/gh" <<'GHLABEL'
+#!/usr/bin/env bash
+# label list --search <X> --json name --jq '.[].name' path: emit one-name-per-line.
+# When --search is "bug.feature" or "release[2026]", emit a sibling whose only
+# difference is in regex-meaningful characters (so BRE would match but
+# fixed-string must not).
+if [[ "$1" == "label" ]] && [[ "$2" == "list" ]]; then
+    # Find the --search value.
+    search=""
+    for ((i=1; i<=$#; i++)); do
+        if [[ "${!i}" == "--search" ]]; then
+            j=$((i + 1))
+            search="${!j}"
+            break
+        fi
+    done
+    case "$search" in
+        bug.feature)
+            # Emit a label whose name has `-` where the search has `.`.
+            # BRE `bug.feature` would match `bug-feature` (`.` = any char);
+            # fixed-string must reject.
+            printf 'bug-feature\nfoo\n'
+            ;;
+        release\[2026\])
+            # Emit `release2` and `release6`. BRE `release[2026]` is a
+            # character class matching ANY single char in {2,0,2,6}; would
+            # match `release2`. Fixed-string must reject.
+            printf 'release2\nrelease6\n'
+            ;;
+        *)
+            # Default: empty (label does not exist).
+            ;;
+    esac
+    exit 0
+fi
+if [[ "$1" == "repo" ]]; then echo 'owner/repo'; exit 0; fi
+if [[ "$1" == "api" ]]; then echo '4242'; exit 0; fi
+# issue create path: emit modern JSON.
+for ((i=1; i<=$#; i++)); do
+    if [[ "${!i}" == "--json" ]]; then
+        echo '{"id":4242,"number":42,"url":"https://github.com/owner/repo/issues/42"}'
+        exit 0
+    fi
+done
+echo 'https://github.com/owner/repo/issues/42'
+exit 0
+GHLABEL
+chmod +x "$LABEL_DIR/gh"
+
+# Sub-case 1: `bug.feature` against `bug-feature` sibling.
+label_out_1=$(PATH="$LABEL_DIR:$PATH" bash "$CREATE_ONE" --title 'plain-title' --body-file "$BODY_FILE" --repo owner/repo --label 'bug.feature' --dry-run 2>&1 || true)
+if printf '%s\n' "$label_out_1" | grep -q "WARN: label 'bug.feature' does not exist"; then
+    PASS=$((PASS + 1))
+    echo "  ok: [label-metachar] bug.feature correctly rejected (no BRE false-match against bug-feature)"
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("[label-metachar] bug.feature should produce WARN: does not exist")
+    echo "  FAIL: [label-metachar] bug.feature against bug-feature sibling" >&2
+    echo "       label_out: $label_out_1" >&2
+fi
+
+# Sub-case 2: `release[2026]` against `release2`/`release6` siblings.
+label_out_2=$(PATH="$LABEL_DIR:$PATH" bash "$CREATE_ONE" --title 'plain-title' --body-file "$BODY_FILE" --repo owner/repo --label 'release[2026]' --dry-run 2>&1 || true)
+if printf '%s\n' "$label_out_2" | grep -qF "WARN: label 'release[2026]' does not exist"; then
+    PASS=$((PASS + 1))
+    echo "  ok: [label-metachar] release[2026] correctly rejected (no BRE class false-match against release2/release6)"
+else
+    FAIL=$((FAIL + 1))
+    FAILED_TESTS+=("[label-metachar] release[2026] should produce WARN: does not exist")
+    echo "  FAIL: [label-metachar] release[2026] against release2/release6 siblings" >&2
+    echo "       label_out: $label_out_2" >&2
+fi
+
 echo ""
 echo "=== Summary ==="
 echo "Passed: $PASS"
