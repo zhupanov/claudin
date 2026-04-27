@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # test-umbrella-emit-output-contract.sh — Regression harness for /umbrella's
-# Step 3B.3 dry-run skip directive, Step 3B.4 dry-run skip directive (matched
-# pair with 3B.3), and Step 4 (Emit Output) prose contract.
+# Step 2 input-file dry-run-safe distinct-count rule, Step 3B.3 dry-run skip
+# directive, Step 3B.4 dry-run skip directive (matched pair with 3B.3), and
+# Step 4 (Emit Output) prose contract.
 #
 # Pins the load-bearing literals in:
-#   .claude/skills/umbrella/SKILL.md (Step 3B.3, Step 3B.4, Step 4 blocks)
+#   .claude/skills/umbrella/SKILL.md (Step 2, Step 3B.3, Step 3B.4, Step 4 blocks)
 #   .claude/skills/umbrella/scripts/helpers.md (emit-output subsection)
 #
 # Closes #602 — out-of-scope observation surfaced during /implement for #571
 # (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to
 # pin the new Step 3B.3 dry-run guard and the matched-pair Step 3B.4 guard.
+# Extended for #724 to pin the Step 2 input-file dry-run-safe distinct-count
+# rule (f1–f4) as authoritative for any caller of /umbrella --input-file.
 # The intent is a cheap CI guard against regression of the same drift;
 # test-helpers.sh explicitly leaves emit-output out of scope (see
 # test-helpers.md "Out of scope").
