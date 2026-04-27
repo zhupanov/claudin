@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.2] - 2026-04-27
+
+### Changed
+
+- `skills/improve-skill/scripts/iteration.md` — added `[--subordinate]` to the documented invocation synopsis (line 12) and a brief description of its purpose. The flag was already parsed by `iteration.sh` (line 230) and always passed by `driver.sh` (line 470); the contract sibling `.md` is now in sync with the kernel's actual argv. Closes #752.
+
 ## [7.17.1] - 2026-04-27
 
 ### Changed
