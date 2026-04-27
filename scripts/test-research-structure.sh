@@ -1,11 +1,12 @@
 #!/bin/bash
 # Structural regression test for /research skill progressive-disclosure refactor.
-# Asserts that the skill's 4-reference symmetric topology survives edits:
+# Asserts that the skill's 5-reference symmetric topology survives edits:
 #  - skills/research/references/research-phase.md, validation-phase.md,
-#    adjudication-phase.md, and citation-validation-phase.md all exist
+#    adjudication-phase.md, citation-validation-phase.md, and critique-loop-phase.md
+#    all exist
 #  - Each appears on a 'MANDATORY — READ ENTIRE FILE' line in skills/research/SKILL.md,
 #    and the SAME line also carries reciprocal 'Do NOT load <each-other-reference>'
-#    guards naming ALL THREE other references (line-scoped so a future edit cannot
+#    guards naming ALL FOUR other references (line-scoped so a future edit cannot
 #    split the MANDATORY and the Do-NOT-load directives into different paragraphs
 #    without the harness catching the drift). Order-agnostic: the harness uses
 #    per-substring grep loops so minor reordering of unrelated lines does NOT
@@ -76,7 +77,7 @@ fail() {
 check_mandatory_topology() {
     local target="$1"  # filename basename of the reference being asserted
     shift
-    local -a others=("$@")  # the other three filenames
+    local -a others=("$@")  # the other four filenames
     # Find the canonical MANDATORY line: it begins with the literal '**MANDATORY'
     # token and names the target reference EARLIER in the line than any 'Do NOT load'
     # clause. The reference-of-record for the line is the one named between the
