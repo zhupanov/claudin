@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.13] - 2026-04-27
+
+### Fixed
+
+- Align `/implement`'s `plan-goals-test` anchor-fragment composition consumer with `/design`'s actual emitted plan heading (`## Implementation Plan`, with `## Revised Implementation Plan` superseding when plan review accepts findings). The previous instruction at `skills/implement/SKILL.md:510` directed the orchestrator to compose from `## Goal` and `## Test plan` sections that `/design` never produced, leaving the anchor fragment structurally non-extractable on every path. Closes #749.
+- Add cross-skill drift-prevention assertion (16) to `scripts/test-implement-structure.sh` (producer pin + scoped consumer pin + anchor template pin + contiguous-phrase negative pin) so the producer/consumer schema agreement cannot silently re-emerge.
+
 ## [7.17.12] - 2026-04-27
 
 ### Changed

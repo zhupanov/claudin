@@ -38,11 +38,11 @@ This line is suppressed as soon as any fragment contains a non-whitespace byte â
 <!-- section:plan-goals-test -->
 ## Goal
 
-<goal paragraph from /design output>
+<goal paragraph synthesized from /design's `## Implementation Plan` (or `## Revised Implementation Plan` when present in conversation context)>
 
 ## Test plan
 
-<test plan from /design output>
+<test plan synthesized from /design's Testing strategy content under `## Implementation Plan` (or `## Revised Implementation Plan` when present in conversation context)>
 
 <!-- section-end:plan-goals-test -->
 
