@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.26] - 2026-04-26
+
+### Fixed
+
+- `.claude/skills/umbrella/scripts/render-batch-input.sh` — add a `[ -w "$TMPDIR" ]` writability preflight immediately after the existing `[ -d "$TMPDIR" ]` check, mirroring the guard in `render-umbrella-body.sh:28-30`. Without it, an unwritable `--tmpdir` produced a raw bash "Permission denied" line on the first redirect under `$TMPDIR` (`2>"$JQ_PARSE_ERR"` or `: > "$OUT"`) and an exit code other than 1, breaking the documented `ERROR=...` stable stderr line + exit 1 grammar that downstream `umbrella` SKILL.md Step 3B.1 consumers rely on. The new guard emits `ERROR=tmpdir not writable: <path>` and exits 1 BEFORE any redirect under `$TMPDIR`. Adds an `assert_unwritable_tmpdir` regression case to `test-render-batch-input.sh` (creates a sub-tmpdir, `chmod 555`, runs the script, asserts exit 1 + `ERROR=tmpdir not writable:` stderr line, restores the writable mode for trap cleanup) and updates `render-batch-input.md` "Test coverage" + CLI sections to document the new failure mode. Closes #687, same bug class as #645 / #710 on a sibling script.
+
 ## [7.16.25] - 2026-04-26
 
 ### Fixed
