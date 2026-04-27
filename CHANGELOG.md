@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.5] - 2026-04-27
+
+### Fixed
+
+- `scripts/eval-research.sh` — `require_value` now rejects a candidate value that starts with `--`, so a trailing flag followed by another flag (e.g. `eval-research.sh --baseline --scale standard`) cleanly exits 2 with `eval-research: --baseline requires a value` instead of silently binding `BASELINE_REF=--scale` and producing a confusing downstream `git show --scale:...` error. The validity regex `^[0-9A-Za-z._/-]+$` allowed `--scale` because hyphens are valid; the third `next_val` argument plus a `[[ "$next_val" == --* ]]` guard mirrors `take_value` in `scripts/render-reviewer-prompt.sh`. All 7 call sites updated to pass `"${2:-}"`. New Sub-5 case in `scripts/test-eval-research-baseline-flag.sh` pins the behavior; sibling contracts `scripts/eval-research.md` and `scripts/test-eval-research-baseline-flag.md` updated. Closes #780.
+
 ## [7.17.4] - 2026-04-27
 
 ### Changed
