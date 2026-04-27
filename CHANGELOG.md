@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.11] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/finalize-umbrella.sh` — rewrote the obsolete "Idempotency guard (FINDING_2)" header comment block to match the current contract documented in `finalize-umbrella.md` and the actual `cmd_finalize` implementation. The prior header described a single rule ("any of CLOSED / `[DONE]` title / closing-comment marker → `FINALIZED=false ALREADY_FINALIZED=true`") that did not reflect runtime behavior; only `state=CLOSED` is a strict short-circuit, while OPEN issues with `[DONE]` title or marker are partial-success signals that drive selective skips (title → skip rename only; marker → skip comment-post only; close-only is the intersection). Also added the missing `REASON=already CLOSED` line to the in-script Stdout contract so all stdout keys are documented. Comment-only; no executable code changed. Closes #754.
+
 ## [7.17.10] - 2026-04-27
 
 ### Fixed
