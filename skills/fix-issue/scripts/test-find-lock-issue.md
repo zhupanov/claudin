@@ -2,7 +2,7 @@
 
 `skills/fix-issue/scripts/test-find-lock-issue.sh` is the offline regression harness for `skills/fix-issue/scripts/find-lock-issue.sh` (the combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock refactor closing #496). It uses a PATH-prepended `gh` stub under a per-fixture tmpdir to validate the script's exit-code matrix and unified stdout contract without any network or git-state mutation.
 
-## Eleven executed fixtures plus one deferred-coverage note
+## Twelve executed fixtures plus one deferred-coverage note
 
 1. **Eligible + lock OK + rename OK** → exit 0; `ELIGIBLE=true`, `ISSUE_NUMBER=N`, `LOCK_ACQUIRED=true`, `RENAMED=true`. Auxiliary delegate keys (`COMMENTED`, `NEW_TITLE`) are filtered from stdout.
 2. **Eligible + lock fail** → exit 3; `ELIGIBLE=true LOCK_ACQUIRED=false ERROR=...`. Simulated by failing the IN PROGRESS comment post inside `cmd_comment` (a stateless-stub-friendly approximation of the duplicate-IN-PROGRESS detection path; both produce the same `exit 1` from `cmd_comment` → `exit 3` from `find-lock-issue.sh`).
@@ -16,6 +16,7 @@
 10. **Explicit `--issue` + missing umbrella-handler.sh** → exit 2; `ELIGIBLE=false ERROR=umbrella-handler.sh not executable; cannot validate explicit issue.` + stderr diagnostic. Per-fixture tmpdir copy of `find-lock-issue.sh` with NO sibling `umbrella-handler.sh`; `dirname "${BASH_SOURCE[0]}"` resolution looks in the tmpdir and finds nothing. Validates the explicit-mode fail-closed gate at the helper-missing branch (closes #765). `LOCK_ACQUIRED` absent — lock never attempted.
 11. **Explicit `--issue` + `umbrella-handler.sh detect` fails with `ERROR=`** → exit 2; helper's `ERROR=Failed to fetch issue #50` re-emitted on stdout AND echoed on stderr. Per-fixture tmpdir holds a copy of `find-lock-issue.sh` plus a stub `umbrella-handler.sh` that prints the `ERROR=` line and exits 1. Validates that the orchestrator forwards the helper's failure cause as the unified-contract `ERROR=` while also surfacing it on stderr for operators (closes #765).
 12. **Explicit `--issue` + `umbrella-handler.sh detect` fails silently** → exit 2; synthesized `ERROR=umbrella-handler.sh detect exited 1 (no ERROR= line emitted)` on stdout. Per-fixture tmpdir holds a copy of `find-lock-issue.sh` plus a stub `umbrella-handler.sh` that exits 1 with no output. Validates the synthesized-fallback path that protects against empty Step 0 stdout when the helper is partial / signal-killed (closes #765).
+13. **Explicit `--issue` + `umbrella-handler.sh detect` exits 0 with no `IS_UMBRELLA=` value** → exit 2; `ERROR=umbrella-handler.sh detect emitted no recognized IS_UMBRELLA= value.` on stdout. Per-fixture tmpdir holds a copy of `find-lock-issue.sh` plus a stub `umbrella-handler.sh` that exits 0 cleanly but prints only an auxiliary field (e.g., `DETECTION=broken`) — no `IS_UMBRELLA=` line. Validates the fail-closed branch covering the entire `detect` contract (partial / buggy helper output that succeeds-but-emits-nothing-usable), which is the third abort path the #765 fix introduces. Without this fixture, that branch is exercised in production only.
 
 ## Stub design
 

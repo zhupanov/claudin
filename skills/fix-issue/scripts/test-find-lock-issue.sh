@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Eleven executed fixtures plus one deferred-coverage
+# refactor (closes #496). Twelve executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -34,6 +34,10 @@
 #  12. explicit --issue + umbrella-handler.sh detect exits non-zero with no
 #      output → exit 2; synthesized ERROR=umbrella-handler.sh detect
 #      exited 1 (no ERROR= line emitted) (fail-closed, closes #765)
+#  13. explicit --issue + umbrella-handler.sh detect exits 0 but emits no
+#      recognized IS_UMBRELLA= value → exit 2; ERROR=umbrella-handler.sh
+#      detect emitted no recognized IS_UMBRELLA= value. (fail-closed on
+#      whole detect contract — partial / buggy helper output, closes #765)
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -702,6 +706,49 @@ assert_contains "$OUT" "ELIGIBLE=false" "[12] ELIGIBLE=false on stdout"
 assert_contains "$OUT" "ERROR=umbrella-handler.sh detect exited 1 (no ERROR= line emitted)" "[12] synthesized ERROR= when helper produces no output"
 assert_contains "$ERR" "umbrella-handler.sh detect failed for issue #50" "[12] stderr surfaces helper failure"
 assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[12] LOCK_ACQUIRED= absent (lock never attempted)"
+
+# ---------------------------------------------------------------------------
+# Fixture 13: explicit --issue + umbrella-handler.sh detect exits 0 but
+# emits no recognized IS_UMBRELLA= value → exit 2; ERROR=umbrella-handler.sh
+# detect emitted no recognized IS_UMBRELLA= value. on stdout. Covers the
+# fail-closed branch for partial / buggy helper output where detect exits
+# successfully but doesn't emit a usable result (the third abort condition
+# from the #765 fix — all three failure classes now CI-backed).
+# ---------------------------------------------------------------------------
+echo "Fixture 13: explicit --issue + umbrella-handler.sh detect exits 0 with no IS_UMBRELLA= (fail-closed)"
+run_fixture "fixture-13"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Regular bug'"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+FIXTURE13_SCRIPT=$(copy_script_to_fixture "fixture-13")
+
+# Stub umbrella-handler.sh: exits 0 cleanly but prints only auxiliary
+# fields (DETECTION=broken) — no IS_UMBRELLA= line. This simulates a
+# partial / buggy helper response.
+cat > "$TMPROOT/fixture-13/umbrella-handler.sh" <<'STUB_HELPER_EOF'
+#!/usr/bin/env bash
+echo "DETECTION=broken"
+exit 0
+STUB_HELPER_EOF
+chmod +x "$TMPROOT/fixture-13/umbrella-handler.sh"
+
+OUT_FILE="$TMPROOT/fixture-13/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-13/stderr.txt"
+EXIT_CODE=0
+"$FIXTURE13_SCRIPT" 50 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+ERR=$(cat "$ERR_FILE")
+
+assert_equal "$EXIT_CODE" "2" "[13] exit code 2 (fail-closed: detect exit 0 but no IS_UMBRELLA= value)"
+assert_contains "$OUT" "ELIGIBLE=false" "[13] ELIGIBLE=false on stdout"
+assert_contains "$OUT" "ERROR=umbrella-handler.sh detect emitted no recognized IS_UMBRELLA= value." "[13] ERROR= identifies malformed helper output"
+assert_contains "$ERR" "umbrella-handler.sh detect succeeded but emitted no recognized IS_UMBRELLA= value" "[13] stderr surfaces malformed-output diagnostic"
+assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[13] LOCK_ACQUIRED= absent (lock never attempted)"
 
 # ---------------------------------------------------------------------------
 # Summary
