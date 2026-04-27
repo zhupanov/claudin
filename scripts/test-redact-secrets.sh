@@ -417,7 +417,7 @@ chmod +x "$LABEL_DIR/gh"
 
 # Sub-case 1: `bug.feature` against `bug-feature` sibling.
 label_out_1=$(PATH="$LABEL_DIR:$PATH" bash "$CREATE_ONE" --title 'plain-title' --body-file "$BODY_FILE" --repo owner/repo --label 'bug.feature' --dry-run 2>&1 || true)
-if printf '%s\n' "$label_out_1" | grep -q "WARN: label 'bug.feature' does not exist"; then
+if printf '%s\n' "$label_out_1" | grep -Fq -- "WARN: label 'bug.feature' does not exist"; then
     PASS=$((PASS + 1))
     echo "  ok: [label-metachar] bug.feature correctly rejected (no BRE false-match against bug-feature)"
 else

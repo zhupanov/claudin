@@ -680,6 +680,55 @@ export STUB_POST_RC=0
   unset STUB_LIST_COMMENTS_RESPONSE STUB_COMMENT_LOG
 }
 
+# (q2) Mid-line marker false-positive guard (closes #775 — pins issue #716
+#      line-start anchor invariant). The probe matcher is awk
+#      `index($0, m) == 1` which requires the marker at byte position 1 of
+#      the comment first line. A discussion comment whose first line CONTAINS
+#      the marker as a substring (e.g., a quoted reply `> Part of umbrella
+#      #1 — ...`) MUST NOT trigger BACKLINKS_SKIPPED_EXISTING. If the matcher
+#      ever regresses to `grep -F` without an anchor (or `index() > 0`), this
+#      fixture catches it. Without (q2), the line-start invariant is
+#      mechanically untested — only verifiable by code review.
+{
+  q2_children="$TMP/children-q2.tsv"
+  q2_edges="$TMP/edges-q2.tsv"
+  q2_out="$TMP/wire-out-q2"
+  q2_err="$TMP/wire-err-q2"
+  q2_comment_log="$TMP/comment-log-q2.txt"
+  : > "$q2_comment_log"
+  printf '20\tsome-child\thttp://x\n' > "$q2_children"
+  : > "$q2_edges"
+  # Stub returns first lines where the marker appears at position > 1
+  # (mid-line quotation-style references). NONE of these should match
+  # the canonical line-start anchor.
+  export STUB_LIST_COMMENTS_RESPONSE=$'> Part of umbrella #1 — Some title\nNote: see "Part of umbrella #1 — Some title" above\nFYI Part of umbrella #1 — Some title\n'
+  export STUB_LIST_COMMENTS_RC=0
+  PATH="$STUB_BIN:$PATH" STUB_COMMENT_LOG="$q2_comment_log" \
+    bash "$HELPERS" wire-dag \
+      --tmpdir "$TMP" --umbrella 1 --umbrella-title "Some title" \
+      --children-file "$q2_children" --edges-file "$q2_edges" \
+      --repo o/r > "$q2_out" 2> "$q2_err" || true
+  ok=1
+  # Mid-line marker must NOT trigger the idempotency-skip path.
+  grep -qE 'BACKLINKS_SKIPPED_EXISTING=0' "$q2_out" || ok=0
+  # The probe sees no canonical first-line marker → posts the back-link.
+  grep -qE 'BACKLINKS_POSTED=1' "$q2_out" || ok=0
+  comment_calls=$(wc -l < "$q2_comment_log" | tr -d ' ')
+  [ "$comment_calls" = "1" ] || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ mid-line marker references → BACKLINKS_SKIPPED_EXISTING=0, BACKLINKS_POSTED=1 (#716 line-start anchor invariant preserved)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ mid-line marker false-positive: stdout:\n'
+    sed 's/^/       /' "$q2_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$q2_err"
+    printf '     comment log lines: %s\n' "$comment_calls"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_LIST_COMMENTS_RESPONSE STUB_COMMENT_LOG
+}
+
 # (r) No matching comment → BACKLINKS_POSTED=1, exactly one `gh issue comment`
 #     invocation recorded in STUB_COMMENT_LOG.
 {
@@ -933,7 +982,8 @@ fi
 #      the normal path AND the --no-backlinks bypass path: junk on bypass
 #      was a latent contract gap (UMBRELLA is not used on bypass, but
 #      defense-in-depth is intentional). Empty UMBRELLA + --no-backlinks=true
-#      remains valid (covered by case (m) above and (p2-bypass) below).
+#      remains valid (covered by case (m) above and the p2_no_backlinks_reject
+#      sub-block below — non-empty non-numeric on bypass).
 {
   p2_children="$TMP/children-p2.tsv"
   p2_edges="$TMP/edges-p2.tsv"
@@ -941,8 +991,12 @@ fi
   : > "$p2_edges"
   # p2_reject: each invalid value must produce ERROR=wire-dag --umbrella ... .
   for bad_umb in '1[' '[abc]' '1.2' ' 5 ' '01' '0'; do
-    out="$TMP/wire-out-p2-reject"
-    err="$TMP/wire-err-p2-reject"
+    # Per-iteration paths so a debugger can inspect each iteration's stdout/stderr
+    # post-loop (otherwise the shared path would only retain the last iteration).
+    bad_slug=$(printf '%s' "$bad_umb" | tr -dc '[:alnum:]')
+    [ -z "$bad_slug" ] && bad_slug="empty"
+    out="$TMP/wire-out-p2-reject-${bad_slug}"
+    err="$TMP/wire-err-p2-reject-${bad_slug}"
     if bash "$HELPERS" wire-dag \
          --tmpdir "$TMP" --umbrella "$bad_umb" --umbrella-title "T" \
          --children-file "$p2_children" --edges-file "$p2_edges" \
@@ -1319,6 +1373,67 @@ echo "test-helpers.sh: wire-dag Bash 3.2-safe cache regressions (issue #744)"
     FAIL=$((FAIL + 1))
   fi
   unset STUB_BLOCKED_BY_1 STUB_BLOCKED_BY_11 STUB_BLOCKED_BY_100
+}
+
+echo ""
+echo "test-helpers.sh: existing-edge probe regex-injection regression (#775)"
+
+# Standalone test of the awk -F$'\t' '$1==b && $2==t' field-equality probe
+# that replaced grep -qE "^${blocker}\t${blocked}$" at helpers.sh:625-633.
+# Pins the byte-exact field-equality semantic so a future regression back to
+# regex matching on EXISTING_EDGES_TSV (e.g., reverting the awk to grep -qE)
+# is caught at lint time. Without this fixture, the invariant is mechanically
+# untested — every other wire-dag fixture uses pure-numeric blocker/blocked
+# IDs, so a metachar-sensitive regression would silently pass (Codex F4).
+{
+  ee_tsv="$TMP/existing-edges-ee.tsv"
+  printf '5\t10\n50\t100\n5X\t10\n5\t10Y\n[5]\t10\n' > "$ee_tsv"
+
+  # Positive: byte-exact pair "5\t10" must match.
+  if awk -F$'\t' -v b="5" -v t="10" \
+       '($1 "") == b && ($2 "") == t {found=1; exit} END{exit !found}' "$ee_tsv"; then
+    printf '  ✅ awk field-equality matches byte-exact "5\\t10" row\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ awk field-equality failed to match byte-exact "5\\t10" row\n'
+    FAIL=$((FAIL + 1))
+  fi
+
+  # Negative 1: "5." (regex `5.` would have matched "5X" or "50" under ERE)
+  # must NOT match — no literal row "5.\t10" exists in the TSV.
+  if awk -F$'\t' -v b="5." -v t="10" \
+       '($1 "") == b && ($2 "") == t {found=1; exit} END{exit !found}' "$ee_tsv"; then
+    printf '  ❌ awk field-equality false-matched "5.\\t10" against sibling row (regex-injection regression)\n'
+    FAIL=$((FAIL + 1))
+  else
+    printf '  ✅ awk field-equality correctly rejects "5.\\t10" (no byte-exact row; ERE would have matched 5X)\n'
+    PASS=$((PASS + 1))
+  fi
+
+  # Negative 2: "5*" (regex `5*` would match "" or "5" or "55" under ERE)
+  # must NOT match — no literal row "5*\t10".
+  if awk -F$'\t' -v b="5*" -v t="10" \
+       '($1 "") == b && ($2 "") == t {found=1; exit} END{exit !found}' "$ee_tsv"; then
+    printf '  ❌ awk field-equality false-matched "5*\\t10" against sibling rows\n'
+    FAIL=$((FAIL + 1))
+  else
+    printf '  ✅ awk field-equality correctly rejects "5*\\t10" (no byte-exact row)\n'
+    PASS=$((PASS + 1))
+  fi
+
+  # Negative 3: "[5]" (regex character class would match "5" under ERE) must
+  # NOT match a sibling "5\t10" row — only the literal "[5]\t10" row matches.
+  if awk -F$'\t' -v b="[5]" -v t="10" \
+       '($1 "") == b && ($2 "") == t {found=1; exit} END{exit !found}' "$ee_tsv"; then
+    # A literal "[5]\t10" row IS in the TSV, so this should PASS — but only
+    # the byte-exact match against the literal row, not against the "5\t10"
+    # sibling. The exit 0 is correct here.
+    printf '  ✅ awk field-equality matches literal "[5]\\t10" byte-exact row (not the "5\\t10" ERE sibling)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ awk field-equality failed to match literal "[5]\\t10" row\n'
+    FAIL=$((FAIL + 1))
+  fi
 }
 
 echo ""

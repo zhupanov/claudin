@@ -149,7 +149,8 @@ case "$SUBCMD" in
     # leading zeros ('01'), embedded decimals ('1.2'), regex metacharacters
     # ('1[', '[abc]'), and whitespace-padded values (' 5 ') all fail. The
     # [ -n "$UMBRELLA" ] gate preserves the empty-string + --no-backlinks bypass
-    # path (test-helpers.sh:867-882). Mirrors the WD_NODE_CAP validation pattern
+    # path (test-helpers.sh case (m) — empty --umbrella with --no-backlinks).
+    # Mirrors the WD_NODE_CAP validation pattern
     # at line ~417 below. CLI tightening is intentional: junk on the --no-backlinks
     # bypass path was a latent contract gap; any future caller supplying
     # non-numeric UMBRELLA now fails fast at parse time rather than producing an
@@ -628,8 +629,12 @@ case "$SUBCMD" in
         # current callers numerically validate IDs, the input boundary lacked
         # the property — fixing here closes the regex-injection class on the
         # wire-dag surface alongside the back-link probe and label probe.
+        # The `""` empty-string concatenation forces awk to treat both
+        # operands as strings; without it, awk's auto-numeric-coercion would
+        # compare numerically when both `$1` (from input) and `b` (from -v)
+        # look like numbers (e.g., `b="5."` would equal `$1="5"` numerically).
         if awk -F$'\t' -v b="$blocker" -v t="$blocked" \
-             '$1==b && $2==t {found=1; exit} END{exit !found}' "$EXISTING_EDGES_TSV"; then
+             '($1 "") == b && ($2 "") == t {found=1; exit} END{exit !found}' "$EXISTING_EDGES_TSV"; then
           EDGES_SKIPPED_EXISTING=$((EDGES_SKIPPED_EXISTING + 1))
           continue
         fi
