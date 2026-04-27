@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.26] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/test-finalize-umbrella.sh` — every fixture now asserts the script's exit code AND its stderr behavior in addition to the existing stdout key/value substring matches. Replaces the per-fixture `OUT=$("$SCRIPT" ... 2>&1) || true` pattern with a `run_script_capture` helper that captures stdout, stderr, and `$?` separately, plus new `assert_eq_exit` / `assert_stderr_contains` / `assert_stderr_empty` helpers alongside the existing `assert_contains` / `assert_not_contains`. Fixtures 1-4 now require exit 0 + empty stderr; fixture 5 requires exit 0 + the literal `WARNING: title rename to [DONE] failed` on stderr (best-effort rename invariant). Sibling contract `skills/fix-issue/scripts/test-finalize-umbrella.md` updated in lockstep to document the new exit-code + stderr assertions and the `run_script_capture` canonical entry point. Harness ends at 26 passed / 0 failed. Closes #767.
+
 ## [7.17.25] - 2026-04-27
 
 ### Fixed
