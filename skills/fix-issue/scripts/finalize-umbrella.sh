@@ -23,29 +23,36 @@
 #   Before posting any comment or running rename/close, probe the umbrella's
 #   current state and look for partial-success signals from a prior finalize
 #   attempt. The guard distinguishes a strict short-circuit from two
-#   close-only retry paths:
+#   independent partial-success skip-flags:
 #     1. State is CLOSED — strict short-circuit. Emit
 #        FINALIZED=false ALREADY_FINALIZED=true REASON=already CLOSED and
 #        exit 0 without further mutation.
 #     2. State is OPEN AND title starts with "[DONE] " (managed lifecycle
 #        prefix) — partial-success: a prior rename succeeded but
-#        `gh issue close` did not complete. Skip the rename API call and
-#        proceed to close-only retry; on success emit FINALIZED=true
-#        CLOSED=true.
+#        `gh issue close` did not complete. Skip ONLY the rename API call;
+#        the closing comment is still posted (unless signal #3 also fires)
+#        and `gh issue close` is still invoked. On success emit
+#        FINALIZED=true CLOSED=true (with RENAMED=false reflecting "no
+#        rename happened in this call").
 #     3. State is OPEN AND a comment body contains the literal marker
 #        "<!-- larch:fix-issue:umbrella-finalized -->" — partial-success:
 #        a prior comment-post succeeded but `gh issue close` did not
-#        complete. Skip the comment-post step (avoid double-comment under
-#        concurrency) and proceed to close-only retry; on success emit
-#        FINALIZED=true CLOSED=true.
+#        complete. Skip ONLY the comment-post step (avoid double-comment
+#        under concurrency); the rename is still attempted (unless signal
+#        #2 also fires) and `gh issue close` is still invoked. On success
+#        emit FINALIZED=true CLOSED=true.
+#   Signals 2 and 3 are independent and may fire together (a prior attempt
+#   may have completed both rename and comment-post but failed close), in
+#   which case the executed path becomes close-only.
 #   Title-prefix and marker signals MUST NOT short-circuit on their own
 #   (FINDING_3): issue-lifecycle.sh close posts the comment BEFORE its
 #   close call, so a transient close failure leaves rename and/or comment
 #   in place but the issue still OPEN. An aggressive short-circuit on
 #   title or marker alone would leave the umbrella stuck OPEN forever —
 #   every retry would return ALREADY_FINALIZED=true and skip the close
-#   call. Routing those signals to close-only retries also avoids
-#   double-comment under concurrent finalize attempts.
+#   call. Routing those signals to selective skips (rather than a flat
+#   short-circuit) also avoids double-comment under concurrent finalize
+#   attempts while still driving the close to its terminal state.
 #
 # Sequence on the non-idempotent path:
 #   1. Rename the umbrella's title to "[DONE] <title>" via
@@ -59,7 +66,12 @@
 #
 # Stdout contract (KEY=value lines):
 #   FINALIZED=true|false
-#   ALREADY_FINALIZED=true        (only when the idempotency guard fired)
+#   ALREADY_FINALIZED=true        (only when the strict short-circuit fired,
+#                                  i.e. state=CLOSED)
+#   REASON=already CLOSED         (paired with ALREADY_FINALIZED=true on the
+#                                  CLOSED short-circuit path; not emitted on
+#                                  the close-only retry paths, which succeed
+#                                  with FINALIZED=true)
 #   RENAMED=true|false            (rename outcome — present on the executed
 #                                  path; omitted on ALREADY_FINALIZED)
 #   CLOSED=true|false             (close outcome — present on the executed
