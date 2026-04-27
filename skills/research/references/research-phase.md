@@ -306,7 +306,7 @@ Print: `✅ 1.2: lane-assign — N=$RESEARCH_PLAN_N, per-lane suffixes composed 
 
 **Baseline prompt** (`RESEARCH_PROMPT_BASELINE`). Per-scale applicability:
 
-- `RESEARCH_SCALE=quick` — the single inline Claude lane runs `RESEARCH_PROMPT_BASELINE` verbatim.
+- `RESEARCH_SCALE=quick` — each of the **K=3 homogeneous Claude Agent-tool lanes** (issue #520) runs `RESEARCH_PROMPT_BASELINE` verbatim; the orchestrator does not run a separate inline Claude lane in quick mode.
 - `RESEARCH_SCALE=deep` — only the **inline Claude lane** runs `RESEARCH_PROMPT_BASELINE` (general/synthesis-style role); the four external slots (Cursor-Arch, Cursor-Edge, Codex-Ext, Codex-Sec) and their per-slot Claude fallbacks run the corresponding **named angle prompts** (`RESEARCH_PROMPT_ARCH`, `RESEARCH_PROMPT_EDGE`, `RESEARCH_PROMPT_EXT`, `RESEARCH_PROMPT_SEC`) defined further below — NOT this baseline literal.
 - `RESEARCH_SCALE=standard` — does **NOT** use `RESEARCH_PROMPT_BASELINE`. All 3 standard-mode lanes use angle prompts (3 of the 4 below); see the per-lane mapping in the `### Standard` subsection.
 
