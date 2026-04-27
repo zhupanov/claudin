@@ -164,6 +164,58 @@ assert_not_contains() {
     fi
 }
 
+assert_eq_exit() {
+    local expected="$1" actual="$2" label="$3"
+    if [[ "$expected" == "$actual" ]]; then
+        PASS=$((PASS + 1))
+        echo "  ok: $label"
+    else
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("$label (expected exit $expected, got $actual)")
+        echo "  FAIL: $label (expected exit $expected, got $actual)" >&2
+    fi
+}
+
+assert_stderr_contains() {
+    local stderr="$1" needle="$2" label="$3"
+    if [[ "$stderr" == *"$needle"* ]]; then
+        PASS=$((PASS + 1))
+        echo "  ok: $label"
+    else
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("$label (stderr missing: $needle)")
+        echo "  FAIL: $label (stderr missing $needle)" >&2
+        echo "       stderr: ${stderr:0:300}" >&2
+    fi
+}
+
+assert_stderr_empty() {
+    local stderr="$1" label="$2"
+    if [[ -z "$stderr" ]]; then
+        PASS=$((PASS + 1))
+        echo "  ok: $label"
+    else
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("$label (stderr non-empty)")
+        echo "  FAIL: $label (stderr non-empty)" >&2
+        echo "       stderr: ${stderr:0:300}" >&2
+    fi
+}
+
+run_script_capture() {
+    # Runs the script under test capturing stdout, stderr, and exit code
+    # separately into the caller's OUT / ERR / EC variables. Resilient to
+    # set -e: the invocation tolerates non-zero exits via `|| EC=$?`.
+    local fixture_dir="$1"
+    shift
+    local out_file="$fixture_dir/stdout.txt"
+    local err_file="$fixture_dir/stderr.txt"
+    EC=0
+    "$SCRIPT" "$@" >"$out_file" 2>"$err_file" || EC=$?
+    OUT=$(cat "$out_file")
+    ERR=$(cat "$err_file")
+}
+
 echo "Running test-finalize-umbrella against $SCRIPT"
 
 # Fixture 1: success path
@@ -175,7 +227,9 @@ run_fixture "fixture-1"
     echo "ISSUE_BODY='Umbrella tracking issue.'"
     echo "ISSUE_COMMENTS='[[]]'"
 } > "$STUB_STATE_FILE"
-OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
+run_script_capture "$TMPROOT/fixture-1" finalize --issue 100
+assert_eq_exit 0 "$EC" "[1] exit 0 on success"
+assert_stderr_empty "$ERR" "[1] stderr empty on success"
 assert_contains "$OUT" "FINALIZED=true" "[1] FINALIZED=true on success"
 assert_contains "$OUT" "RENAMED=true" "[1] RENAMED=true"
 assert_contains "$OUT" "CLOSED=true" "[1] CLOSED=true"
@@ -193,7 +247,9 @@ ISSUE_STATE=OPEN
 ISSUE_BODY='Umbrella tracking issue.'
 ISSUE_COMMENTS='[[{"id":1,"body":"<!-- larch:fix-issue:umbrella-finalized -->\nAll tracked issues are closed. Marking umbrella as DONE and closing.","created_at":"2024-01-01T00:00:00Z"}]]'
 STATE_EOF
-OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
+run_script_capture "$TMPROOT/fixture-2" finalize --issue 100
+assert_eq_exit 0 "$EC" "[2] exit 0 on close-only retry"
+assert_stderr_empty "$ERR" "[2] stderr empty on close-only retry"
 assert_contains "$OUT" "FINALIZED=true" "[2] FINALIZED=true (close-only retry succeeded)"
 assert_contains "$OUT" "CLOSED=true" "[2] CLOSED=true (the close path WAS retried)"
 assert_not_contains "$OUT" "ALREADY_FINALIZED=true" "[2] does NOT short-circuit when state=OPEN even with marker present"
@@ -210,7 +266,9 @@ run_fixture "fixture-3"
     echo "ISSUE_BODY='Umbrella tracking issue.'"
     echo "ISSUE_COMMENTS='[[]]'"
 } > "$STUB_STATE_FILE"
-OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
+run_script_capture "$TMPROOT/fixture-3" finalize --issue 100
+assert_eq_exit 0 "$EC" "[3] exit 0 on close-only retry (skip rename)"
+assert_stderr_empty "$ERR" "[3] stderr empty on close-only retry (skip rename)"
 assert_contains "$OUT" "FINALIZED=true" "[3] FINALIZED=true (close path ran)"
 assert_contains "$OUT" "RENAMED=false" "[3] RENAMED=false (rename skipped, title already [DONE])"
 assert_contains "$OUT" "CLOSED=true" "[3] CLOSED=true (close path WAS retried)"
@@ -224,7 +282,9 @@ run_fixture "fixture-4"
     echo "ISSUE_STATE=CLOSED"
     echo "ISSUE_BODY='Umbrella tracking issue.'"
 } > "$STUB_STATE_FILE"
-OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
+run_script_capture "$TMPROOT/fixture-4" finalize --issue 100
+assert_eq_exit 0 "$EC" "[4] exit 0 on already-CLOSED short-circuit"
+assert_stderr_empty "$ERR" "[4] stderr empty on already-CLOSED short-circuit"
 assert_contains "$OUT" "ALREADY_FINALIZED=true" "[4] ALREADY_FINALIZED=true"
 assert_contains "$OUT" "already CLOSED" "[4] REASON identifies CLOSED state"
 
@@ -238,7 +298,10 @@ run_fixture "fixture-5"
     echo "ISSUE_COMMENTS='[[]]'"
     echo "RENAME_FAIL=true"
 } > "$STUB_STATE_FILE"
-OUT=$("$SCRIPT" finalize --issue 100 2>&1) || true
+run_script_capture "$TMPROOT/fixture-5" finalize --issue 100
+assert_eq_exit 0 "$EC" "[5] exit 0 (best-effort rename failure does not abort)"
+assert_stderr_contains "$ERR" "WARNING: title rename to [DONE] failed" \
+    "[5] stderr surfaces the rename-failure WARNING"
 assert_contains "$OUT" "FINALIZED=true" "[5] FINALIZED=true (close succeeded)"
 assert_contains "$OUT" "RENAMED=false" "[5] RENAMED=false (best-effort fail)"
 assert_contains "$OUT" "CLOSED=true" "[5] CLOSED=true"
