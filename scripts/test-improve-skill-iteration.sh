@@ -23,8 +23,9 @@
 #   Tier 2 — Behavioral (best-effort smoke tests with stubbed claude + gh):
 #     Stubs `claude` and `gh` on PATH under a mktemp'd fixture skill dir and
 #     invokes iteration.sh with --work-dir set, asserting on the KV footer
-#     emitted on stdout. Four cases cover: grade_a, no_plan, design_refusal,
-#     im_verification_failed.
+#     emitted on stdout. Fixtures cover grade_a, no_plan, design_refusal,
+#     im_verification_failed, issue_755_refusal_phrase_in_plan_body, and
+#     judge_subprocess_failure (issue #399 retention path).
 #
 # Invoked via:  bash scripts/test-improve-skill-iteration.sh
 # Wired into:   make lint (via the test-improve-skill-iteration target).
