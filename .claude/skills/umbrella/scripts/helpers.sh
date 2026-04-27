@@ -151,6 +151,71 @@ case "$SUBCMD" in
     else
       probe_target="$UMBRELLA"
     fi
+
+    # PROBE_FAILED=0|1 (issue #728): parse-only disambiguator distinguishing
+    # confirmed feature-missing (PROBE_FAILED=0) from transient/operational
+    # probe failure (PROBE_FAILED=1). Initialized here so it has a defined
+    # value on every code path including the empty-probe-target path below
+    # and the DRY_RUN early-exit further down.
+    PROBE_FAILED=0
+
+    # Resolve the canonical secret-scrubber and the one-time redact-fallback
+    # guard early so emit_probe_failure_warning (defined below) can use them.
+    # The per-edge emit_edge_failure_warning helper later in this branch
+    # references the same names — these initializations are intentionally
+    # placed before the probe block to avoid forward references.
+    REDACT_SCRIPT="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)/scripts/redact-secrets.sh"
+    REDACT_FALLBACK_WARNED=0
+
+    # _wd_is_feature_missing_404 <body>: dual-regex fingerprint shared by the
+    # repo-wide probe (issue #728) and the per-edge POST handler (issue #720).
+    # Returns 0 when both regexes match the body, 1 otherwise.
+    _wd_is_feature_missing_404() {
+      local body="$1"
+      if printf '%s' "$body" | grep -qiE '(dependencies|blocked_by|sub.?issue)' \
+           && printf '%s' "$body" | grep -qiE 'not (be )?found|does not exist|no longer (available|supported)'; then
+        return 0
+      fi
+      return 1
+    }
+
+    # emit_probe_failure_warning <status> <raw>: emit one redacted stderr
+    # warning when the repo-wide probe failed transiently / operationally
+    # (issue #728). Mirrors emit_edge_failure_warning's fail-closed redaction
+    # discipline. See helpers.md stderr-prefix section.
+    emit_probe_failure_warning() {
+      local code="$1" raw="$2"
+      local flat redacted
+      flat=$(printf '%s' "$raw" | tr '\n\r' '  ' | head -c 200)
+      if [ -x "$REDACT_SCRIPT" ]; then
+        if redacted=$(printf '%s' "$flat" | "$REDACT_SCRIPT" 2>/dev/null); then
+          : # success path
+        else
+          if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+            echo "**⚠ /umbrella: wire-dag — redact-secrets.sh exited non-zero; suppressing reason text for safety**" >&2
+            REDACT_FALLBACK_WARNED=1
+          fi
+          redacted="<REDACTION_FAILED>"
+        fi
+      else
+        if [ "$REDACT_FALLBACK_WARNED" = "0" ]; then
+          echo "**⚠ /umbrella: wire-dag — redact-secrets.sh not found at $REDACT_SCRIPT; using inline-fallback scrub**" >&2
+          REDACT_FALLBACK_WARNED=1
+        fi
+        redacted="$flat"
+      fi
+      echo "**⚠ /umbrella: wire-dag probe failed (HTTP ${code}): ${redacted}**" >&2
+    }
+
+    # Status-aware probe (issue #728) — replaces the old binary
+    # `gh api ... --silent && echo ok || echo fail` with a three-way classification:
+    #   2xx                  -> api_available=true,  PROBE_FAILED=0
+    #   404 + fingerprint    -> api_available=false, PROBE_FAILED=0  (feature missing)
+    #   429 / other 4xx      -> api_available=false, PROBE_FAILED=1  (no retry — clear HTTP response, not transport blip)
+    #   5xx / empty-status   -> retry once. If second attempt also fails to classify,
+    #                           api_available=false, PROBE_FAILED=1.
+    # Retry policy (DECISION_1, dialectic 2-1 ANTI_THESIS): one retry only,
+    # scoped to 5xx and empty-status (the unclassifiable transport-blip class).
     api_available="false"
     if [ -n "$probe_target" ]; then
       # Optional test-stub hook: when set, record the probe URL so test-helpers.sh
@@ -158,10 +223,49 @@ case "$SUBCMD" in
       if [ -n "${UMBRELLA_PROBE_TARGET_FILE:-}" ]; then
         printf '/repos/%s/issues/%s/dependencies/blocked_by\n' "$REPO" "$probe_target" > "$UMBRELLA_PROBE_TARGET_FILE"
       fi
-      api_probe=$(gh api "/repos/$REPO/issues/$probe_target/dependencies/blocked_by" --silent 2>/dev/null && echo "ok" || echo "fail")
-      if [ "$api_probe" = "ok" ]; then
-        api_available="true"
-      fi
+      probe_attempt=1
+      while [ "$probe_attempt" -le 2 ]; do
+        set +e
+        probe_resp=$(gh api -i "/repos/$REPO/issues/$probe_target/dependencies/blocked_by" 2>/dev/null)
+        set -e
+        probe_status=$(printf '%s\n' "$probe_resp" | awk 'NR==1{print $2; exit}')
+        probe_body=$(printf '%s\n' "$probe_resp" | awk 'BEGIN{skip=1} /^[[:space:]]*\r?$/{skip=0;next} !skip{print}')
+        case "$probe_status" in
+          2*)
+            api_available="true"
+            break
+            ;;
+          404)
+            if _wd_is_feature_missing_404 "$probe_body"; then
+              # Confirmed feature-missing. PROBE_FAILED stays 0.
+              :
+            else
+              # Ambiguous 404 (e.g., stale child issue on --no-backlinks first-child path)
+              # — operational, not feature-off.
+              PROBE_FAILED=1
+              emit_probe_failure_warning "$probe_status" "$probe_body"
+            fi
+            break
+            ;;
+          5*|"")
+            if [ "$probe_attempt" -eq 1 ]; then
+              probe_attempt=2
+              continue
+            fi
+            # Second attempt also failed — bucket as transient/operational probe failure.
+            PROBE_FAILED=1
+            emit_probe_failure_warning "${probe_status:-network}" "${probe_body:-$probe_resp}"
+            break
+            ;;
+          *)
+            # Other 4xx (403, 429, etc.) — clear HTTP response, not a transport blip.
+            # 429 is non-retriable per DECISION_1 simplification (no Retry-After parse).
+            PROBE_FAILED=1
+            emit_probe_failure_warning "$probe_status" "$probe_body"
+            break
+            ;;
+        esac
+      done
     fi
 
     EDGES_ADDED=0
@@ -174,13 +278,12 @@ case "$SUBCMD" in
     edge_lines=""
     j=0
 
-    # One-time guard for redact-secrets.sh fallback (issue #720, FINDING_6).
-    # Set to 1 after the first stderr notice so the per-edge loop does not spam.
-    REDACT_FALLBACK_WARNED=0
-    # Resolve canonical secret-scrubber relative to this script's location.
-    # helpers.sh is at .claude/skills/umbrella/scripts/helpers.sh — climb four
-    # levels to reach the repo root that owns scripts/redact-secrets.sh.
-    REDACT_SCRIPT="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)/scripts/redact-secrets.sh"
+    # REDACT_SCRIPT and REDACT_FALLBACK_WARNED are initialized earlier (above
+    # the probe block) so emit_probe_failure_warning can use them. The
+    # per-edge emit_edge_failure_warning helper below references the same
+    # names; do NOT re-initialize REDACT_FALLBACK_WARNED here — the probe path
+    # may have already flipped it to 1 (one-time-per-run guard, issue #720
+    # FINDING_6).
 
     # Per-run cache mapping blocker display number -> blocker internal numeric id.
     # The GitHub Issue Dependencies POST body requires `issue_id` (internal id),
@@ -219,7 +322,7 @@ case "$SUBCMD" in
     : > "$EXISTING_EDGES_TSV"
 
     if [ "$DRY_RUN" = "true" ]; then
-      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_NATIVE=0\n'
+      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nPROBE_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_NATIVE=0\n'
       exit 0
     fi
 
@@ -448,13 +551,15 @@ case "$SUBCMD" in
             printf '%s\t%s\n' "$blocker" "$blocked" >> "$EXISTING_EDGES_TSV"
             ;;
           404)
-            # Conservative: BOTH a "dependencies / blocked_by / sub-issue" keyword
-            # AND a "not found / does not exist / no longer (available|supported)"
-            # phrase must appear in the body before we credit "feature missing".
-            # Ambiguous 404s (e.g., stale child issue) fall to EDGES_FAILED so
-            # operators see a real diagnostic instead of a silent skip.
-            if printf '%s' "$body" | grep -qiE '(dependencies|blocked_by|sub.?issue)' \
-                 && printf '%s' "$body" | grep -qiE 'not (be )?found|does not exist|no longer (available|supported)'; then
+            # Conservative dual-regex fingerprint: BOTH a "dependencies /
+            # blocked_by / sub-issue" keyword AND a "not found / does not
+            # exist / no longer (available|supported)" phrase must appear in
+            # the body before we credit "feature missing". Ambiguous 404s
+            # (e.g., stale child issue) fall to EDGES_FAILED so operators
+            # see a real diagnostic instead of a silent skip.
+            # Predicate is shared with the repo-wide probe (issue #728) via
+            # _wd_is_feature_missing_404 — single source of truth, no drift.
+            if _wd_is_feature_missing_404 "$body"; then
               EDGES_SKIPPED_API_UNAVAILABLE=$((EDGES_SKIPPED_API_UNAVAILABLE + 1))
             else
               EDGES_FAILED=$((EDGES_FAILED + 1))
@@ -516,12 +621,18 @@ case "$SUBCMD" in
     printf 'EDGES_SKIPPED_EXISTING=%d\n' "$EDGES_SKIPPED_EXISTING"
     printf 'EDGES_SKIPPED_API_UNAVAILABLE=%d\n' "$EDGES_SKIPPED_API_UNAVAILABLE"
     printf 'EDGES_FAILED=%d\n' "$EDGES_FAILED"
+    printf 'PROBE_FAILED=%d\n' "$PROBE_FAILED"
     printf 'BACKLINKS_POSTED=%d\n' "$BACKLINKS_POSTED"
     printf 'BACKLINKS_SKIPPED_NATIVE=%d\n' "$BACKLINKS_SKIPPED_NATIVE"
     if [ -n "$edge_lines" ]; then
       printf '%s' "$edge_lines"
     fi
-    if [ "$api_available" = "false" ]; then
+    # Repo-wide "API not available" warning fires only on confirmed
+    # feature-missing (issue #728): PROBE_FAILED=0 AND api_available=false.
+    # Transient probe failure (PROBE_FAILED=1) emits the dedicated
+    # "wire-dag probe failed (HTTP <status>)" stderr earlier inside the probe
+    # block; emitting both would double-warn on the same condition.
+    if [ "$api_available" = "false" ] && [ "$PROBE_FAILED" = "0" ]; then
       if [ "$NO_BACKLINKS" = "true" ]; then
         # On the created-eq-1 bypass path, back-links are intentionally suppressed —
         # the legacy "Back-links posted via comments" tail would be factually false.

@@ -44,12 +44,33 @@ Regression harness for `helpers.sh check-cycle` (pure logic, no network) and `he
 
 - `--no-backlinks` probes the FIRST CHILD in `--children-file`, NOT the (empty) umbrella. Asserted via `UMBRELLA_PROBE_TARGET_FILE` capture: the file contains `/issues/<first-child>/dependencies/blocked_by` and does NOT contain `/issues/1/dependencies/blocked_by` (the would-be umbrella URL).
 - `--no-backlinks` issues ZERO `gh issue comment` calls — the entire back-link emission loop is skipped, including both the native-relationship `gh api` lookup and the comment posting. Asserted via `STUB_COMMENT_LOG`: zero recorded comment-call lines.
-- `--no-backlinks` + `api_available=false` (probe failure) → mode-aware stderr: the message reads `Back-links suppressed (--no-backlinks).` instead of the legacy `Back-links posted via comments.` tail. This matters because back-links are intentionally suppressed on the bypass path; the legacy text would be factually false.
+- `--no-backlinks` + feature-missing 404 (fingerprinted body) → mode-aware legacy stderr: `Back-links suppressed (--no-backlinks).` AND `PROBE_FAILED=0`. Pins the issue #728 split: the legacy "API not available" warning is intentionally retained on the feature-missing path.
+- `--no-backlinks` + transient probe failure (5xx on both attempts) → new probe-failed stderr: `wire-dag probe failed (HTTP 502)` AND `PROBE_FAILED=1`. Legacy `Back-links suppressed` warning is SUPPRESSED (would double-warn). Probe call count file asserts exactly 2 attempts (one retry).
 - empty `--umbrella ''` WITHOUT `--no-backlinks` → script errors with `use --no-backlinks to omit it on the created-eq-1 bypass path` so callers don't accidentally bypass back-links via empty `--umbrella`.
+
+**Coverage** — `wire-dag` probe classification (issue #728):
+
+The probe classification suite uses the new per-attempt sequencing knobs (`STUB_PROBE_RESPONSE_<N>`, `STUB_PROBE_RC_<N>`, `PROBE_CALL_COUNT_FILE`) introduced for #728. The `run_probe_test` helper writes children/edges fixtures, sets per-attempt response env vars, runs `helpers.sh wire-dag`, and asserts on `PROBE_FAILED=<value>`, presence/absence of the legacy "API not available" warning, presence/absence of the new "wire-dag probe failed" warning, and the recorded probe attempt count. Test cases:
+
+- `probe 404 feature-missing` → `PROBE_FAILED=0`, legacy warning fires, 1 attempt.
+- `probe 502 then 200` (retry success) → `PROBE_FAILED=0`, no warning, 2 attempts.
+- `probe 502 twice` → `PROBE_FAILED=1`, new probe-failed warning, 2 attempts.
+- `probe empty-status twice` (no HTTP response on both attempts) → `PROBE_FAILED=1`, new warning, 2 attempts.
+- `probe 403` → `PROBE_FAILED=1`, no retry (1 attempt) — clear HTTP response is not a transport blip.
+- `probe 429` → `PROBE_FAILED=1`, no retry (1 attempt) — DECISION_1 simplification: all 429 are non-retriable, no Retry-After header parsing.
+- `probe 404 ambiguous` (no fingerprint match) → `PROBE_FAILED=1`, new warning, 1 attempt.
+- `probe 502 then feature-missing 404` (retry recovers to feature-missing) → `PROBE_FAILED=0`, legacy warning, 2 attempts.
+- `--no-backlinks ambiguous-404 first-child` (stale child, non-fingerprint 404) → `PROBE_FAILED=1` (operational, not feature-off).
+- `--no-backlinks empty CHILDREN_FILE` → `probe_target` is empty, no probe runs, `PROBE_FAILED=0`, no probe stderr.
+- dry-run path → stdout includes `PROBE_FAILED=0` literal (initialized before `--dry-run` early-exit so `set -u` cannot trip).
+
+The shared body fingerprint regex (`_wd_is_feature_missing_404`) is exercised at both call sites: the new probe-stage classifier AND the existing per-edge POST-stage 404 handler. The existing per-edge tests `(b)` and `(c)` continue to pin the per-edge fingerprint behavior; the probe-stage tests above mirror them at the probe stage. Drift between the two sites is structurally prevented by the shared shell function.
 
 The wire-dag tests use a PATH-stub `gh` script written into `$TMP/bin/gh`, prepended to `PATH` for the duration of each scenario. The stub dispatches on argv pattern (probe vs blocker-id lookup vs POST vs `gh issue comment`) and returns a per-test canned `-i` response selected via env vars. The `--no-backlinks` suite additionally uses two new instrumentation hooks: `UMBRELLA_PROBE_TARGET_FILE` (set on the `wire-dag` invocation; `helpers.sh` writes the probed URL to it for assertion) and `STUB_COMMENT_LOG` (set on the stub's environment; the stub appends one line per `gh issue comment` invocation).
 
 **Per-node `blocked_by` stub dispatch** (issue #718): the existing-edges lookup branch (matched by `--jq '.[].number'` in argv) extracts the issue number from the URL path and looks up `STUB_BLOCKED_BY_<N>` first. When that var is unset, falls back to the legacy global `STUB_EXISTING_BLOCKERS` (unset by default; pre-existing tests that relied on its empty-default behavior continue to work without modification). `STUB_BLOCKED_BY_<N>_RC` (default 0) overrides the lookup exit code per node — non-zero simulates a transient `gh` failure for that node. Multi-blocker values use space-separated lists in the env var (e.g., `STUB_BLOCKED_BY_20="100 101 102"`); the stub converts them to newline-separated to match production `gh api --jq '.[].number'` output shape.
+
+**Per-attempt probe stub dispatch** (issue #728): the probe path (no POST, no `--jq`) supports per-attempt response sequencing for retry tests. Set `PROBE_CALL_COUNT_FILE` to an empty file path to enable counting; the stub increments the file on each call and uses `STUB_PROBE_RESPONSE_<attempt>` / `STUB_PROBE_RC_<attempt>` (1-based). When the per-attempt vars are unset, the stub falls back to the legacy `STUB_PROBE_RESPONSE` / `STUB_PROBE_RC` single-shot pattern. Default behavior (no env vars set) emits a 200 OK HTTP response so existing tests with `STUB_PROBE_RC=0` continue to see `api_available=true` on the new status-aware probe (preserves backward-compat without per-test changes). The dispatch also handles the new `gh api -i URL` invocation shape (URL at $3 instead of $2) by scanning all args for a `/repos/.../issues/...` path and binding the matched arg to a local `_stub_url` variable used in the case dispatch.
 
 **Edit-in-sync**: any change to `helpers.sh check-cycle` or `wire-dag` stdout grammar / stderr contract requires a same-PR update to the assertion expectations here. Cycle-check semantic changes also require regenerating `test-helpers.sh` expectations.
 
