@@ -773,9 +773,21 @@ ISSUES_JSONL=$(gh api --paginate "repos/${REPO}/issues?state=open&per_page=100" 
     exit 2
 }
 
-# Sort by number ascending (oldest first) and iterate. `-s` slurps the JSONL
-# stream emitted by `--jq '.[]'` into an array so we can sort it.
-SORTED=$(echo "$ISSUES_JSONL" | jq -s -c 'sort_by(.number) | .[]')
+# Sort with two keys, then iterate. `-s` slurps the JSONL stream emitted by
+# `--jq '.[]'` into an array so we can sort it.
+#
+# Sort keys (jq sorts arrays lexicographically; false < true for booleans):
+#   1. (title | ascii_downcase | contains("urgent") | not) — Urgent-tagged
+#      issues (substring match anywhere in the title, case-insensitive) get
+#      `false` and sort BEFORE non-Urgent issues. This implements the
+#      "prefer Urgent" preference among otherwise-eligible candidates.
+#   2. .number ascending — within each preference tier, fall back to the
+#      pre-existing oldest-first selection order.
+#
+# The preference is a soft signal: it only changes the order in which
+# candidates are evaluated, not which candidates are eligible. A non-Urgent
+# eligible issue is still picked when no Urgent eligible issue exists.
+SORTED=$(echo "$ISSUES_JSONL" | jq -s -c 'sort_by([(.title // "" | ascii_downcase | contains("urgent") | not), .number]) | .[]')
 
 if [ -z "$SORTED" ]; then
     echo "ELIGIBLE=false"

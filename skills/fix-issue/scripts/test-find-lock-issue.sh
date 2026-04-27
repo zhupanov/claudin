@@ -433,6 +433,82 @@ assert_equal "$EXIT_CODE" "1" "[6] exit code 1 (no eligible candidates)"
 assert_contains "$OUT" "ELIGIBLE=false" "[6] ELIGIBLE=false on stdout"
 
 # ---------------------------------------------------------------------------
+# Fixture 7: auto-pick mode + Urgent preference. Four issues; the picker
+# must select the lowest-numbered Urgent-tagged issue (case-insensitive
+# substring match) ahead of any non-Urgent issue and ahead of higher-
+# numbered Urgent issues.
+#
+# Layout (OPEN_ISSUES_JSON lines):
+#   #10 "Plain old issue"          — non-Urgent (oldest); would win without preference
+#   #20 "Critical urgent fix"      — Urgent (lowercase); should win
+#   #30 "Plain new issue"          — non-Urgent
+#   #40 "URGENT system broken"     — Urgent (uppercase); higher-numbered, loses tiebreaker
+#
+# Asserting ISSUE_NUMBER=20 verifies BOTH sort keys: Urgent-first AND
+# oldest-first within the Urgent tier.
+# ---------------------------------------------------------------------------
+echo "Fixture 7: auto-pick + Urgent preference (case-insensitive, oldest-within-tier)"
+run_fixture "fixture-7"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Critical urgent fix'"
+    # JSONL — one JSON object per line; the production --jq filter is applied
+    # server-side in real gh, but the bash stub ignores --jq, so we emit the
+    # already-filtered shape here (matches fixture 6's empty-stream contract).
+    OPEN_ISSUES_LINES='{"number":10,"title":"Plain old issue"}
+{"number":20,"title":"Critical urgent fix"}
+{"number":30,"title":"Plain new issue"}
+{"number":40,"title":"URGENT system broken"}'
+    # Single-quote the value so newlines survive the shell-source round-trip.
+    printf "OPEN_ISSUES_JSON='%s'\n" "$OPEN_ISSUES_LINES"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+OUT_FILE="$TMPROOT/fixture-7/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-7/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+
+assert_equal "$EXIT_CODE" "0" "[7] exit code 0 (Urgent candidate picked + locked)"
+assert_contains "$OUT" "ELIGIBLE=true" "[7] ELIGIBLE=true on stdout"
+assert_contains "$OUT" "ISSUE_NUMBER=20" "[7] ISSUE_NUMBER=20 (Urgent issue, lowest number among Urgent tier)"
+assert_not_contains "$OUT" "ISSUE_NUMBER=10" "[7] non-Urgent #10 not picked despite oldest"
+assert_not_contains "$OUT" "ISSUE_NUMBER=40" "[7] higher-numbered Urgent #40 not picked"
+assert_contains "$OUT" "LOCK_ACQUIRED=true" "[7] LOCK_ACQUIRED=true"
+
+# ---------------------------------------------------------------------------
+# Fixture 8: auto-pick mode + no Urgent issues falls back to oldest-first.
+# Confirms the preference is a soft signal — when no Urgent candidate
+# exists, the pre-existing oldest-first ordering is preserved unchanged.
+# ---------------------------------------------------------------------------
+echo "Fixture 8: auto-pick + no Urgent → oldest-first preserved"
+run_fixture "fixture-8"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Plain old issue'"
+    OPEN_ISSUES_LINES='{"number":10,"title":"Plain old issue"}
+{"number":20,"title":"Another normal one"}
+{"number":30,"title":"Plain new issue"}'
+    printf "OPEN_ISSUES_JSON='%s'\n" "$OPEN_ISSUES_LINES"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+OUT_FILE="$TMPROOT/fixture-8/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-8/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+
+assert_equal "$EXIT_CODE" "0" "[8] exit code 0 (oldest non-Urgent candidate picked)"
+assert_contains "$OUT" "ISSUE_NUMBER=10" "[8] ISSUE_NUMBER=10 (oldest, no Urgent tier exists)"
+assert_contains "$OUT" "LOCK_ACQUIRED=true" "[8] LOCK_ACQUIRED=true"
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 echo
