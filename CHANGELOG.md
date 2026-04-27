@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.16] - 2026-04-27
+
+### Added
+
+- `/umbrella` now prepends the literal marker <code>(Umbrella: &lt;N&gt;) </code> (with trailing space — load-bearing) to the title of every newly-created child issue on the multi-piece-with-real-umbrella path. Implemented as a new `helpers.sh prefix-titles` subcommand invoked from Step 3B.4 after `wire-dag`, iterating a caller-filtered TSV of newly-created children only. Idempotent — same-umbrella prefixes are skipped on re-runs; per-row `gh issue edit` failures bucket as `TITLES_FAILED` with redacted stderr warnings. Dedup'd, failed, and dry-run children are excluded so prior-umbrella prefixes are not stomped. The `created-eq-1` bypass, one-shot, dry-run, batch-fail, and umbrella-fail paths all skip the rename pass intentionally (no umbrella to anchor the marker). Stdout adds parse-only `TITLES_RENAMED` / `TITLES_SKIPPED_EXISTING` / `TITLES_FAILED` counters; not propagated through `output.kv`. New regression suite in `test-helpers.sh` covers idempotency, layering, gh-failure, dry-run, malformed-input, and validation paths. Closes #794.
+
 ## [7.17.15] - 2026-04-27
 
 ### Fixed
