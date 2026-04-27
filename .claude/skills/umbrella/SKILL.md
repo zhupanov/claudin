@@ -108,7 +108,7 @@ Invoke the Skill tool:
 - Try skill `"issue"` first (bare name). If no skill matches, try `"larch:issue"`.
 - args: `[--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go] <TASK>` — pass each captured flag verbatim; omit the flag if its parsed value is the default. Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0.
 
-Parse `/issue`'s stdout for `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`, `ISSUE_1_NUMBER`, `ISSUE_1_URL`, `ISSUE_1_TITLE`, `ISSUE_1_DUPLICATE_OF_NUMBER` / `ISSUE_1_DUPLICATE_OF_URL` (when deduplicated), `ISSUE_1_DRY_RUN` (when dry-run). Capture into the `CHILD_*` fields per Step 4 (the one-shot child is `CHILD_1`).
+Parse `/issue`'s stdout for `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`, `ISSUE_1_NUMBER`, `ISSUE_1_URL`, `ISSUE_1_TITLE`, `ISSUE_1_DUPLICATE_OF_NUMBER` / `ISSUE_1_DUPLICATE_OF_URL` (when deduplicated), `ISSUE_1_DRY_RUN` (when dry-run). Capture into the `CHILD_*` fields per Step 4 (the one-shot child is `CHILD_1`). When `ISSUE_1_DRY_RUN=true`, capture the one-shot child per the dry-run child shape in Step 4.
 
 Continue at Step 4. (No umbrella issue, no DAG, no back-links — there is only one child.)
 
@@ -178,7 +178,7 @@ The bypass procedure:
 
 6. **Skip Steps 3B.3 and 3B.4 entirely** and continue at Step 4.
 
-For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes; on the multi-piece dry-run path, 3B.3's dry-run guard skips umbrella body composition + umbrella creation AND 3B.4's wiring + back-links entirely.
+For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes; on the multi-piece dry-run path, 3B.3's dry-run guard skips umbrella body composition + umbrella creation AND 3B.4's wiring + back-links entirely. When `ISSUE_<i>_DRY_RUN=true`, record the child per the dry-run child shape in Step 4.
 
 ### 3B.3 — Compose umbrella body and create umbrella
 
@@ -227,7 +227,7 @@ Parse stdout for `EDGES_ADDED`, per-edge `EDGE_<j>_BLOCKER`, `EDGE_<j>_BLOCKED`,
 $PWD/.claude/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
 ```
 
-Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The orchestrator owns completeness (it authored `output.kv`); the emitter validates the KV grammar (well-formed `KEY=VALUE` lines, no embedded newlines, no duplicate keys) and prints to stdout in the canonical order:
+Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The orchestrator owns completeness (it authored `output.kv`); the emitter validates the KV grammar (well-formed `KEY=VALUE` lines, no embedded newlines, no duplicate keys) and streams to stdout in file order. The canonical order shown below is author guidance for composing `output.kv`, not a guarantee from `emit-output`:
 
 ```
 UMBRELLA_VERDICT=<one-shot|multi-piece>
@@ -236,9 +236,10 @@ UMBRELLA_DOWNGRADE=<token>   (emitted on any bypass path — `decomposition-lt-2
 CHILDREN_CREATED=<N>
 CHILDREN_DEDUPLICATED=<N>
 CHILDREN_FAILED=<N>
-CHILD_<i>_NUMBER=<N>
-CHILD_<i>_URL=<url>
+CHILD_<i>_NUMBER=<N>         (only on resolved/non-dry-run children)
+CHILD_<i>_URL=<url>          (only on resolved/non-dry-run children)
 CHILD_<i>_TITLE=<title>
+CHILD_<i>_DRY_RUN=true       (only on dry-run children — when emitted, `CHILD_<i>_NUMBER` and `CHILD_<i>_URL` are omitted; `CHILD_<i>_TITLE` remains)
 UMBRELLA_NUMBER=<N>          (only on multi-piece + success)
 UMBRELLA_URL=<url>           (only on multi-piece + success)
 UMBRELLA_FAILURE_REASON=<text>   (only on multi-piece partial — children created, umbrella creation failed; sanitized one-line value, ≤200 chars; omitted when no failure signal could be extracted)
@@ -247,6 +248,8 @@ EDGE_<j>_BLOCKER=<N>
 EDGE_<j>_BLOCKED=<M>
 BACKLINKS_POSTED=<N>         (only on multi-piece, non-dry-run, success)
 ```
+
+Global dry-run ⇒ every resolved-non-failed child uses the dry-run child shape; mixed-mode runs are not currently produced by `/umbrella`. The dry-run child shape mirrors `/issue --dry-run`'s upstream `ISSUE_<i>_DRY_RUN=true` grammar (per `skills/issue/SKILL.md` Step 6 dry-run branch), keeping `output.kv`'s child grammar a clean projection of `/issue`'s rather than a second invent-your-own-numbers layer.
 
 After `emit-output` returns, the orchestrator (the LLM running this skill) MUST print exactly one human summary breadcrumb of the form below. Step 4 is the single emission point for this summary — Step 3B.3's umbrella-creation-failure path defers to Step 4 instead of printing inline. The orchestrator composes each shape using both `output.kv` values AND any session state captured from earlier sub-steps (e.g., `/issue`'s stdout for the one-shot dedup'd / failed cases — `ISSUE_1_DUPLICATE_OF_NUMBER`/`ISSUE_1_DUPLICATE_OF_URL` and the `/issue` failure context). The multi-piece partial shape interpolates the optional `UMBRELLA_FAILURE_REASON` field documented in the canonical grammar above; the remaining shapes (one-shot, multi-piece success, multi-piece dry-run) compose from `output.kv` values and earlier-step session state without additional canonical fields:
 
@@ -277,6 +280,6 @@ Each script under `scripts/` has a sibling contract `.md` documenting CLI surfac
 - `scripts/helpers.sh` — Steps 3B.4 / 4 consolidated helpers exposing `check-cycle`, `wire-dag`, and `emit-output` subcommands; contract `scripts/helpers.md`.
 - `scripts/test-helpers.sh` — regression harness for `helpers.sh check-cycle` (pure logic) and `helpers.sh wire-dag` (PATH-stub `gh` for the per-edge POST classifier and counter categorization, including `EDGES_FAILED`); contract `scripts/test-helpers.md`. Wired into `make lint` via the `test-umbrella-helpers` Makefile target.
 - `scripts/test-umbrella-parse-args.sh` — regression harness for `parse-args.sh`; contract `scripts/test-umbrella-parse-args.md`. Wired into `make lint` via the `test-umbrella-parse-args` Makefile target alongside `test-umbrella-helpers`.
-- `scripts/test-umbrella-emit-output-contract.sh` — structural harness pinning Step 2's input-file dry-run-safe distinct-count rule, Step 3B.3 / 3B.4's matched-pair dry-run skip directives, Step 4 prose attribution and the canonical breadcrumb shape templates in `SKILL.md`, plus the `emit-output` stderr-discipline literals in `helpers.md`; contract `scripts/test-umbrella-emit-output-contract.md`. Wired into `make lint` via the `test-umbrella-emit-output-contract` Makefile target.
+- `scripts/test-umbrella-emit-output-contract.sh` — structural harness pinning Step 2's input-file dry-run-safe distinct-count rule, Step 3B.3 / 3B.4's matched-pair dry-run skip directives, Step 4 prose attribution and the canonical breadcrumb shape templates in `SKILL.md`, plus the `emit-output` stderr-discipline literals in `helpers.md`, plus the Step 4 dry-run child shape contract (`CHILD_<i>_DRY_RUN=true` and per-key omission annotations on `CHILD_<i>_NUMBER` / `CHILD_<i>_URL` — added in #726); contract `scripts/test-umbrella-emit-output-contract.md`. Wired into `make lint` via the `test-umbrella-emit-output-contract` Makefile target.
 - `scripts/test-render-batch-input.sh` — regression harness pinning the malformed-`pieces.json` gatekeeper contract of `render-batch-input.sh` (parse failure OR valid-JSON-with-non-array-top-level → stable `ERROR=invalid pieces.json: <reason>` stderr line + exit 1, not raw `jq:` output); contract `scripts/test-render-batch-input.md`. Wired into `make lint` via the `test-umbrella-render-batch-input` Makefile target.
 - `scripts/test-render-umbrella-body.sh` — runtime conformance harness for `render-umbrella-body.sh`; pins the `--tmpdir` writability preflight, the checked-write + atomic-rename success / failure paths, and the existing children-TSV malformed-input path; contract `scripts/test-render-umbrella-body.md`. Wired into `make lint` via the `test-render-umbrella-body` Makefile target alongside `test-umbrella-emit-output-contract`.

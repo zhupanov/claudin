@@ -13,6 +13,12 @@
 # pin the new Step 3B.3 dry-run guard and the matched-pair Step 3B.4 guard.
 # Extended for #724 to pin the Step 2 input-file dry-run-safe distinct-count
 # rule (f1–f4) as authoritative for any caller of /umbrella --input-file.
+# Extended for #717 to pin the new Step 3B.2 created-eq-1 bypass branch
+# (g1–g4) and the new Step 4 bypass breadcrumb (c8) plus the broadened
+# UMBRELLA_DOWNGRADE schema parenthetical (a3 / a3b / a3c).
+# Extended for #726 to pin the Step 4 dry-run child shape contract (h1–h4):
+# CHILD_<i>_DRY_RUN=true and per-key omission annotations on CHILD_<i>_NUMBER
+# and CHILD_<i>_URL.
 # The intent is a cheap CI guard against regression of the same drift;
 # test-helpers.sh explicitly leaves emit-output out of scope (see
 # test-helpers.md "Out of scope").
@@ -238,6 +244,27 @@ assert_contains "a3b: Step 4 UMBRELLA_DOWNGRADE schema lists input-file-distinct
     "$STEP4_BLOCK"
 assert_contains "a3c: Step 4 UMBRELLA_DOWNGRADE schema lists created-eq-1" \
     'created-eq-1' \
+    "$STEP4_BLOCK"
+
+# (h*) Step 4 dry-run child shape contract (added in #726). Pins the option (c)
+# resolution: dry-run children emit CHILD_<i>_TITLE + CHILD_<i>_DRY_RUN=true and
+# omit CHILD_<i>_NUMBER / CHILD_<i>_URL. The (h3)/(h4) split anchors each
+# omission annotation to its specific key line so an asymmetric drift (one key's
+# annotation reworded or dropped while the other's remains) cannot pass the
+# harness — a single shared-substring assertion would not catch it because
+# `grep -qF` is order-agnostic. The `g*` letter was already taken above by #717's
+# Step 3B.2 bypass-branch coverage; `h*` is the next free letter.
+assert_contains "h1: Step 4 dry-run child key — CHILD_<i>_DRY_RUN=true" \
+    'CHILD_<i>_DRY_RUN=true' \
+    "$STEP4_BLOCK"
+assert_contains "h2: Step 4 dry-run child annotation tail (omission semantics)" \
+    'only on dry-run children — when emitted, `CHILD_<i>_NUMBER` and `CHILD_<i>_URL` are omitted' \
+    "$STEP4_BLOCK"
+assert_contains "h3: Step 4 CHILD_<i>_NUMBER per-key annotation" \
+    'CHILD_<i>_NUMBER=<N>         (only on resolved/non-dry-run children)' \
+    "$STEP4_BLOCK"
+assert_contains "h4: Step 4 CHILD_<i>_URL per-key annotation" \
+    'CHILD_<i>_URL=<url>          (only on resolved/non-dry-run children)' \
     "$STEP4_BLOCK"
 
 # (b*) helpers.md emit-output subsection scopes stderr to validation errors
