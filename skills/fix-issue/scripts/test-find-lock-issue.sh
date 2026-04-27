@@ -24,6 +24,7 @@
 #      ISSUE_NUMBER=10
 #   9. explicit issue with a GHE-style host (host-generic URL parsing —
 #      closes #766) → exit 0; ISSUE_NUMBER=55 LOCK_ACQUIRED=true
+#      RENAMED=true (mirrors fixture 1's full success contract)
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -532,8 +533,10 @@ assert_contains "$OUT" "LOCK_ACQUIRED=true" "[8] LOCK_ACQUIRED=true"
 # ---------------------------------------------------------------------------
 # Fixture 9: explicit-issue mode with a GitHub-Enterprise-style host. The
 # repo-ownership parser must NOT pin to github.com (closes #766) — any
-# https?://<host>/<owner>/<repo>/issues/<n> URL where <owner>/<repo> matches
-# the current repo ($REPO from gh repo view = stub/repo) is acceptable.
+# https://<host>/<owner>/<repo>/issues/<n> URL where <owner>/<repo> matches
+# the current repo ($REPO from gh repo view = stub/repo) is acceptable. The
+# scheme is pinned to `https://` because the `gh` CLI always emits `https://`
+# URLs and the production regex deliberately stays BRE-portable.
 # ---------------------------------------------------------------------------
 echo "Fixture 9: explicit issue with GHE host (host-generic URL parsing, closes #766)"
 run_fixture "fixture-9"
@@ -556,6 +559,7 @@ assert_equal "$EXIT_CODE" "0" "[9] exit code 0 (GHE URL accepted, repo matches)"
 assert_contains "$OUT" "ELIGIBLE=true" "[9] ELIGIBLE=true on stdout"
 assert_contains "$OUT" "ISSUE_NUMBER=55" "[9] ISSUE_NUMBER=55 on stdout"
 assert_contains "$OUT" "LOCK_ACQUIRED=true" "[9] LOCK_ACQUIRED=true on stdout"
+assert_contains "$OUT" "RENAMED=true" "[9] RENAMED=true on stdout (mirrors Fixture 1)"
 assert_not_contains "$OUT" "Cannot parse repository from issue URL" "[9] no parse-failure error"
 
 # ---------------------------------------------------------------------------
