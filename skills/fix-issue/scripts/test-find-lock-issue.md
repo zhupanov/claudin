@@ -2,7 +2,7 @@
 
 `skills/fix-issue/scripts/test-find-lock-issue.sh` is the offline regression harness for `skills/fix-issue/scripts/find-lock-issue.sh` (the combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock refactor closing #496). It uses a PATH-prepended `gh` stub under a per-fixture tmpdir to validate the script's exit-code matrix and unified stdout contract without any network or git-state mutation.
 
-## Six fixtures
+## Eight fixtures
 
 1. **Eligible + lock OK + rename OK** → exit 0; `ELIGIBLE=true`, `ISSUE_NUMBER=N`, `LOCK_ACQUIRED=true`, `RENAMED=true`. Auxiliary delegate keys (`COMMENTED`, `NEW_TITLE`) are filtered from stdout.
 2. **Eligible + lock fail** → exit 3; `ELIGIBLE=true LOCK_ACQUIRED=false ERROR=...`. Simulated by failing the IN PROGRESS comment post inside `cmd_comment` (a stateless-stub-friendly approximation of the duplicate-IN-PROGRESS detection path; both produce the same `exit 1` from `cmd_comment` → `exit 3` from `find-lock-issue.sh`).
@@ -10,6 +10,8 @@
 4. **Idempotent rename no-op** — coverage deferred to `scripts/test-tracking-issue-write.sh` (which exercises the rename subcommand directly). The eligibility filter in `find-lock-issue.sh` rejects `[IN PROGRESS]`-prefixed titles before the rename call is ever made in production, so the idempotent-no-op path is unreachable from `find-lock-issue.sh`'s contract surface.
 5. **Ineligible (managed prefix in explicit `--issue` mode)** → exit 2; `ELIGIBLE=false ERROR=Issue #N has a managed lifecycle title prefix...`. Lock is never attempted (`LOCK_ACQUIRED` absent from stdout).
 6. **Auto-pick mode + no eligible candidates** → exit 1; `ELIGIBLE=false`. Empty open-issues list.
+7. **Auto-pick mode + Urgent preference** → exit 0; `ISSUE_NUMBER=20`. Five open issues (#5 "Fix non-urgent cleanup" substring trap, #10 non-Urgent oldest, #20 lowercase "urgent", #30 non-Urgent, #40 uppercase "URGENT"); the picker selects #20, verifying all three behaviors: word-boundary regex (so #5 is REJECTED — `non-urgent` does not match `\burgent\b` despite containing the letters), Urgent-tier comes before non-Urgent-tier (so #20 beats #10 despite #10 being older), AND oldest-first holds within the Urgent tier (so #20 beats #40). Case-insensitive matching is exercised by the lowercase / uppercase mix.
+8. **Auto-pick mode + no Urgent → oldest-first preserved** → exit 0; `ISSUE_NUMBER=10`. Three non-Urgent open issues; the picker selects the oldest, confirming the Urgent preference is a soft signal that does not alter ordering when no Urgent candidate exists.
 
 ## Stub design
 

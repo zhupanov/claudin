@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.6] - 2026-04-27
+
+### Changed
+
+- `skills/fix-issue/scripts/find-lock-issue.sh` — auto-pick now prefers issues whose title matches the whole word `urgent` (case-insensitive, anywhere in the title) ahead of non-Urgent candidates, with oldest-first by issue number remaining the within-tier tiebreaker. The match uses an explicit non-word lookaround character class `[-A-Za-z0-9_]` rather than `\b` because jq's `\b` treats hyphen as a non-word char (so `\burgent\b` would mis-match `non-urgent`); the chosen pattern correctly rejects `non-urgent`, `insurgent`, and `urgently`. The preference is a soft re-ordering, not an eligibility filter — a non-Urgent issue is still picked when no Urgent eligible candidate exists; explicit-target mode (`/fix-issue <N>`) is unaffected. Companion docs in `skills/fix-issue/SKILL.md` and `skills/fix-issue/scripts/find-lock-issue.md` updated; `scripts/test-find-lock-issue.sh` adds two regression fixtures (Urgent-preference + non-urgent-rejection, and oldest-first preserved when no Urgent exists). Closes #787.
+
 ## [7.17.5] - 2026-04-27
 
 ### Fixed
