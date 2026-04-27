@@ -1,6 +1,6 @@
 # post-issue-slack.sh
 
-**Purpose**: Post a single one-line Slack status message about a tracking issue. Consumed by `/implement` Step 16a (once per run) and by `/fix-issue` Steps 4 and 8b. Replaces the former PR-scoped Slack stack (`post-pr-announce.sh` + `slack-announce.sh` + `post-merged-emoji.sh` + `add-merged-emoji.sh` + `add-slack-emoji.sh`) and the former `skills/fix-issue/scripts/post-issue-slack.sh`.
+**Purpose**: Post a single one-line Slack status message about a tracking issue. Consumed by `/implement` Step 16a (once per run) and by `/fix-issue` Steps 3 and 7b. Replaces the former PR-scoped Slack stack (`post-pr-announce.sh` + `slack-announce.sh` + `post-merged-emoji.sh` + `add-merged-emoji.sh` + `add-slack-emoji.sh`) and the former `skills/fix-issue/scripts/post-issue-slack.sh`.
 
 ## Output contract
 
@@ -14,7 +14,7 @@ One-liner body (Slack mrkdwn):
 - **Link**: mrkdwn link composed from `gh issue view --repo "$REPO"` output when available (scoped to the caller-supplied repo so gh's default-repo context cannot fetch the wrong issue). When `gh issue view` fails, falls back to `gh repo view "$REPO" --json url` and appends `/issues/$N` — preserves GitHub Enterprise host correctly. Last-resort synthesis hardcodes `https://github.com/$REPO/issues/$N` only when both gh calls fail.
 - **Safe-title**: `|`, `<`, `>` are backslash-escaped; `"` is replaced with U+201C left curly quote (matching the pre-existing convention from the deleted `slack-announce.sh`).
 - **Status tail**: fixed per status enum (e.g. `closed`, `PR opened, awaiting merge`). When `--pr-url` is given with `pr-opened`, the tail renders the PR URL as a nested link.
-- **Detail suffix**: when `--detail` is provided, appended (preceded by ` — `) after the status tail, with the same mrkdwn-reserved-character escaping as the title. Used by `/fix-issue` to preserve closure reason context (Step 4 not-material reason; Step 8b WORK_SUMMARY one-liner).
+- **Detail suffix**: when `--detail` is provided, appended (preceded by ` — `) after the status tail, with the same mrkdwn-reserved-character escaping as the title. Used by `/fix-issue` to preserve closure reason context (Step 3 not-material reason; Step 7b WORK_SUMMARY one-liner).
 
 ## Identity
 
@@ -57,10 +57,10 @@ Non-zero exit on argument or API failure. Callers should never abort their run o
 ## Call sites
 
 - `skills/implement/SKILL.md` Step 16a — once near end of run, gated on `slack_enabled AND slack_available AND ISSUE_NUMBER set AND !deferred AND !repo_unavailable`.
-- `skills/fix-issue/SKILL.md` Step 4 — not-material close, `--status closed --detail "<reason>"`.
-- `skills/fix-issue/SKILL.md` Step 8b — NON_PR close, `--status closed --detail "<WORK_SUMMARY one-liner>"`.
+- `skills/fix-issue/SKILL.md` Step 3 (not-material close sub-step) — `--status closed --detail "<reason>"`.
+- `skills/fix-issue/SKILL.md` Step 7b (NON_PR Slack announce) — `--status closed --detail "<WORK_SUMMARY one-liner>"`.
 
-`/fix-issue` Step 8a (INTENT=PR) does NOT call this script directly — the child `/implement` invocation handles the Slack post via its Step 16a.
+`/fix-issue` Step 7 (INTENT=PR) does NOT call this script directly — the child `/implement` invocation handles the Slack post via its Step 16a.
 
 ## Edit-in-sync
 
