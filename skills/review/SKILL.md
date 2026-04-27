@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Use when reviewing code changes (current branch diff, or a verbal slice of the repo) with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Slice mode supports file-batch review and inline /issue filing for /loop-review."
+description: "Use when reviewing code changes (current branch diff, or a verbal slice of the repo) with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Slice mode supports file-batch review and inline /umbrella filing for /loop-review."
 argument-hint: "[--debug] [--session-env <path>] [--slice <text> | --slice-file <path>] [--create-issues [<slice-text>]] [--label <label>] [--security-output <path>]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 ---
@@ -79,7 +79,7 @@ When `--slice <text>` is set, `--slice-file <path>` is set, or trailing position
 
 - Step 1 (Gather Context): replaced by a **slice-resolve** step that maps the verbal description to a canonical file list at `$REVIEW_TMPDIR/slice-files.txt` via Glob/Grep/Read. The canonical list anchors OOS classification.
 - Step 2 (Launch Reviewers): reviewer prompts instruct the panel to review the canonical file list (existing code, not a diff). Reviewers may explore further via Glob/Grep/Read for context but OOS classification is anchored to the canonical list.
-- Step 3 (Review Cycle): runs ONE round only (no recursive re-review loop). After voting, either compose a findings batch and invoke `/issue` via the Skill tool (if `--create-issues`) or just print the findings.
+- Step 3 (Review Cycle): runs ONE round only (no recursive re-review loop). After voting, either compose a findings batch and invoke `/umbrella` via the Skill tool (if `--create-issues`) or just print the findings.
 - Step 3e (Implement Fixes): SKIPPED in slice mode — slice mode is read-only review for issue filing, not implement-fixes.
 - Step 4 (Final Summary): writes accepted security findings to `--security-output` path; emits a `### slice-result` KV footer for driver consumption.
 
@@ -250,7 +250,7 @@ Merge findings from all reviewers into a single deduplicated list, grouped by fi
 
 ### 3c.1 — Voting Panel (round 1 only)
 
-**In round 1**: **MANDATORY — READ ENTIRE FILE** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` and execute its body — three-voter setup with proportionality guidance, ballot file handling rule (Write tool, not `cat`-heredoc), parallel launch order (Cursor → Codex → Claude subagent), threshold rules + competition scoring per `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`, the zero-accepted-findings short-circuit to **Step 4**, the OOS-accepted-by-vote artifact write to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` (only when `SESSION_ENV_PATH` is non-empty AND slice mode is OFF — slice mode bypasses this artifact and files directly via /issue at Step 4), and the save-not-accepted-IDs rule used to suppress re-raised findings in rounds 2+ (diff mode only).
+**In round 1**: **MANDATORY — READ ENTIRE FILE** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` and execute its body — three-voter setup with proportionality guidance, ballot file handling rule (Write tool, not `cat`-heredoc), parallel launch order (Cursor → Codex → Claude subagent), threshold rules + competition scoring per `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`, the zero-accepted-findings short-circuit to **Step 4**, the OOS-accepted-by-vote artifact write to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` (only when `SESSION_ENV_PATH` is non-empty AND slice mode is OFF — slice mode bypasses this artifact and files directly via /umbrella at Step 4), and the save-not-accepted-IDs rule used to suppress re-raised findings in rounds 2+ (diff mode only).
 
 **In rounds 2+ (diff mode only)**: Skip voting — accept all Claude-only findings directly, **except** findings that match round-1 rejected findings. **Do NOT load** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` in rounds 2+ — the body is round-1-only and would waste tokens. Same `Do NOT load` guidance applies on the Step 3b zero-findings short-circuit.
 
@@ -288,7 +288,7 @@ After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run
 
 **Diff mode only.** If the loop has run **5 rounds** without converging, stop and print a warning, then proceed to Step 4.
 
-## Step 4 — Final Summary (and slice-mode /issue filing)
+## Step 4 — Final Summary (and slice-mode /umbrella filing)
 
 ### 4a — Print summary (both modes)
 
