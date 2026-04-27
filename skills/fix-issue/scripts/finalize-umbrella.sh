@@ -19,20 +19,33 @@
 # Subcommand:
 #   finalize --issue N
 #
-# Idempotency guard (FINDING_2):
+# Idempotency guard (FINDING_2 + FINDING_3):
 #   Before posting any comment or running rename/close, probe the umbrella's
-#   current state and look for a sentinel HTML-comment marker that would have
-#   been embedded by a prior successful finalize. The guard treats ANY of the
-#   following as "already finalized":
-#     1. Issue state is CLOSED.
-#     2. Title starts with "[DONE] " (managed lifecycle prefix).
-#     3. Any existing comment body contains the literal marker
-#        "<!-- larch:fix-issue:umbrella-finalized -->".
-#   On any of these, emit FINALIZED=false ALREADY_FINALIZED=true and exit 0
-#   without posting a duplicate comment. issue-lifecycle.sh close ALREADY
-#   skips the gh issue close call when state is CLOSED, but it posts the
-#   --comment BEFORE its idempotency probe — so without this pre-flight guard
-#   we would still double-comment under concurrent finalize attempts.
+#   current state and look for partial-success signals from a prior finalize
+#   attempt. The guard distinguishes a strict short-circuit from two
+#   close-only retry paths:
+#     1. State is CLOSED — strict short-circuit. Emit
+#        FINALIZED=false ALREADY_FINALIZED=true REASON=already CLOSED and
+#        exit 0 without further mutation.
+#     2. State is OPEN AND title starts with "[DONE] " (managed lifecycle
+#        prefix) — partial-success: a prior rename succeeded but
+#        `gh issue close` did not complete. Skip the rename API call and
+#        proceed to close-only retry; on success emit FINALIZED=true
+#        CLOSED=true.
+#     3. State is OPEN AND a comment body contains the literal marker
+#        "<!-- larch:fix-issue:umbrella-finalized -->" — partial-success:
+#        a prior comment-post succeeded but `gh issue close` did not
+#        complete. Skip the comment-post step (avoid double-comment under
+#        concurrency) and proceed to close-only retry; on success emit
+#        FINALIZED=true CLOSED=true.
+#   Title-prefix and marker signals MUST NOT short-circuit on their own
+#   (FINDING_3): issue-lifecycle.sh close posts the comment BEFORE its
+#   close call, so a transient close failure leaves rename and/or comment
+#   in place but the issue still OPEN. An aggressive short-circuit on
+#   title or marker alone would leave the umbrella stuck OPEN forever —
+#   every retry would return ALREADY_FINALIZED=true and skip the close
+#   call. Routing those signals to close-only retries also avoids
+#   double-comment under concurrent finalize attempts.
 #
 # Sequence on the non-idempotent path:
 #   1. Rename the umbrella's title to "[DONE] <title>" via
