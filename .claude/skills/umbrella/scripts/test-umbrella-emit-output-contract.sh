@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # test-umbrella-emit-output-contract.sh — Regression harness for /umbrella's
-# Step 4 (Emit Output) prose contract.
+# Step 3B.3 dry-run skip directive, Step 3B.4 dry-run skip directive (matched
+# pair with 3B.3), and Step 4 (Emit Output) prose contract.
 #
 # Pins the load-bearing literals in:
-#   .claude/skills/umbrella/SKILL.md (Step 4 block)
+#   .claude/skills/umbrella/SKILL.md (Step 3B.3, Step 3B.4, Step 4 blocks)
 #   .claude/skills/umbrella/scripts/helpers.md (emit-output subsection)
 #
 # Closes #602 — out-of-scope observation surfaced during /implement for #571
-# (which fixed the original SKILL.md/helpers.md drift). The intent is a cheap
-# CI guard against regression of the same drift; test-helpers.sh explicitly
-# leaves emit-output out of scope (see test-helpers.md "Out of scope").
+# (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to
+# pin the new Step 3B.3 dry-run guard and the matched-pair Step 3B.4 guard.
+# The intent is a cheap CI guard against regression of the same drift;
+# test-helpers.sh explicitly leaves emit-output out of scope (see
+# test-helpers.md "Out of scope").
 #
 # This is a *structural* test (literal-substring assertions on awk-extracted
 # blocks), not a runtime conformance test of `helpers.sh emit-output` (which
@@ -55,6 +58,38 @@ if [[ -z "$STEP4_BLOCK" ]]; then
     echo "  Boundary regexes: '^## Step 4 — Emit Output' (start) and '^## Step 5' (end)." >&2
     echo "  If Step 4's heading was renamed or renumbered, update both regexes here AND in" >&2
     echo "  the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
+    exit 1
+fi
+
+# Extract the Step 3B.3 block from SKILL.md: from "### 3B.3 " (subheading prefix
+# match — tolerates subtitle changes) up to (but not including) "### 3B.4 ".
+STEP3B3_BLOCK=$(awk '
+    /^### 3B\.3 / { in_block=1 }
+    /^### 3B\.4 / { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+if [[ -z "$STEP3B3_BLOCK" ]]; then
+    echo "FAIL: SKILL.md Step 3B.3 block extraction produced empty output." >&2
+    echo "  Boundary regexes: '^### 3B\\.3 ' (start) and '^### 3B\\.4 ' (end)." >&2
+    echo "  If Step 3B.3 or Step 3B.4's heading was renamed or renumbered, update both regexes" >&2
+    echo "  here AND in the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
+    exit 1
+fi
+
+# Extract the Step 3B.4 block from SKILL.md: from "### 3B.4 " up to (but not
+# including) "## Step 4 — Emit Output" (full heading anchor).
+STEP3B4_BLOCK=$(awk '
+    /^### 3B\.4 / { in_block=1 }
+    /^## Step 4 — Emit Output/ { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+if [[ -z "$STEP3B4_BLOCK" ]]; then
+    echo "FAIL: SKILL.md Step 3B.4 block extraction produced empty output." >&2
+    echo "  Boundary regexes: '^### 3B\\.4 ' (start) and '^## Step 4 — Emit Output' (end)." >&2
+    echo "  If Step 3B.4 or Step 4's heading was renamed or renumbered, update both regexes" >&2
+    echo "  here AND in the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
     exit 1
 fi
 
@@ -162,6 +197,30 @@ assert_contains "b2: emit-output non-emission of breadcrumb" \
 assert_contains "b3: wire-dag stderr carve-out" \
     '`wire-dag`'"'"'s documented stderr warning behavior above is unaffected' \
     "$EMIT_OUTPUT_BLOCK"
+
+# (d*) Step 3B.3 dry-run skip directive — pins the new dry-run guard added by
+# issue #719. The shared "Skip this entire sub-step when DRY_RUN=true" prefix
+# pattern is mirrored from Step 3B.4; pinning it in BOTH 3B.3 and 3B.4 (e1
+# below) prevents the two parallel gates from drifting apart silently.
+assert_contains "d1: 3B.3 dry-run skip directive prefix" \
+    'Skip this entire sub-step when `DRY_RUN=true`' \
+    "$STEP3B3_BLOCK"
+assert_contains "d2: 3B.3 dry-run skip-line breadcrumb (folded — subsumes 3B.4 on dry-run path)" \
+    '⏭️ /umbrella: umbrella body + umbrella create + dependency wiring + back-links skipped (--dry-run)' \
+    "$STEP3B3_BLOCK"
+assert_contains "d3: 3B.3 dry-run output.kv contract — UMBRELLA_NUMBER and UMBRELLA_URL omitted" \
+    '`UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv`' \
+    "$STEP3B3_BLOCK"
+
+# (e*) Step 3B.4 dry-run skip directive — the existing pre-#719 guard. Pinning
+# the shared prefix here AND in 3B.3 (d1 above) is the matched-pair invariant
+# the harness enforces so the two gates cannot drift apart.
+assert_contains "e1: 3B.4 dry-run skip directive prefix (matched pair with d1)" \
+    'Skip this entire sub-step when `DRY_RUN=true`' \
+    "$STEP3B4_BLOCK"
+assert_contains "e2: 3B.4 dry-run skip-line breadcrumb (existing pre-#719 wiring/back-links wording)" \
+    '⏭️ /umbrella: dependency wiring + back-links skipped (--dry-run)' \
+    "$STEP3B4_BLOCK"
 
 echo
 echo "All $PASS_COUNT assertions passed."

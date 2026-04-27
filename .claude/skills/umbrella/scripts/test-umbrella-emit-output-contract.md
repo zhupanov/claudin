@@ -1,6 +1,6 @@
 # test-umbrella-emit-output-contract.sh — sibling contract
 
-Structural regression harness for `/umbrella` SKILL.md Step 4 (Emit Output) and the `emit-output` subcommand subsection of `helpers.md`. Closes #602 — out-of-scope observation surfaced during /implement for #571 (which fixed the original SKILL.md/helpers.md drift). The intent is a cheap CI guard against regression of the same drift; `test-helpers.sh` explicitly leaves `emit-output` out of scope.
+Structural regression harness for `/umbrella` SKILL.md Step 3B.3 (dry-run skip directive — added in #719), Step 3B.4 (dry-run skip directive — pre-existing, pinned as the matched pair with 3B.3), Step 4 (Emit Output) prose, and the `emit-output` subcommand subsection of `helpers.md`. Closes #602 — out-of-scope observation surfaced during /implement for #571 (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to pin the new Step 3B.3 dry-run guard (`d1`–`d3`) and the matched-pair Step 3B.4 guard (`e1`–`e2`) so the two parallel dry-run gates cannot drift apart silently. The intent is a cheap CI guard against regression of the same drift; `test-helpers.sh` explicitly leaves `emit-output` out of scope.
 
 This is a *structural* test (literal-substring assertions on `awk`-extracted blocks), not a runtime conformance test of `helpers.sh emit-output` (which remains exercised indirectly via SKILL.md integration). Pattern matches `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh`.
 
@@ -10,7 +10,18 @@ This is a *structural* test (literal-substring assertions on `awk`-extracted blo
 
 ## Coverage
 
-Thirteen assertions, fail-fast on first miss.
+Eighteen assertions, fail-fast on first miss.
+
+### Step 3B.3 block (extracted from SKILL.md) — added in #719
+
+- (d1) 3B.3 contains the shared dry-run skip directive prefix ``Skip this entire sub-step when `DRY_RUN=true` ``. Matched-pair invariant with `e1` below — both must mirror the same literal so the two parallel dry-run gates cannot drift.
+- (d2) 3B.3 contains the folded skip-line breadcrumb `⏭️ /umbrella: umbrella body + umbrella create + dependency wiring + back-links skipped (--dry-run)` (subsumes 3B.4's skip-line on the dry-run path because the orchestrator never enters 3B.4 there).
+- (d3) 3B.3 documents the `output.kv` contract — ``UMBRELLA_NUMBER`` and ``UMBRELLA_URL`` are **omitted** from `output.kv` — which routes the dry-run path through the canonical "only on multi-piece + success" key-presence convention shared with the children-batch-failure and umbrella-creation-failure paths.
+
+### Step 3B.4 block (extracted from SKILL.md) — added in #719 as matched pair with 3B.3
+
+- (e1) 3B.4 contains the shared dry-run skip directive prefix ``Skip this entire sub-step when `DRY_RUN=true` ``. Matched pair with `d1`. Pinning both at the same literal is the load-bearing drift guard that prevents one gate from being reworded while the other stays.
+- (e2) 3B.4 contains its existing pre-#719 skip-line breadcrumb `⏭️ /umbrella: dependency wiring + back-links skipped (--dry-run)`. Pinning this protects against silent removal — even though it is unreachable on the dry-run path post-#719, it remains in place as defense in depth for any path that might still flow through 3B.4.
 
 ### Step 4 block (extracted from SKILL.md)
 
@@ -38,6 +49,8 @@ Thirteen assertions, fail-fast on first miss.
 
 | Block | Start regex | End regex |
 |-------|-------------|-----------|
+| SKILL.md Step 3B.3 | `^### 3B\.3` plus space (subheading prefix) | `^### 3B\.4` plus space (next subheading prefix) |
+| SKILL.md Step 3B.4 | `^### 3B\.4` plus space (subheading prefix) | `^## Step 4 — Emit Output` (full heading) |
 | SKILL.md Step 4 | `^## Step 4 — Emit Output` (full heading) | `^## Step 5` (prefix only) |
 | helpers.md emit-output | `^## .emit-output` | `^###` followed by a space (first triple-hash) |
 
@@ -49,8 +62,10 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 
 - Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the eight concrete literals — c1–c7 plus c6b) requires a same-PR update to the corresponding assertion literal in this harness.
 - Any change to helpers.md `emit-output` subsection (stderr discipline sentence, the orchestrator-emits-breadcrumb sentence, or the wire-dag carve-out) requires the same.
-- Renaming or renumbering Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
+- Renaming or renumbering Step 3B.3, Step 3B.4, or Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
 - Adding a new canonical breadcrumb shape to SKILL.md Step 4: add a corresponding `(c<N>)` assertion here.
+- Reword to either dry-run skip directive (Step 3B.3 or Step 3B.4): the matched-pair invariant requires both `d1` and `e1` to share the same literal — update both assertion literals in lockstep, otherwise CI catches the drift.
+- Reword to either skip-line breadcrumb literal (3B.3's `d2` folded form, or 3B.4's `e2` wiring/back-links form): update the assertion literal here in the same PR.
 
 ## Out of scope
 

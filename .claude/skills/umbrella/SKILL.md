@@ -29,7 +29,7 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 | `--title-prefix PREFIX` | Prepended by `/issue` to every child title AND the umbrella title. |
 | `--repo OWNER/REPO` | Forwarded to `/issue`. Defaults to the inferred current repo. |
 | `--closed-window-days N` | Forwarded to `/issue` (closed-issue dedup window). Default 90. |
-| `--dry-run` | Forwarded to `/issue`. Multi-piece path also skips DAG wiring + back-links. |
+| `--dry-run` | Forwarded to `/issue`. Multi-piece path skips umbrella body composition + umbrella issue creation (Step 3B.3) and DAG wiring + back-links (Step 3B.4). |
 | `--go` | Forwarded to `/issue` for child batch AND umbrella single. Posts `GO` on every successfully-created issue (children + umbrella). Duplicates / failed creates / dry-runs never get a GO comment (per `/issue` Step 6 contract). |
 | `--debug` | Verbose mode for this skill's own helpers. |
 | `--input-file PATH` | Activates pre-decomposed-input mode. Bypasses Step 1 (task resolve) and Step 3B.1 (LLM decomposition). The file MUST be a pre-built `/issue --input-file` batch markdown. Required to be paired with `--umbrella-summary-file`. Mutually exclusive with positional TASK. |
@@ -112,7 +112,7 @@ Continue at Step 4. (No umbrella issue, no DAG, no back-links — there is only 
 
 ## Step 3B — Multi-Piece Path
 
-Four sub-steps run in order. Each is exactly one Bash tool call (Section III rule C). The LLM owns the decomposition; the scripts own the I/O and GitHub mechanics.
+Four sub-steps run in order. Each is exactly one Bash tool call (Section III rule C). The LLM owns the decomposition; the scripts own the I/O and GitHub mechanics. On the multi-piece dry-run path (`DRY_RUN=true`), 3B.2's children-batch-failure abort or 3B.3's dry-run guard may short-circuit to Step 4, skipping the remaining sub-steps; this is the canonical exit shape, not an exception.
 
 ### 3B.1 — Decompose and write batch-input file
 
@@ -145,9 +145,11 @@ Parse the per-item `ISSUE_<i>_NUMBER`, `ISSUE_<i>_URL`, `ISSUE_<i>_TITLE`, `ISSU
 
 **Abort condition**: if `ISSUES_FAILED >= 1`, do NOT proceed to umbrella creation. Capture the children-batch-failure as session state (preserve `ISSUES_FAILED` and the count of successfully-resolved children for Step 4's summary), populate the `CHILD_*` output fields with whatever did succeed (for partial-failure auditability), and jump to Step 4 with `UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv` entirely — do NOT write them with blank values. The canonical Step 4 grammar marks these keys present only on multi-piece success, so consumers distinguish success from failure by key presence/absence; writing blank values would validate but break that contract. Skip 3B.3 and 3B.4. Do NOT print a warning here — Step 4 is the single emission point for the human summary line and will render the multi-piece children-batch-failed shape on this path.
 
-For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes but skip wiring + back-links (handled in 3B.3 / 3B.4).
+For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes; on the multi-piece dry-run path, 3B.3's dry-run guard skips umbrella body composition + umbrella creation AND 3B.4's wiring + back-links entirely.
 
 ### 3B.3 — Compose umbrella body and create umbrella
+
+Skip this entire sub-step when `DRY_RUN=true` (no real children exist on GitHub — `/issue --dry-run` does not emit issue numbers, so `children.tsv`'s numeric-first-column invariant cannot hold and `render-umbrella-body.sh`'s validator at lines 38–42 would hard-fail; the renderer is left strict by design). Print `⏭️ /umbrella: umbrella body + umbrella create + dependency wiring + back-links skipped (--dry-run)` and jump to Step 4 with `UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv` entirely (consistent with the canonical "only on multi-piece + success" contract documented in Step 4). The folded skip-line subsumes 3B.4's existing skip breadcrumb on this path because the orchestrator never enters 3B.4. Step 4's emit-output then renders the canonical multi-piece dry-run breadcrumb (`ℹ /umbrella: dry-run — would file umbrella with <N> children`) using `<N> = CHILDREN_CREATED` from session state authored in Step 3B.2 — not dependent on this skipped sub-step's outputs.
 
 **Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty (so `UMBRELLA_SUMMARY_FILE` is also non-empty by paired-flag validation), the summary is caller-supplied at `UMBRELLA_SUMMARY_FILE`; do NOT compose one. Skip the LLM-summary step. Pass the caller's summary path as `--summary-file` to the renderer (the caller is expected to have applied compose-time sanitization — strip control chars, redact secrets/internal URLs/PII). Continue with the renderer invocation below using `--summary-file "$UMBRELLA_SUMMARY_FILE"`.
 
