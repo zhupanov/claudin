@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.24] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/finalize-umbrella.md:33-39` — replaced the misleading three-value `REASON` enum in the Stdout-contract table with the granular four-row split from duplicate #759. The script `finalize-umbrella.sh` only emits `REASON=already CLOSED` (line 153, paired with `ALREADY_FINALIZED=true` on the strict CLOSED short-circuit); the prior table listed `title already prefixed [DONE]` and `existing closing-comment marker detected` as `REASON` values, but those literals exist nowhere in the script. New rows tie `ALREADY_FINALIZED` / `REASON` to the strict CLOSED short-circuit and `RENAMED` / `CLOSED` to the executed path (including the close-only retry path where `RENAMED` may be `false` when the title was already prefixed `[DONE]`). Documentation alignment only; no script behavior change. Closes #756.
+
 ## [7.17.23] - 2026-04-27
 
 ### Fixed
