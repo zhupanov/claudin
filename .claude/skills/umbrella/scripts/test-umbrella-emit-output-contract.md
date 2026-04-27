@@ -69,7 +69,7 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 
 ## Out of scope
 
-Runtime conformance of `helpers.sh emit-output` (KV grammar validation, duplicate-key rejection, embedded-newline rejection) — `helpers.sh emit-output` is a thin awk validator covered indirectly by SKILL.md integration. `test-helpers.sh` covers `helpers.sh check-cycle` only; `wire-dag` has a follow-up issue for network-mocking coverage.
+Runtime conformance of `helpers.sh emit-output` (KV grammar validation, duplicate-key rejection, embedded-newline rejection) — `helpers.sh emit-output` is a thin awk validator covered indirectly by SKILL.md integration. `test-helpers.sh` covers both `helpers.sh check-cycle` (pure logic) and `helpers.sh wire-dag` (PATH-stub `gh` for the per-edge POST classifier and counter categorization, including `EDGES_FAILED` per issue #720).
 
 ## Pattern reference
 
