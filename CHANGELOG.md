@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.30] - 2026-04-26
+
+### Changed
+
+- `/review --create-issues` (slice mode) now delegates issue filing to `/umbrella` (via Skill tool) instead of calling `/issue --input-file` directly. When ≥2 distinct issues are filed (counted post-`/issue` dedup, dry-run-safe), `/umbrella` produces a tracking umbrella issue + children with back-link comments. When ≤1 distinct → no umbrella (one-shot path). Adds `--input-file PATH` and `--umbrella-summary-file PATH` to `/umbrella` (paired-flag validation, mutual exclusion with positional TASK; bypasses Step 1 task resolve and Step 3B.1 LLM decomposition). `/review` composes the umbrella summary from slice context with concrete sanitization (strip control chars, redact secrets / internal URLs / PII, cap ~200 chars). Slice-result KV footer schema unchanged: `ISSUES_CREATED` includes the umbrella tracker (per dialectic DECISION_2 — uniform "any GitHub issue created counts" semantic); `ISSUES_FAILED` uses a structural signal (`UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` empty AND `CHILDREN_FAILED=0`) so the children-batch-failed abort path doesn't double-count. `skills/loop-review/scripts/driver.md` documents the "Issues filed" semantic shift. Test harness extended (32 invocations covering 7 new flag/validation cases, 16 frozen ERROR templates). `/umbrella` is currently dev-only at `.claude/skills/umbrella/`; the `/review` SKILL.md now carries a consumer-repo caveat parallel to `/skill-evolver`. Closes #713.
+
 ## [7.16.29] - 2026-04-26
 
 ### Changed
