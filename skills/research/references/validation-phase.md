@@ -237,19 +237,19 @@ Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background:
 
    The append uses a **quoted heredoc** (`<<'EOF'`) so residual shell metacharacters in a substituted reason value are preserved literally rather than expanded — same shell-injection defense as Step 0b.
 
-   ```bash
-   LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
-   LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
-   # Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
-   grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
-   cat >> "$LANE_STATUS_TMP" <<'EOF'
-   VALIDATION_CURSOR_STATUS=<cursor token>
-   VALIDATION_CURSOR_REASON=<cursor sanitized reason or empty>
-   VALIDATION_CODEX_STATUS=<codex token>
-   VALIDATION_CODEX_REASON=<codex sanitized reason or empty>
-   EOF
-   mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
-   ```
+```bash
+LANE_STATUS_FILE="$RESEARCH_TMPDIR/lane-status.txt"
+LANE_STATUS_TMP="$(mktemp "${LANE_STATUS_FILE}.XXXXXX")"
+# Preserve RESEARCH_* keys verbatim; emit fresh VALIDATION_* keys.
+grep -v '^VALIDATION_' "$LANE_STATUS_FILE" > "$LANE_STATUS_TMP"
+cat >> "$LANE_STATUS_TMP" <<'EOF'
+VALIDATION_CURSOR_STATUS=<cursor token>
+VALIDATION_CURSOR_REASON=<cursor sanitized reason or empty>
+VALIDATION_CODEX_STATUS=<codex token>
+VALIDATION_CODEX_REASON=<codex sanitized reason or empty>
+EOF
+mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
+```
 
    Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
 
