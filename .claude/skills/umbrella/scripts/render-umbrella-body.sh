@@ -72,6 +72,7 @@ TITLE_HINT=$(awk '
 OUT_TMP=$(mktemp "$TMPDIR/umbrella-body.md.XXXXXX") || {
   echo "ERROR=failed to write umbrella body: $OUT" >&2; exit 1
 }
+trap 'rm -f "$OUT_TMP" 2>/dev/null || true' EXIT
 {
   printf 'Umbrella tracking issue.\n\n'
   printf '## Summary\n\n'
