@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.25] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/find-lock-issue.sh:618` — the repo-ownership URL parser no longer hard-codes `https://github.com/...`. The regex was widened to `https://[^/]*/<owner>/<repo>/issues/<n>` so explicit `--issue <full-URL>` invocations work for GitHub Enterprise / self-hosted GHE deployments where the host is not `github.com`; the cross-repo guard (`ISSUE_REPO != REPO`) remains the actual safety net since `$REPO` already comes from `gh repo view` in the current repo. Sibling `find-lock-issue.md` and `test-find-lock-issue.{sh,md}` updated in sync; the test harness gains a fixture-9 `ISSUE_URL_HOST` knob and a regression case for a `ghe.example.com` URL (40 assertions pass). Closes #766.
+
 ## [7.17.24] - 2026-04-27
 
 ### Fixed

@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Seven executed fixtures plus one deferred-coverage
+# refactor (closes #496). Eight executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -22,6 +22,9 @@
 #      "non-urgent" rejected, oldest-within-tier) → exit 0; ISSUE_NUMBER=20
 #   8. auto-pick + no Urgent → oldest-first preserved → exit 0;
 #      ISSUE_NUMBER=10
+#   9. explicit issue with a GHE-style host (host-generic URL parsing —
+#      closes #766) → exit 0; ISSUE_NUMBER=55 LOCK_ACQUIRED=true
+#      RENAMED=true (mirrors fixture 1's full success contract)
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -89,9 +92,17 @@ dispatch_repo_view() {
 }
 
 dispatch_issue_view() {
-    local issue="$1"
-    printf '{"number":%s,"state":"%s","url":"https://github.com/stub/repo/issues/%s","title":"%s","body":"%s"}\n' \
-        "$issue" "${ISSUE_STATE:-OPEN}" "$issue" "${ISSUE_TITLE:-Test issue}" "${ISSUE_BODY:-Test body}"
+    # Accept either a bare number or a full GitHub-style URL — `gh issue view`
+    # resolves both natively, and find-lock-issue.sh's host-generic URL parser
+    # (closes #766) passes URLs through unchanged.
+    local arg="$1"
+    local host="${ISSUE_URL_HOST:-github.com}"
+    local issue="$arg"
+    case "$arg" in
+        http*://*) issue=$(echo "$arg" | sed -E 's|.*/issues/([0-9]+).*|\1|') ;;
+    esac
+    printf '{"number":%s,"state":"%s","url":"https://%s/stub/repo/issues/%s","title":"%s","body":"%s"}\n' \
+        "$issue" "${ISSUE_STATE:-OPEN}" "$host" "$issue" "${ISSUE_TITLE:-Test issue}" "${ISSUE_BODY:-Test body}"
     exit 0
 }
 
@@ -518,6 +529,38 @@ OUT=$(cat "$OUT_FILE")
 assert_equal "$EXIT_CODE" "0" "[8] exit code 0 (oldest non-Urgent candidate picked)"
 assert_contains "$OUT" "ISSUE_NUMBER=10" "[8] ISSUE_NUMBER=10 (oldest, no Urgent tier exists)"
 assert_contains "$OUT" "LOCK_ACQUIRED=true" "[8] LOCK_ACQUIRED=true"
+
+# ---------------------------------------------------------------------------
+# Fixture 9: explicit-issue mode with a GitHub-Enterprise-style host. The
+# repo-ownership parser must NOT pin to github.com (closes #766) — any
+# https://<host>/<owner>/<repo>/issues/<n> URL where <owner>/<repo> matches
+# the current repo ($REPO from gh repo view = stub/repo) is acceptable. The
+# scheme is pinned to `https://` because the `gh` CLI always emits `https://`
+# URLs and the production regex deliberately stays BRE-portable.
+# ---------------------------------------------------------------------------
+echo "Fixture 9: explicit issue with GHE host (host-generic URL parsing, closes #766)"
+run_fixture "fixture-9"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='GHE test issue'"
+    echo "ISSUE_URL_HOST=ghe.example.com"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+OUT_FILE="$TMPROOT/fixture-9/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-9/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" "https://ghe.example.com/stub/repo/issues/55" >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+
+assert_equal "$EXIT_CODE" "0" "[9] exit code 0 (GHE URL accepted, repo matches)"
+assert_contains "$OUT" "ELIGIBLE=true" "[9] ELIGIBLE=true on stdout"
+assert_contains "$OUT" "ISSUE_NUMBER=55" "[9] ISSUE_NUMBER=55 on stdout"
+assert_contains "$OUT" "LOCK_ACQUIRED=true" "[9] LOCK_ACQUIRED=true on stdout"
+assert_contains "$OUT" "RENAMED=true" "[9] RENAMED=true on stdout (mirrors Fixture 1)"
+assert_not_contains "$OUT" "Cannot parse repository from issue URL" "[9] no parse-failure error"
 
 # ---------------------------------------------------------------------------
 # Summary

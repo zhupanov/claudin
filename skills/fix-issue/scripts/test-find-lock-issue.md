@@ -2,7 +2,7 @@
 
 `skills/fix-issue/scripts/test-find-lock-issue.sh` is the offline regression harness for `skills/fix-issue/scripts/find-lock-issue.sh` (the combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock refactor closing #496). It uses a PATH-prepended `gh` stub under a per-fixture tmpdir to validate the script's exit-code matrix and unified stdout contract without any network or git-state mutation.
 
-## Eight fixtures
+## Eight executed fixtures plus one deferred-coverage note
 
 1. **Eligible + lock OK + rename OK** → exit 0; `ELIGIBLE=true`, `ISSUE_NUMBER=N`, `LOCK_ACQUIRED=true`, `RENAMED=true`. Auxiliary delegate keys (`COMMENTED`, `NEW_TITLE`) are filtered from stdout.
 2. **Eligible + lock fail** → exit 3; `ELIGIBLE=true LOCK_ACQUIRED=false ERROR=...`. Simulated by failing the IN PROGRESS comment post inside `cmd_comment` (a stateless-stub-friendly approximation of the duplicate-IN-PROGRESS detection path; both produce the same `exit 1` from `cmd_comment` → `exit 3` from `find-lock-issue.sh`).
@@ -12,6 +12,7 @@
 6. **Auto-pick mode + no eligible candidates** → exit 1; `ELIGIBLE=false`. Empty open-issues list.
 7. **Auto-pick mode + Urgent preference** → exit 0; `ISSUE_NUMBER=20`. Five open issues (#5 "Fix non-urgent cleanup" substring trap, #10 non-Urgent oldest, #20 lowercase "urgent", #30 non-Urgent, #40 uppercase "URGENT"); the picker selects #20, verifying all three behaviors: word-boundary regex (so #5 is REJECTED — `non-urgent` does not match `\burgent\b` despite containing the letters), Urgent-tier comes before non-Urgent-tier (so #20 beats #10 despite #10 being older), AND oldest-first holds within the Urgent tier (so #20 beats #40). Case-insensitive matching is exercised by the lowercase / uppercase mix.
 8. **Auto-pick mode + no Urgent → oldest-first preserved** → exit 0; `ISSUE_NUMBER=10`. Three non-Urgent open issues; the picker selects the oldest, confirming the Urgent preference is a soft signal that does not alter ordering when no Urgent candidate exists.
+9. **Explicit-issue mode with a GHE-style host** → exit 0; `ISSUE_NUMBER=55 LOCK_ACQUIRED=true RENAMED=true`. The script is invoked with a full URL whose host is `ghe.example.com` (not `github.com`); the repo-ownership parser must accept any `https://<host>/<owner>/<repo>/issues/<n>` (the `gh` CLI always emits `https://`, so the production regex pins that scheme literally) as long as `<owner>/<repo>` matches the current repo. Closes #766. Fixture-controlled via `ISSUE_URL_HOST` in the stub state file.
 
 ## Stub design
 
@@ -19,6 +20,7 @@ The stub `gh` dispatches on positional + `--json` args. Each fixture writes a st
 
 - `ISSUE_STATE` — fixture-controlled value for `gh issue view --json state`.
 - `ISSUE_TITLE` — fixture-controlled value for `gh issue view --json title`.
+- `ISSUE_URL_HOST` — fixture-controlled host (defaults to `github.com`) embedded in the `url` field returned by `gh issue view --json url`. Used by Fixture 9 to exercise host-generic URL parsing for GitHub Enterprise / self-hosted GHE deployments.
 - `COMMENTS_JSON` — page-array JSON for `gh api --paginate --slurp .../comments`. Single-quoted in the state file so JSON braces survive `source`.
 - `OPEN_ISSUES_JSON` — JSONL for `gh api repos/.../issues?state=open`.
 - `RENAME_FAIL=true` — makes `gh issue edit --title` exit non-zero (used by Fixture 3).
