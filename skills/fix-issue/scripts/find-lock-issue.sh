@@ -651,8 +651,33 @@ if [[ -n "$ISSUE_ARG" ]]; then
             if [ "$IS_UMBRELLA_DETECT" = "true" ]; then
                 # Apply the umbrella's own blocker check (parallel to non-
                 # umbrella behavior — an umbrella that is itself blocked by
-                # an open issue should not dispatch).
+                # an open issue should not dispatch). The umbrella's parsed
+                # children are filtered out of the blocker set: per #716,
+                # /umbrella now wires native child→umbrella edges so each
+                # open child appears in the umbrella's blocked_by, but the
+                # umbrella is meant to be GATED on its children (and
+                # handle_umbrella dispatches them) — not deadlocked. Only
+                # blockers that are NOT parsed children of this umbrella
+                # count as umbrella-blockers.
                 BLOCKERS=$(all_open_blockers "$ISSUE_NUM")
+                if [ -n "$BLOCKERS" ]; then
+                    UMBRELLA_CHILDREN=$("$UMBRELLA_HANDLER" list-children --issue "$ISSUE_NUM" 2>/dev/null \
+                        | awk -F= '/^CHILDREN=/ { v=$2 } END { print v }')
+                    FILTERED=""
+                    for b in $BLOCKERS; do
+                        is_child="false"
+                        for c in $UMBRELLA_CHILDREN; do
+                            if [ "$b" = "$c" ]; then
+                                is_child="true"
+                                break
+                            fi
+                        done
+                        if [ "$is_child" = "false" ]; then
+                            FILTERED="$FILTERED $b"
+                        fi
+                    done
+                    BLOCKERS=$(echo "$FILTERED" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                fi
                 if [ -n "$BLOCKERS" ]; then
                     FORMATTED=$(echo "$BLOCKERS" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
                     echo "ELIGIBLE=false"

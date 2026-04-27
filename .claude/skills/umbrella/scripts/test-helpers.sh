@@ -104,7 +104,13 @@ cat > "$GH_STUB" <<'STUB'
 #   STUB_BLOCKED_BY_<N>_RC      — per-node exit code for the blocked_by lookup
 #                                 (default: 0). Non-zero simulates a transient
 #                                 gh failure for that node.
-#   STUB_NATIVE_CHECK_RESPONSE  — value to print for the native blocked_by check (back-link branch)
+#   STUB_LIST_COMMENTS_RESPONSE — newline-separated comment bodies returned by
+#                                 the back-link comment-existence probe (issue
+#                                 #716). Default empty string → no existing
+#                                 back-link comment, post is expected.
+#   STUB_LIST_COMMENTS_RC       — exit code for the comment-list probe (default
+#                                 0). Non-zero simulates a transient gh
+#                                 failure; helpers.sh fails open and posts.
 set -e
 # Resolve the request URL by scanning args (handles `gh api -i URL` from the
 # new probe (issue #728) where the URL is at $3, AND the legacy
@@ -116,6 +122,13 @@ for arg in "$@"; do
   esac
 done
 case "$1 $_stub_url" in
+  "api /repos/"*"/issues/"*"/comments")
+    # Back-link comment-existence probe (issue #716). Placed BEFORE the
+    # generic /issues/<N> arm so the case-statement first-match order does
+    # not shadow this dispatch with the blocker-id-lookup arm.
+    printf '%s' "${STUB_LIST_COMMENTS_RESPONSE:-}"
+    exit "${STUB_LIST_COMMENTS_RC:-0}"
+    ;;
   "api /repos/"*"/issues/"*"/dependencies/blocked_by")
     # Could be: probe (--silent or -i), existing-edges (--jq), native check (--jq with select),
     # or per-edge POST (-X POST -i).
@@ -259,12 +272,15 @@ assert_wire_dag() {
   rm -f "$out_file" "$err_file"
 }
 
-# Default stub state: probe ok, blocker-id resolves, no existing edges, no native umbrella relationship.
+# Default stub state: probe ok, blocker-id resolves, no existing edges, no
+# existing back-link comment on any child (per #716 — comments-listing default
+# returns empty, so the back-link idempotency check finds nothing and posts).
 export STUB_PROBE_RC=0
 export STUB_BLOCKER_ID=999001
 export STUB_BLOCKER_ID_RC=0
 export STUB_EXISTING_BLOCKERS=""
-export STUB_NATIVE_CHECK_RESPONSE=""
+export STUB_LIST_COMMENTS_RESPONSE=""
+export STUB_LIST_COMMENTS_RC=0
 
 # (a) 200 OK → EDGES_ADDED, no warning.
 export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
@@ -553,6 +569,136 @@ export STUB_POST_RC=0
     FAIL=$((FAIL + 1))
   fi
   unset STUB_BLOCKED_BY_20_RC STUB_BLOCKED_BY_10
+}
+
+echo ""
+echo "test-helpers.sh: wire-dag back-link comment-existence idempotency (issue #716)"
+
+# Reset stub for the back-link suite. Children: just #20. EDGES_FILE empty
+# (no DAG wiring in scope; we are exercising the back-link branch only).
+unset STUB_BLOCKED_BY_20 STUB_BLOCKED_BY_10
+export STUB_PROBE_RC=0
+export STUB_BLOCKER_ID=999001
+export STUB_BLOCKER_ID_RC=0
+export STUB_EXISTING_BLOCKERS=""
+export STUB_POST_RESPONSE=$'HTTP/2 200 OK\r\nContent-Type: application/json\r\n\r\n{}\n'
+export STUB_POST_RC=0
+
+# (q) Comment exists matching the umbrella prefix → BACKLINKS_SKIPPED_EXISTING=1,
+#     zero `gh issue comment` invocations recorded in STUB_COMMENT_LOG.
+{
+  q_children="$TMP/children-q.tsv"
+  q_edges="$TMP/edges-q.tsv"
+  q_out="$TMP/wire-out-q"
+  q_err="$TMP/wire-err-q"
+  q_comment_log="$TMP/comment-log-q.txt"
+  : > "$q_comment_log"
+  printf '20\tsome-child\thttp://x\n' > "$q_children"
+  : > "$q_edges"   # no DAG edges — back-link branch only
+  # Stub returns one matching body (other unrelated comments interleaved to
+  # exercise the substring-grep tolerance).
+  export STUB_LIST_COMMENTS_RESPONSE=$'unrelated comment\nPart of umbrella #1 — Some title\nanother comment\n'
+  export STUB_LIST_COMMENTS_RC=0
+  PATH="$STUB_BIN:$PATH" STUB_COMMENT_LOG="$q_comment_log" \
+    bash "$HELPERS" wire-dag \
+      --tmpdir "$TMP" --umbrella 1 --umbrella-title "Some title" \
+      --children-file "$q_children" --edges-file "$q_edges" \
+      --repo o/r > "$q_out" 2> "$q_err" || true
+  ok=1
+  grep -qE 'BACKLINKS_SKIPPED_EXISTING=1' "$q_out" || ok=0
+  grep -qE 'BACKLINKS_POSTED=0' "$q_out" || ok=0
+  comment_calls=$(wc -l < "$q_comment_log" | tr -d ' ')
+  [ "$comment_calls" = "0" ] || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ existing back-link comment → BACKLINKS_SKIPPED_EXISTING=1, zero posts\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ existing back-link did not skip comment\n     stdout:\n'
+    sed 's/^/       /' "$q_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$q_err"
+    printf '     comment log lines: %s\n' "$comment_calls"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_LIST_COMMENTS_RESPONSE STUB_COMMENT_LOG
+}
+
+# (r) No matching comment → BACKLINKS_POSTED=1, exactly one `gh issue comment`
+#     invocation recorded in STUB_COMMENT_LOG.
+{
+  r_children="$TMP/children-r.tsv"
+  r_edges="$TMP/edges-r.tsv"
+  r_out="$TMP/wire-out-r"
+  r_err="$TMP/wire-err-r"
+  r_comment_log="$TMP/comment-log-r.txt"
+  : > "$r_comment_log"
+  printf '20\tsome-child\thttp://x\n' > "$r_children"
+  : > "$r_edges"
+  # Stub returns comments that do NOT contain the umbrella back-link prefix.
+  export STUB_LIST_COMMENTS_RESPONSE=$'unrelated\nanother\nnope\n'
+  export STUB_LIST_COMMENTS_RC=0
+  PATH="$STUB_BIN:$PATH" STUB_COMMENT_LOG="$r_comment_log" \
+    bash "$HELPERS" wire-dag \
+      --tmpdir "$TMP" --umbrella 1 --umbrella-title "Some title" \
+      --children-file "$r_children" --edges-file "$r_edges" \
+      --repo o/r > "$r_out" 2> "$r_err" || true
+  ok=1
+  grep -qE 'BACKLINKS_SKIPPED_EXISTING=0' "$r_out" || ok=0
+  grep -qE 'BACKLINKS_POSTED=1' "$r_out" || ok=0
+  comment_calls=$(wc -l < "$r_comment_log" | tr -d ' ')
+  [ "$comment_calls" = "1" ] || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ no matching back-link → BACKLINKS_POSTED=1, exactly one post\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ no-match scenario did not post exactly one back-link\n     stdout:\n'
+    sed 's/^/       /' "$r_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$r_err"
+    printf '     comment log lines: %s\n' "$comment_calls"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_LIST_COMMENTS_RESPONSE STUB_COMMENT_LOG
+}
+
+# (s) Numeric prefix-collision guard: comment for umbrella #12 is present
+#     while we look up #1. The trailing ` — ` separator in the marker
+#     prevents the prefix-collision (without it, `Part of umbrella #1` would
+#     false-match `Part of umbrella #12`). Assert post happens.
+{
+  s_children="$TMP/children-s.tsv"
+  s_edges="$TMP/edges-s.tsv"
+  s_out="$TMP/wire-out-s"
+  s_err="$TMP/wire-err-s"
+  s_comment_log="$TMP/comment-log-s.txt"
+  : > "$s_comment_log"
+  printf '20\tsome-child\thttp://x\n' > "$s_children"
+  : > "$s_edges"
+  # Stub returns a comment for umbrella #12 (a sibling, not us).
+  export STUB_LIST_COMMENTS_RESPONSE=$'Part of umbrella #12 — Other title\n'
+  export STUB_LIST_COMMENTS_RC=0
+  PATH="$STUB_BIN:$PATH" STUB_COMMENT_LOG="$s_comment_log" \
+    bash "$HELPERS" wire-dag \
+      --tmpdir "$TMP" --umbrella 1 --umbrella-title "Some title" \
+      --children-file "$s_children" --edges-file "$s_edges" \
+      --repo o/r > "$s_out" 2> "$s_err" || true
+  ok=1
+  grep -qE 'BACKLINKS_SKIPPED_EXISTING=0' "$s_out" || ok=0
+  grep -qE 'BACKLINKS_POSTED=1' "$s_out" || ok=0
+  comment_calls=$(wc -l < "$s_comment_log" | tr -d ' ')
+  [ "$comment_calls" = "1" ] || ok=0
+  if [ "$ok" = "1" ]; then
+    printf '  ✅ #12 prefix does not false-match #1 (separator-anchored grep)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ prefix collision was not prevented\n     stdout:\n'
+    sed 's/^/       /' "$s_out"
+    printf '     stderr:\n'
+    sed 's/^/       /' "$s_err"
+    printf '     comment log lines: %s\n' "$comment_calls"
+    FAIL=$((FAIL + 1))
+  fi
+  unset STUB_LIST_COMMENTS_RESPONSE STUB_COMMENT_LOG
 }
 
 echo ""
