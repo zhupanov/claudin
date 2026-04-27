@@ -147,6 +147,37 @@ Parse the per-item `ISSUE_<i>_NUMBER`, `ISSUE_<i>_URL`, `ISSUE_<i>_TITLE`, `ISSU
 
 **Abort condition**: if `ISSUES_FAILED >= 1`, do NOT proceed to umbrella creation. Capture the children-batch-failure as session state (preserve `ISSUES_FAILED` and the count of successfully-resolved children for Step 4's summary), populate the `CHILD_*` output fields with whatever did succeed (for partial-failure auditability), and jump to Step 4 with `UMBRELLA_NUMBER` and `UMBRELLA_URL` **omitted** from `output.kv` entirely — do NOT write them with blank values. The canonical Step 4 grammar marks these keys present only on multi-piece success, so consumers distinguish success from failure by key presence/absence; writing blank values would validate but break that contract. Skip 3B.3 and 3B.4. Do NOT print a warning here — Step 4 is the single emission point for the human summary line and will render the multi-piece children-batch-failed shape on this path.
 
+**`created-eq-1` bypass condition** (normal mode only — closes #717): after the children-batch-failed abort runs, when **`INPUT_FILE` is empty AND `DRY_RUN=false` AND `ISSUES_FAILED=0` AND `ISSUES_CREATED=1`**, emit a downgrade KV bundle (parallel to Step 3B.1's `decomposition-lt-2` and Step 2's `input-file-distinct-lt-2` conventions) and skip Steps 3B.3 and 3B.4 entirely. Precedence: `failed batch (ISSUES_FAILED>=1) > created-eq-1 (normal mode, non-dry-run) > existing 3B.3 dispatch`. The bypass exists because if `/issue --input-file` deduplicated `N-1` of `N` pieces to existing tickets and created only 1 new issue, the natural shape is one-shot — creating a brand-new umbrella tracking that single child plus `N-1` duplicates is wrong. Do NOT execute Step 3A on this path — children were already created in Step 3B.2; re-invoking `/issue` would double-create.
+
+The bypass procedure:
+
+1. **Identify the single new child's piece-index `c`**: the unique `i` where `ISSUE_<i>_NUMBER` is non-empty AND `ISSUE_<i>_DUPLICATE_OF_NUMBER` is empty AND `ISSUE_<i>_FAILED` is not `true` AND `ISSUE_<i>_DRY_RUN` is not `true`. Set `CHILD_NEW_NUMBER = ISSUE_<c>_NUMBER`, `CHILD_NEW_URL = ISSUE_<c>_URL`, `CHILD_NEW_TITLE = ISSUE_<c>_TITLE`.
+
+2. **Build a thin bidirectional edge set incident to `c`** (using `pieces.json`'s `depends_on` info — captured in the session-state `PIECE_<i>_DEPENDS_ON` lines from Step 3B.1). Scan ALL pieces (not just `c`) and keep every edge incident to `c` in EITHER direction:
+   - For each `j` in `pieces.json[c].depends_on` (i.e., piece `c` depends on piece `j`): if `j` resolves to a real issue number (via `ISSUE_<j>_NUMBER` if newly created OR `ISSUE_<j>_DUPLICATE_OF_NUMBER` if dedup'd), emit edge `<resolved-j> → <c-number>` (j blocks c).
+   - For each piece `i ≠ c`: if `pieces.json[i].depends_on` contains `c` (i.e., piece `i` depends on piece `c`), and `i` resolves, emit edge `<c-number> → <resolved-i>` (c blocks i).
+   - Skip edges where the other endpoint is a failed sibling (no resolved number); log to stderr if any are skipped.
+
+3. **Build `proposed-edges.tsv` and `children.tsv`**: Use the Write tool (per Step 3B.4's existing pattern) to write `$UMBRELLA_TMPDIR/proposed-edges.tsv` with one row per resolved edge (`<blocker>\t<blocked>`), and `$UMBRELLA_TMPDIR/children.tsv` containing the single newly-created child row (`<c-number>\t<c-title>\t<c-url>`). The single-child `children.tsv` is required by `wire-dag --no-backlinks` for its API-availability probe-target fallback (probe target is the first child row).
+
+4. **Invoke `helpers.sh wire-dag --no-backlinks`** (one Bash tool call):
+
+   ```bash
+   $PWD/.claude/skills/umbrella/scripts/helpers.sh wire-dag --no-backlinks --tmpdir "$UMBRELLA_TMPDIR" --umbrella '' --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
+   ```
+
+   `--no-backlinks` instructs `wire-dag` to (a) probe the first child in `children.tsv` for API availability instead of the (empty) umbrella; (b) skip the entire back-link emission loop — no native-relationship `gh api` calls and no `gh issue comment` posts. Edge wiring + cycle-check + idempotency + per-edge counters are unchanged. `wire-dag` still emits `EDGES_*` and `BACKLINKS_*` counters on stdout, but per the schema rule below the orchestrator does NOT propagate them to `output.kv` on this path. On non-zero exit, log `ERROR=` and continue — partial wiring is acceptable.
+
+5. **Compose `output.kv`**: write the 3-line downgrade bundle:
+   ```
+   UMBRELLA_VERDICT=one-shot
+   UMBRELLA_DOWNGRADE=created-eq-1
+   UMBRELLA_RATIONALE=Downgraded — ISSUES_CREATED=1; <D> sibling pieces deduplicated to existing issues
+   ```
+   Where `<D> = ISSUES_DEDUPLICATED`. Then emit aggregate counts (`CHILDREN_CREATED=1`, `CHILDREN_DEDUPLICATED=<D>`, `CHILDREN_FAILED=0`) and the **renormalized `CHILD_*` set**: `CHILD_1` is always the newly-created child (piece `c`) — set `CHILD_1_NUMBER=$CHILD_NEW_NUMBER`, `CHILD_1_URL=$CHILD_NEW_URL`, `CHILD_1_TITLE=$CHILD_NEW_TITLE`. Then append deduplicated siblings as `CHILD_2_*`, `CHILD_3_*`, ... in pieces order (using `ISSUE_<i>_DUPLICATE_OF_NUMBER` / `ISSUE_<i>_DUPLICATE_OF_URL` / `ISSUE_<i>_TITLE` for each dedup'd piece `i ≠ c`). This preserves the documented `CHILD_1_URL` consumer contract for one-shot consumers (e.g., `/skill-evolver`). Do NOT emit `UMBRELLA_NUMBER`, `UMBRELLA_URL`, `EDGES_ADDED`, per-edge `EDGE_<j>_*`, or `BACKLINKS_*` keys — they are reserved for the multi-piece-success path; the bypass output is one-shot-shaped.
+
+6. **Skip Steps 3B.3 and 3B.4 entirely** and continue at Step 4.
+
 For each successfully-resolved item (created OR deduplicated to an existing issue), record `(piece_index, issue_number, issue_url, title)` — this is the canonical child set for umbrella body, DAG wiring, and back-links. Items resolved as `ISSUE_<i>_DRY_RUN=true` count as children for output purposes; on the multi-piece dry-run path, 3B.3's dry-run guard skips umbrella body composition + umbrella creation AND 3B.4's wiring + back-links entirely.
 
 ### 3B.3 — Compose umbrella body and create umbrella
@@ -201,7 +232,7 @@ Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoki
 ```
 UMBRELLA_VERDICT=<one-shot|multi-piece>
 UMBRELLA_RATIONALE=<one-line>
-UMBRELLA_DOWNGRADE=<token>   (only when Step 3B.1 downgraded multi-piece → one-shot; e.g., `decomposition-lt-2`)
+UMBRELLA_DOWNGRADE=<token>   (emitted on any bypass path — `decomposition-lt-2` (Step 3B.1 fallback), `input-file-distinct-lt-2` (Step 2 pre-decomposed-input mode), `created-eq-1` (Step 3B.2 normal-mode bypass))
 CHILDREN_CREATED=<N>
 CHILDREN_DEDUPLICATED=<N>
 CHILDREN_FAILED=<N>
@@ -220,6 +251,7 @@ BACKLINKS_POSTED=<N>         (only on multi-piece, non-dry-run, success)
 After `emit-output` returns, the orchestrator (the LLM running this skill) MUST print exactly one human summary breadcrumb of the form below. Step 4 is the single emission point for this summary — Step 3B.3's umbrella-creation-failure path defers to Step 4 instead of printing inline. The orchestrator composes each shape using both `output.kv` values AND any session state captured from earlier sub-steps (e.g., `/issue`'s stdout for the one-shot dedup'd / failed cases — `ISSUE_1_DUPLICATE_OF_NUMBER`/`ISSUE_1_DUPLICATE_OF_URL` and the `/issue` failure context). The multi-piece partial shape interpolates the optional `UMBRELLA_FAILURE_REASON` field documented in the canonical grammar above; the remaining shapes (one-shot, multi-piece success, multi-piece dry-run) compose from `output.kv` values and earlier-step session state without additional canonical fields:
 
 - one-shot: `✅ /umbrella: filed #<N> — <url>` (or `ℹ /umbrella: dedup'd to #<N> — <url>` / `**⚠ /umbrella: failed — <error>**` etc.).
+- created-eq-1 bypass (Step 3B.2 normal-mode `ISSUES_CREATED==1` downgrade): `✅ /umbrella: filed #<N> — <url> (multi-piece downgraded — created-eq-1, <D> sibling(s) deduplicated to existing issues, no umbrella issue created)` where `<N>` / `<url>` are `CHILD_1_NUMBER` / `CHILD_1_URL` and `<D>` is `CHILDREN_DEDUPLICATED` from `output.kv`.
 - multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`.
 - multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`.
 - multi-piece partial (children created, umbrella failed): when `UMBRELLA_FAILURE_REASON` is present in `output.kv`, render `**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**`; when omitted (no failure signal could be extracted), fall back to `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`.

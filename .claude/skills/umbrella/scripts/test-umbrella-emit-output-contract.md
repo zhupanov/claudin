@@ -1,6 +1,6 @@
 # test-umbrella-emit-output-contract.sh — sibling contract
 
-Structural regression harness for `/umbrella` SKILL.md Step 2 (input-file dry-run-safe distinct-count rule — added in #724), Step 3B.3 (dry-run skip directive — added in #719), Step 3B.4 (dry-run skip directive — pre-existing, pinned as the matched pair with 3B.3), Step 4 (Emit Output) prose, and the `emit-output` subcommand subsection of `helpers.md`. Closes #602 — out-of-scope observation surfaced during /implement for #571 (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to pin the new Step 3B.3 dry-run guard (`d1`–`d3`) and the matched-pair Step 3B.4 guard (`e1`–`e2`) so the two parallel dry-run gates cannot drift apart silently. Extended for #724 to pin the Step 2 dry-run-safe distinct-count rule (`f1`–`f4`) as authoritative for any caller of `/umbrella --input-file`. The intent is a cheap CI guard against regression of the same drift; `test-helpers.sh` explicitly leaves `emit-output` out of scope.
+Structural regression harness for `/umbrella` SKILL.md Step 2 (input-file dry-run-safe distinct-count rule — added in #724), Step 3B.2 (created-eq-1 bypass branch — added in #717), Step 3B.3 (dry-run skip directive — added in #719), Step 3B.4 (dry-run skip directive — pre-existing, pinned as the matched pair with 3B.3), Step 4 (Emit Output) prose, and the `emit-output` subcommand subsection of `helpers.md`. Closes #602 — out-of-scope observation surfaced during /implement for #571 (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to pin the new Step 3B.3 dry-run guard (`d1`–`d3`) and the matched-pair Step 3B.4 guard (`e1`–`e2`) so the two parallel dry-run gates cannot drift apart silently. Extended for #724 to pin the Step 2 dry-run-safe distinct-count rule (`f1`–`f4`) as authoritative for any caller of `/umbrella --input-file`. Extended for #717 to pin the new Step 3B.2 created-eq-1 bypass branch (`g1`–`g4`) and the new Step 4 bypass breadcrumb (`c8`) plus the broadened UMBRELLA_DOWNGRADE schema parenthetical (`a3`/`a3b`/`a3c`). The intent is a cheap CI guard against regression of the same drift; `test-helpers.sh` explicitly leaves `emit-output` out of scope.
 
 This is a *structural* test (literal-substring assertions on `awk`-extracted blocks), not a runtime conformance test of `helpers.sh emit-output` (which remains exercised indirectly via SKILL.md integration). Pattern matches `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh`.
 
@@ -10,7 +10,7 @@ This is a *structural* test (literal-substring assertions on `awk`-extracted blo
 
 ## Coverage
 
-Twenty-two assertions, fail-fast on first miss.
+Thirty assertions, fail-fast on first miss.
 
 ### Step 2 block (extracted from SKILL.md) — added in #724
 
@@ -20,6 +20,15 @@ The Step 2 dry-run-safe distinct-count rule is the umbrella-layer authority for 
 - (f2) Step 2 `ISSUE_<i>_DRY_RUN=true` count-as-1 sentence: ``If `ISSUE_<i>_DRY_RUN=true`: count this item as 1 prospective distinct child``
 - (f3) Step 2 distinct-count formula: `len(set_of_numbers) + count_of_dry_run_items`
 - (f4) Step 2 caller-agnostic authoritativeness note: `` authoritative for any caller of `/umbrella --input-file` ``
+
+### Step 3B.2 block (extracted from SKILL.md) — added in #717
+
+Pin the load-bearing literals of the new `created-eq-1` bypass branch (closes #717). The bypass triggers when `INPUT_FILE` is empty AND `DRY_RUN=false` AND `ISSUES_FAILED=0` AND `ISSUES_CREATED=1`; it skips Steps 3B.3 and 3B.4 entirely and emits one-shot-shaped output with `UMBRELLA_DOWNGRADE=created-eq-1`. The four `g*` assertions guard against silent regression of the predicate, the precedence note, the bypass-condition heading, and the explicit "do NOT execute Step 3A" guardrail.
+
+- (g1) Step 3B.2 bypass-condition heading: `` `created-eq-1` bypass condition ``
+- (g2) Step 3B.2 full-conjunction predicate: `` `INPUT_FILE` is empty AND `DRY_RUN=false` AND `ISSUES_FAILED=0` AND `ISSUES_CREATED=1` ``
+- (g3) Step 3B.2 precedence note: `failed batch (ISSUES_FAILED>=1) > created-eq-1 (normal mode, non-dry-run) > existing 3B.3 dispatch`
+- (g4) Step 3B.2 "do NOT execute Step 3A" guardrail: ``Do NOT execute Step 3A on this path — children were already created in Step 3B.2; re-invoking `/issue` would double-create``
 
 ### Step 3B.3 block (extracted from SKILL.md) — added in #719
 
@@ -36,7 +45,8 @@ The Step 2 dry-run-safe distinct-count rule is the umbrella-layer authority for 
 
 - (a1) Orchestrator-attribution: the human summary breadcrumb is printed by the orchestrator (the LLM running this skill), not by the `emit-output` helper.
 - (a2) Single-emission-point invariant: Step 4 is the only place in SKILL.md that emits the breadcrumb (Step 3B.3's umbrella-creation-failure path defers to Step 4).
-- (c1)–(c7) plus (c6b) — the eight concrete breadcrumb shape literals on disk:
+- (a3 / a3b / a3c) UMBRELLA_DOWNGRADE schema parenthetical lists all 3 emission sites (`decomposition-lt-2`, `input-file-distinct-lt-2`, `created-eq-1`) — added in #717. Pinned because the previous wording mentioned only Step 3B.1, which became stale once `input-file-distinct-lt-2` (Step 2) and `created-eq-1` (Step 3B.2) were added.
+- (c1)–(c8) plus (c6b) — the nine concrete breadcrumb shape literals on disk:
   - (c1) one-shot filed: `✅ /umbrella: filed #<N> — <url>`
   - (c2) one-shot dedup'd: `ℹ /umbrella: dedup'd to #<N> — <url>`
   - (c3) one-shot failed: `**⚠ /umbrella: failed — <error>**`
@@ -45,8 +55,9 @@ The Step 2 dry-run-safe distinct-count rule is the umbrella-layer authority for 
   - (c6) multi-piece partial — fallback (no `UMBRELLA_FAILURE_REASON`): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`
   - (c6b) multi-piece partial — with `UMBRELLA_FAILURE_REASON` parenthetical: `**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**`
   - (c7) multi-piece children-batch-failed (umbrella never attempted): `**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`
+  - (c8) created-eq-1 bypass — multi-piece downgraded one-shot (added in #717): `✅ /umbrella: filed #<N> — <url> (multi-piece downgraded — created-eq-1, <D> sibling(s) deduplicated to existing issues, no umbrella issue created)`
 
-  Issue #602 specifies "the four canonical shape templates" but explicitly includes "dry-run and partial-failure variants of multi-piece as documented in Step 4". On disk, Step 4 contains eight concrete breadcrumb literals — the multi-piece partial case has dual shapes (with-reason / fallback) that #644 surfaced as both load-bearing, and the children-batch-failed variant was added after #602 was filed. The harness pins each concrete literal to guard against silent shape deletion — pinning fewer would let one variant disappear unnoticed.
+  Issue #602 specifies "the four canonical shape templates" but explicitly includes "dry-run and partial-failure variants of multi-piece as documented in Step 4". On disk, Step 4 now contains nine concrete breadcrumb literals — the multi-piece partial case has dual shapes (with-reason / fallback) that #644 surfaced as both load-bearing, the children-batch-failed variant was added after #602 was filed, and the created-eq-1 bypass shape was added in #717. The harness pins each concrete literal to guard against silent shape deletion — pinning fewer would let one variant disappear unnoticed.
 
 ### emit-output subsection (extracted from helpers.md)
 
@@ -59,6 +70,7 @@ The Step 2 dry-run-safe distinct-count rule is the umbrella-layer authority for 
 | Block | Start regex | End regex |
 |-------|-------------|-----------|
 | SKILL.md Step 2 | `^## Step 2 — Classify One-Shot vs Multi-Piece` (full heading) | `^## Step 3A` (prefix only) |
+| SKILL.md Step 3B.2 | `^### 3B\.2` plus space (subheading prefix) | `^### 3B\.3` plus space (next subheading prefix) |
 | SKILL.md Step 3B.3 | `^### 3B\.3` plus space (subheading prefix) | `^### 3B\.4` plus space (next subheading prefix) |
 | SKILL.md Step 3B.4 | `^### 3B\.4` plus space (subheading prefix) | `^## Step 4 — Emit Output` (full heading) |
 | SKILL.md Step 4 | `^## Step 4 — Emit Output` (full heading) | `^## Step 5` (prefix only) |
@@ -72,7 +84,9 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 
 - Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the eight concrete literals — c1–c7 plus c6b) requires a same-PR update to the corresponding assertion literal in this harness.
 - Any change to helpers.md `emit-output` subsection (stderr discipline sentence, the orchestrator-emits-breadcrumb sentence, or the wire-dag carve-out) requires the same.
-- Renaming or renumbering Step 2, Step 3B.3, Step 3B.4, or Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
+- Renaming or renumbering Step 2, Step 3B.2, Step 3B.3, Step 3B.4, or Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
+- Any change to SKILL.md Step 3B.2's `created-eq-1` bypass branch (predicate, precedence note, "do NOT execute Step 3A" guardrail, condition heading) requires a same-PR update to the corresponding `(g1)`–`(g4)` assertion literal here.
+- Any change to SKILL.md Step 4's UMBRELLA_DOWNGRADE schema parenthetical (the enumeration of emission sites) requires preserving all 3 downgrade tokens (`decomposition-lt-2`, `input-file-distinct-lt-2`, `created-eq-1`); pinned by `(a3)`, `(a3b)`, `(a3c)`.
 - Adding a new canonical breadcrumb shape to SKILL.md Step 4: add a corresponding `(c<N>)` assertion here.
 - Reword to either dry-run skip directive (Step 3B.3 or Step 3B.4): the matched-pair invariant requires both `d1` and `e1` to share the same literal — update both assertion literals in lockstep, otherwise CI catches the drift.
 - Reword to either skip-line breadcrumb literal (3B.3's `d2` folded form, or 3B.4's `e2` wiring/back-links form): update the assertion literal here in the same PR.
