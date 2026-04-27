@@ -604,13 +604,18 @@ if [[ -n "$ISSUE_ARG" ]]; then
     ISSUE_URL=$(echo "$ISSUE_JSON" | jq -r '.url // empty')
 
     # Verify issue belongs to the current repo by parsing owner/repo from the
-    # issue URL (format: https://github.com/OWNER/REPO/issues/N).
+    # issue URL. Host is intentionally not pinned to github.com so the parser
+    # works for GitHub Enterprise / self-hosted GHE deployments too — the
+    # cross-repo guard below (ISSUE_REPO != REPO) is the actual safety net,
+    # since $REPO already comes from `gh repo view` in the current repo. The
+    # `gh` CLI always emits `https://` URLs (no plain `http://`), so a literal
+    # `https://` keeps the regex BRE-compatible across BSD sed / GNU sed.
     if [[ -z "$ISSUE_URL" ]]; then
         echo "ELIGIBLE=false"
         echo "ERROR=Cannot verify repository ownership for issue: $ISSUE_ARG"
         exit 2
     fi
-    ISSUE_REPO=$(echo "$ISSUE_URL" | sed -n 's|https://github.com/\([^/]*/[^/]*\)/issues/.*|\1|p')
+    ISSUE_REPO=$(echo "$ISSUE_URL" | sed -n 's|https://[^/]*/\([^/]*/[^/]*\)/issues/.*|\1|p')
     if [[ -z "$ISSUE_REPO" ]]; then
         echo "ELIGIBLE=false"
         echo "ERROR=Cannot parse repository from issue URL: $ISSUE_URL"
