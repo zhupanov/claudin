@@ -42,7 +42,7 @@ Changes to `emit-output`'s stdout grammar require a same-PR update to `SKILL.md`
 
 ### GitHub dependency-API note
 
-The `/repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by` REST endpoint surface evolved during 2024-2026 (sub-issues vs blocked-by, REST vs GraphQL surfaces). `wire-dag` is fail-open by design: when the probe fails, all proposed edges land in `EDGES_SKIPPED_API_UNAVAILABLE` and back-links via plain `gh issue comment` still proceed.
+The `/repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by` REST endpoint surface evolved during 2024-2026 (sub-issues vs blocked-by, REST vs GraphQL surfaces). `wire-dag` is fail-open by design: when the probe fails, all proposed edges land in `EDGES_SKIPPED_API_UNAVAILABLE`. In the **default mode** (no `--no-backlinks`), back-links via plain `gh issue comment` still proceed even when the probe fails. In `--no-backlinks` mode (created-eq-1 bypass), the back-link loop is skipped regardless of probe outcome and stderr is mode-aware (see the wire-dag stderr contract above).
 
 ### Issue #718 transitive-closure traversal — residual-risk notes
 
