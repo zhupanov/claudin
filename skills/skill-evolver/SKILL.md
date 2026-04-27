@@ -83,7 +83,7 @@ Output: a structured `## Research Report` with one numbered finding per improvem
 
 Invoke the Skill tool:
 - Try skill `"research"` first (bare name). If no skill matches, try `"larch:research"` (fully-qualified plugin name).
-- args: `--scale=deep <substituted-prompt>`. Append `--debug` only if `DEBUG=true`.
+- args: `[--debug] --scale=deep <substituted-prompt>`. Prepend `--debug` only if `DEBUG=true` — placement before the positional argument is required because `/research` stops flag parsing at the first non-flag token (see `skills/research/SKILL.md:21`).
 
 After `/research` returns, read its `## Research Report` from conversation context. The report is followed by an optional `## Citation Validation` block when `/research`'s sidecar exists (Step 3 splice in `skills/research/SKILL.md`), so the literal last line of the combined output is NOT necessarily the count. Parse the **last line of the file matching `^ACTIONABLE_IMPROVEMENTS_COUNT=`**, ignoring any trailing `## Citation Validation` content. The integer on that line drives Step 3.
 
@@ -105,7 +105,7 @@ If no such line is present (the `/research` lane synthesis dropped the requested
 
   Then invoke the Skill tool:
   - Try skill `"umbrella"` first (bare name). If no skill matches, try `"larch:umbrella"`.
-  - args: `--label evolved-by:skill-evolver --label skill:<SKILL_NAME> --title-prefix "[skill-evolver:<SKILL_NAME>] " <umbrella-task-description>`. Append `--debug` only if `DEBUG=true`.
+  - args: `[--debug] --label evolved-by:skill-evolver --label skill:<SKILL_NAME> --title-prefix "[skill-evolver:<SKILL_NAME>] " <umbrella-task-description>`. Prepend `--debug` only if `DEBUG=true` — placement before the positional argument is required because `/umbrella` stops flag parsing at the first non-flag token (see `.claude/skills/umbrella/SKILL.md:24`).
 
   After `/umbrella` returns, branch on its `UMBRELLA_VERDICT` line (per `.claude/skills/umbrella/SKILL.md` Step 4 stdout grammar — `UMBRELLA_NUMBER` and `UMBRELLA_URL` are emitted only on the multi-piece success path; one-shot success emits `CHILD_1_URL` instead; failure paths omit `UMBRELLA_NUMBER` and `UMBRELLA_URL` entirely; `CHILDREN_CREATED=<N>` is emitted on every multi-piece path):
   - `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_URL` present: print `✅ /skill-evolver: filed umbrella #<UMBRELLA_NUMBER> at <UMBRELLA_URL> with <CHILDREN_CREATED> child issues.`
