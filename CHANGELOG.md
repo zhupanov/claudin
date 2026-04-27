@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.0] - 2026-04-27
+
+### Changed
+
+- `/umbrella` promoted from dev-only `.claude/skills/umbrella/` to shipped `skills/umbrella/` so consumer repos that load larch as a plugin can resolve it (closes #723). `/review --create-issues` and `/skill-evolver` now work for plugin consumers without requiring them to copy `/umbrella` into their own `.claude/skills/`. Path-style normalized to `${CLAUDE_PLUGIN_ROOT}/...` per AGENTS.md; `helpers.sh`'s relative climb to `redact-secrets.sh` adjusted from 4 to 3 levels (`skills/umbrella/scripts/` → repo root); `skills/review/SKILL.md` and `skills/skill-evolver/SKILL.md` consumer-repo prerequisite caveats deleted; `docs/configuration-and-permissions.md` strict-permissions snippet extended with `Skill(umbrella)` / `Skill(larch:umbrella)`; `Makefile` umbrella test targets and the `scripts/repro-claude-p-edit-permissions.{sh,md}` debug-target paths updated; `README.md` and `docs/skills.md` skills catalog augmented with the `/umbrella` entry.
+
 ## [7.16.38] - 2026-04-27
 
 ### Fixed
