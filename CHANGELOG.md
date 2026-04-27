@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.8] - 2026-04-27
+
+### Fixed
+
+- `skills/design/SKILL.md` — Step 5 cleanup section's "Repeat any external reviewer warnings" parenthetical cited `Step 0b binary checks`, but Step 0 in the file is titled only "Session Setup" and has no `0b` subsection. Reworded the citation to `Step 0 reviewer-availability checks via session-setup.sh`, matching the simpler attribution style used in `skills/review/SKILL.md`. The other three citations (`Step 2a`, `Step 3`, `Step 3b`) correspond to real anchors and are unchanged. Documentation-only. Closes #748.
+
 ## [7.17.7] - 2026-04-27
 
 ### Fixed
