@@ -68,7 +68,7 @@ The snapshot path `$IMPLEMENT_TMPDIR/pre-review-untracked.txt` is stable across 
 
 ## Test harness
 
-`skills/implement/scripts/test-check-review-changes.sh` (offline harness, wired via `make lint`'s `test-harnesses` target). 7 cases pin both the regression behavior (issue #651) and the empty-vs-missing distinction. See `skills/implement/scripts/test-check-review-changes.md` for case-by-case detail and the deliberate-behavior-change callout for case (f).
+`skills/implement/scripts/test-check-review-changes.sh` (offline harness, wired via `make lint`'s `test-harnesses` target). 9 cases pin the regression behavior (issue #651), the empty-vs-missing distinction, the `printf '%s\n'` → `comm` → `sed` safety net, and the issue #695 dash-prefixed-filename fix. See `skills/implement/scripts/test-check-review-changes.md` for case-by-case detail and the deliberate-behavior-change callout for case (f).
 
 ## Edit-in-sync
 

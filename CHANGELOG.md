@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.24] - 2026-04-26
+
+### Fixed
+
+- `skills/implement/scripts/check-review-changes.sh` (line 81) — replace `echo "$CURRENT"` with `printf '%s\n' "$CURRENT"` so untracked filenames matching bash `echo` flags (`-n` / `-e` / `-nn` / `-E`) are not silently swallowed when the sorted current-untracked stream is fed to `comm`. Pre-fix, a real `/implement` Step-5/6 run could miss review-created untracked files when the current set contained exactly such a name (reproduced with an external baseline + a repo whose only untracked file was named `-n` — the script returned `FILES_CHANGED=false`). The existing `sed '/^$/d'` empty-CURRENT safety net is preserved (`printf '%s\n' ""` still emits a single trailing newline). Add regression case (i) to `test-check-review-changes.sh` (untracked `-n` + external empty baseline) and update the script's docstring header, `check-review-changes.md` case-count prose, and `test-check-review-changes.md` table + harness summary in sync. Closes #695.
+
 ## [7.16.23] - 2026-04-26
 
 ### Fixed

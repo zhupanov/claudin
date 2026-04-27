@@ -78,7 +78,7 @@ UNTRACKED_DELTA=""
 if [[ -n "$BASELINE" ]] && [[ -r "$BASELINE" ]]; then
     UNTRACKED_BASELINE="present"
     CURRENT=$(git ls-files --others --exclude-standard 2>/dev/null | LC_ALL=C sort || echo "")
-    UNTRACKED_DELTA=$(comm -23 <(echo "$CURRENT") <(LC_ALL=C sort "$BASELINE") | sed '/^$/d' || echo "")
+    UNTRACKED_DELTA=$(comm -23 <(printf '%s\n' "$CURRENT") <(LC_ALL=C sort "$BASELINE") | sed '/^$/d' || echo "")
 fi
 
 FILES_CHANGED="false"
