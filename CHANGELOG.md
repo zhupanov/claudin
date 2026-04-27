@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.10] - 2026-04-27
+
+### Fixed
+
+- `skills/design/references/flags.md` — replaced the dead "see Verbosity Control below" cross-reference on the `--debug` bullet (line 14) with an explicit pointer to the Verbosity Control section in `${CLAUDE_PLUGIN_ROOT}/skills/design/SKILL.md`. The Verbosity Control rules live in `SKILL.md`, not `flags.md`, and the file ends after the `--branch-info` bullet — readers following the original "below" pointer hit a dead link. The new pointer matches the cross-reference style used by the adjacent `--step-prefix` bullet (which references `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`). Closes #750.
+
 ## [7.17.9] - 2026-04-27
 
 ### Fixed
