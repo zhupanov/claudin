@@ -55,8 +55,10 @@
 #   1 — schema validation of eval-set.md or eval-baseline.json failed.
 #   2 — argument parse error or invalid argument value (e.g., bad timeout
 #       integer, regex-invalid baseline ref, baseline ref that cannot be
-#       resolved via git show, or a value-taking flag with no following
-#       value such as a trailing `--baseline`).
+#       resolved via git show, a value-taking flag with no following
+#       value such as a trailing `--baseline`, or a value-taking flag
+#       whose next token is another long option such as `--baseline
+#       --scale standard` — issue #780).
 #   3 — required tooling missing. jq and awk are required in all modes
 #       (including --smoke-test); claude is required only when not using
 #       --smoke-test.
