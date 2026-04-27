@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.3] - 2026-04-27
+
+### Fixed
+
+- `skills/research/references/validation-phase.md` — dedented the third `<<'EOF'` heredoc example (lines 240-252) from 3-space indentation to flush-left at column 0, matching the convention of the two prior working examples in the same file. Previously the block was nested under numbered list item 4, so an LLM agent (or human) copying the source literally would produce a non-terminating heredoc (`<<'EOF'` requires `EOF` flush-left) and indented `VALIDATION_*` body lines that fail the downstream `grep '^VALIDATION_'` filter. Closes #783.
+
 ## [7.17.2] - 2026-04-27
 
 ### Changed
