@@ -18,6 +18,8 @@ CLOSED_WINDOW_DAYS=<integer — empty if not specified>
 DRY_RUN=<true|false>
 GO=<true|false>
 DEBUG=<true|false>
+INPUT_FILE=<path — empty if --input-file not specified>
+UMBRELLA_SUMMARY_FILE=<path — empty if --umbrella-summary-file not specified>
 TASK=<verbatim remainder of $ARGS_STR after the flag prefix — may be empty; preserves embedded whitespace AND any quote/escape characters>
 UMBRELLA_TMPDIR=<absolute path — newly-created mktemp dir>
 ```
@@ -32,8 +34,14 @@ When `LABELS_COUNT=0`, no `LABEL_*` lines are emitted (the `LABEL_<i>` block is 
 - `--repo OWNER/REPO` — single value.
 - `--closed-window-days N` — non-negative integer; validated.
 - `--dry-run` / `--go` / `--debug` — booleans (default `false`; presence sets `true`).
+- `--input-file PATH` — single value. Activates `/umbrella`'s pre-decomposed-input mode: caller provides a pre-built `/issue --input-file` batch markdown directly, bypassing Step 1 task resolve and Step 3B.1 LLM decomposition. Required to be paired with `--umbrella-summary-file`. Mutually exclusive with positional TASK.
+- `--umbrella-summary-file PATH` — single value. Caller-composed 1-2 sentence summary paragraph used as the umbrella issue body's lead summary in Step 3B.3 (replaces the LLM-composed summary). Required to be paired with `--input-file`.
 - `--` — explicit end-of-flags marker; subsequent text is TASK verbatim.
 - Any unknown `--flag` aborts with `ERROR=Unknown flag: <flag>`.
+
+**Paired-flag and mutual-exclusion validation** (after the parse loop, before `mktemp`):
+- If exactly one of `--input-file` / `--umbrella-summary-file` is set → `ERROR=--input-file and --umbrella-summary-file must be passed together` + exit 1.
+- If `--input-file` is set AND a positional `TASK` is non-empty → `ERROR=--input-file is mutually exclusive with positional TASK` + exit 1.
 
 **Quoting subset** (phase-1 flag-prefix lexer only — phase 2 TASK is verbatim):
 - **Double quotes** (`"..."`): the lexer recognizes `\"`, `\\`, `\$` as escape sequences (the `\` is consumed; the next char is literal). Any other `\X` inside double quotes is preserved as the literal two-character sequence `\X`. Literal newline bytes inside the run are rejected.
@@ -51,6 +59,8 @@ ERROR=--title-prefix requires a value
 ERROR=--repo requires a value
 ERROR=--closed-window-days requires a value
 ERROR=--closed-window-days must be a non-negative integer; got '<value>'
+ERROR=--input-file requires a value
+ERROR=--umbrella-summary-file requires a value
 ERROR=Unknown flag: <flag>
 ERROR=unclosed double quote at offset <N>
 ERROR=unclosed single quote at offset <N>
@@ -58,6 +68,8 @@ ERROR=stray backslash at end of input
 ERROR=embedded newline in quoted value at offset <N>
 ERROR=embedded newline in unquoted value at offset <N>
 ERROR=embedded newline in TASK at offset <N>
+ERROR=--input-file and --umbrella-summary-file must be passed together
+ERROR=--input-file is mutually exclusive with positional TASK
 ```
 
 **Exit codes**: `0` success; `1` parse failure (one `ERROR=...` line on stderr).

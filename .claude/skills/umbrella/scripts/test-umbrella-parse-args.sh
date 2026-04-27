@@ -2,9 +2,11 @@
 # test-umbrella-parse-args.sh — regression harness for /umbrella's parse-args.sh.
 #
 # Pins the stdout grammar (LABELS_COUNT + LABEL_<i>, TITLE_PREFIX, REPO,
-# CLOSED_WINDOW_DAYS, DRY_RUN, GO, DEBUG, TASK, UMBRELLA_TMPDIR), the frozen
-# ERROR= templates, the quoting subset, and TASK byte-preservation contract
-# documented in scripts/parse-args.md.
+# CLOSED_WINDOW_DAYS, DRY_RUN, GO, DEBUG, INPUT_FILE, UMBRELLA_SUMMARY_FILE,
+# TASK, UMBRELLA_TMPDIR), the frozen ERROR= templates, the quoting subset,
+# the paired-flag and TASK-mutual-exclusion validation rules for --input-file
+# / --umbrella-summary-file, and the TASK byte-preservation contract documented
+# in scripts/parse-args.md.
 #
 # Run manually:
 #   bash .claude/skills/umbrella/scripts/test-umbrella-parse-args.sh
@@ -25,6 +27,12 @@ FAIL=0
 # output is deterministic across runs (mktemp picks a fresh path each call).
 # Also clean up the actual temp dir the parser created, to keep /tmp tidy
 # and not interfere with other tests.
+#
+# Also strip INPUT_FILE= and UMBRELLA_SUMMARY_FILE= lines when their values
+# are empty, so the 25 pre-existing assert_stdout test cases (which were
+# authored before these flags existed) continue to match without churning
+# every expected string. Tests that exercise the new flags use the dedicated
+# assert_raw_stdout_contains helper below instead.
 run_parser() {
   local args_str="$1"
   local stdout_file="$2"
@@ -41,9 +49,49 @@ run_parser() {
     rm -rf "$emitted"
   fi
   # Strip the UMBRELLA_TMPDIR= line so expected-output comparison is stable.
-  sed -i.bak '/^UMBRELLA_TMPDIR=/d' "$stdout_file"
+  # Also strip empty INPUT_FILE= / UMBRELLA_SUMMARY_FILE= lines so pre-existing
+  # assert_stdout cases that don't pass the new flags keep matching.
+  sed -i.bak \
+    -e '/^UMBRELLA_TMPDIR=/d' \
+    -e '/^INPUT_FILE=$/d' \
+    -e '/^UMBRELLA_SUMMARY_FILE=$/d' \
+    "$stdout_file"
   rm -f "$stdout_file.bak"
   printf '%s' "$exit_code"
+}
+
+# assert_raw_stdout_contains LABEL "ARGS" "EXPECTED_LINE"
+# Asserts: parser exits 0, raw stdout (UMBRELLA_TMPDIR stripped, but
+# INPUT_FILE= / UMBRELLA_SUMMARY_FILE= preserved) contains EXPECTED_LINE.
+# Used by new-flag tests where we want to verify the new KV lines are emitted.
+assert_raw_stdout_contains() {
+  local label="$1"
+  local args_str="$2"
+  local expected_line="$3"
+  local stdout_file="$TMP/stdout-raw"
+  local stderr_file="$TMP/stderr-raw"
+  set +e
+  bash "$PARSER" "$args_str" >"$stdout_file" 2>"$stderr_file"
+  local exit_code=$?
+  set -e
+  local emitted
+  emitted=$(sed -n 's/^UMBRELLA_TMPDIR=//p' "$stdout_file")
+  if [ -n "$emitted" ] && [ -d "$emitted" ]; then
+    rm -rf "$emitted"
+  fi
+  if [ "$exit_code" != "0" ]; then
+    printf '  ❌ %s — expected exit 0, got %s. stderr: %s\n' "$label" "$exit_code" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  if ! grep -qxF "$expected_line" "$stdout_file"; then
+    printf '  ❌ %s — expected line not in stdout: %s\n' "$label" "$expected_line"
+    printf '     full stdout:\n%s\n' "$(cat "$stdout_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+  printf '  ✅ %s\n' "$label"
+  PASS=$((PASS + 1))
 }
 
 # assert_stdout LABEL "ARGS" "EXPECTED_STDOUT"
@@ -246,6 +294,41 @@ assert_error "case 24: backslash-escaped newline in unquoted value" \
 assert_error "case 25: backslash-escaped newline inside double-quote" \
   $'--label "foo\\\nbar"' \
   "embedded newline in quoted value"
+
+# --- New cases: --input-file and --umbrella-summary-file ---
+
+# 26. Both flags set together — INPUT_FILE and UMBRELLA_SUMMARY_FILE emitted.
+assert_raw_stdout_contains "case 26: --input-file emitted" \
+  "--input-file /tmp/foo.md --umbrella-summary-file /tmp/bar.txt" \
+  "INPUT_FILE=/tmp/foo.md"
+assert_raw_stdout_contains "case 26b: --umbrella-summary-file emitted" \
+  "--input-file /tmp/foo.md --umbrella-summary-file /tmp/bar.txt" \
+  "UMBRELLA_SUMMARY_FILE=/tmp/bar.txt"
+
+# 27. Half-config: --input-file alone → error.
+assert_error "case 27: --input-file without --umbrella-summary-file" \
+  "--input-file /tmp/foo.md" \
+  "must be passed together"
+
+# 28. Half-config: --umbrella-summary-file alone → error.
+assert_error "case 28: --umbrella-summary-file without --input-file" \
+  "--umbrella-summary-file /tmp/bar.txt" \
+  "must be passed together"
+
+# 29. Mutual exclusion: --input-file + positional TASK → error.
+assert_error "case 29: --input-file mutually exclusive with TASK" \
+  "--input-file /tmp/foo.md --umbrella-summary-file /tmp/bar.txt some task" \
+  "mutually exclusive with positional TASK"
+
+# 30. --input-file requires a value (frozen ERROR template).
+assert_error "case 30: --input-file requires a value" \
+  "--input-file" \
+  "--input-file requires a value"
+
+# 31. --umbrella-summary-file requires a value (frozen ERROR template).
+assert_error "case 31: --umbrella-summary-file requires a value" \
+  "--umbrella-summary-file" \
+  "--umbrella-summary-file requires a value"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

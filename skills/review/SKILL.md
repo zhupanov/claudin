@@ -18,7 +18,7 @@ Review code changes (default: current branch diff vs `main`; slice mode: a verba
 - `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"5.::code review"` (numeric `5.`, path `code review`), `"5."` (numeric only, backward compat). Default: empty (standalone numbering). Internal orchestration flag.
 - `--slice <text>`: Set `SLICE_TEXT` to the given verbal description (e.g., `--slice "implementation of /research skill"`). Mutually exclusive with `--slice-file`. Activates **slice mode** (see "Slice Mode" section below). Used for human-invoked slice reviews where the description is short.
 - `--slice-file <path>`: Set `SLICE_FILE` to the given path; the verbal description is read from that file (single-line file). Mutually exclusive with `--slice`. Activates **slice mode**. Used for driver-invoked slice reviews (e.g., from `/loop-review`'s `driver.sh`) where file-based handoff bypasses argv shell-quoting hazards on verbal descriptions containing quotes, parens, ampersands, etc.
-- `--create-issues`: Set `CREATE_ISSUES=true`. After voting completes, file every accepted finding (in-scope-accepted AND OOS-accepted, 2+ YES) as a GitHub issue via `/issue --input-file --label <forwarded-label>`. **Requires slice mode.** Slice mode may be activated three ways: (a) `--slice <text>`, (b) `--slice-file <path>`, or (c) by passing the slice description as trailing positional text after `--create-issues` (equivalent to `--slice <text>`). If none of these are provided (no slice flag AND no positional remainder), print `**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**` and exit. Security-tagged findings are written to `--security-output` and never auto-filed (per SECURITY.md).
+- `--create-issues`: Set `CREATE_ISSUES=true`. After voting completes, file every accepted finding (in-scope-accepted AND OOS-accepted, 2+ YES) as GitHub issues by delegating to `/umbrella` (which wraps `/issue` for batch creation and produces an umbrella tracking issue when ≥2 distinct issues are filed; ≤1 distinct → no umbrella). See Step 4b for the full mapping. **Requires slice mode.** Slice mode may be activated three ways: (a) `--slice <text>`, (b) `--slice-file <path>`, or (c) by passing the slice description as trailing positional text after `--create-issues` (equivalent to `--slice <text>`). If none of these are provided (no slice flag AND no positional remainder), print `**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**` and exit. Security-tagged findings are written to `--security-output` and never auto-filed (per SECURITY.md). **Prerequisite**: `/umbrella` is currently dev-only at `.claude/skills/umbrella/` and not shipped under `skills/`; consumer repos that load larch as a plugin must work inside the larch repo, copy `/umbrella` into their own `.claude/skills/`, or wait for `/umbrella` to be promoted. (Parallel to `skill-evolver`'s consumer-repo caveat.)
 - `--label <label>`: Set `ISSUE_LABEL` to the given label. Forwarded to `/issue` when `--create-issues` is set. Default: empty (no label).
 - `--security-output <path>`: Set `SECURITY_OUTPUT_PATH` to the given path. In slice mode, accepted security-tagged findings are written verbatim to this file before `/review` exits. Default: `$REVIEW_TMPDIR/security-findings.md` (printed to terminal verbatim before tmpdir cleanup if `--security-output` is unset).
 
@@ -301,9 +301,11 @@ Print a final summary:
 - Build/test status (pass/fail)
 - **External reviewer warnings** (repeat any preflight or runtime warnings from Codex/Cursor here so they are visible at the end)
 
-### 4b — Slice-mode /issue filing (only when slice mode AND --create-issues)
+### 4b — Slice-mode /umbrella filing (only when slice mode AND --create-issues)
 
 If slice mode is OFF or `--create-issues` is unset, skip this sub-step.
+
+> **Prerequisite — `/umbrella` availability.** Slice-mode `--create-issues` delegates issue filing to `/umbrella` (which wraps `/issue` for batch creation and adds an umbrella tracking issue when ≥2 distinct issues are filed). `/umbrella` currently lives at `.claude/skills/umbrella/` in the larch repo and is **NOT shipped under `skills/`** at the time of writing. Consumer repos that load larch as a plugin and want `/review --create-issues` to work must either: (a) work inside the larch repo (where `.claude/skills/umbrella/` is present); (b) copy `/umbrella` into their own `.claude/skills/`; or (c) wait for `/umbrella` to be promoted to the plugin tree. If neither bare `umbrella` nor `larch:umbrella` resolves, the Skill tool will surface an unresolved-skill error — `/review` does not preflight skill availability. (Parallel to `skills/skill-evolver/SKILL.md`'s consumer-repo caveat.)
 
 Compose a findings batch markdown at `$REVIEW_TMPDIR/findings-batch.md`. Include:
 - For each in-scope-accepted finding (2+ YES): a generic `### <terse title>` block with `**Slice**`, `**File**`, `**Reviewer**`, `**Focus area**`, `**Problem**`, `**Suggested fix**` body.
@@ -317,19 +319,36 @@ Compose a findings batch markdown at `$REVIEW_TMPDIR/findings-batch.md`. Include
   ```
 - **Exclude** any finding tagged `security` — those are handled by Step 4c.
 
-If the batch is empty (zero accepted findings, or all accepted findings were security-tagged), skip the `/issue` invocation.
+If the batch is empty (zero accepted findings, or all accepted findings were security-tagged), skip the `/umbrella` invocation. Set `ISSUES_CREATED=0`, `ISSUES_DEDUPLICATED=0`, `ISSUES_FAILED=0` for the KV footer.
 
-Otherwise, invoke `/issue` via the Skill tool:
+Otherwise, compose a 1-2 sentence umbrella summary paragraph at `$REVIEW_TMPDIR/umbrella-summary.txt` derived from the slice context (slice description + accepted-finding count + reviewer attribution summary). The summary becomes the lead paragraph of the umbrella issue body if `/umbrella` produces one (≥2 distinct resolved children). **Apply compose-time sanitization** before writing — the umbrella body becomes a public GitHub issue:
 
-> **Continue after child returns.** When `/issue` returns, parse its stdout machine lines for `ISSUES_CREATED=`, `ISSUES_DEDUPLICATED=`, `ISSUES_FAILED=` aggregates and continue to Step 4c — do NOT end the turn or write a summary. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+- Strip ASCII control characters (except whitespace `\t`, `\n` is already disallowed by the line grammar).
+- Replace newlines and tabs with single spaces; collapse internal whitespace runs to one space.
+- Redact secrets / API keys / OAuth / JWT / passwords / certificates → `<REDACTED-TOKEN>`.
+- Redact internal hostnames / URLs / private IPs → `<INTERNAL-URL>`.
+- Redact PII (emails, account IDs tied to a real user) → `<REDACTED-PII>`.
+- Cap at ~200 characters (truncate at a word boundary if longer).
 
-```
-/issue --input-file $REVIEW_TMPDIR/findings-batch.md [--label $ISSUE_LABEL]
-```
+Then invoke `/umbrella` via the Skill tool:
 
-Only forward `--label $ISSUE_LABEL` if `ISSUE_LABEL` is non-empty. Do NOT forward `--debug`, `--auto`, or `--merge` — `/issue` does not support those.
+> **Continue after child returns.** When `/umbrella` returns, parse its stdout machine lines per `/umbrella`'s Step 4 emit-output grammar — `UMBRELLA_VERDICT=`, `CHILDREN_CREATED=`, `CHILDREN_DEDUPLICATED=`, `CHILDREN_FAILED=`, `UMBRELLA_NUMBER=`, `UMBRELLA_URL=` (and optional `UMBRELLA_DOWNGRADE=`, `UMBRELLA_FAILURE_REASON=`) — and continue to Step 4c — do NOT end the turn or write a summary. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
-Parse `/issue`'s stdout for the aggregate counters: `ISSUES_CREATED=<n>`, `ISSUES_DEDUPLICATED=<n>`, `ISSUES_FAILED=<n>`. Save these for the KV footer at Step 4d.
+Skill invocation:
+- Try skill `"umbrella"` first (bare name). If no skill matches, try `"larch:umbrella"`.
+- args: `--input-file $REVIEW_TMPDIR/findings-batch.md --umbrella-summary-file $REVIEW_TMPDIR/umbrella-summary.txt [--label $ISSUE_LABEL]`
+
+Only forward `--label $ISSUE_LABEL` if `ISSUE_LABEL` is non-empty. Do NOT forward `--debug`, `--auto`, `--merge`, or other flags `/umbrella` does not accept.
+
+Parse `/umbrella`'s stdout. Map to the slice-result counters (per dialectic DECISION_2 — uniform "any GitHub issue created counts" semantic — see Step 4d below for the footer schema):
+
+- `ISSUES_CREATED` = `CHILDREN_CREATED` + (1 if `UMBRELLA_NUMBER` is non-empty else 0)
+- `ISSUES_DEDUPLICATED` = `CHILDREN_DEDUPLICATED`
+- `ISSUES_FAILED` = `CHILDREN_FAILED` + (1 if `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` is empty AND `CHILDREN_FAILED=0` else 0).
+
+The umbrella-failure structural signal is `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` empty AND `CHILDREN_FAILED=0` (umbrella creation was actually attempted and failed). The `CHILDREN_FAILED=0` gate is essential: per `/umbrella`'s Step 3B.2 abort condition (`.claude/skills/umbrella/SKILL.md`), when `ISSUES_FAILED >= 1` from the `/issue` batch, `/umbrella` skips Step 3B.3 entirely (umbrella creation never attempted) and emits `UMBRELLA_VERDICT=multi-piece` plus an empty `UMBRELLA_NUMBER`. Without the gate, `/review` would double-count: N child failures plus a phantom +1 for an umbrella that was never attempted. We do NOT key off `UMBRELLA_FAILURE_REASON` presence — `/umbrella` documents that field as optional even on real umbrella-create failures. Save the mapped counters for the KV footer at Step 4d.
+
+Print an informational line summarizing the outcome (above the KV footer): `filed N children + umbrella #M (<url>)` (when umbrella created), `filed N child issue(s)` (one-shot path), `all findings deduped to existing issues` (downgrade), or omit (empty batch).
 
 ### 4c — Write security findings (slice mode only)
 

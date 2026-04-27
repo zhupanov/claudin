@@ -14,6 +14,8 @@
 #   DRY_RUN=<true|false>
 #   GO=<true|false>
 #   DEBUG=<true|false>
+#   INPUT_FILE=<path — empty if --input-file not specified>
+#   UMBRELLA_SUMMARY_FILE=<path — empty if --umbrella-summary-file not specified>
 #   TASK=<verbatim remainder of $ARGS_STR after the flag prefix — may be
 #         empty; preserves embedded whitespace AND any quote/escape characters>
 #   UMBRELLA_TMPDIR=<absolute path — newly-created mktemp dir owned by this run>
@@ -24,6 +26,8 @@
 #   ERROR=--repo requires a value
 #   ERROR=--closed-window-days requires a value
 #   ERROR=--closed-window-days must be a non-negative integer; got '<value>'
+#   ERROR=--input-file requires a value
+#   ERROR=--umbrella-summary-file requires a value
 #   ERROR=Unknown flag: <flag>
 #   ERROR=unclosed double quote at offset <N>
 #   ERROR=unclosed single quote at offset <N>
@@ -31,6 +35,8 @@
 #   ERROR=embedded newline in quoted value at offset <N>
 #   ERROR=embedded newline in unquoted value at offset <N>
 #   ERROR=embedded newline in TASK at offset <N>
+#   ERROR=--input-file and --umbrella-summary-file must be passed together
+#   ERROR=--input-file is mutually exclusive with positional TASK
 #
 # See parse-args.md for the full contract, supported quoting subset, and
 # consumer-side parsing rules.
@@ -50,6 +56,8 @@ CLOSED_WINDOW_DAYS=""
 DRY_RUN="false"
 GO="false"
 DEBUG="false"
+INPUT_FILE=""
+UMBRELLA_SUMMARY_FILE=""
 
 # Single positional argument: the entire $ARGUMENTS string from the SKILL.
 ARGS_STR="${1:-}"
@@ -289,6 +297,16 @@ while :; do
         --dry-run) DRY_RUN="true" ;;
         --go) GO="true" ;;
         --debug) DEBUG="true" ;;
+        --input-file)
+          read_flag_value "--input-file" "$i"
+          i="$TOKEN_END"
+          INPUT_FILE="$TOKEN_VALUE"
+          ;;
+        --umbrella-summary-file)
+          read_flag_value "--umbrella-summary-file" "$i"
+          i="$TOKEN_END"
+          UMBRELLA_SUMMARY_FILE="$TOKEN_VALUE"
+          ;;
         *)
           echo "ERROR=Unknown flag: $tok" >&2
           exit 1
@@ -328,6 +346,24 @@ case "$TASK" in
     ;;
 esac
 
+# --- Paired-flag and mutual-exclusion validation ---
+
+# --input-file and --umbrella-summary-file must be passed together (both or neither).
+if [ -n "$INPUT_FILE" ] && [ -z "$UMBRELLA_SUMMARY_FILE" ]; then
+  echo "ERROR=--input-file and --umbrella-summary-file must be passed together" >&2
+  exit 1
+fi
+if [ -z "$INPUT_FILE" ] && [ -n "$UMBRELLA_SUMMARY_FILE" ]; then
+  echo "ERROR=--input-file and --umbrella-summary-file must be passed together" >&2
+  exit 1
+fi
+
+# --input-file is mutually exclusive with positional TASK.
+if [ -n "$INPUT_FILE" ] && [ -n "$TASK" ]; then
+  echo "ERROR=--input-file is mutually exclusive with positional TASK" >&2
+  exit 1
+fi
+
 # --- mktemp (only after parse success) ---
 
 UMBRELLA_TMPDIR=$(mktemp -d -t claude-umbrella-XXXXXX)
@@ -347,5 +383,7 @@ printf 'CLOSED_WINDOW_DAYS=%s\n' "$CLOSED_WINDOW_DAYS"
 printf 'DRY_RUN=%s\n' "$DRY_RUN"
 printf 'GO=%s\n' "$GO"
 printf 'DEBUG=%s\n' "$DEBUG"
+printf 'INPUT_FILE=%s\n' "$INPUT_FILE"
+printf 'UMBRELLA_SUMMARY_FILE=%s\n' "$UMBRELLA_SUMMARY_FILE"
 printf 'TASK=%s\n' "$TASK"
 printf 'UMBRELLA_TMPDIR=%s\n' "$UMBRELLA_TMPDIR"
