@@ -2,12 +2,13 @@
 
 ## Purpose
 
-Regression harness for the `--baseline` flag handling in `scripts/eval-research.sh`. Pins the post-#441 and post-#477 behavior so these flag-state paths cannot silently regress:
+Regression harness for the `--baseline` flag handling in `scripts/eval-research.sh`. Pins the post-#441, post-#477, and post-#780 behavior so these flag-state paths cannot silently regress:
 
 1. **Sub-1** — `--baseline` not set: no `PREVIEW MODE` banner on stdout; exit 0; no cache file at `$WORK_DIR/baseline-rows.json`.
 2. **Sub-2** — `--baseline <valid-ref>` (using `HEAD` against the committed `skills/research/references/eval-baseline.json` schema-only stub): exit 0; `PREVIEW MODE` banner present on stdout (visible alongside the summary table); baseline cached to `$WORK_DIR/baseline-rows.json`.
 3. **Sub-3** — `--baseline <bogus-ref>`: exit 2; stderr error names the unresolvable ref AND surfaces a tail of `git show`'s captured stderr (so operators can distinguish ref-missing / file-missing-at-ref / non-git-checkout); no cache file left behind.
 4. **Sub-4** — trailing `--baseline` with no following value: exit 2; stderr names `--baseline` as the flag missing its value. Pins the issue #477 fix that separated this case from the schema-validation exit-1 path; pre-fix, `shift 2` aborted under `set -e` with exit 1, indistinguishable from a real schema failure.
+5. **Sub-5** — `--baseline` followed by another flag (e.g. `--baseline --scale standard`): exit 2; stderr names `--baseline` as the flag missing its value. Pins the issue #780 fix that extended `require_value` to take a third arg (the candidate value) and reject when it starts with `--`. Pre-fix, the validity regex `^[0-9A-Za-z._/-]+$` permitted `--scale` (hyphens are allowed), so `BASELINE_REF` was silently set to `--scale` and `git show --scale:...` produced a confusing downstream error. Mirrors `take_value` in `scripts/render-reviewer-prompt.sh`.
 
 ## Invocation
 

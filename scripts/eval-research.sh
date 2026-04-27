@@ -101,23 +101,27 @@ print_usage() {
 # with code 1 — colliding with the documented schema-validation exit
 # code (issue #477). Routing missing values to exit 2 lines up with the
 # script's other argument-parse errors (unknown argument, regex-invalid
-# baseline ref).
+# baseline ref). The third arg also rejects a following flag name as the
+# value (issue #780): `--baseline --scale standard` would otherwise bind
+# `BASELINE_REF=--scale` because the validity regex permits hyphens —
+# parallels `take_value` in scripts/render-reviewer-prompt.sh.
 require_value() {
-  if (( $2 < 2 )); then
-    printf 'eval-research: %s requires a value\n' "$1" >&2
+  local flag="$1" argc="$2" next_val="${3:-}"
+  if (( argc < 2 )) || [[ "$next_val" == --* ]]; then
+    printf 'eval-research: %s requires a value\n' "$flag" >&2
     exit 2
   fi
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --id) require_value "$1" "$#"; ID_FILTER="${2:-}"; shift 2 ;;
-    --scale) require_value "$1" "$#"; SCALE="${2:-standard}"; shift 2 ;;
-    --baseline) require_value "$1" "$#"; BASELINE_REF="${2:-}"; shift 2 ;;
-    --work-dir) require_value "$1" "$#"; WORK_DIR="${2:-}"; shift 2 ;;
-    --write-baseline) require_value "$1" "$#"; WRITE_BASELINE_FILE="${2:-}"; shift 2 ;;
-    --timeout) require_value "$1" "$#"; TIMEOUT_SECONDS="${2:-4200}"; shift 2 ;;
-    --judge-timeout) require_value "$1" "$#"; JUDGE_TIMEOUT_SECONDS="${2:-600}"; shift 2 ;;
+    --id) require_value "$1" "$#" "${2:-}"; ID_FILTER="${2:-}"; shift 2 ;;
+    --scale) require_value "$1" "$#" "${2:-}"; SCALE="${2:-standard}"; shift 2 ;;
+    --baseline) require_value "$1" "$#" "${2:-}"; BASELINE_REF="${2:-}"; shift 2 ;;
+    --work-dir) require_value "$1" "$#" "${2:-}"; WORK_DIR="${2:-}"; shift 2 ;;
+    --write-baseline) require_value "$1" "$#" "${2:-}"; WRITE_BASELINE_FILE="${2:-}"; shift 2 ;;
+    --timeout) require_value "$1" "$#" "${2:-}"; TIMEOUT_SECONDS="${2:-4200}"; shift 2 ;;
+    --judge-timeout) require_value "$1" "$#" "${2:-}"; JUDGE_TIMEOUT_SECONDS="${2:-600}"; shift 2 ;;
     --smoke-test) SMOKE_TEST="true"; shift ;;
     --help|-h) print_usage; exit 0 ;;
     *)
