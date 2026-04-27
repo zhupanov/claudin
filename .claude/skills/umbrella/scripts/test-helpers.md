@@ -29,7 +29,7 @@ Regression harness for `helpers.sh check-cycle` (pure logic, no network) and `he
 - probe ok + 5xx → `EDGES_FAILED=1`, one redacted stderr line
 - probe ok + 422 with already-exists body → `EDGES_SKIPPED_EXISTING=1` (idempotent per `add-blocked-by.sh:193-196`)
 - probe ok + 422 non-idempotent → `EDGES_FAILED=1`
-- probe failure (existing repo-wide path unchanged) → all proposed edges land in `EDGES_SKIPPED_API_UNAVAILABLE`
+- probe failure (legacy `STUB_PROBE_RC=22` shorthand) → all proposed edges land in `EDGES_SKIPPED_API_UNAVAILABLE` (counter unchanged); after issue #728 the same input ALSO produces `PROBE_FAILED=1` on stdout and the new `wire-dag probe failed (HTTP network)` warning on stderr — coverage of those new outputs lives in the probe-classification suite below, not in test (i)
 - dry-run → stdout includes `EDGES_FAILED=0`
 - stub `gh` exits non-zero on POST while still emitting `-i` blob → classifier still routes correctly (proves `set +e`/`set -e` wrapper)
 - blocker-id lookup failure → `EDGES_FAILED=1`, one redacted stderr line tagged `id-lookup`

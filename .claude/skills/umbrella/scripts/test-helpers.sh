@@ -307,10 +307,34 @@ export STUB_POST_RC=22
 assert_wire_dag "422 non-idempotent → EDGES_FAILED" 'EDGES_FAILED=1' 1
 
 # (i) Probe failure → existing repo-wide path (all proposed edges → EDGES_SKIPPED_API_UNAVAILABLE).
+# Counter behavior is unchanged after issue #728; the new PROBE_FAILED=1 stdout
+# line and the new "wire-dag probe failed" stderr warning are pinned in the
+# probe-classification suite below — this assertion only checks the legacy
+# counter and the absence of per-edge "wire-dag edge" stderr lines.
 export STUB_PROBE_RC=22
 export STUB_POST_RESPONSE=""
 export STUB_POST_RC=0
 assert_wire_dag "probe failure → repo-wide skip" 'EDGES_SKIPPED_API_UNAVAILABLE=1' 0
+# (i.1) The same probe-failure run now also emits PROBE_FAILED=1 (issue #728).
+{
+  i1_children="$TMP/children-i1.tsv"
+  i1_edges="$TMP/edges-i1.tsv"
+  i1_out="$TMP/wire-out-i1"
+  printf '20\tsome-child\thttp://x\n' > "$i1_children"
+  printf '10\t20\n' > "$i1_edges"
+  PATH="$STUB_BIN:$PATH" bash "$HELPERS" wire-dag \
+    --tmpdir "$TMP" --umbrella 1 --umbrella-title "T" \
+    --children-file "$i1_children" --edges-file "$i1_edges" \
+    --repo o/r > "$i1_out" 2>/dev/null || true
+  if grep -qE '^PROBE_FAILED=1$' "$i1_out"; then
+    printf '  ✅ probe failure → PROBE_FAILED=1 (#728)\n'
+    PASS=$((PASS + 1))
+  else
+    printf '  ❌ probe failure expected PROBE_FAILED=1 (#728)\n     stdout:\n'
+    sed 's/^/       /' "$i1_out"
+    FAIL=$((FAIL + 1))
+  fi
+}
 export STUB_PROBE_RC=0
 
 # (j) Dry-run → stdout includes EDGES_FAILED=0.

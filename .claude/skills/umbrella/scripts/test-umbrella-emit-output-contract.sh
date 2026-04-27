@@ -19,6 +19,8 @@
 # Extended for #726 to pin the Step 4 dry-run child shape contract (h1–h4):
 # CHILD_<i>_DRY_RUN=true and per-key omission annotations on CHILD_<i>_NUMBER
 # and CHILD_<i>_URL.
+# Extended for #728 to pin the Step 3B.4 wire-dag PROBE_FAILED parse-only key
+# + retry policy + transient-probe stderr literal (i1–i6).
 # The intent is a cheap CI guard against regression of the same drift;
 # test-helpers.sh explicitly leaves emit-output out of scope (see
 # test-helpers.md "Out of scope").

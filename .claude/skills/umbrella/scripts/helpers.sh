@@ -24,6 +24,8 @@
 #       internal ids are resolved via gh api and cached per run.
 #       Stdout: EDGES_ADDED=N, EDGE_<j>_BLOCKER, EDGE_<j>_BLOCKED, EDGES_REJECTED_CYCLE,
 #               EDGES_SKIPPED_EXISTING, EDGES_SKIPPED_API_UNAVAILABLE, EDGES_FAILED,
+#               PROBE_FAILED (parse-only, 0|1, issue #728 — disambiguates the cause
+#                 behind any EDGES_SKIPPED_API_UNAVAILABLE bulk-skip; see helpers.md),
 #               BACKLINKS_POSTED, BACKLINKS_SKIPPED_NATIVE.
 #
 #   emit-output  --kv-file FILE
@@ -217,7 +219,13 @@ case "$SUBCMD" in
     # Retry policy (DECISION_1, dialectic 2-1 ANTI_THESIS): one retry only,
     # scoped to 5xx and empty-status (the unclassifiable transport-blip class).
     api_available="false"
+    # probe_attempted distinguishes "probe ran and concluded feature-missing"
+    # (PROBE_FAILED=0, fire legacy "API not available" warning) from
+    # "no probe was attempted at all" because probe_target is empty
+    # (PROBE_FAILED=0, suppress the warning — the diagnosis would be false).
+    probe_attempted=0
     if [ -n "$probe_target" ]; then
+      probe_attempted=1
       # Optional test-stub hook: when set, record the probe URL so test-helpers.sh
       # can assert which issue was targeted. Production callers leave this unset.
       if [ -n "${UMBRELLA_PROBE_TARGET_FILE:-}" ]; then
@@ -249,7 +257,7 @@ case "$SUBCMD" in
             ;;
           5*|"")
             if [ "$probe_attempt" -eq 1 ]; then
-              probe_attempt=2
+              probe_attempt=$((probe_attempt + 1))
               continue
             fi
             # Second attempt also failed — bucket as transient/operational probe failure.
@@ -628,11 +636,14 @@ case "$SUBCMD" in
       printf '%s' "$edge_lines"
     fi
     # Repo-wide "API not available" warning fires only on confirmed
-    # feature-missing (issue #728): PROBE_FAILED=0 AND api_available=false.
+    # feature-missing (issue #728): PROBE_FAILED=0 AND api_available=false
+    # AND probe_attempted=1 (otherwise we never made an HTTP request and
+    # cannot truthfully diagnose the surface as unavailable; the empty-
+    # probe_target case on the --no-backlinks path is silent by design).
     # Transient probe failure (PROBE_FAILED=1) emits the dedicated
     # "wire-dag probe failed (HTTP <status>)" stderr earlier inside the probe
     # block; emitting both would double-warn on the same condition.
-    if [ "$api_available" = "false" ] && [ "$PROBE_FAILED" = "0" ]; then
+    if [ "$api_available" = "false" ] && [ "$PROBE_FAILED" = "0" ] && [ "$probe_attempted" = "1" ]; then
       if [ "$NO_BACKLINKS" = "true" ]; then
         # On the created-eq-1 bypass path, back-links are intentionally suppressed —
         # the legacy "Back-links posted via comments" tail would be factually false.
