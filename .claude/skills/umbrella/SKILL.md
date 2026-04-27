@@ -32,6 +32,8 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 | `--dry-run` | Forwarded to `/issue`. Multi-piece path also skips DAG wiring + back-links. |
 | `--go` | Forwarded to `/issue` for child batch AND umbrella single. Posts `GO` on every successfully-created issue (children + umbrella). Duplicates / failed creates / dry-runs never get a GO comment (per `/issue` Step 6 contract). |
 | `--debug` | Verbose mode for this skill's own helpers. |
+| `--input-file PATH` | Activates pre-decomposed-input mode. Bypasses Step 1 (task resolve) and Step 3B.1 (LLM decomposition). The file MUST be a pre-built `/issue --input-file` batch markdown. Required to be paired with `--umbrella-summary-file`. Mutually exclusive with positional TASK. |
+| `--umbrella-summary-file PATH` | Caller-composed 1-2 sentence summary paragraph for the umbrella issue body's lead in Step 3B.3 (replaces the LLM-composed summary). Required to be paired with `--input-file`. |
 
 ## Step 0 — Setup
 
@@ -39,7 +41,9 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 $PWD/.claude/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
 ```
 
-Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
+Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `INPUT_FILE` (path — empty if `--input-file` not specified), `UMBRELLA_SUMMARY_FILE` (path — empty if `--umbrella-summary-file` not specified), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
+
+**Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty (and `UMBRELLA_SUMMARY_FILE` is also non-empty by paired-flag validation in `parse-args.sh`), skip Step 1 (task resolve) and Step 3B.1 (LLM decomposition); Step 2 classification is replaced by post-3B.2 distinct-resolved-child-count rule (see Step 2 below). Mutual exclusion with positional `TASK` is enforced at the parser layer.
 
 When forwarding labels to `/issue` in Steps 3A, 3B.2, and 3B.3 below, reconstruct the repeated `--label` flags by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>`.
 
@@ -47,11 +51,37 @@ On non-zero exit, print the `ERROR=` line and abort.
 
 ## Step 1 — Resolve Task Description
 
+**Skip Step 1 entirely when `INPUT_FILE` is non-empty** (pre-decomposed-input mode). The caller has already produced a `/issue --input-file` batch markdown directly, so there is no `TASK` to resolve and no LLM decomposition needed downstream. Proceed directly to Step 2.
+
 If `TASK` is non-empty, use it verbatim.
 
 If `TASK` is empty, deduce the task from session context — the most recent unambiguous user request (e.g., a feature spec discussed in the prior turns, a research finding, a /research output the user just acted on). Surface the deduced task to the user as a single quoted line prefixed by `Deduced task:` so they can interrupt if you got it wrong. If the context is genuinely ambiguous (multiple plausible tasks, or none), abort with the error message: `/umbrella requires a task description and could not deduce one from context. Re-invoke with the description as a positional argument.`
 
 ## Step 2 — Classify One-Shot vs Multi-Piece
+
+### Pre-decomposed-input mode (when `INPUT_FILE` is non-empty)
+
+Skip LLM classification entirely. Instead, classification is **deterministic post-3B.2**: jump directly to Step 3B.2 (batch /issue create), then count distinct resolved child issue numbers per the rule below. The verdict + rationale are emitted *after* 3B.2 returns.
+
+**Distinct-resolved-child-count rule** (dry-run-safe):
+- For each `ISSUE_<i>_*` group emitted by `/issue` (batch-mode stdout):
+  - If `ISSUE_<i>_DRY_RUN=true`: count this item as 1 prospective distinct child (dry-run children have no real number; treat each independently).
+  - Else if `ISSUE_<i>_DUPLICATE_OF_NUMBER=<N>` is non-empty: contribute `<N>` to the set of distinct numbers (deduplicates collapse to the existing target).
+  - Else if `ISSUE_<i>_NUMBER=<N>` is non-empty (newly-created child): contribute `<N>` to the set.
+  - Else (failed item — `ISSUE_<i>_FAILED=true`): exclude from the count.
+- The distinct count is `len(set_of_numbers) + count_of_dry_run_items`.
+
+If distinct count is **<2** → emit a 3-line bundle (parallel to 3B.1's existing `decomposition-lt-2` downgrade convention; preserves the "NEVER skip the user-visible classification verdict" anti-pattern):
+```
+UMBRELLA_VERDICT=one-shot
+UMBRELLA_DOWNGRADE=input-file-distinct-lt-2
+UMBRELLA_RATIONALE=Downgraded from input-file mode — fewer than two distinct resolved child issue numbers after /issue dedup
+```
+Then **skip Step 3B.3 and Step 3B.4 entirely** and continue at Step 4. **CRITICAL**: do NOT execute Step 3A on the downgrade path — children were already created in Step 3B.2; re-invoking `/issue` would double-create. Step 4's `output.kv` for `CHILDREN_CREATED`, `CHILDREN_DEDUPLICATED`, `CHILDREN_FAILED` reflects the Step 3B.2 batch results directly. `UMBRELLA_NUMBER` and `UMBRELLA_URL` are omitted.
+
+If distinct count is **≥2** → emit `UMBRELLA_VERDICT=multi-piece` + `UMBRELLA_RATIONALE=<one short sentence — under 120 chars — explaining the call>` and proceed to Step 3B.3 (umbrella body composition + creation), then Step 3B.4 (DAG-empty wire-dag with back-links).
+
+### Normal mode (when `INPUT_FILE` is empty)
 
 Decide one of two verdicts based on the task description:
 
@@ -86,6 +116,8 @@ Four sub-steps run in order. Each is exactly one Bash tool call (Section III rul
 
 ### 3B.1 — Decompose and write batch-input file
 
+**Skip Step 3B.1 entirely when `INPUT_FILE` is non-empty** (pre-decomposed-input mode). The caller-supplied `INPUT_FILE` is already a `/issue --input-file` batch markdown — no decomposition or rendering needed. `BATCH_INPUT_FILE` is set to `INPUT_FILE` directly. Proceed to Step 3B.2.
+
 Decompose `TASK` into N concrete work-pieces (`N >= 2`). Each piece must be small enough to land as one PR but substantial enough to merit its own issue — bias toward pieces that are independently testable. Compose, in your reasoning, an ordered list of `(title, body, depends-on)` tuples:
 
 - `title` — one line, ≤ 80 chars, imperative ("Add X", "Fix Y", "Refactor Z").
@@ -117,13 +149,17 @@ For each successfully-resolved item (created OR deduplicated to an existing issu
 
 ### 3B.3 — Compose umbrella body and create umbrella
 
-Compose a one-paragraph summary of the overall task (≤ 4 sentences, plain prose) — distinct from any individual piece body. Render the umbrella issue body:
+**Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty (so `UMBRELLA_SUMMARY_FILE` is also non-empty by paired-flag validation), the summary is caller-supplied at `UMBRELLA_SUMMARY_FILE`; do NOT compose one. Skip the LLM-summary step. Pass the caller's summary path as `--summary-file` to the renderer (the caller is expected to have applied compose-time sanitization — strip control chars, redact secrets/internal URLs/PII). Continue with the renderer invocation below using `--summary-file "$UMBRELLA_SUMMARY_FILE"`.
+
+**Normal mode**: compose a one-paragraph summary of the overall task (≤ 4 sentences, plain prose) — distinct from any individual piece body. Write to `$UMBRELLA_TMPDIR/summary.txt` and use that path as `--summary-file`.
+
+Render the umbrella issue body:
 
 ```bash
-$PWD/.claude/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "$UMBRELLA_TMPDIR/summary.txt" --children-file "$UMBRELLA_TMPDIR/children.tsv"
+$PWD/.claude/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "<summary-path>" --children-file "$UMBRELLA_TMPDIR/children.tsv"
 ```
 
-Write `$UMBRELLA_TMPDIR/summary.txt` (the summary paragraph) and `$UMBRELLA_TMPDIR/children.tsv` (one row per child: `<number>\t<title>\t<url>`, in pieces order) BEFORE invoking the renderer. The renderer emits `UMBRELLA_BODY_FILE=<path>` and `UMBRELLA_TITLE_HINT=<derived umbrella title from the first sentence of the summary>`.
+Where `<summary-path>` is `$UMBRELLA_SUMMARY_FILE` in pre-decomposed-input mode and `$UMBRELLA_TMPDIR/summary.txt` in normal mode. Write `$UMBRELLA_TMPDIR/children.tsv` (one row per child: `<number>\t<title>\t<url>`, in pieces order) BEFORE invoking the renderer. The renderer emits `UMBRELLA_BODY_FILE=<path>` and `UMBRELLA_TITLE_HINT=<derived umbrella title from the first sentence of the summary>`.
 
 Then forward to `/issue` (single mode) for the umbrella itself:
 
@@ -136,7 +172,9 @@ Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as
 
 Skip this entire sub-step when `DRY_RUN=true` (no children actually exist on GitHub). Print `⏭️ /umbrella: dependency wiring + back-links skipped (--dry-run)` and jump to Step 4.
 
-Compose the proposed edge list from the `depends-on` field of each piece: for piece index `i` with `depends_on=[j, k, ...]`, propose edges `child[j] blocks child[i]`, `child[k] blocks child[i]`, etc. (using the resolved issue numbers from 3B.2). Write the proposed edges to `$UMBRELLA_TMPDIR/proposed-edges.tsv` (one row per edge: `<blocker-number>\t<blocked-number>`) using the Write tool.
+**Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty, `pieces.json` does not exist (Step 3B.1 was skipped). The caller's pre-built batch input has no inter-piece dependency information, so the proposed edges are empty by construction. Still run `helpers.sh wire-dag` with an EMPTY `proposed-edges.tsv` so DAG wiring is a no-op (`EDGES_ADDED=0`) but the back-link fallback (`Part of umbrella #M — <umbrella-title>` comments on each child) and the GitHub-native umbrella relationship detection logic remain active. Write `$UMBRELLA_TMPDIR/proposed-edges.tsv` as a zero-byte file (or omit content if the renderer accepts a missing file — but the wire-dag invocation expects the path to exist; create it via the Write tool with empty content if needed).
+
+**Normal mode**: compose the proposed edge list from the `depends-on` field of each piece: for piece index `i` with `depends_on=[j, k, ...]`, propose edges `child[j] blocks child[i]`, `child[k] blocks child[i]`, etc. (using the resolved issue numbers from 3B.2). Write the proposed edges to `$UMBRELLA_TMPDIR/proposed-edges.tsv` (one row per edge: `<blocker-number>\t<blocked-number>`) using the Write tool.
 
 Then run the wiring + back-links coordinator:
 

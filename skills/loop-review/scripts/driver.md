@@ -52,6 +52,8 @@ Mirrors `### iteration-result` from `skills/improve-skill/scripts/iteration.sh`.
 
 `PARSE_STATUS=ok` indicates a successful slice run. Any other value (or absence of the footer) is treated as slice failure: the driver logs a warning, increments the failure counter, sets `LOOP_PRESERVE_TMPDIR=true`, and continues to the next slice.
 
+**`ISSUES_CREATED` semantic** (since `/review --create-issues` was routed through `/umbrella`): the count includes BOTH the child issues filed for the slice's accepted findings AND the per-slice umbrella tracking issue when ≥2 distinct children are filed (one umbrella per slice; no umbrella when ≤1 distinct child). The driver's `Issues filed` summary line therefore aggregates child issues + umbrella trackers across all slices in the sweep — this is consistent with `/issue`'s existing definition of `ISSUES_CREATED` as "any GitHub issue object created" rather than "child work items only." `ISSUES_FAILED` similarly counts both child-create failures and umbrella-create failures (the umbrella-create failure structural signal is `/umbrella`'s `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_NUMBER` empty).
+
 ## Security-findings handoff
 
 `/review` writes accepted security-tagged findings to the `--security-output <path>` argument. Driver passes `$LOOP_TMPDIR/security-findings-slice-${N}.md`. After all slices complete, the driver concatenates non-empty per-slice files into the final summary block, prints the SECURITY.md disclaimer, and sets `LOOP_PRESERVE_TMPDIR=true` so the per-slice files survive cleanup.
