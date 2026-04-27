@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.21] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/test-finalize-umbrella.md` — aligned fixture descriptions with the actual close-only retry semantics in `test-finalize-umbrella.sh` and the canonical `finalize-umbrella.md` contract (FINDING_3 from the umbrella-PR code-review panel). Fixture 2 (marker present + state=OPEN) now correctly describes close-only retry yielding `FINALIZED=true RENAMED=true CLOSED=true` (NOT the stale `ALREADY_FINALIZED=true` short-circuit). Fixture 3 (`[DONE]` title + state=OPEN) now describes close-only retry skipping the rename, yielding `FINALIZED=true RENAMED=false CLOSED=true`. Only fixture 4 (state=CLOSED) is the strict short-circuit emitting `ALREADY_FINALIZED=true REASON=already CLOSED`. Tightened the "Test scope" preamble to make the asymmetry between the strict CLOSED short-circuit and the title/marker close-only-retry signals unambiguous on first read. Closes #760.
+
 ## [7.17.20] - 2026-04-27
 
 ### Fixed
