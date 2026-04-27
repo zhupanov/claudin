@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.25] - 2026-04-26
+
+### Fixed
+
+- `scripts/eval-research.sh` — close the `--smoke-test` grep-fallback bypass that let truncated/malformed `eval-baseline.json` pass schema validation. Previously, when `jq` was unavailable, `validate_baseline_json` fell back to three substring `grep` checks for `"version"`, `"scale"`, `"entries"` — a bug-shaped JSON containing those literals anywhere (including inside string values or comments) returned success even though it was not parseable, contradicting the contract at `scripts/eval-research.md` ("parse and schema-validate"). Move `require_tool jq` outside the `SMOKE_TEST` guard so `jq` is required in all modes and drop the grep-fallback `else` branch in `validate_baseline_json` so JSON validation has a single deterministic path. Updates the `--smoke-test` row in `scripts/eval-research.md` to document `jq` as required in this mode and rewrites the exit-code-3 prose (and the script's matching usage-block comment / tooling-check section title) to spell out per-mode tool requirements. Existing test harnesses are unaffected: `test-eval-research-baseline-flag.sh` already PATH-stubs `jq`, and `test-eval-set-structure.sh`'s `--smoke-test` invocation will surface a clear exit-3 if `jq` is genuinely missing. Closes #669.
+
 ## [7.16.24] - 2026-04-26
 
 ### Fixed

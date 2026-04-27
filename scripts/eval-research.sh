@@ -57,7 +57,9 @@
 #       integer, regex-invalid baseline ref, baseline ref that cannot be
 #       resolved via git show, or a value-taking flag with no following
 #       value such as a trailing `--baseline`).
-#   3 — required tooling missing (claude, jq, awk).
+#   3 — required tooling missing. jq and awk are required in all modes
+#       (including --smoke-test); claude is required only when not using
+#       --smoke-test.
 #
 # Security: --baseline accepts only [0-9A-Za-z_./-]+ to avoid shell
 # injection into git show. See OOS_1 in the tracking issue for #419.
@@ -138,7 +140,10 @@ if ! [[ "$JUDGE_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( JUDGE_TIMEOUT_SECONDS < 1 
   exit 2
 fi
 
-# ---- Tooling check (skipped under --smoke-test) --------------------------
+# ---- Tooling check -------------------------------------------------------
+# awk + jq are required in all modes (jq schema-validates eval-baseline.json
+# in both smoke-test and full-run paths). claude is required only when not
+# using --smoke-test.
 require_tool() {
   command -v "$1" >/dev/null 2>&1 || {
     printf 'eval-research: required tool missing: %s\n' "$1" >&2
@@ -146,9 +151,9 @@ require_tool() {
   }
 }
 require_tool awk
+require_tool jq
 if [[ "$SMOKE_TEST" != "true" ]]; then
   require_tool claude
-  require_tool jq
 fi
 
 # ---- Validate baseline ref against strict regex --------------------------
@@ -281,24 +286,9 @@ validate_baseline_json() {
     printf 'eval-research: eval-baseline.json not found at %s\n' "$file" >&2
     return 1
   fi
-  if command -v jq >/dev/null 2>&1; then
-    if ! jq -e '.version and .scale and (.entries | type == "array")' "$file" >/dev/null 2>&1; then
-      printf 'eval-research: eval-baseline.json missing required keys (version, scale, entries)\n' >&2
-      return 1
-    fi
-  else
-    if ! grep -q '"version"' "$file"; then
-      printf 'eval-research: eval-baseline.json missing required key: version (jq not available; using grep fallback)\n' >&2
-      return 1
-    fi
-    if ! grep -q '"scale"' "$file"; then
-      printf 'eval-research: eval-baseline.json missing required key: scale (jq not available; using grep fallback)\n' >&2
-      return 1
-    fi
-    if ! grep -q '"entries"' "$file"; then
-      printf 'eval-research: eval-baseline.json missing required key: entries (jq not available; using grep fallback)\n' >&2
-      return 1
-    fi
+  if ! jq -e '.version and .scale and (.entries | type == "array")' "$file" >/dev/null 2>&1; then
+    printf 'eval-research: eval-baseline.json missing required keys (version, scale, entries) or not valid JSON\n' >&2
+    return 1
   fi
   return 0
 }
