@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # test-check-review-changes.sh — Offline regression harness for check-review-changes.sh.
 #
-# Pins eight cases that together cover the issue #651 regression
+# Pins nine cases that together cover the issue #651 regression
 # (pre-existing untracked → false positive), the empty-vs-missing
-# baseline-state distinction, and the echo "" -> comm -> sed safety net
-# inside the SUT:
+# baseline-state distinction, the printf '%s\n' -> comm -> sed safety net
+# inside the SUT, and the issue #695 dash-prefixed-filename regression:
 #   (a) clean tree, no baseline → FILES_CHANGED=false UNTRACKED_BASELINE=missing
 #   (b) pre-existing untracked + matching baseline →
 #       FILES_CHANGED=false UNTRACKED_BASELINE=present (THE regression case)
@@ -20,7 +20,12 @@
 #       distinction — readable empty file is present, not missing)
 #   (h) non-empty baseline + empty current untracked →
 #       FILES_CHANGED=false UNTRACKED_BASELINE=present (pins the
-#       echo "" -> comm -> sed '/^$/d' safety net for empty CURRENT)
+#       printf '%s\n' -> comm -> sed '/^$/d' safety net for empty CURRENT)
+#   (i) untracked file named "-n" + empty external baseline →
+#       FILES_CHANGED=true UNTRACKED_BASELINE=present (issue #695:
+#       feeding CURRENT to comm via printf '%s\n' instead of echo, so
+#       filenames matching echo flags like -n / -e / -nn / -E are not
+#       silently swallowed)
 #
 # Usage:
 #   bash skills/implement/scripts/test-check-review-changes.sh
@@ -146,10 +151,11 @@ run_case "(g) zero-byte readable baseline + non-empty current untracked" \
     "true" "present" "$SBX_G" "$BL_G"
 
 # Case (h): non-empty baseline + empty current untracked. Exercises the
-# echo "" -> comm -> sed '/^$/d' safety net path inside the SUT (when
-# CURRENT is empty, echo "" emits one blank line that sed must strip).
-# A regression that removes the trailing sed filter would yield a phantom
-# delta entry and flip FILES_CHANGED to true incorrectly.
+# printf '%s\n' -> comm -> sed '/^$/d' safety net path inside the SUT
+# (when CURRENT is empty, printf '%s\n' "" emits one blank line that
+# sed must strip). A regression that removes the trailing sed filter
+# would yield a phantom delta entry and flip FILES_CHANGED to true
+# incorrectly.
 SBX_H=$(mkrepo)
 ( cd "$SBX_H" && touch ephemeral.txt )
 BL_H="$SBX_H/baseline.txt"
@@ -158,8 +164,24 @@ BL_H="$SBX_H/baseline.txt"
 run_case "(h) non-empty baseline + empty current untracked (sed safety net)" \
     "false" "present" "$SBX_H" "$BL_H"
 
+# Case (i): untracked file named "-n" with an EXTERNAL (outside-repo)
+# empty baseline file. Issue #695: bash builtin echo treats values like
+# "-n" / "-e" / "-nn" / "-E" as flags, so feeding CURRENT through
+# `echo "$CURRENT"` would emit nothing on these names and comm would
+# report an empty delta — silently masking review-created untracked
+# files matching such names. The fix replaces echo with printf '%s\n'
+# inside check-review-changes.sh; this case fails pre-fix and passes
+# post-fix. The baseline lives outside the repo so `git ls-files
+# --others` doesn't pick it up as part of CURRENT.
+SBX_I=$(mkrepo)
+BL_I=$(mktemp)  # external (outside the repo), empty baseline
+( cd "$SBX_I" && touch -- -n )
+run_case '(i) untracked filename "-n" + external empty baseline (#695)' \
+    "true" "present" "$SBX_I" "$BL_I"
+rm -f "$BL_I"
+
 # Cleanup sandboxes.
-rm -rf "$SBX_A" "$SBX_B" "$SBX_C" "$SBX_D" "$SBX_E" "$SBX_F" "$SBX_G" "$SBX_H"
+rm -rf "$SBX_A" "$SBX_B" "$SBX_C" "$SBX_D" "$SBX_E" "$SBX_F" "$SBX_G" "$SBX_H" "$SBX_I"
 
 echo ""
 echo "RESULTS: $PASS passed, $FAIL failed"

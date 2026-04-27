@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Offline regression harness for `skills/implement/scripts/check-review-changes.sh`. Pins the post-fix behavior for issue #651 (the false-positive scenario where ANY pre-existing untracked file flipped `FILES_CHANGED=true`), the empty-vs-missing baseline-state distinction introduced by the fix, and the `echo ""` → `comm` → `sed` safety-net path for the empty-`CURRENT` case.
+Offline regression harness for `skills/implement/scripts/check-review-changes.sh`. Pins the post-fix behavior for issue #651 (the false-positive scenario where ANY pre-existing untracked file flipped `FILES_CHANGED=true`), the empty-vs-missing baseline-state distinction introduced by the fix, the `printf '%s\n' ""` → `comm` → `sed` safety-net path for the empty-`CURRENT` case, and the issue #695 fix (untracked filenames matching `echo` flags such as `-n` / `-e` / `-nn` / `-E` must not be silently swallowed when CURRENT is fed to `comm`).
 
 ## Test cases
 
@@ -17,7 +17,8 @@ Each case sets up an isolated `git init` sandbox via `mktemp -d`, optionally wri
 | (e) | unstaged modification (with empty baseline) | `FILES_CHANGED=true UNTRACKED_BASELINE=present` | unstaged-only path is unchanged |
 | (f) | pre-existing untracked, NO `--baseline` flag | `FILES_CHANGED=false UNTRACKED_BASELINE=missing` | **deliberate behavior change** — see callout below |
 | (g) | zero-byte readable baseline + new untracked file | `FILES_CHANGED=true UNTRACKED_BASELINE=present` | empty-vs-missing distinction (readable zero-byte = present, delta = current) |
-| (h) | non-empty baseline + empty current untracked (file removed after snapshot) | `FILES_CHANGED=false UNTRACKED_BASELINE=present` | exercises the `echo ""` → `comm` → `sed '/^$/d'` safety net inside the SUT — pins the empty-`CURRENT` path that would otherwise yield a phantom delta entry if the trailing `sed` filter were removed |
+| (h) | non-empty baseline + empty current untracked (file removed after snapshot) | `FILES_CHANGED=false UNTRACKED_BASELINE=present` | exercises the `printf '%s\n' ""` → `comm` → `sed '/^$/d'` safety net inside the SUT — pins the empty-`CURRENT` path that would otherwise yield a phantom delta entry if the trailing `sed` filter were removed |
+| (i) | untracked file named `-n` + empty external (outside-repo) baseline | `FILES_CHANGED=true UNTRACKED_BASELINE=present` | **issue #695 regression case** — feeding CURRENT to `comm` via `printf '%s\n'` instead of `echo` so filenames matching `echo` flags (`-n` / `-e` / `-nn` / `-E`) are detected; pre-fix the SUT reported `FILES_CHANGED=false` |
 
 ## Case (f) is a deliberate behavior change — do NOT "fix" it
 
