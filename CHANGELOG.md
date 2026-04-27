@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.16.33] - 2026-04-26
+
+### Changed
+
+- `.claude/skills/umbrella/SKILL.md` Step 2 — strengthen the `Distinct-resolved-child-count rule` (governing `/umbrella --input-file` classification post-3B.2) with an explicit caller-agnostic authoritativeness note: the rule applies uniformly regardless of whether `/issue --input-file --dry-run` is invoked through `/review --create-issues` (today's caller), a future CI driver exercising `/umbrella --input-file --dry-run`, or any other future caller. The note enumerates the four load-bearing literals — `Distinct-resolved-child-count rule** (dry-run-safe)`, the `ISSUE_<i>_DRY_RUN=true` count-as-1 sentence, the `len(set_of_numbers) + count_of_dry_run_items` formula, plus the new note itself — and confirms `scripts/test-umbrella-emit-output-contract.sh` pins them. Behavior-preserving: the rule itself is unchanged; only its documentation strength + a structural drift guard. Regression: extends `test-umbrella-emit-output-contract.sh` to 22 assertions (4 new `f1`–`f4` literals over a new Step 2 awk-extracted block). `test-umbrella-emit-output-contract.md` (extraction-boundaries table + edit-in-sync rules), `docs/linting.md` row, and the `Script contracts` bullet in `umbrella/SKILL.md` are refreshed in lockstep. Closes #724.
+
 ## [7.16.32] - 2026-04-26
 
 ### Fixed
