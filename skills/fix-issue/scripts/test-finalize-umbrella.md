@@ -4,12 +4,12 @@ Offline regression harness for `skills/fix-issue/scripts/finalize-umbrella.sh`. 
 
 ## Test scope
 
-5 fixtures cover the executed path and the three idempotency-guard signals:
+5 fixtures cover the executed path, the three idempotency-guard signals, and the best-effort rename invariant. Per the canonical contract in `finalize-umbrella.md` (FINDING_3 from the umbrella-PR code-review panel), only `state=CLOSED` is a strict short-circuit; the `[DONE]`-title and marker-comment signals indicate partial-success states (rename and/or comment-post completed in a prior attempt but `gh issue close` did not) and MUST drive a close-only retry rather than short-circuit — otherwise the umbrella stays stuck OPEN with every retry returning `ALREADY_FINALIZED=true`.
 
 1. **finalize-success** — open umbrella, no existing marker, rename + close succeed → `FINALIZED=true RENAMED=true CLOSED=true`.
-2. **idempotent-when-marker-comment-exists** (FINDING_2) — comment stream contains the literal marker `<!-- larch:fix-issue:umbrella-finalized -->`, even when `state=OPEN` and title has no `[DONE]` prefix → `FINALIZED=false ALREADY_FINALIZED=true REASON=existing closing-comment marker detected`. This is the central anti-double-comment check; without the marker probe, two concurrent finalize attempts could each post the closing comment before either's `gh issue close` fired.
-3. **idempotent-when-already-DONE-prefix** — title starts with the managed prefix `[DONE]` (followed by a space) → same idempotent emission with `REASON=title already prefixed [DONE]`.
-4. **idempotent-when-already-CLOSED** — state is `CLOSED` (any title, any comments) → same idempotent emission with `REASON=already CLOSED`.
+2. **marker-present-OPEN-close-only-retry** (FINDING_3) — comment stream contains the literal marker `<!-- larch:fix-issue:umbrella-finalized -->` while `state=OPEN` (prior comment-post succeeded but close did not) → close-only retry, skip the comment-post (avoid double-comment under concurrency) → `FINALIZED=true CLOSED=true` and explicitly does NOT short-circuit. Without the marker probe driving close-only retry, the umbrella would stay stuck OPEN with every retry no-op.
+3. **DONE-title-OPEN-close-only-retry** (FINDING_3) — title starts with the managed prefix `[DONE]` (followed by a space) while `state=OPEN` (prior rename succeeded but close did not) → close-only retry, skip the rename API call (do not re-rename) → `FINALIZED=true RENAMED=false CLOSED=true` and explicitly does NOT short-circuit.
+4. **idempotent-when-already-CLOSED** — state is `CLOSED` (any title, any comments) → strict short-circuit, the only one of the three guard signals that does → `FINALIZED=false ALREADY_FINALIZED=true REASON=already CLOSED`.
 5. **rename-failed-but-close-success** — best-effort rename invariant: rename delegate fails (stubbed `gh issue edit` returns exit 1), but close succeeds → `FINALIZED=true RENAMED=false CLOSED=true` plus stderr WARNING surfacing the rename failure. The lock is the correctness boundary; the title prefix is a visual lifecycle marker.
 
 ## Stub contract
