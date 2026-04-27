@@ -9,7 +9,7 @@
 # in scripts/parse-args.md.
 #
 # Run manually:
-#   bash .claude/skills/umbrella/scripts/test-umbrella-parse-args.sh
+#   bash skills/umbrella/scripts/test-umbrella-parse-args.sh
 # Wire into make lint via the `test-umbrella-parse-args` Makefile target
 # (parallel to `test-umbrella-helpers`).
 

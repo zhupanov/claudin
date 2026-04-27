@@ -166,7 +166,7 @@ case "$SUBCMD" in
     # The per-edge emit_edge_failure_warning helper later in this branch
     # references the same names — these initializations are intentionally
     # placed before the probe block to avoid forward references.
-    REDACT_SCRIPT="$(cd "$(dirname "$0")/../../../.." 2>/dev/null && pwd)/scripts/redact-secrets.sh"
+    REDACT_SCRIPT="$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)/scripts/redact-secrets.sh"
     REDACT_FALLBACK_WARNED=0
 
     # _wd_is_feature_missing_404 <body>: dual-regex fingerprint shared by the

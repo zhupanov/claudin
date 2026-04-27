@@ -22,7 +22,7 @@
 **Run manually**:
 
 ```bash
-bash .claude/skills/umbrella/scripts/test-render-umbrella-body.sh
+bash skills/umbrella/scripts/test-render-umbrella-body.sh
 ```
 
 Exits `0` on success, `1` on the first failed assertion.

@@ -1,6 +1,6 @@
 # test-umbrella-parse-args.sh
 
-**Purpose**: regression harness for `.claude/skills/umbrella/scripts/parse-args.sh`. Pins the stdout grammar (`LABELS_COUNT` + indexed `LABEL_<i>`, `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN`, `GO`, `DEBUG`, `INPUT_FILE`, `UMBRELLA_SUMMARY_FILE`, `TASK`, `UMBRELLA_TMPDIR`), the frozen `ERROR=` template list, the quoting subset (single quotes, double quotes with `\"`/`\\`/`\$` escapes, outside-quote backslash escapes, space/tab/newline as unquoted separators), the paired-flag and TASK-mutual-exclusion validation rules for `--input-file` / `--umbrella-summary-file`, and the TASK byte-preservation contract documented in `parse-args.md` so downstream parsers (`SKILL.md` Step 0 + `/issue` forwarding prose in Steps 3A / 3B.2 / 3B.3) don't silently break on unrelated edits.
+**Purpose**: regression harness for `skills/umbrella/scripts/parse-args.sh`. Pins the stdout grammar (`LABELS_COUNT` + indexed `LABEL_<i>`, `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN`, `GO`, `DEBUG`, `INPUT_FILE`, `UMBRELLA_SUMMARY_FILE`, `TASK`, `UMBRELLA_TMPDIR`), the frozen `ERROR=` template list, the quoting subset (single quotes, double quotes with `\"`/`\\`/`\$` escapes, outside-quote backslash escapes, space/tab/newline as unquoted separators), the paired-flag and TASK-mutual-exclusion validation rules for `--input-file` / `--umbrella-summary-file`, and the TASK byte-preservation contract documented in `parse-args.md` so downstream parsers (`SKILL.md` Step 0 + `/issue` forwarding prose in Steps 3A / 3B.2 / 3B.3) don't silently break on unrelated edits.
 
 ## Helpers
 
@@ -12,7 +12,7 @@
 ## When to run
 
 - Wired into `make lint` via the `test-umbrella-parse-args` Makefile target (parallel to `test-umbrella-helpers`), included in the `test-harnesses` aggregate.
-- Also suitable for ad-hoc runs: `bash .claude/skills/umbrella/scripts/test-umbrella-parse-args.sh`.
+- Also suitable for ad-hoc runs: `bash skills/umbrella/scripts/test-umbrella-parse-args.sh`.
 
 ## Naming distinction
 

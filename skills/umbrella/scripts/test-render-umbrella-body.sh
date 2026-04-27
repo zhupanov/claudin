@@ -24,7 +24,7 @@
 #   - The existing children-TSV malformed path: a malformed children.tsv
 #     produces ERROR=children.tsv malformed on stderr, exit 1.
 #
-# Pattern matches .claude/skills/umbrella/scripts/test-umbrella-parse-args.sh
+# Pattern matches skills/umbrella/scripts/test-umbrella-parse-args.sh
 # (mktemp workspace, trap cleanup, exit-code + stdout/stderr substring
 # assertions). Distinct from test-umbrella-emit-output-contract.sh, which is
 # a structural literal-substring test of SKILL.md / helpers.md.
@@ -33,7 +33,7 @@
 # so the unwritable-tmpdir test would falsely pass under root.
 #
 # Run manually:
-#   bash .claude/skills/umbrella/scripts/test-render-umbrella-body.sh
+#   bash skills/umbrella/scripts/test-render-umbrella-body.sh
 # Wired into make lint via the test-render-umbrella-body Makefile target.
 #
 # Exits 0 on success, 1 on the first failed assertion.

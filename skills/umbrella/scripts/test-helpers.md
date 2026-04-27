@@ -2,7 +2,7 @@
 
 Regression harness for `helpers.sh check-cycle` (pure logic, no network) and `helpers.sh wire-dag` (PATH-stub `gh`, no real network). Self-contained: creates an ephemeral `mktemp` dir for edge fixtures and a stub `gh` script, runs each assertion, prints a `✅`/`❌` line, exits non-zero on any failure.
 
-**Run manually**: `bash .claude/skills/umbrella/scripts/test-helpers.sh`.
+**Run manually**: `bash skills/umbrella/scripts/test-helpers.sh`.
 
 **Wired into `make lint`**: the top-level `Makefile` defines a `test-umbrella-helpers` target that runs this harness; it is a dep of `test-harnesses` (and therefore `lint`), so CI's `test-harnesses` job catches any regression.
 

@@ -12,7 +12,7 @@
 # at the exact LLM boundary the script is supposed to harden.
 #
 # Run manually:
-#   bash .claude/skills/umbrella/scripts/test-render-batch-input.sh
+#   bash skills/umbrella/scripts/test-render-batch-input.sh
 #
 # Wired into `make lint` via the `test-umbrella-render-batch-input` target.
 
