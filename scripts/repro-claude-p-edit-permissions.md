@@ -6,7 +6,7 @@ Sibling per-script-contract doc per `AGENTS.md`. Edit this file in lockstep with
 
 Isolated reproducer for the `claude -p` Edit-permission stall first observed in #566. Validates the kernel fix (#585) and the related settings audit independently of the full `/loop-improve-skill` pipeline.
 
-The script invokes a single `claude -p --plugin-dir "$REPO_ROOT"` subprocess against the project's permission stack (`.claude/settings.json` + `.claude/settings.local.json` + `hooks/hooks.json` PreToolUse hooks), asks the model to perform a trivial edit on a tracked file under `.claude/skills/**`, and classifies the outcome by combining a pinned stall-regex grep on combined stdout+stderr with a `git diff` ground-truth check on the edit target.
+The script invokes a single `claude -p --plugin-dir "$REPO_ROOT"` subprocess against the project's permission stack (`.claude/settings.json` + `.claude/settings.local.json` + `hooks/hooks.json` PreToolUse hooks), asks the model to perform a trivial edit on a tracked file under `skills/**`, and classifies the outcome by combining a pinned stall-regex grep on combined stdout+stderr with a `git diff` ground-truth check on the edit target.
 
 Opt-in operator instrumentation. NOT a CI gate. Depends on a real authenticated `claude` binary, costs API tokens, and is timing-sensitive. Same shape as `scripts/eval-research.sh` and `scripts/test-loop-improve-skill-halt-rate.sh`.
 
@@ -16,7 +16,7 @@ The script preserves these invariants under every normal exit path (success, fai
 
 - `.claude/settings.json` is byte-identical to its pre-run state.
 - `.claude/settings.local.json` (if present) is byte-identical to its pre-run state.
-- `.claude/skills/umbrella/SKILL.md` is byte-identical to its pre-run state.
+- `skills/umbrella/SKILL.md` is byte-identical to its pre-run state.
 - No staging files (`*.repro.bak`, `*.repro.new`) remain on disk.
 - The mktemp scratch directory is removed.
 
@@ -33,7 +33,7 @@ Variants A and B are read-only against the on-disk settings: they do NOT mutate 
 | C       | (empty)                                   | replace via `jq`        | staged aside        | `observational_only`  |
 | D       | `--permission-mode bypassPermissions`     | rename aside            | staged aside        | `edit_completed`      |
 
-Variant C's replacement settings JSON is built via `jq -n --arg p "$REPO_ROOT" '{permissions:{allow:["Read(\($p)/.claude/skills/**)","Edit(\($p)/.claude/skills/**)","Write(\($p)/.claude/skills/**)"]}}'` and atomically `mv`'d from `.claude/settings.json.repro.new` (same directory as the target, guaranteeing same-filesystem rename atomicity).
+Variant C's replacement settings JSON is built via `jq -n --arg p "$REPO_ROOT" '{permissions:{allow:["Read(\($p)/skills/**)","Edit(\($p)/skills/**)","Write(\($p)/skills/**)"]}}'` and atomically `mv`'d from `.claude/settings.json.repro.new` (same directory as the target, guaranteeing same-filesystem rename atomicity).
 
 Variant A reproduces the original #566 incident shape (current settings, no kernel flag) — meaningful even when the live `.claude/settings.json` has `defaultMode: bypassPermissions` because #566 reproduced on that exact shape. The script emits a preflight `**⚠ WARNING**` when this combination is detected so the operator interprets the result with context.
 
@@ -46,7 +46,7 @@ Result classification is a 4-way switch evaluated on the captured stdout file AN
 ```
 if combined output contains the literal substring "Edit tool is repeatedly returning":
   RESULT=stall
-elif `git diff -- .claude/skills/umbrella/SKILL.md` is non-empty:
+elif `git diff -- skills/umbrella/SKILL.md` is non-empty:
   RESULT=edit_completed
 elif timeout exit code is 124 or 137:
   RESULT=timeout
@@ -67,7 +67,7 @@ A single `cleanup()` function is registered on `EXIT INT TERM`. Restoration orde
 1. `mv` `$SETTINGS_BACKUP` → `.claude/settings.json` (Variant C only).
 2. `mv` `$SETTINGS_RENAMED_AWAY` → `.claude/settings.json` (Variant D only).
 3. `mv` `$LOCAL_SETTINGS_RENAMED_AWAY` → `.claude/settings.local.json` (variants A/C/D).
-4. `git checkout -- .claude/skills/umbrella/SKILL.md 2>/dev/null || true` (no-op if clean or absent).
+4. `git checkout -- skills/umbrella/SKILL.md 2>/dev/null || true` (no-op if clean or absent).
 5. `rm -rf "$REPRO_WORKDIR"`.
 
 All four cleanup variables are initialized to empty strings BEFORE the trap is registered so that `set -u` does not error inside the trap. Each step is idempotent and tolerant of partial-stage interrupts: if a setup phase failed before assigning a variable, the corresponding cleanup step is skipped.
@@ -88,7 +88,7 @@ It does NOT invoke `claude -p`. Total runtime: <1 second. Used as a CI-friendly 
 
 ## Hooks remain active
 
-This repo's plugin-installed PreToolUse hooks (via `hooks/hooks.json` → `scripts/block-submodule-edit.sh`) fire on every `Edit`/`Write` tool use, alongside the permission engine. Observed behavior is therefore "permission manager + hook policy" combined. `block-submodule-edit.sh` does not block `.claude/skills/umbrella/SKILL.md` (not in a submodule), so the hook layer is permissive for this target.
+This repo's plugin-installed PreToolUse hooks (via `hooks/hooks.json` → `scripts/block-submodule-edit.sh`) fire on every `Edit`/`Write` tool use, alongside the permission engine. Observed behavior is therefore "permission manager + hook policy" combined. `block-submodule-edit.sh` does not block `skills/umbrella/SKILL.md` (not in a submodule), so the hook layer is permissive for this target.
 
 ## Path resolution
 
@@ -112,7 +112,7 @@ If the trap was skipped, manually restore:
 mv .claude/settings.json.repro.bak .claude/settings.json   # variant C or D
 mv .claude/settings.local.json.repro.bak .claude/settings.local.json  # if present
 # Edit target:
-git checkout -- .claude/skills/umbrella/SKILL.md
+git checkout -- skills/umbrella/SKILL.md
 # Staging tmp file (variant C, mid-staging interrupt):
 rm -f .claude/settings.json.repro.new
 ```

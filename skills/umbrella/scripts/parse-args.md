@@ -76,4 +76,4 @@ ERROR=--input-file is mutually exclusive with positional TASK
 
 **Edit-in-sync rules**: any change to flag set OR stdout grammar OR the frozen ERROR= list OR the quoting subset OR `UMBRELLA_TMPDIR` ownership requires a same-PR update to `SKILL.md` Step 0 (which parses the grammar) and Step 5 (which removes the tmpdir). The harness `test-umbrella-parse-args.sh` keys off the frozen ERROR= templates and stdout shape — update it in lockstep. Wording-only ERROR= template changes (no stdout grammar change, no behavioral change to which inputs are rejected) do NOT require a SKILL.md update because Step 0 surfaces ERROR= lines verbatim and does not parse them.
 
-**Test harness**: `.claude/skills/umbrella/scripts/test-umbrella-parse-args.sh` (sibling `test-umbrella-parse-args.md`); wired into `make lint` via the `test-umbrella-parse-args` Makefile target alongside `test-umbrella-helpers`.
+**Test harness**: `skills/umbrella/scripts/test-umbrella-parse-args.sh` (sibling `test-umbrella-parse-args.md`); wired into `make lint` via the `test-umbrella-parse-args` Makefile target alongside `test-umbrella-helpers`.

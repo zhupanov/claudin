@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-helpers.sh — regression harness for /umbrella's helpers.sh subcommands.
 # Currently covers `check-cycle` (pure logic, no network).
-# Run manually: bash .claude/skills/umbrella/scripts/test-helpers.sh
+# Run manually: bash skills/umbrella/scripts/test-helpers.sh
 # Wire into make lint via a `test-umbrella-helpers` target alongside existing test-* harnesses.
 
 set -euo pipefail

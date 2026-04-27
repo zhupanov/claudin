@@ -4,7 +4,7 @@ Structural regression harness for `/umbrella` SKILL.md Step 2 (input-file dry-ru
 
 This is a *structural* test (literal-substring assertions on `awk`-extracted blocks), not a runtime conformance test of `helpers.sh emit-output` (which remains exercised indirectly via SKILL.md integration). Pattern matches `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh`.
 
-**Run manually**: `bash .claude/skills/umbrella/scripts/test-umbrella-emit-output-contract.sh`.
+**Run manually**: `bash skills/umbrella/scripts/test-umbrella-emit-output-contract.sh`.
 
 **Wired into `make lint`**: the top-level `Makefile` defines a `test-umbrella-emit-output-contract` target that runs this harness; it is a dep of `test-harnesses` (and therefore `lint`), so CI's `test-harnesses` job catches any regression.
 
@@ -120,4 +120,4 @@ Runtime conformance of `helpers.sh emit-output` (KV grammar validation, duplicat
 
 ## Pattern reference
 
-Mirrors `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` (awk range extraction + literal-substring assertions + fail-fast). Path discovery uses umbrella-local style (`HERE=$(cd "$(dirname "$0")" && pwd)`) parallel to `test-umbrella-parse-args.sh`, not the `REPO_ROOT/../../..` math from `test-fix-issue-bail-detection.sh` (whose three-`..` segments do not reach the repo root from `.claude/skills/umbrella/scripts/`).
+Mirrors `skills/fix-issue/scripts/test-fix-issue-bail-detection.sh` (awk range extraction + literal-substring assertions + fail-fast). Path discovery uses umbrella-local style (`HERE=$(cd "$(dirname "$0")" && pwd)`) parallel to `test-umbrella-parse-args.sh`, resolving SKILL.md and helpers.md as `$HERE/../SKILL.md` and `$HERE/helpers.md` directly — not the `REPO_ROOT`-rooted lookup that `test-fix-issue-bail-detection.sh` performs against a fixed `skills/fix-issue/...` path.

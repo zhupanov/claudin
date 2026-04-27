@@ -207,19 +207,19 @@ test-assemble-anchor:
 	bash scripts/test-assemble-anchor.sh
 
 test-umbrella-helpers:
-	bash .claude/skills/umbrella/scripts/test-helpers.sh
+	bash skills/umbrella/scripts/test-helpers.sh
 
 test-umbrella-parse-args:
-	bash .claude/skills/umbrella/scripts/test-umbrella-parse-args.sh
+	bash skills/umbrella/scripts/test-umbrella-parse-args.sh
 
 test-umbrella-emit-output-contract:
-	bash .claude/skills/umbrella/scripts/test-umbrella-emit-output-contract.sh
+	bash skills/umbrella/scripts/test-umbrella-emit-output-contract.sh
 
 test-umbrella-render-batch-input:
-	bash .claude/skills/umbrella/scripts/test-render-batch-input.sh
+	bash skills/umbrella/scripts/test-render-batch-input.sh
 
 test-render-umbrella-body:
-	bash .claude/skills/umbrella/scripts/test-render-umbrella-body.sh
+	bash skills/umbrella/scripts/test-render-umbrella-body.sh
 
 test-check-review-changes:
 	bash skills/implement/scripts/test-check-review-changes.sh

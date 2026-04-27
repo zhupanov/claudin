@@ -5,8 +5,8 @@
 # Step 4 (Emit Output) prose contract.
 #
 # Pins the load-bearing literals in:
-#   .claude/skills/umbrella/SKILL.md (Step 2, Step 3B.3, Step 3B.4, Step 4 blocks)
-#   .claude/skills/umbrella/scripts/helpers.md (emit-output subsection)
+#   skills/umbrella/SKILL.md (Step 2, Step 3B.3, Step 3B.4, Step 4 blocks)
+#   skills/umbrella/scripts/helpers.md (emit-output subsection)
 #
 # Closes #602 — out-of-scope observation surfaced during /implement for #571
 # (which fixed the original SKILL.md/helpers.md drift). Extended for #719 to
@@ -34,7 +34,7 @@
 # target (parallel to test-umbrella-helpers and test-umbrella-parse-args).
 #
 # Run manually:
-#   bash .claude/skills/umbrella/scripts/test-umbrella-emit-output-contract.sh
+#   bash skills/umbrella/scripts/test-umbrella-emit-output-contract.sh
 #
 # Exits 0 on success, 1 on the first failed assertion.
 

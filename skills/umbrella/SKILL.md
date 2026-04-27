@@ -1,6 +1,6 @@
 ---
 name: umbrella
-description: "Use when planning or breaking up a task or plan into GitHub issues — auto-classifies one-shot vs multi-piece work, delegates to /issue (batch mode plus an umbrella tracking issue), wires hard GitHub native block dependencies into an execution DAG, and back-links each child issue to the umbrella."
+description: "Use when planning or breaking up a task or plan into GitHub issues — auto-classifies one-shot vs multi-piece, delegates to /issue (batch mode plus umbrella tracking issue), and wires native blocked-by edges plus child→umbrella back-links."
 argument-hint: "[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] <task description or empty to deduce from context>"
 allowed-tools: Bash, Read, Skill
 ---
@@ -38,7 +38,7 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 ## Step 0 — Setup
 
 ```bash
-$PWD/.claude/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
+${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
 ```
 
 Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `INPUT_FILE` (path — empty if `--input-file` not specified), `UMBRELLA_SUMMARY_FILE` (path — empty if `--umbrella-summary-file` not specified), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
@@ -131,7 +131,7 @@ If decomposition produces fewer than 2 pieces, fall back to one-shot: print thre
 Render the batch-input markdown file:
 
 ```bash
-$PWD/.claude/skills/umbrella/scripts/render-batch-input.sh --tmpdir "$UMBRELLA_TMPDIR" --pieces-file "$UMBRELLA_TMPDIR/pieces.json"
+${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/render-batch-input.sh --tmpdir "$UMBRELLA_TMPDIR" --pieces-file "$UMBRELLA_TMPDIR/pieces.json"
 ```
 
 Write `$UMBRELLA_TMPDIR/pieces.json` (a JSON array of `{title, body, depends_on: [int,...]}` objects in pieces order) BEFORE invoking the renderer using the Write tool. The renderer emits `BATCH_INPUT_FILE=<path>`, `PIECES_TOTAL=<N>`, plus per-piece `PIECE_<i>_TITLE` and `PIECE_<i>_DEPENDS_ON` lines. On non-zero exit, print `ERROR=` and abort.
@@ -163,7 +163,7 @@ The bypass procedure:
 4. **Invoke `helpers.sh wire-dag --no-backlinks`** (one Bash tool call):
 
    ```bash
-   $PWD/.claude/skills/umbrella/scripts/helpers.sh wire-dag --no-backlinks --tmpdir "$UMBRELLA_TMPDIR" --umbrella '' --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
+   ${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/helpers.sh wire-dag --no-backlinks --tmpdir "$UMBRELLA_TMPDIR" --umbrella '' --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
    ```
 
    `--no-backlinks` instructs `wire-dag` to (a) probe the first child in `children.tsv` for API availability instead of the (empty) umbrella; (b) skip the entire back-link emission loop — no native-relationship `gh api` calls and no `gh issue comment` posts. Edge wiring + cycle-check + idempotency + per-edge counters are unchanged. `wire-dag` still emits `EDGES_*` and `BACKLINKS_*` counters on stdout, but per the schema rule below the orchestrator does NOT propagate them to `output.kv` on this path. On non-zero exit, log `ERROR=` and continue — partial wiring is acceptable.
@@ -191,7 +191,7 @@ Skip this entire sub-step when `DRY_RUN=true` (no real children exist on GitHub 
 Render the umbrella issue body:
 
 ```bash
-$PWD/.claude/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "<summary-path>" --children-file "$UMBRELLA_TMPDIR/children.tsv"
+${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/render-umbrella-body.sh --tmpdir "$UMBRELLA_TMPDIR" --summary-file "<summary-path>" --children-file "$UMBRELLA_TMPDIR/children.tsv"
 ```
 
 Where `<summary-path>` is `$UMBRELLA_SUMMARY_FILE` in pre-decomposed-input mode and `$UMBRELLA_TMPDIR/summary.txt` in normal mode. Write `$UMBRELLA_TMPDIR/children.tsv` (one row per child: `<number>\t<title>\t<url>`, in pieces order) BEFORE invoking the renderer. The renderer emits `UMBRELLA_BODY_FILE=<path>` and `UMBRELLA_TITLE_HINT=<derived umbrella title from the first sentence of the summary>`.
@@ -214,7 +214,7 @@ Skip this entire sub-step when `DRY_RUN=true` (no children actually exist on Git
 Then run the wiring + back-links coordinator:
 
 ```bash
-$PWD/.claude/skills/umbrella/scripts/helpers.sh wire-dag --tmpdir "$UMBRELLA_TMPDIR" --umbrella "$UMBRELLA_NUMBER" --umbrella-title "$UMBRELLA_TITLE" --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
+${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/helpers.sh wire-dag --tmpdir "$UMBRELLA_TMPDIR" --umbrella "$UMBRELLA_NUMBER" --umbrella-title "$UMBRELLA_TITLE" --children-file "$UMBRELLA_TMPDIR/children.tsv" --edges-file "$UMBRELLA_TMPDIR/proposed-edges.tsv" --repo "$REPO"
 ```
 
 `helpers.sh wire-dag` is a coordinator that, internally, (a) builds the existing-edges TSV from the **full reachable `blocked_by` subgraph** (transitive closure from children + both endpoints of every proposed edge — issue #718; pre-#718 the TSV was seeded only from each child's `blocked_by`, missing cycles closing through non-child intermediaries), bounded by `WIRE_DAG_TRAVERSAL_NODE_CAP` (default 200), (b) runs `helpers.sh check-cycle` on the union of existing + proposed edges to refuse any edge that would create a cycle, (c) adds each surviving new edge via the GitHub dependency-API adapter, and (d) posts a back-link comment (`Part of umbrella #M — <umbrella-title>`) on each child unless an existing back-link comment matching the literal prefix <code>Part of umbrella #${UMBRELLA} — </code> is already present in the child's comments (issue #716 — the prior `blocked_by` native-detection probe was unreachable because no path created the matching native edge in the direction that probe tested, so re-runs accumulated duplicate comments). The comment-existence idempotency check runs unconditionally on the back-link loop, independent of `api_available` — the comments API is a separate GitHub surface from the dependencies API; on transient `gh api` failure the check fails open (post the comment).
@@ -224,7 +224,7 @@ Parse stdout for `EDGES_ADDED`, per-edge `EDGE_<j>_BLOCKER`, `EDGE_<j>_BLOCKED`,
 ## Step 4 — Emit Output
 
 ```bash
-$PWD/.claude/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
+${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/helpers.sh emit-output --kv-file "$UMBRELLA_TMPDIR/output.kv"
 ```
 
 Write `$UMBRELLA_TMPDIR/output.kv` (one `KEY=VALUE` line per fact) BEFORE invoking the emitter, using the Write tool. The orchestrator owns completeness (it authored `output.kv`); the emitter validates the KV grammar (well-formed `KEY=VALUE` lines, no embedded newlines, no duplicate keys) and streams to stdout in file order. The canonical order shown below is author guidance for composing `output.kv`, not a guarantee from `emit-output`:

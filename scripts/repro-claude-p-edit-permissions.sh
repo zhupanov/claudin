@@ -7,7 +7,7 @@
 #
 # The script invokes `claude -p` as a subprocess against the project's
 # permission stack (settings.json + settings.local.json + PreToolUse hooks),
-# asks the model to perform a trivial edit on .claude/skills/umbrella/SKILL.md,
+# asks the model to perform a trivial edit on skills/umbrella/SKILL.md,
 # and classifies the outcome by combining a stall-regex grep on combined
 # stdout+stderr with a `git diff` ground-truth check on the edit target.
 #
@@ -38,7 +38,7 @@ REPRO_WORKDIR=""
 STALL_SIGNATURE="Edit tool is repeatedly returning"
 
 # Edit target (must be tracked in git so `git checkout --` can restore it).
-EDIT_TARGET=".claude/skills/umbrella/SKILL.md"
+EDIT_TARGET="skills/umbrella/SKILL.md"
 
 # Variant outcome bookkeeping.
 VARIANT=""
@@ -247,7 +247,7 @@ stage_variant() {
       SETTINGS_BACKUP=".claude/settings.json.repro.bak"
       cp -f .claude/settings.json "$SETTINGS_BACKUP"
       local staging=".claude/settings.json.repro.new"
-      jq -n --arg p "$REPO_ROOT" '{permissions:{allow:["Read(\($p)/.claude/skills/**)","Edit(\($p)/.claude/skills/**)","Write(\($p)/.claude/skills/**)"]}}' \
+      jq -n --arg p "$REPO_ROOT" '{permissions:{allow:["Read(\($p)/skills/**)","Edit(\($p)/skills/**)","Write(\($p)/skills/**)"]}}' \
         > "$staging"
       mv -f "$staging" .claude/settings.json
       ;;

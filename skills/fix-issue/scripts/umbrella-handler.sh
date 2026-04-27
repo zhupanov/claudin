@@ -17,7 +17,7 @@
 # Detection (FINDING_13 — body primary, title fallback):
 #   1. Body literal "Umbrella tracking issue." (anywhere in body) — primary
 #      signal. /umbrella-rendered umbrellas always emit this literal as the
-#      first paragraph (see .claude/skills/umbrella/scripts/render-umbrella-body.sh).
+#      first paragraph (see skills/umbrella/scripts/render-umbrella-body.sh).
 #   2. Title prefix "Umbrella:" or "Umbrella —" (case-sensitive, anchored at
 #      start) — fallback for hand-authored umbrellas like #348 whose body is
 #      free-form prose with the marker missing. Tool-created umbrellas may also

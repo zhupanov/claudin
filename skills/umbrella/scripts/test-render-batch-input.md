@@ -7,7 +7,7 @@
 **CLI**: no flags. Run manually:
 
 ```bash
-bash .claude/skills/umbrella/scripts/test-render-batch-input.sh
+bash skills/umbrella/scripts/test-render-batch-input.sh
 ```
 
 **Cases**:

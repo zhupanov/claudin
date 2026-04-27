@@ -35,10 +35,12 @@
 "Skill(larch:loop-review)",
 "Skill(larch:research)",
 "Skill(larch:review)",
+"Skill(larch:umbrella)",
 "Skill(loop-improve-skill)",
 "Skill(loop-review)",
 "Skill(research)",
-"Skill(review)"
+"Skill(review)",
+"Skill(umbrella)"
 ```
 
 Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, all `larch:`-prefixed entries sort **before** `Skill(loop-review)`, `Skill(research)`, and `Skill(review)` (whose first letters are `l`-then-`o`, `r`, and `r`). Sort the whole block with `sort -u` to verify if you extend it. This section reflects currently-documented Claude Code behavior; consult the upstream docs above if matching semantics change in a future release.
@@ -80,7 +82,7 @@ Project settings cannot be silently downgraded by user-level files for entries t
 
 ### Implication for the umbrella stall (issue #566)
 
-Because the bare `"Edit"` allow rule IS honored by `claude -p` and `defaultMode: bypassPermissions` IS in effect, the umbrella stall reported in [#566](https://github.com/zhupanov/larch/issues/566) (where `/loop-improve-skill /umbrella` iteration 1 hit a permission-prompt stall on `Edit` against `.claude/skills/umbrella/SKILL.md`) is **not caused by missing or insufficient on-disk permissions**. The decisive remedy is the kernel-side fix tracked in [#585](https://github.com/zhupanov/larch/issues/585) (pin the permission contract at the `invoke_claude_p` invocation site, e.g., via explicit `--permission-mode bypassPermissions` and/or `--allowedTools` flags), which removes the dependence on settings discovery entirely.
+Because the bare `"Edit"` allow rule IS honored by `claude -p` and `defaultMode: bypassPermissions` IS in effect, the umbrella stall reported in [#566](https://github.com/zhupanov/larch/issues/566) (where `/loop-improve-skill /umbrella` iteration 1 hit a permission-prompt stall on `Edit` against `skills/umbrella/SKILL.md`) is **not caused by missing or insufficient on-disk permissions**. The decisive remedy is the kernel-side fix tracked in [#585](https://github.com/zhupanov/larch/issues/585) (pin the permission contract at the `invoke_claude_p` invocation site, e.g., via explicit `--permission-mode bypassPermissions` and/or `--allowedTools` flags), which removes the dependence on settings discovery entirely.
 
 This audit therefore does **not** modify `.claude/settings.json`. The settings are correct as-shipped; no path-qualified `Edit($PWD/.claude/skills/**)` entry is needed.
 
