@@ -28,6 +28,10 @@
 #      - --plugin-dir "$CLAUDE_PLUGIN_ROOT" (FINDING_7)
 #      - prompt-file on STDIN via < $prompt_file (FINDING_9)
 #      - stderr to <out>.stderr sidecar via 2> $stderr_file (FINDING_10)
+#      - --output-format stream-json --verbose (NDJSON capture so every
+#        assistant turn — including Step 0's success breadcrumb — reaches
+#        iter-N-out.txt; default-mode claude -p would emit only the final
+#        assistant message text and miss the Step 0 sentinel)
 #   H) SETUP_SENTINEL is assigned the literal `find & lock — found and locked`
 #      on a single line. Anchored on the executable assignment line, not the
 #      header comments where the same prose appears (driver.sh:27, :231).
@@ -139,6 +143,21 @@ if grep -qE '2> "\$stderr_file"' "$DRIVER_SH"; then
   pass "G: driver.sh uses stderr sidecar via 2> \"\$stderr_file\" (FINDING_10)"
 else
   fail "G: driver.sh missing stderr sidecar (FINDING_10)"
+fi
+# G-stream-json: NDJSON capture so every assistant turn (Step 0 success
+# breadcrumb included) reaches iter-N-out.txt. Default-mode claude -p emits
+# only the final assistant message text and misses the Step 0 sentinel.
+# Pinned via two independent grep checks so the order of flags in the live
+# argv may evolve without breaking the assertion.
+if grep -qF -- '--output-format stream-json' "$DRIVER_SH"; then
+  pass "G: driver.sh passes --output-format stream-json to claude -p"
+else
+  fail "G: driver.sh missing --output-format stream-json on claude -p invocation"
+fi
+if grep -qF -- '--verbose' "$DRIVER_SH"; then
+  pass "G: driver.sh passes --verbose to claude -p (required by claude -p stream-json mode)"
+else
+  fail "G: driver.sh missing --verbose flag (required by claude -p stream-json mode)"
 fi
 
 # --- Assertion H: SETUP_SENTINEL live assignment line (anchors on the

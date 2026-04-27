@@ -36,14 +36,23 @@
 #   - LOOP_TMPDIR MUST begin with /tmp/ or /private/tmp/ AND MUST NOT contain
 #     `..` as a path component.
 #   - Per-iteration artifacts (iter-N-out.txt, iter-N-out.txt.stderr) accumulate
-#     in LOOP_TMPDIR. The per-iteration `claude -p` is redirected so that its
-#     raw stdout goes to iter-N-out.txt, its raw stderr (and any
-#     `claude-iter-N: TIMED OUT after Xs` watcher diagnostic) goes to
-#     iter-N-out.txt.stderr. Driver stdout (captured by the caller's
-#     `> LOG_PATH 2>&1` redirect) carries only driver-emitted breadcrumbs and
-#     the `LOOP_TMPDIR=` cleanup line — never raw child stdout/stderr.
+#     in LOOP_TMPDIR. The per-iteration `claude -p` runs with
+#     `--output-format stream-json --verbose`, so iter-N-out.txt is a newline-
+#     delimited stream of JSON objects (one JSON object per assistant turn /
+#     tool_use / system / result event). The breadcrumb text appears verbatim
+#     within `.message.content[0].text` of `assistant`-typed JSON lines, so the
+#     existing literal-substring grep keeps matching the Step 0 sentinel after
+#     the format switch. iter-N-out.txt.stderr captures raw stderr (including
+#     any `claude-iter-N: TIMED OUT after Xs` watcher diagnostic). Driver stdout
+#     (captured by the caller's `> LOG_PATH 2>&1` redirect) carries only
+#     driver-emitted breadcrumbs and the `LOOP_TMPDIR=` cleanup line — never
+#     raw child stdout/stderr.
 #   - All `claude -p` invocations follow loop-review's contract:
-#     --plugin-dir, prompt on STDIN (avoids ARG_MAX), stderr sidecar.
+#     --plugin-dir, prompt on STDIN (avoids ARG_MAX), stderr sidecar. This
+#     driver additionally pins `--output-format stream-json --verbose` so the
+#     full assistant-turn stream reaches iter-N-out.txt rather than just the
+#     final assistant message text (which was the default-mode behavior and
+#     missed Step 0's success breadcrumb).
 #   - $LOOP_TMPDIR retention rule: cleaned via EXIT trap when
 #     LOOP_PRESERVE_TMPDIR=false (clean success, including --max-iterations
 #     cap-hit which is itself a clean exit); retained when
@@ -116,9 +125,16 @@ invoke_claude_p_skill() {
   : > "$out_file"
   : > "$stderr_file"
 
+  # `--output-format stream-json --verbose` makes claude -p emit a newline-
+  # delimited stream of JSON objects (system init / assistant turns / tool_use
+  # events / result), where every assistant turn appears in `.message.content[0]
+  # .text` verbatim. Default-mode `claude -p` would emit only the final
+  # assistant message text — losing the Step 0 success breadcrumb that the
+  # outer Step-3 termination grep depends on. `--verbose` is required by
+  # Claude Code to enable stream-json under `-p`.
   (
     cd "$REPO_ROOT"
-    "$claude_bin" -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" \
+    "$claude_bin" -p --plugin-dir "$CLAUDE_PLUGIN_ROOT" --output-format stream-json --verbose \
       < "$prompt_file" > "$out_file" 2> "$stderr_file" &
     pid=$!
     elapsed=0
@@ -241,6 +257,16 @@ breadcrumb_done "2: session setup — LOOP_TMPDIR=${LOOP_TMPDIR}"
 # Chosen over the Step 1 setup breadcrumb because Step 0's success line is
 # explicitly mandated by /fix-issue SKILL.md while Step 1's breadcrumb is
 # only an implicit progress-reporting convention.
+#
+# Format note: iter-N-out.txt is now newline-delimited JSON (stream-json mode;
+# see invoke_claude_p_skill above). The breadcrumb text appears verbatim
+# within `.message.content[0].text` on the JSON line for each `assistant`-
+# typed turn — `&` and the em-dash stay as raw UTF-8 (Anthropic's stream-json
+# encoder does not HTML-escape these), and the full per-turn text arrives in
+# one JSON object (not chunked across delta events). So `grep -aF` for the
+# literal substring still wins on the file even though the bytes around it are
+# JSON envelope. The `-a` flag is added below to force text-mode interpretation
+# in case grep mis-detects binary on the JSON sidecar.
 SETUP_SENTINEL='find & lock — found and locked'
 
 # Compose the per-iteration prompt once (identical across iterations).
@@ -284,19 +310,21 @@ for (( ITER=1; ITER<=MAX_ITERATIONS; ITER++ )); do
   # Each sub-sentinel is anchored with the literal `0: find & lock — ` step
   # prefix so user-data-bearing $ERROR text in one branch (e.g., the exit-3
   # message body) cannot accidentally trigger a different branch's keyword.
-  if ! grep -F -q "$SETUP_SENTINEL" "$ITER_OUT_FILE"; then
-    if grep -F -q '0: find & lock — no approved issues found' "$ITER_OUT_FILE"; then
+  # `-a` forces text-mode interpretation so grep does not silently classify the
+  # JSON sidecar as binary if a stream-json byte sequence trips its heuristic.
+  if ! grep -aF -q "$SETUP_SENTINEL" "$ITER_OUT_FILE"; then
+    if grep -aF -q '0: find & lock — no approved issues found' "$ITER_OUT_FILE"; then
       breadcrumb_done "3: iteration ${ITER} — /fix-issue reported no work to do. Loop complete."
       TERMINATION_REASON="no eligible issues (clean exhaustion)"
-    elif grep -F -q '0: find & lock — error:' "$ITER_OUT_FILE"; then
+    elif grep -aF -q '0: find & lock — error:' "$ITER_OUT_FILE"; then
       breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 reported an error; retaining LOOP_TMPDIR for inspection. Stopping loop."
       LOOP_PRESERVE_TMPDIR="true"
       TERMINATION_REASON="Step 0 error (likely transient)"
-    elif grep -F -q '0: find & lock — lock failed' "$ITER_OUT_FILE"; then
+    elif grep -aF -q '0: find & lock — lock failed' "$ITER_OUT_FILE"; then
       breadcrumb_warn "3: iteration ${ITER} — /fix-issue Step 0 lock acquisition failed; retaining LOOP_TMPDIR for inspection. Stopping loop."
       LOOP_PRESERVE_TMPDIR="true"
       TERMINATION_REASON="Step 0 lock failure (concurrent runner or partial-state)"
-    elif grep -F -q '0: find & lock — umbrella' "$ITER_OUT_FILE"; then
+    elif grep -aF -q '0: find & lock — umbrella' "$ITER_OUT_FILE"; then
       # Umbrella-terminal Step 0 paths: all-closed/finalize OR
       # no-eligible-child. /loop-fix-issue drives no-arg /fix-issue, which
       # auto-pick excludes umbrellas from per FINDING_4 from the umbrella-PR
