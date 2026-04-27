@@ -496,7 +496,7 @@ case "$SUBCMD" in
         [ -z "$child_num" ] && continue
         native="false"
         if [ "$api_available" = "true" ]; then
-          if gh api "/repos/$REPO/issues/${child_num}/dependencies/blocked_by" --jq ".[] | select(.number == ${UMBRELLA})" 2>/dev/null | grep -q .; then
+          if gh api "/repos/$REPO/issues/${child_num}/dependencies/blocked_by" --paginate --jq ".[] | select(.number == ${UMBRELLA})" 2>/dev/null | grep -q .; then
             native="true"
           fi
         fi
