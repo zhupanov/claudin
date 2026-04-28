@@ -230,13 +230,13 @@ assert_contains "c3: one-shot failed" \
     '**⚠ /umbrella: failed — <error>**' \
     "$STEP4_BLOCK"
 assert_contains "c4: multi-piece success" \
-    '✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>' \
+    '✅ /umbrella: <T> pieces, filed umbrella #<M> with <C> children (<D> deduplicated), <E> dependency edge(s), <B> back-link(s) — <umbrella-url>' \
     "$STEP4_BLOCK"
 assert_contains "c5: multi-piece dry-run" \
-    'ℹ /umbrella: dry-run — would file umbrella with <N> children' \
+    'ℹ /umbrella: dry-run — <T> pieces, would file umbrella with <N> children' \
     "$STEP4_BLOCK"
 assert_contains "c6: multi-piece partial — fallback (no UMBRELLA_FAILURE_REASON)" \
-    '**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**' \
+    '**⚠ /umbrella: <T> pieces → <N> children created but umbrella creation failed. Children remain unlinked.**' \
     "$STEP4_BLOCK"
 # (c6b) The parenthetical variant of the multi-piece partial breadcrumb, rendered
 # when emit-output's `output.kv` carries `UMBRELLA_FAILURE_REASON`. SKILL.md Step 4
@@ -244,16 +244,16 @@ assert_contains "c6: multi-piece partial — fallback (no UMBRELLA_FAILURE_REASO
 # fallback is pinned by c6; without c6b, a future edit could remove or reword
 # only the parenthetical variant unnoticed.
 assert_contains "c6b: multi-piece partial — with UMBRELLA_FAILURE_REASON parenthetical" \
-    '**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**' \
+    '**⚠ /umbrella: <T> pieces → <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**' \
     "$STEP4_BLOCK"
 assert_contains "c7: multi-piece children-batch-failed (umbrella never attempted)" \
-    '**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**' \
+    '**⚠ /umbrella: <T> pieces → /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**' \
     "$STEP4_BLOCK"
 # (c8) created-eq-1 bypass breadcrumb (closes #717). Pinned so any future edit
-# that renames the bypass shape's "(multi-piece downgraded — created-eq-1, ...)"
+# that renames the bypass shape's "(downgraded — created-eq-1, ...)"
 # parenthetical or its surrounding template breaks CI.
 assert_contains "c8: created-eq-1 bypass — multi-piece downgraded one-shot" \
-    '✅ /umbrella: filed #<N> — <url> (multi-piece downgraded — created-eq-1, <D> sibling(s) deduplicated to existing issues, no umbrella issue created)' \
+    '✅ /umbrella: <T> pieces → 1 created, <D> deduplicated; filed #<N> — <url> (downgraded — created-eq-1, no umbrella issue created)' \
     "$STEP4_BLOCK"
 
 # (a3) Step 4 schema parenthetical for UMBRELLA_DOWNGRADE — must enumerate all 3
