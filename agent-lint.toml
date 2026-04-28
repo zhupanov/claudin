@@ -19,10 +19,12 @@ suppress = [
   "nested-ref-deep",
   # tools-unknown (S040) is suppressed because agent-lint 2.3.2's built-in
   # tool registry predates the `Monitor` tool (introduced in Claude Code
-  # after the agent-lint release shipped). Suppression is global because
-  # agent-lint 2.3.2 does not support per-file or per-token exceptions
-  # for this rule. Revisit when agent-lint is upgraded — once the registry
-  # includes Monitor, remove this entry.
+  # after the agent-lint release shipped). `Monitor` is a first-party
+  # Claude Code tool used by loop-driver SKILL.md files for passive
+  # log-tailing observability. Suppression is global because agent-lint
+  # 2.3.2 does not support per-file or per-token exceptions for this rule.
+  # Revisit when agent-lint is upgraded — once the registry includes
+  # Monitor, remove this entry.
   "tools-unknown",
 ]
 
@@ -243,8 +245,6 @@ suppress = [
 # scripts/test-references-headers.md (sibling contract), matching the
 # same Makefile-only pattern as the other test-* harnesses above.
 #
-# (test-lib-halt-ledger target).
-#
 # scripts/test-orchestrator-scope-sync.sh is the cross-validation harness
 # (closes #285) that asserts exact set equality between the ORCHESTRATORS /
 # DELEGATORS arrays in scripts/test-anti-halt-banners.sh and the bulleted
@@ -309,7 +309,7 @@ suppress = [
 # (closes #419 under umbrella #413). Referenced only from Makefile
 # (eval-research target — NOT a lint prerequisite) and
 # scripts/eval-research.md (sibling contract); matches the same
-# Makefile-only pattern as the test-* harnesses and halt-rate-probe.
+# Makefile-only pattern as the test-* harnesses.
 # scripts/test-eval-set-structure.sh is the offline structural regression
 # harness for the eval set + harness; referenced only from Makefile
 # (test-eval-set-structure standalone target — also NOT a lint prerequisite,
@@ -495,7 +495,7 @@ exclude = [
   # scripts are referenced only from Makefile (eval-research target,
   # test-eval-set-structure standalone target — neither is a lint
   # prerequisite) and from their sibling .md contracts. Same Makefile-only
-  # pattern as the test-* harnesses and halt-rate-probe above.
+  # pattern as the test-* harnesses above.
   "scripts/eval-research.sh",
   "scripts/test-eval-set-structure.sh",
   # scripts/repro-claude-p-edit-permissions.sh is the opt-in operator
