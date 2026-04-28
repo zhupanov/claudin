@@ -238,7 +238,7 @@ External reviewer output collection, validation, and retry are handled by the sh
    Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. **In slice mode**, external reviewers (Codex, Cursor) produce **dual-list output** with '### In-Scope Findings' and '### Out-of-Scope Observations' section headers — parse both sections. Section-header fail-open rules: (1) if exactly one section header is present, the missing section is interpreted as empty (NOT a parse error); (2) if both section headers are absent AND the entire output is the literal 'NO_ISSUES_FOUND', the reviewer reported nothing — proceed; (3) if both section headers are absent AND the output is not 'NO_ISSUES_FOUND' (legacy unsectioned output), treat the entire body as in-scope (preserves backward compatibility with the diff-mode single-list contract). **In diff mode**, external reviewers produce **single-list output** — treat their entire output as in-scope findings.
 3. Merge external reviewer in-scope findings (and any Claude fallback findings when externals were unavailable) into the Claude in-scope findings. **In slice mode**, also merge external reviewer OOS observations into the Claude OOS observations pool — both lists flow through the same dedup pipeline. Deduplicate in-scope findings and OOS observations separately. If the same issue appears in both lists from different reviewers, merge under the in-scope finding.
 
-OOS observations are only collected in round 1 — rounds 2+ (diff mode only) use a Claude-only reviewer without OOS collection.
+OOS observations are only collected in round 1 — rounds 2+ (diff mode only) use a single Cursor reviewer (Claude Code Reviewer fallback when `cursor_available` is false) without OOS collection.
 
 ### 3b — Check for Zero Findings
 
@@ -252,7 +252,7 @@ Merge findings from all reviewers into a single deduplicated list, grouped by fi
 
 **In round 1**: **MANDATORY — READ ENTIRE FILE** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` and execute its body — three-voter setup with proportionality guidance, ballot file handling rule (Write tool, not `cat`-heredoc), parallel launch order (Cursor → Codex → Claude subagent), threshold rules + competition scoring per `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`, the zero-accepted-findings short-circuit to **Step 4**, the OOS-accepted-by-vote artifact write to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` (only when `SESSION_ENV_PATH` is non-empty AND slice mode is OFF — slice mode bypasses this artifact and files directly via /umbrella at Step 4), and the save-not-accepted-IDs rule used to suppress re-raised findings in rounds 2+ (diff mode only).
 
-**In rounds 2+ (diff mode only)**: Skip voting — accept all Claude-only findings directly, **except** findings that match round-1 rejected findings. **Do NOT load** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` in rounds 2+ — the body is round-1-only and would waste tokens. Same `Do NOT load` guidance applies on the Step 3b zero-findings short-circuit.
+**In rounds 2+ (diff mode only)**: Skip voting — accept all single-reviewer findings directly, **except** findings that match round-1 rejected findings. **Do NOT load** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` in rounds 2+ — the body is round-1-only and would waste tokens. Same `Do NOT load` guidance applies on the Step 3b zero-findings short-circuit.
 
 ### 3d — Print Round Summary
 
@@ -282,7 +282,7 @@ After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run
 
 **In diff mode**, increment the round number. Go back to **Step 1** (gather the updated diff) and **Step 2** (launch reviewers again).
 
-**Round 2+ optimization**: Only launch the **1 Claude Code Reviewer subagent** — skip Codex and Cursor.
+**Round 2+ optimization**: Only launch **Cursor** (if `cursor_available`; else 1 Claude Code Reviewer subagent as fallback) — skip Codex and the round-1 three-reviewer panel. Use the same diff-mode Cursor Bash block from Step 2 (without the competition notice — there is no voting panel in rounds 2+). If Cursor is unavailable, launch 1 Claude Code Reviewer subagent using the same archetype and diff-mode context as round 1 (without the competition notice). In round 2+ Step 3a, collect from whichever single reviewer was launched: Cursor output via `collect-reviewer-results.sh` (with Runtime Timeout Fallback on failure — flip `cursor_available=false`, retry the round with Claude Code Reviewer subagent), or Claude subagent output directly.
 
 ### 3g — Safety Limit
 
