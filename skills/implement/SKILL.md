@@ -82,6 +82,7 @@ Step Name Registry:
 | 7a.r | rebase |
 | 8 | version bump |
 | 8a | changelog |
+| 8b | rebase |
 | 9a.1 | OOS issues |
 | 9 | create PR |
 | 10 | CI monitor |
@@ -98,9 +99,9 @@ Step Name Registry:
 
 When `debug_mode=false` (default): empty `description` on Bash calls; terse 3-5-word `description` on Agent calls; no explanatory prose between tool outputs beyond the preserved categories below. When `debug_mode=true`: descriptive `description` everywhere; print full explanatory text between calls.
 
-**Preserved (never suppressed regardless of `debug_mode`):** step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`/`⏭️`) — except the three rebase-skip variants in Suppressed below; final completion (Step 18); warning / error lines (`**⚠ ...`); structured summaries (voting tallies, scoreboards, round summaries, final reports); diagrams; implementation plans; dialectic resolutions; accepted / rejected findings; out-of-scope observations; PR body sections.
+**Preserved (never suppressed regardless of `debug_mode`):** step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`/`⏭️`) — except the four rebase-skip variants in Suppressed below; final completion (Step 18); warning / error lines (`**⚠ ...`); structured summaries (voting tallies, scoreboards, round summaries, final reports); diagrams; implementation plans; dialectic resolutions; accepted / rejected findings; out-of-scope observations; PR body sections.
 
-**Suppressed (only when `debug_mode=false`):** explanatory prose, script paths, inter-call rationale, per-reviewer individual completion messages (replaced by status table in child skills), these three rebase-skip variants: `⏩ 1.m: design plan | update main — already at latest`, `⏩ 1.r: design plan | rebase — already pushed`, `⏩ 1.r: design plan | rebase — already at latest main`. Non-rebase `⏩` skip messages and rebase outcomes inside the Rebase + Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
+**Suppressed (only when `debug_mode=false`):** explanatory prose, script paths, inter-call rationale, per-reviewer individual completion messages (replaced by status table in child skills), these four rebase-skip variants: `⏩ 1.m: design plan | update main — already at latest`, `⏩ 1.r: design plan | rebase — already pushed`, `⏩ 1.r: design plan | rebase — already at latest main`, `⏩ 8b: rebase — already at latest main`. Non-rebase `⏩` skip messages and rebase outcomes inside the Rebase + Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
 
 Verbosity suppression is prompt-enforced and best-effort; may degrade in very long sessions.
 
@@ -734,7 +735,7 @@ Write to `$IMPLEMENT_TMPDIR/anchor-sections/diagrams.md`. If `ISSUE_NUMBER` is s
 
 ### Rebase onto latest main (before version bump)
 
-Final safety net before version bump + PR creation. `--skip-if-pushed` skips this when the branch is already on origin — freshness of already-pushed branches is the CI+rebase+merge loop's responsibility (Step 12).
+Safety net before version bump. `--skip-if-pushed` short-circuits this when the branch is already on origin; Step 8b (a separate inline rebase that does NOT use `--skip-if-pushed`) ensures already-pushed branches still rebase onto fresh main right before PR creation, with Step 12 remaining the last-chance enforcement at merge time.
 
 Apply the Rebase Checkpoint Macro with `<step-prefix>=7a.r` and `<short-name>=code flow`.
 
@@ -746,11 +747,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
 
 Parse `HAS_BUMP`, `COMMITS_BEFORE`, `STATUS` (`ok|missing_main_ref|git_error` per #172). If `STATUS != ok`, the pre-mode count is untrustworthy — log `**⚠ 8: version bump — pre-check STATUS=$STATUS, commit count may be unreliable. Continuing.**` to `Warnings` and proceed. Step 8 is pre-PR and permissive; last-chance enforcement is in the Rebase + Re-bump Sub-procedure step 4 invoked by Step 12 (step12 family), which hard-bails on non-`ok` STATUS from either pre- or post-check.
 
-**If `HAS_BUMP=false`**: print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 9.
+**If `HAS_BUMP=false`**: print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 8b. The freshness rebase at Step 8b still runs so resumed Branch 1/2/3 runs in repos without a `/bump-version` skill are refreshed before PR creation; Step 8a (CHANGELOG amend) is bypassed because there is no bump commit to amend.
 
 **If `HAS_BUMP=true`**:
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: `HAS_BUMP=false` skips to Step 9 per the control-flow directive above, which overrides this rule.)
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: `HAS_BUMP=false` skips to Step 8b per the control-flow directive above, which overrides this rule.)
 
 1. Invoke `/bump-version` via the Skill tool.
 2. **Capture the reasoning file path**: when invoked via Skill tool, `IMPLEMENT_TMPDIR` does not always propagate to the skill's bash env, so `classify-bump.sh` may write `bump-version-reasoning.md` to `${TMPDIR:-/tmp}`. The authoritative path is on stdout as `REASONING_FILE=<path>`. Parse and save as `BUMP_REASONING_FILE` for step 3b, Step 9a, and the sub-procedure step 6.
@@ -761,7 +762,7 @@ Parse `HAS_BUMP`, `COMMITS_BEFORE`, `STATUS` (`ok|missing_main_ref|git_error` pe
    **MANDATORY — READ ENTIRE FILE** before post-check evaluation (Block α + Block γ): `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/bump-verification.md`. Contains the STATUS-handling matrix (pre-check degraded → skip numeric; `git_error` / `missing_main_ref` / `ok`+`VERIFIED=false` / `ok`+`VERIFIED=true`) and the reasoning-file sentinel defense-in-depth procedure for step 3b. **Do NOT load** when `HAS_BUMP=false`.
 3b. **Sentinel-file defense-in-depth** (#160): execute Block γ from `bump-verification.md` against `$BUMP_REASONING_FILE`. Advisory only — do NOT bail.
 
-**Important**: at PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 8a after `/bump-version` returns. No additional commits may occur between Step 8a and Step 9. After PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the sub-procedure). Branch history between PR creation and merge may temporarily contain zero or multiple bump commits; the invariant is Load-Bearing Invariant #1 (terminal bump commit on HEAD based on latest `origin/main` at merge time), enforced strictly by Step 12 and best-effort by Step 10.
+**Important**: at PR creation time there must be exactly ONE version bump commit as HEAD. Proceed immediately to Step 8a after `/bump-version` returns. No additional commits may be created between Step 8a and Step 9; Step 8b's rebase may rewrite the bump commit's parent (replaying the same commit on top of fresh main) but does NOT introduce new commits, so the single-bump-on-HEAD invariant is preserved. After PR creation, Steps 10 and 12's rebase handlers may repeatedly drop and recreate this bump commit as main advances (via the sub-procedure). Branch history between PR creation and merge may temporarily contain zero or multiple bump commits; the invariant is Load-Bearing Invariant #1 (terminal bump commit on HEAD based on latest `origin/main` at merge time), enforced strictly by Step 12 and best-effort by Step 10.
 
 ### Anchor-section fragment — `version-bump-reasoning`
 
@@ -771,7 +772,7 @@ Compose the `version-bump-reasoning` fragment from the contents of `$BUMP_REASON
 
 ## Step 8a — CHANGELOG Update
 
-Skip and proceed to Step 9 if `CHANGELOG.md` does not exist in the project root (print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`) or if Step 8 was skipped (`HAS_BUMP=false`; print `⏩ 8a: changelog — skipped (no version bump) (<elapsed>)`).
+Skip and proceed to Step 8b if `CHANGELOG.md` does not exist in the project root (print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`). The freshness rebase at Step 8b still runs on this path so resumed Branch 1/2/3 runs are refreshed before PR creation. (Step 8's `HAS_BUMP=false` directive bypasses Step 8a entirely and skips directly to Step 8b — there is no CHANGELOG amend without a bump commit to amend.)
 
 Otherwise: read `CHANGELOG.md` and `NEW_VERSION` (from `/bump-version` output in Step 8). Compose a brief changelog entry using the Summary bullets from the implementation (same 1-3 bullets as Step 9a's PR body `## Summary`). Today's date. Format:
 
@@ -795,6 +796,53 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/git-amend-add.sh CHANGELOG.md
 Keeps the bump commit as the single HEAD commit containing both the version bump and the changelog update.
 
 Print: `✅ 8a: changelog — updated for v<NEW_VERSION> (<elapsed>)`
+
+## Step 8b — Rebase onto latest main (before PR creation)
+
+Final freshness gate before Step 9. Unlike Step 7a.r's macro call, Step 8b does NOT use `--skip-if-pushed` — resumed Branch 1/2/3 runs (where the feature branch already exists on origin) MUST refresh here, otherwise the PR is created against a base captured before `/bump-version` + CHANGELOG amend ran. Step 12's CI+rebase+merge loop remains the last-chance enforcement at merge time; Step 8b narrows the freshness gap on the initial PR-creation push.
+
+Print: `🔃 8b: rebase`
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
+```
+
+Capture the exit code as `rc`. Branch:
+
+- **Exit 0** with stdout containing `SKIPPED_ALREADY_FRESH=true`: HEAD already at latest main. If `debug_mode=true`, print `⏩ 8b: rebase — already at latest main`. Otherwise silently continue. Proceed to the force-push gate below.
+- **Exit 0** otherwise (rebase actually moved HEAD): print `✅ 8b: rebase — rebased onto latest main (<elapsed>)`. Proceed to the force-push gate below.
+- **Exit 1** (rebase conflict — typically `.claude-plugin/plugin.json` against a concurrent main bump): print `**⚠ Step 8b: rebase onto main failed (conflict). Bailing to cleanup.**`. Set `STALL_TRACKING=true` (signals Step 18 to rename the tracking issue to `[STALLED]` — see "Title-prefix lifecycle terminal transition" in Step 18), and skip to Step 18. Pre-PR conflict resolution is out of scope here; with `--merge`, Step 12's CI+rebase+merge loop is the last-chance enforcement and would handle conflicts post-PR-creation, but at this point no PR exists yet.
+- **Exit 3** (non-conflict rebase failure — fetch error, detached HEAD, etc.; `REBASE_ERROR=...` printed on stderr): print `**⚠ Step 8b: rebase failed (non-conflict): $REBASE_ERROR. Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+- **Other non-zero exit** (defensive — `rebase-push.sh`'s header documents only 1 and 3 in `--no-push` mode): print `**⚠ Step 8b: rebase failed unexpectedly (exit $rc). Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+
+### Force-push gate (only when remote refresh is needed)
+
+If `repo_unavailable=true`: skip the force-push branch entirely (no `git ls-remote` / `git-force-push.sh` calls — neither has a `gh` dependency, but the convention is to keep Step 8b's network surface minimal in `repo_unavailable=true` mode parallel to Step 0.5 / 10 / 12 / 18). Proceed to Step 9.
+
+Otherwise, detect whether the feature branch already exists on `origin`. Capture the exit code of `git ls-remote --exit-code --heads`:
+
+```bash
+git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1
+ls_remote_rc=$?
+```
+
+`git ls-remote --exit-code` returns 0 when the named ref is found, 2 when it is positively confirmed absent, and other non-zero (typically 128) on transport / auth / network failures. Distinguish the three:
+
+- **Exit 0** (branch exists on origin): the local rebase may have rewritten history that origin still points at; force-push to align them:
+
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/git-force-push.sh
+  ```
+
+  Parse `STATUS`:
+  - `STATUS=pushed` or `STATUS=noop_same_ref`: print `✅ 8b: rebase — force-pushed to origin (<elapsed>)`. Proceed to Step 9.
+  - `STATUS=diverged_retry_failed` (exit 1): print `**⚠ Step 8b: force-push failed after rebase (lease check refused). Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+
+- **Exit 2** (branch positively confirmed absent on origin — the fresh-branch path): skip the force-push entirely; Step 9b's `create-pr.sh` will perform the initial push.
+
+- **Other non-zero exit** (transport / auth / network failure — e.g., 128): do NOT degrade to the fresh-branch path, because that would silently mask a real network problem and let `create-pr.sh`'s existing-PR fast-path swallow the subsequent non-fast-forward push failure. Print `**⚠ Step 8b: git ls-remote --heads failed (exit $ls_remote_rc; transport or auth error). Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+
+Detection is Git-based (not via `gh pr view`) so transient GitHub API failures do not silently degrade to a stale-remote path — see issue #818 for the failure-mode rationale.
 
 ## Step 9 — Create PR
 
