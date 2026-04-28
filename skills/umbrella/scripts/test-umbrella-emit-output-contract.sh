@@ -21,6 +21,11 @@
 # and CHILD_<i>_URL.
 # Extended for #728 to pin the Step 3B.4 wire-dag PROBE_FAILED parse-only key
 # + retry policy + transient-probe stderr literal (i1–i6).
+# Extended for the very-small-item bundling rule to pin the Step 3B.1 prose
+# (j1–j7: sizing magnitude, security/permissions carve-out, pairwise
+# incomparability, merged depends_on union, ### prohibition with
+# parse-input.sh WHY including fenced blocks, keep-N>=2 floor, and same-area
+# cohesion criterion).
 # The intent is a cheap CI guard against regression of the same drift;
 # test-helpers.sh explicitly leaves emit-output out of scope (see
 # test-helpers.md "Out of scope").
@@ -87,6 +92,24 @@ if [[ -z "$STEP2_BLOCK" ]]; then
     echo "  Boundary regexes: '^## Step 2 — Classify One-Shot vs Multi-Piece' (start) and '^## Step 3A' (end)." >&2
     echo "  If Step 2's heading was renamed or renumbered, update both regexes here AND in" >&2
     echo "  the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
+    exit 1
+fi
+
+# Extract the Step 3B.1 block from SKILL.md: from "### 3B.1 " (subheading prefix
+# match) up to (but not including) "### 3B.2 ". Pinned for the very-small-item
+# bundling rule: assertions (j1)–(j6) below pin each load-bearing clause of the
+# rule separately so any future edit that drops or rewords a clause breaks CI.
+STEP3B1_BLOCK=$(awk '
+    /^### 3B\.1 / { in_block=1 }
+    /^### 3B\.2 / { in_block=0 }
+    in_block { print }
+' "$SKILL_MD")
+
+if [[ -z "$STEP3B1_BLOCK" ]]; then
+    echo "FAIL: SKILL.md Step 3B.1 block extraction produced empty output." >&2
+    echo "  Boundary regexes: '^### 3B\\.1 ' (start) and '^### 3B\\.2 ' (end)." >&2
+    echo "  If Step 3B.1 or Step 3B.2's heading was renamed or renumbered, update both regexes" >&2
+    echo "  here AND in the sibling test-umbrella-emit-output-contract.md edit-in-sync rules." >&2
     exit 1
 fi
 
@@ -368,6 +391,32 @@ assert_contains "i5: 3B.4 transient-probe stderr warning literal" \
 assert_contains "i6: 3B.4 EDGES_SKIPPED_API_UNAVAILABLE semantic-preservation note" \
     '`EDGES_SKIPPED_API_UNAVAILABLE` semantics are intentionally preserved as broad "repo-wide skip"' \
     "$STEP3B4_BLOCK"
+
+# (j*) Step 3B.1 very-small-item bundling rule. Pins the seven load-bearing
+# clauses of the new rule so any future edit that silently drops or rewords a
+# clause breaks CI (parallel to (g*) for created-eq-1 and (i*) for PROBE_FAILED).
+# The prior letter (i) was taken; (j) is the next free letter.
+assert_contains "j1: 3B.1 very-small sizing magnitude" \
+    'expected to be under ~10 lines of change, especially when touching only 1-3 files' \
+    "$STEP3B1_BLOCK"
+assert_contains "j2: 3B.1 low-risk / security carve-out" \
+    'auth, permissions, or security-critical change is small but NOT bundle-safe' \
+    "$STEP3B1_BLOCK"
+assert_contains "j3: 3B.1 pairwise-incomparable bundling rule (transitive)" \
+    'Pairwise incomparable in the dependency graph' \
+    "$STEP3B1_BLOCK"
+assert_contains "j4: 3B.1 merged depends_on union rule" \
+    "Merged \`depends_on\` = sorted unique union of all bundled items' predecessors" \
+    "$STEP3B1_BLOCK"
+assert_contains "j5: 3B.1 ### prohibition with parse-input.sh WHY (incl. fenced blocks)" \
+    'Do NOT use `###` sub-headers anywhere inside the bundled body, including inside fenced code blocks' \
+    "$STEP3B1_BLOCK"
+assert_contains "j6: 3B.1 keep-N-at-least-2 rule" \
+    'Bundling must keep at least 2 final pieces' \
+    "$STEP3B1_BLOCK"
+assert_contains "j7: 3B.1 same-area cohesion criterion" \
+    '**Same area**: bundled items touch the same component' \
+    "$STEP3B1_BLOCK"
 
 echo
 echo "All $PASS_COUNT assertions passed."

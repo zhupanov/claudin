@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.32] - 2026-04-27
+
+### Changed
+
+- `skills/umbrella/SKILL.md` — added a "Bundle very small work items" rule to Step 3B.1: when two or more candidate pieces are each expected to be under ~10 lines of change (especially when touching only 1-3 files), the LLM decomposer biases toward merging them into a single composed `(title, body, depends-on)` tuple to reduce the token cost of downstream `/implement` runs. Conservative bundling criteria (all required): same component / skill / script-and-its-test pair; pairwise incomparable in the `depends_on` graph (no directed path in either direction — transitive, not just direct-edge); merged `depends_on` equals sorted unique union of bundled predecessors after compaction; body uses `- [ ]` checklist bullets only (never `###` sub-headers — `parse-input.sh` is line-based and would silently undo the bundle even inside fenced code blocks). Security / permissions carve-out keeps tiny-but-risky items as separate pieces. Bundling must keep `N>=2` final pieces; collapse to 1 falls through to the existing `decomposition-lt-2` one-shot path. Pinned all seven load-bearing clauses via new `j1`–`j7` assertions in `test-umbrella-emit-output-contract.sh` (40 → 47 assertions). Updated sibling `.md` doc, `docs/linting.md` count + j2 wording, and "one child per piece" phrasing in `docs/skills.md` / `docs/workflow-lifecycle.md` (L54 + L155) / `skills/skill-evolver/SKILL.md` to acknowledge bundling.
+
 ## [7.17.31] - 2026-04-27
 
 ### Fixed
