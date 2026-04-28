@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.61] - 2026-04-27
+
+### Fixed
+
+- `/issue` Step 4E/Step 5 — intra-batch dependency analysis no longer silently skipped when external CANDIDATES is empty. When `N_NON_MALFORMED >= 2`, Phase 2 runs for intra-batch dep reasoning regardless of Phase 1 results.
+- `/issue` Step 4D — allocator exit-0 with empty CANDIDATES now correctly handles `N_NON_MALFORMED < 2` (jump to Step 6 with CREATE verdicts).
+
+### Added
+
+- `skills/issue/scripts/test-intra-batch-deps.sh` — 7-assertion structural regression harness pinning Step 4E/5 gating logic, conditional fetch skip, empty-CANDIDATES verdict guidance, no-external-refs validation rule, FETCH_STATUS scope narrowing, and old short-circuit removal.
+
 ## [7.17.60] - 2026-04-27
 
 ### Changed

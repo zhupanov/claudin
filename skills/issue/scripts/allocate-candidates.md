@@ -36,7 +36,7 @@ On exit 0, **exactly one line** on stdout:
 CANDIDATES=<comma-separated issue numbers, ascending>
 ```
 
-Empty selection (N=0, empty stdin, all rows dropped, or no candidates after both passes) emits `CANDIDATES=` and exits 0. The empty case is normal — `/issue` SKILL Step 5's "if CANDIDATES is non-empty" gate short-circuits.
+Empty selection (N=0, empty stdin, all rows dropped, or no candidates after both passes) emits `CANDIDATES=` and exits 0. The empty case is normal — `/issue` SKILL Step 5's gate allows this when `N_NON_MALFORMED >= 2` (intra-batch-only path) or short-circuits to Step 6 when `N_NON_MALFORMED < 2`.
 
 ALL diagnostics (warnings, dropped-row notices, the N>30 banner) go to **stderr only**. Any accidental stdout pollution would break the calling SKILL prompt's parse of `CANDIDATES=`.
 
