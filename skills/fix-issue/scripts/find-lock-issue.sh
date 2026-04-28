@@ -84,8 +84,9 @@
 #       UMBRELLA_ACTION=dispatched and ISSUE_NUMBER refers to the chosen
 #       child (rename may have failed best-effort — RENAMED=false signals).
 #   1 — no eligible issues (auto-pick mode only)
-#   2 — error: gh CLI failure, or explicit issue not eligible (or umbrella
-#       blocked by open dependencies)
+#   2 — error: gh CLI failure, explicit issue not eligible, umbrella
+#       blocked by open dependencies, or umbrella-handler.sh detect
+#       failure in explicit-target mode (closes #891)
 #   3 — eligible issue found but comment lock could not be acquired
 #       (concurrent runner won the race, or GO sentinel changed between
 #       eligibility scan and lock attempt; on umbrella paths, the failure

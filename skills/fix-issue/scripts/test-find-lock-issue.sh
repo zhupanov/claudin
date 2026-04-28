@@ -831,9 +831,9 @@ assert_contains "$ERR" "Skipping issue #200: umbrella issue" "[12] stderr diagno
 # When umbrella-handler.sh detect fails (non-zero exit) in explicit-target
 # mode, find-lock-issue.sh must surface the error (exit 2) instead of
 # silently falling through to the ordinary-issue path. Setup: issue #300
-# with an umbrella-style title, VIEW_FAIL_BODY=true makes the detect call's
-# gh issue view (--json title,body) fail while the initial find-lock-issue.sh
-# fetch (--json number,state,title,url) succeeds.
+# with an umbrella-style title, ISSUE_300_VIEW_FAIL_BODY=true makes the
+# detect call's gh issue view (--json title,body) fail while the initial
+# find-lock-issue.sh fetch (--json number,state,title,url) succeeds.
 # ---------------------------------------------------------------------------
 echo "Fixture 13: explicit-target detect failure exits 2 (#891)"
 run_fixture "fixture-13"
