@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.35] - 2026-04-27
+
+### Fixed
+
+- `skills/research/SKILL.md` — aligned three stale wording occurrences with issue #520's K=3 quick-mode contract. Line 74's `--plan` resolution rule changed `(single lane, no fan-out)` to `(K=3 homogeneous lanes, no per-angle differentiation)`, matching the scale-matrix row at line 66 and the warning text at lines 76-77. Line 180's parenthetical aside about Step 1.1 / 1.2 skip semantics changed `single-lane quick mode has no fan-out to assign subquestions to` to `quick mode has no per-angle differentiation to assign subquestions to`. Line 334's quick-mode skip gate dropped the stale `single-lane` qualifier on `research-report.txt` (the file name is canonical regardless of K-lane vote-merge vs single-lane fallback). Same family of stale-K=3-contract drift as #823 (which fixed line 31 of the same file). Documentation-only; runtime behavior unchanged. Closes #824.
+
 ## [7.17.34] - 2026-04-27
 
 ### Fixed
