@@ -103,6 +103,14 @@ The wire-dag tests use a PATH-stub `gh` script written into `$TMP/bin/gh`, prepe
 
 The `gh issue edit` arm is dispatched in the PATH-stub `gh` script via the `"$1 $_stub_url"` case statement matching `"issue edit"` (the `_stub_url` resolution falls back to `$2` when no `/repos/.../issues/...` path is in argv, same shorthand the existing `"issue comment"` arm uses). Stub behavior controlled by `STUB_EDIT_RC` (exit code, default 0), `STUB_EDIT_STDERR` (stderr message, default empty), and `STUB_EDIT_LOG` (path; when set, the stub appends `<number>\t<new-title>` rows for each invocation so tests can assert which titles the loop actually rewrote).
 
+**Coverage** — `wire-dag --umbrella` numeric grammar (issue #775):
+
+- non-numeric `--umbrella` values (`1[`, `[abc]`, `1.2`, ` 5 `, `01`, `0`) on the normal path are rejected at arg-parse with `ERROR=wire-dag --umbrella must be a positive integer (got: '<value>')` on stderr. Pins the regex-injection input-boundary defense.
+- non-empty non-numeric `--umbrella` value on the `--no-backlinks` bypass path (e.g., `--no-backlinks --umbrella '[abc]'`) is also rejected. Pins the explicit CLI tightening: junk-on-bypass was a latent contract gap, now fails fast regardless of `--no-backlinks`.
+- valid positive-integer `--umbrella 12345` on the normal path passes the numeric-grammar guard (downstream API behavior is independent — assertions are scoped to "no numeric-grammar error in stderr").
+
+The case (q) comment was rewritten in this PR to reflect the awk `index($0, m) == 1` line-start-anchor semantics (replacing the prior misleading "substring-grep tolerance" wording — the production probe never tolerated mid-line substrings; the line-start anchor was deliberately added per #716 review FINDING and is preserved across the regex→awk swap).
+
 **Edit-in-sync**: any change to `helpers.sh check-cycle`, `wire-dag`, or `prefix-titles` stdout grammar / stderr contract requires a same-PR update to the assertion expectations here. Cycle-check semantic changes also require regenerating `test-helpers.sh` expectations. The Bash 3.2 portability guard regex pattern is intentionally identical to `skills/issue/scripts/test-allocate-candidates.sh` Test 21 — drift between the two harnesses should be deliberate and documented in the same PR.
 
 **Out of scope**: `emit-output` subcommand. `emit-output` is a thin awk validator covered indirectly by SKILL.md integration; its Step 4 prose contract (orchestrator-attribution, single-emission-point, canonical breadcrumb shapes, stderr discipline) is structurally pinned by `test-umbrella-emit-output-contract.sh`.

@@ -144,6 +144,20 @@ case "$SUBCMD" in
     if [ "$NO_BACKLINKS" != "true" ] && [ -z "$UMBRELLA" ]; then
       echo "ERROR=wire-dag requires --umbrella (use --no-backlinks to omit it on the created-eq-1 bypass path)" >&2; exit 1
     fi
+    # Numeric grammar guard (closes #775 — unified grep -F doctrine, input-boundary
+    # hardening). Reject any non-empty UMBRELLA that is not a positive integer:
+    # leading zeros ('01'), embedded decimals ('1.2'), regex metacharacters
+    # ('1[', '[abc]'), and whitespace-padded values (' 5 ') all fail. The
+    # [ -n "$UMBRELLA" ] gate preserves the empty-string + --no-backlinks bypass
+    # path (test-helpers.sh case (m) — empty --umbrella with --no-backlinks).
+    # Mirrors the WD_NODE_CAP validation pattern
+    # at line ~417 below. CLI tightening is intentional: junk on the --no-backlinks
+    # bypass path was a latent contract gap; any future caller supplying
+    # non-numeric UMBRELLA now fails fast at parse time rather than producing an
+    # invalid-ERE grep that swallows silently into a surrounding "|| true".
+    if [ -n "$UMBRELLA" ] && ! printf '%s' "$UMBRELLA" | grep -qE '^[1-9][0-9]*$'; then
+      echo "ERROR=wire-dag --umbrella must be a positive integer (got: '$UMBRELLA')" >&2; exit 1
+    fi
 
     # Feature-detect the GitHub blocked-by API surface. As of late-2024 / 2026 GitHub
     # exposed REST endpoints under /repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by
@@ -609,8 +623,18 @@ case "$SUBCMD" in
       # Walk proposed edges, cycle-check each, add survivors.
       while IFS=$'\t' read -r blocker blocked; do
         [ -z "$blocker" ] || [ -z "$blocked" ] && continue
-        # Existing? skip.
-        if grep -qE "^${blocker}	${blocked}$" "$EXISTING_EDGES_TSV"; then
+        # Existing? skip. Fixed-string field-equality (closes #775 — unified
+        # grep -F doctrine). Previously `grep -qE "^${blocker}\t${blocked}$"`,
+        # which interpolated EDGES_FILE-derived values into an ERE; though
+        # current callers numerically validate IDs, the input boundary lacked
+        # the property — fixing here closes the regex-injection class on the
+        # wire-dag surface alongside the back-link probe and label probe.
+        # The `""` empty-string concatenation forces awk to treat both
+        # operands as strings; without it, awk's auto-numeric-coercion would
+        # compare numerically when both `$1` (from input) and `b` (from -v)
+        # look like numbers (e.g., `b="5."` would equal `$1="5"` numerically).
+        if awk -F$'\t' -v b="$blocker" -v t="$blocked" \
+             '($1 "") == b && ($2 "") == t {found=1; exit} END{exit !found}' "$EXISTING_EDGES_TSV"; then
           EDGES_SKIPPED_EXISTING=$((EDGES_SKIPPED_EXISTING + 1))
           continue
         fi
@@ -738,13 +762,20 @@ case "$SUBCMD" in
         [ -z "$child_num" ] && continue
         existing="false"
         # Idempotency probe: extract the FIRST LINE of each comment body
-        # (`split("\n")[0]`) and grep with `^` anchor for the marker. This
-        # matches only comments whose body starts with the canonical prefix
-        # (the exact shape helpers.sh emits at the comment-post site below)
-        # — a discussion comment that quotes or mentions the marker mid-prose
-        # will not false-match (issue #716 review FINDING — Codex).
+        # (`split("\n")[0]`) and use awk's `index($0, m) == 1` (literal
+        # position-1 anchor) to test whether that first line begins with the
+        # canonical marker. Pure fixed-string match — no regex interpretation
+        # of $backlink_marker (closes #775 — unified grep -F doctrine; replaces
+        # the prior `grep -qE "^${backlink_marker}"` which would have
+        # over-matched or invalid-ERE-failed had UMBRELLA contained ERE
+        # metacharacters). The position-1 semantic preserves the line-start
+        # anchor that issue #716 review FINDING (Codex) deliberately added:
+        # a discussion comment that quotes or mentions the marker mid-prose
+        # will not false-match. Awk's `index()` is POSIX-mandated (identical
+        # across BSD/GNU); the early `exit` short-circuits at the first
+        # matching comment; END `exit !found` returns 0/1 for shell-if usage.
         if gh api "/repos/$REPO/issues/${child_num}/comments" --paginate --jq '.[].body | split("\n")[0]' 2>/dev/null \
-             | grep -qE "^${backlink_marker}"; then
+             | awk -v m="$backlink_marker" 'index($0, m) == 1 { found=1; exit } END { exit !found }'; then
           existing="true"
         fi
         if [ "$existing" = "true" ]; then

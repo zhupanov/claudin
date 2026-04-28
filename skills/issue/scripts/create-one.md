@@ -2,6 +2,8 @@
 
 **Purpose**: create a single GitHub issue with defensive guards (`[OOS]` double-prefix normalization, optional-label probe, dry-run preview), defense-in-depth secret redaction on title and body, and (since issue #546) capture of the issue's internal numeric `id` alongside its display number and URL on the success path.
 
+**Label-existence probe**: implemented as `gh label list --repo "$REPO" --search "$L" --json name --jq '.[].name' | grep -Fqx -- "$L"`. The `-Fqx` flag set is load-bearing per issue #775 (unified grep -F doctrine): `-F` interprets `$L` as a fixed string (not a BRE), so a label name containing regex metacharacters like `bug.feature` or `release[2026]` cannot false-match a sibling label whose name happens to match the BRE interpretation; `-x` requires whole-line match (matches `gh`'s name-per-line output exactly); `-q` suppresses output. The previous `grep -qx -- "$L"` interpreted `$L` as a BRE — `bug.feature` would have falsely accepted `bug-feature` (`.` matches any char). Active-current-path concern: `/umbrella` forwards operator `--label` values verbatim through `/issue` to here, so labels with regex metacharacters are a live shipped-path input. Regression coverage: `scripts/test-redact-secrets.sh` section 4e exercises `bug.feature` and `release[2026]` against sibling labels that would have BRE-matched but must NOT fixed-string-match.
+
 **Caller**: `/issue` SKILL.md Step 6 per-item iteration. Single-purpose helper — owns create semantics, output parsing, and redaction in one tested choke point.
 
 **Output schema** (key=value on stdout):

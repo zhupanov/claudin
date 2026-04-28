@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.34] - 2026-04-27
+
+### Fixed
+
+- Apply unified `grep -F` doctrine at three regex-injection-class call sites (closes #775; closes #743 as duplicate). `skills/umbrella/scripts/helpers.sh` wire-dag back-link probe (`grep -qE "^${marker}"` → anchored awk `index($0, m) == 1`); existing-edge probe (`grep -qE "^${blocker}\t${blocked}$"` → string-forced awk field-equality `($1 "") == b && ($2 "") == t`, fixing an auto-numeric-coercion subtlety caught by a new regression test); and a new `--umbrella` numeric-grammar arg-parse guard (`^[1-9][0-9]*$`) that rejects non-empty non-numeric values on both normal and `--no-backlinks` bypass paths. `skills/issue/scripts/create-one.sh:182` label-existence probe `grep -qx` → `grep -Fqx` — active-current-path fix since `/umbrella --label` forwards operator labels verbatim.
+- Add `SECURITY.md` "Fixed-string matching for interpolated values" section codifying the doctrine for future call sites.
+
 ## [7.17.33] - 2026-04-27
 
 ### Fixed
