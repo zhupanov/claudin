@@ -25,4 +25,4 @@
 
 - When editing `skills/loop-review/SKILL.md`, run this harness to confirm contract tokens stay intact.
 - The filter literal in Assertion E is byte-pinned. Changing the breadcrumb prefixes in driver.sh REQUIRES updating BOTH the filter literal in SKILL.md AND this assertion in the same PR.
-- This file mirrors `scripts/test-loop-improve-skill-skill-md.md` since `/loop-review` adopts the same bash-driver + Bash-background + Monitor-attach topology.
+- `/loop-review` uses the bash-driver + Bash-background + Monitor-attach topology.

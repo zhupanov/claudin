@@ -50,7 +50,7 @@ claude plugin install larch@larch-local
 ```
 - Install claude code: `curl -fsSL https://claude.ai/install.sh | bash`
 - Run `claude` and verify the above settings
-- **Minimum `claude` CLI version**: a build that supports `--permission-mode bypassPermissions` is required. Every `claude -p` child launched by `skills/improve-skill/scripts/iteration.sh::invoke_claude_p` carries that flag (issue #585) so an in-child tool-permission prompt cannot stall the non-interactive subprocess until the 3600s watchdog fires. The shared kernel covers both `/improve-skill` (standalone) and `/loop-improve-skill` (loop body, per-iteration). `/loop-improve-skill`'s driver also carries its own slim `invoke_claude_p` for the Step 5a post-iter-cap re-judge (1200s watchdog) which carries the same flag (issue #614, sibling to #585) — both `claude -p` launch sites in `/loop-improve-skill` (per-iteration kernel + post-iter-cap re-judge) are now pinned. See SECURITY.md `## Trust Model` for the carve-out. Older `claude` binaries that do not recognize the flag fail-fast (subprocess returns non-zero; existing `dump_subprocess_diagnostics` captures stderr); the kernel will not silently degrade. Verify with `claude --permission-mode bypassPermissions --version` if uncertain.
+- **Minimum `claude` CLI version**: a build that supports `--permission-mode bypassPermissions` is required. Loop drivers that spawn `claude -p` children carry this flag so an in-child tool-permission prompt cannot stall a non-interactive subprocess until the watchdog fires. Older `claude` binaries that do not recognize the flag fail-fast (subprocess returns non-zero). Verify with `claude --permission-mode bypassPermissions --version` if uncertain.
 
 ### Codex
 - Via web UI of your Codex org, create your own API key
@@ -83,7 +83,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/loop-improve-skill`, `/improve-skill`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/loop-review`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
 | Agents | `code-reviewer` (unified archetype covering code quality, risk/integration, correctness, architecture, security) |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 | SessionStart hook | `sessionstart-health.sh` — at session start/resume/clear/compact, probes `jq` and `git` on `PATH`; if either is missing, injects an advisory into session context so the issue is visible before the first `Edit`/`Write`. Non-blocking (always exits 0); silent when both tools are present |

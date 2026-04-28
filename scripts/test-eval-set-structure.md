@@ -47,7 +47,7 @@ test-eval-set-structure:
 
 - The `**Consumer**:` / `**Contract**:` / `**When to load**:` first-20-lines check copies the strictness layer from `scripts/test-research-structure.sh` Check 4. The cross-skill triplet check in `scripts/test-references-headers.sh` already enforces the looser any-line variant; this harness layers the stricter check just for the new file.
 - The literal-pin pattern (Check 8 — Anthropic-blog citation) mirrors the byte-pin check in `scripts/test-research-structure.sh` Checks 5 and 6 (`RESEARCH_PROMPT_BASELINE` literal — substring-pinned via `RESEARCH_PROMPT`, which also matches the four angle prompt names `RESEARCH_PROMPT_ARCH` / `_EDGE` / `_EXT` / `_SEC`; reviewer XML wrapper tags).
-- The `--smoke-test` round-trip (Check 9) mirrors how `scripts/test-loop-improve-skill-driver.sh` round-trips the driver under fixture data.
+- The `--smoke-test` round-trip (Check 9) mirrors how test harnesses round-trip drivers under fixture data.
 
 ## When this harness is wrong
 

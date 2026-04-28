@@ -16,9 +16,8 @@
 # Reserved-name union (rejects the name if it matches any):
 #   Anthropic:     anthropic, claude
 #   larch static:  design, implement, review, research, loop-review,
-#                  loop-improve-skill, loop-improve-skill-iter, alias,
-#                  relevant-checks, bump-version, fix-issue, im, imaq,
-#                  create-skill, issue
+#                  alias, relevant-checks, bump-version, fix-issue,
+#                  im, imaq, create-skill, issue
 #   Plugin skills: ls "${CLAUDE_PLUGIN_ROOT}/skills" (if present)
 #   Local skills:  ls "$PWD/.claude/skills" (if present)
 #
@@ -87,8 +86,6 @@ LARCH_RESERVED=(
   imaq
   implement
   issue
-  loop-improve-skill
-  loop-improve-skill-iter
   loop-review
   relevant-checks
   research

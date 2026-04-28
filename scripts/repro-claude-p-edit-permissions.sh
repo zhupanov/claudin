@@ -2,7 +2,7 @@
 # repro-claude-p-edit-permissions.sh — Isolated reproducer for the `claude -p`
 # Edit-permission stall observed in #566. Runs ONE variant per invocation
 # (--variant {A,B,C,D}) and validates the kernel fix in #585 plus the
-# settings-audit hypothesis independently of the full /loop-improve-skill
+# settings-audit hypothesis independently of the full skill improvement
 # pipeline.
 #
 # The script invokes `claude -p` as a subprocess against the project's

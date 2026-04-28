@@ -9,9 +9,9 @@ allowed-tools: Bash, Read, Skill
 
 Plan improvements for an existing larch skill in a single research-and-file-issues pass. Take a mandatory `<skill-name>` (must already exist under `skills/<name>/` or `.claude/skills/<name>/` in the current plugin repo), invoke `/research --scale=deep` via the Skill tool against repo-local sibling skills + reputable external sources (Anthropic, OpenAI, DeepMind, ≥500-star OSS), and — if the research lane surfaces ≥1 actionable improvement with citations — invoke `/umbrella` via the Skill tool to file the resulting GitHub issue(s). `/umbrella` runs its own one-shot vs multi-piece classifier on the distilled task description: multi-piece yields an umbrella tracking issue plus one child per piece (very small items may be bundled into a single composed piece per `/umbrella` Step 3B.1's bundling rule); one-shot files a single new issue or resolves to an existing one via dedup (still no umbrella). To iterate (re-research after children land), re-run `/skill-evolver`.
 
-The skill itself does NOT modify the target skill's files. Implementation of each improvement happens later via `/fix-issue` or `/improve-skill`. This skill is research-and-file-issues only.
+The skill itself does NOT modify the target skill's files. Implementation of each improvement happens later via `/fix-issue`. This skill is research-and-file-issues only.
 
-Example: `/skill-evolver design` or `/skill-evolver --debug improve-skill`.
+Example: `/skill-evolver design` or `/skill-evolver --debug review`.
 
 > **Before editing**, read `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md` (full file). Section III mechanical rules A/B/C override general writing-style guidance on conflict.
 
@@ -26,7 +26,7 @@ Example: `/skill-evolver design` or `/skill-evolver --debug improve-skill`.
 
 ## Anti-patterns
 
-- **NEVER modify the target skill's files from inside this skill.** Why: the contract is research-and-file-issues only. Editing `<SKILL_DIR>/` here would bypass the umbrella + child-issue tracking, the per-change `/review` panel, and the `/fix-issue` lifecycle that downstream agents depend on. Implementation lands later via `/fix-issue` or `/improve-skill`.
+- **NEVER modify the target skill's files from inside this skill.** Why: the contract is research-and-file-issues only. Editing `<SKILL_DIR>/` here would bypass the umbrella + child-issue tracking, the per-change `/review` panel, and the `/fix-issue` lifecycle that downstream agents depend on. Implementation lands later via `/fix-issue`.
 - **NEVER inline the target SKILL.md body into the `/research` prompt.** Why: deep-mode fan-out spawns 5 research lanes + 5 validation lanes — each receives the full prompt. Inlining the target body multiplies token cost by 10× without benefit; the lanes have full Read/Grep/Glob access and should read `<SKILL_DIR>/SKILL.md` themselves. Pass the **path**, not the contents.
 - **NEVER pass the verbatim `/research` report as the `/umbrella` task description.** Why: `/umbrella`'s classifier expects a multi-piece task description naming distinct phases, not a multi-section research narrative with reviewer commentary and validation tables. Distill the actionable improvements into a numbered phase list (one phase per improvement, citations preserved) before invoking `/umbrella`.
 - **NEVER call `/umbrella` when `/research` returns zero actionable improvements.** Why: an empty umbrella creates a tracking issue with no children — pure noise. Print the canonical Step 3 zero-branch message (the `**ℹ /skill-evolver: …**` line whose verbatim text lives in Step 3) and exit cleanly.
@@ -115,6 +115,6 @@ If no such line is present (the `/research` lane synthesis dropped the requested
 
 ## What this skill does NOT do
 
-- Does not modify `<SKILL_DIR>/` files. Implementation happens later via `/fix-issue` (per child issue) or `/improve-skill` (judge-design-implement loop) or `/loop-improve-skill` (multi-round loop).
-- Does not run benchmarks, quality scoring, or grading. `/skill-judge` (invoked by `/improve-skill`) handles per-dimension grading.
+- Does not modify `<SKILL_DIR>/` files. Implementation happens later via `/fix-issue` (per child issue).
+- Does not run benchmarks, quality scoring, or grading.
 - Does not iterate. One invocation = one `/research --scale=deep` invocation (which fans out to 5 research + 5 validation lanes internally) + one (conditional) `/umbrella`. Re-run `/skill-evolver` after children land if you want a fresh research pass against the evolved skill.

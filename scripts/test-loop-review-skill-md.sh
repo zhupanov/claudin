@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # test-loop-review-skill-md.sh — structural regression harness for
 # skills/loop-review/SKILL.md. Companion to scripts/test-loop-review-driver.sh
-# (which pins driver.sh contract tokens). Mirrors test-loop-improve-skill-skill-md.sh
-# byte-for-byte where applicable since /loop-review now uses the same
-# bash-driver + Bash-background + Monitor-attach topology as /loop-improve-skill.
+# (which pins driver.sh contract tokens). Uses the same
+# bash-driver + Bash-background + Monitor-attach topology.
 #
 # Assertions:
 #   A) frontmatter `allowed-tools` line contains both `Bash` and `Monitor` tokens.

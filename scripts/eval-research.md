@@ -129,9 +129,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 | `Makefile` | Adds `eval-research`, `test-eval-set-structure`, and `test-eval-research-baseline-flag` standalone targets. NONE is a `test-harnesses` prerequisite. |
 | `agent-lint.toml` | Excludes `scripts/eval-research.sh`, `scripts/test-eval-set-structure.sh`, and `scripts/test-eval-research-baseline-flag.sh` from dead-script checks (all are Makefile-only references). |
 | `docs/linting.md` | Documents `eval-research` as opt-in operator-run instrumentation. |
-| `skills/improve-skill/scripts/iteration.sh` | Source of the `claude -p` subprocess pattern (stdin file + stderr sidecar + poll loop). The harness reuses the pattern but decouples numeric timeouts. |
-| `scripts/parse-skill-judge-grade.sh` | Source of the fail-closed structured-output parsing discipline. The harness's judge-output parser mirrors the exit-zero-with-status-on-stdout shape. |
-| `scripts/test-loop-improve-skill-halt-rate.sh` | Source of the opt-in operator-run pattern (Makefile-only, agent-lint excluded, documented in `docs/linting.md`). |
+| `scripts/repro-claude-p-edit-permissions.sh` | Sibling opt-in operator harness using the same `claude -p` subprocess pattern (stdin file + stderr sidecar + poll loop). |
 
 ## Exit codes
 

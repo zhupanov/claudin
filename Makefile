@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-validate-research-output test-validate-citations test-collect-reviewer-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-render-deep-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-classify-research-scale test-render-findings-batch test-degraded-path-banner test-synthesis-subagent test-quick-vote-state test-standard-angle-prompts test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-loop-review-driver test-loop-review-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes smoke-dialectic halt-rate-probe eval-research test-eval-set-structure test-eval-research-baseline-flag test-body-file-title test-intra-batch-deps
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-validate-research-output test-validate-citations test-collect-reviewer-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-render-deep-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-classify-research-scale test-render-findings-batch test-degraded-path-banner test-synthesis-subagent test-quick-vote-state test-standard-angle-prompts test-subskill-anchors test-loop-review-driver test-loop-review-skill-md test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes smoke-dialectic eval-research test-eval-set-structure test-eval-research-baseline-flag test-body-file-title test-intra-batch-deps
 
 # CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
 # (regression harnesses). `lint` remains the local-dev convenience target
@@ -11,7 +11,7 @@ lint: test-harnesses lint-only
 lint-only:
 	pre-commit run --all-files
 
-test-harnesses: test-redact test-validate-research-output test-validate-citations test-collect-reviewer-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-render-deep-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-classify-research-scale test-render-findings-batch test-degraded-path-banner test-synthesis-subagent test-quick-vote-state test-standard-angle-prompts test-subskill-anchors test-loop-improve-skill-driver test-loop-improve-skill-skill-md test-loop-review-driver test-loop-review-skill-md test-improve-skill-iteration test-improve-skill-skill-md test-parse-skill-judge-grade test-lib-halt-ledger test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes test-body-file-title test-intra-batch-deps
+test-harnesses: test-redact test-validate-research-output test-validate-citations test-collect-reviewer-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-render-deep-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-classify-research-scale test-render-findings-batch test-degraded-path-banner test-synthesis-subagent test-quick-vote-state test-standard-angle-prompts test-subskill-anchors test-loop-review-driver test-loop-review-skill-md test-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes test-body-file-title test-intra-batch-deps
 
 test-redact:
 	bash scripts/test-redact-secrets.sh
@@ -170,29 +170,11 @@ test-standard-angle-prompts:
 test-subskill-anchors:
 	bash scripts/test-subskill-anchors.sh
 
-test-loop-improve-skill-driver:
-	bash scripts/test-loop-improve-skill-driver.sh
-
-test-loop-improve-skill-skill-md:
-	bash scripts/test-loop-improve-skill-skill-md.sh
-
 test-loop-review-driver:
 	bash scripts/test-loop-review-driver.sh
 
 test-loop-review-skill-md:
 	bash scripts/test-loop-review-skill-md.sh
-
-test-improve-skill-iteration:
-	bash scripts/test-improve-skill-iteration.sh
-
-test-improve-skill-skill-md:
-	bash scripts/test-improve-skill-skill-md.sh
-
-test-parse-skill-judge-grade:
-	bash scripts/test-parse-skill-judge-grade.sh
-
-test-lib-halt-ledger:
-	bash scripts/test-lib-loop-improve-halt-ledger.sh
 
 test-tracking-issue-write:
 	bash scripts/test-tracking-issue-write.sh
@@ -229,11 +211,6 @@ test-intra-batch-deps:
 
 smoke-dialectic:
 	bash scripts/dialectic-smoke-test.sh
-
-# Opt-in halt-rate regression probe (closes #278). NOT a lint prerequisite —
-# too slow and non-deterministic for CI. See docs/linting.md "Halt-rate regression harness".
-halt-rate-probe:
-	bash scripts/test-loop-improve-skill-halt-rate.sh
 
 # Opt-in /research evaluation harness (closes #419 under umbrella #413). NOT a
 # lint prerequisite — runs ~20 questions × ~30-60s each, costs real tokens.
