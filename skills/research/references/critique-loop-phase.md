@@ -38,7 +38,7 @@ On exit, SKILL.md emits one of:
 
 ### 2.8.3 — Critique pass
 
-Invoke a single Claude Code Reviewer subagent via the Agent tool (`subagent_type: code-reviewer`). Reuse the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the variables filled for **research-synthesis critique**:
+Invoke a single Claude Code Reviewer subagent via the Agent tool (`subagent_type: larch:code-reviewer`). Reuse the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the variables filled for **research-synthesis critique**:
 
 - **`{REVIEW_TARGET}`** = `"research synthesis"`
 - **`{CONTEXT_BLOCK}`** (collision-resistant XML wrap + literal-delimiter instruction; namespaced tag names are the same shape used by `validation-phase.md` Check 6 to harden against prompt injection in untrusted content):

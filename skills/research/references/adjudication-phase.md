@@ -65,7 +65,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor judge replacement** (if `judge_cursor_available=false`): launch a Claude code-reviewer subagent via the `Agent` tool (subagent_type: `code-reviewer`) with the judge prompt below inlined; the replacement's vote is returned in the `Agent` tool's return value.
+**Cursor judge replacement** (if `judge_cursor_available=false`): launch a Claude code-reviewer subagent via the `Agent` tool (subagent_type: `larch:code-reviewer`) with the judge prompt below inlined; the replacement's vote is returned in the `Agent` tool's return value.
 
 **Codex judge** (if `judge_codex_available=true`):
 
@@ -83,7 +83,7 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
 **Codex judge replacement** (if `judge_codex_available=false`): same as Cursor replacement — Claude code-reviewer subagent via `Agent` tool inline.
 
-**Claude code-reviewer subagent judge** (always present, always inline): launch via `Agent` tool with subagent_type: `code-reviewer` and the judge prompt below. Pass the ballot file path inline; the subagent reads it via the Read tool.
+**Claude code-reviewer subagent judge** (always present, always inline): launch via `Agent` tool with subagent_type: `larch:code-reviewer` and the judge prompt below. Pass the ballot file path inline; the subagent reads it via the Read tool.
 
 ### Judge prompt template
 
