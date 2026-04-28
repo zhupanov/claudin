@@ -18,6 +18,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PARSER="$SCRIPT_DIR/parse-prose-blockers.sh"
 
+# Intentionally stricter than blocker-helpers.sh (which uses `bash "$parser_script"`
+# and tolerates non-executable files): this harness requires +x to enforce the
+# shipped-executable-bit invariant at lint time.
 if [[ ! -x "$PARSER" ]]; then
     echo "ERROR: parser not found or not executable: $PARSER" >&2
     exit 1

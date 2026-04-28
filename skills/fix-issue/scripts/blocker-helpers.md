@@ -12,7 +12,7 @@ Queries GitHub's native issue-dependencies API (`repos/<REPO>/issues/<N>/depende
 
 ### `prose_open_blockers <issue-number>`
 
-Scans the issue body and every comment body separately (per-document iteration to prevent cross-document fabrication) for the conservative prose-dependency keyword set defined in `parse-prose-blockers.sh`, resolves each referenced same-repo issue's current state, and prints a space-separated list of OPEN refs on stdout. Self-references (the candidate's own number) are filtered out. Every boundary (body fetch, comments fetch, parser invocation, per-ref state lookup) is fail-open: any failure degrades to "no additional prose blockers known".
+Scans the issue body and every comment body separately (per-document iteration to prevent cross-document fabrication) for the conservative prose-dependency keyword set defined in `parse-prose-blockers.sh`, resolves each referenced same-repo issue's current state, and prints a space-separated list of OPEN refs on stdout. Self-references (the candidate's own number) are filtered out. The parser is invoked via `bash "$parser_script"` so it works regardless of the execute bit; if the file exists but is not executable, a warning is emitted on stderr. If the parser file is missing entirely (`! -f`), the function returns 0 silently (fail-open). Every boundary (body fetch, comments fetch, parser invocation, per-ref state lookup) is fail-open: any failure degrades to "no additional prose blockers known".
 
 ### `all_open_blockers <issue-number>`
 
