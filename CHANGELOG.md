@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.43] - 2026-04-27
+
+### Changed
+
+- `skills/umbrella/SKILL.md` Step 3B.1 unbundled `body` bullet — extended with a sibling clause prohibiting `###` sub-headers in any piece body (including inside fenced code blocks), mirroring the canonical wording of the existing bundled `Body shape` bullet. Documents the silent-corruption hazard where a `^### <title>` line in any piece body matches Path 3 in `parse-input.sh` (generic-mode flush + start new item), splitting the piece into multiple parsed items with broken `depends_on` index alignment relative to the original `pieces.json`.
+- `skills/umbrella/scripts/render-batch-input.md` — added a new "Piece-body item-split hazard (#831)" paragraph documenting the producer-side contract (scoped to the normal-mode pipeline; pre-decomposed `--input-file` callers bypass this surface).
+- `skills/issue/scripts/parse-input.md` — added a parallel "Reverse coupling: `/umbrella`'s piece bodies (#831)" subsection mirroring the existing `/research` reverse-coupling pattern, with an explicit caller catalog (covering all upstream `/issue --input-file` producers including operator-prebuilt batches that bypass `/umbrella` Step 3B.1 and the renderer) and a doc-only-enforcement note clarifying that `/umbrella` has no mechanical escape mechanism analogous to `/research`'s body-line backslash escape.
+- `skills/umbrella/scripts/test-umbrella-emit-output-contract.md` — added a "Coverage asymmetry" sub-subsection plus an Edit-in-sync rule bullet documenting why the new unbundled-bullet `###` prohibition is intentionally NOT pinned by a `j8` assertion (panel-vote rationale from #831 plan review FINDING_1).
+- Documentation-only — no script behavior changes; `j5` (bundled-body wording pin) and all 47 emit-output-contract assertions, 136 parse-input assertions, and 10 render-batch-input assertions continue to pass. Per code review FINDING_2 (3 YES unanimous), all in-prose references to "line 126" / "line 136" use stable semantic anchors ("Step 3B.1's unbundled `body` bullet" / "Step 3B.1's bundled `Body shape` bullet") instead of fragile fixed line numbers. Closes #831.
+
 ## [7.17.42] - 2026-04-27
 
 ### Fixed
