@@ -134,6 +134,55 @@ assert_exit "zero-based reference (must be 1-based)" 1 "ERROR=pieces-json entry 
 assert_exit "unknown argument" 1 "ERROR=Unknown argument" \
   bash "$VALIDATOR" --pieces-file "$TMPDIR_TEST/valid-2.json" --count 2 --extra
 
+# --- Null/string/object/array in depends_on (Codex review finding) ---
+
+cat > "$TMPDIR_TEST/null-dep.json" << 'EOF'
+[
+  {"title": "a", "body": "b", "depends_on": []},
+  {"title": "c", "body": "d", "depends_on": [null]}
+]
+EOF
+
+assert_exit "null in depends_on" 1 "ERROR=pieces-json entry 2 has out-of-range depends_on" \
+  bash "$VALIDATOR" --pieces-file "$TMPDIR_TEST/null-dep.json" --count 2
+
+cat > "$TMPDIR_TEST/string-dep.json" << 'EOF'
+[
+  {"title": "a", "body": "b", "depends_on": []},
+  {"title": "c", "body": "d", "depends_on": [""]}
+]
+EOF
+
+assert_exit "empty string in depends_on" 1 "ERROR=pieces-json entry 2 has out-of-range depends_on" \
+  bash "$VALIDATOR" --pieces-file "$TMPDIR_TEST/string-dep.json" --count 2
+
+cat > "$TMPDIR_TEST/object-dep.json" << 'EOF'
+[
+  {"title": "a", "body": "b", "depends_on": []},
+  {"title": "c", "body": "d", "depends_on": [{}]}
+]
+EOF
+
+assert_exit "object in depends_on" 1 "ERROR=pieces-json entry 2 has out-of-range depends_on" \
+  bash "$VALIDATOR" --pieces-file "$TMPDIR_TEST/object-dep.json" --count 2
+
+cat > "$TMPDIR_TEST/array-dep.json" << 'EOF'
+[
+  {"title": "a", "body": "b", "depends_on": []},
+  {"title": "c", "body": "d", "depends_on": [[]]}
+]
+EOF
+
+assert_exit "nested array in depends_on" 1 "ERROR=pieces-json entry 2 has out-of-range depends_on" \
+  bash "$VALIDATOR" --pieces-file "$TMPDIR_TEST/array-dep.json" --count 2
+
+# --- count=0 guard ---
+
+echo '[]' > "$TMPDIR_TEST/empty-array.json"
+
+assert_exit "--count 0 rejected (empty batch is structurally invalid)" 1 "ERROR=--count must be >= 1" \
+  bash "$VALIDATOR" --pieces-file "$TMPDIR_TEST/empty-array.json" --count 0
+
 # --- Summary ---
 
 echo ""

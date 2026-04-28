@@ -21,6 +21,11 @@ Offline regression harness for `validate-pieces-json.sh`. No network calls.
 - Self-reference (entry 2 depends on itself)
 - Zero-based reference (must be 1-based)
 - Unknown argument
+- null in depends_on (review finding: @csv fail-open bypass)
+- Empty string in depends_on (review finding: @csv fail-open bypass)
+- Object in depends_on (review finding: @csv fail-open bypass)
+- Nested array in depends_on (review finding: @csv fail-open bypass)
+- --count 0 rejected (empty batch structurally invalid)
 
 ## Edit-in-sync
 

@@ -37,13 +37,15 @@ validate-pieces-json.sh --pieces-file <path> --count <N>
 ERROR=--pieces-file is required
 ERROR=--count is required
 ERROR=--count must be a non-negative integer; got '<value>'
+ERROR=--count must be >= 1; empty batch is structurally invalid
 ERROR=pieces-json file not found: <path>
 ERROR=jq is required but was not found in PATH
 ERROR=invalid pieces-json: <reason>
 ERROR=invalid pieces-json: top-level value must be a JSON array, got <type>
 ERROR=pieces-json length mismatch: expected <N> entries, got <M>
 ERROR=pieces-json entry <N> field 'depends_on' must be an array
-ERROR=pieces-json entry <N> has out-of-range depends_on values: <values> (must be 1-based ints < entry index)
+ERROR=pieces-json entry <N> has out-of-range depends_on values (<count> invalid; must be 1-based integers < entry index)
+ERROR=pieces-json entry <N> dep-validation failed: <reason>
 ERROR=Unknown argument: <arg>
 ```
 

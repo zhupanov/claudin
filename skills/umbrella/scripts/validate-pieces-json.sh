@@ -51,6 +51,10 @@ case "$COUNT" in
     exit 1
     ;;
 esac
+if [ "$COUNT" -eq 0 ]; then
+  echo "ERROR=--count must be >= 1; empty batch is structurally invalid" >&2
+  exit 1
+fi
 
 if [ ! -f "$PIECES_FILE" ]; then
   echo "ERROR=pieces-json file not found: $PIECES_FILE" >&2
@@ -88,13 +92,17 @@ for i in $(seq 0 $((ACTUAL_LENGTH - 1))); do
     echo "ERROR=pieces-json entry $((i + 1)) field 'depends_on' must be an array" >&2
     exit 1
   fi
-  bad_deps=$(jq -r --argjson idx "$i" '
+  bad_count=$(jq --argjson idx "$i" '
     .[$idx].depends_on // [] |
     map(select((type != "number") or (. != (. | floor)) or (. < 1) or (. > $idx))) |
-    @csv
-  ' "$PIECES_FILE" 2>/dev/null || true)
-  if [ -n "$bad_deps" ] && [ "$bad_deps" != '""' ]; then
-    echo "ERROR=pieces-json entry $((i + 1)) has out-of-range depends_on values: $bad_deps (must be 1-based ints < entry index)" >&2
+    length
+  ' "$PIECES_FILE" 2>"$JQ_ERR") || {
+    reason=$(head -n 1 "$JQ_ERR" 2>/dev/null | sed -e 's/^jq: //' -e 's/[[:cntrl:]]//g')
+    echo "ERROR=pieces-json entry $((i + 1)) dep-validation failed: ${reason:-jq error}" >&2
+    exit 1
+  }
+  if [ "$bad_count" -gt 0 ]; then
+    echo "ERROR=pieces-json entry $((i + 1)) has out-of-range depends_on values ($bad_count invalid; must be 1-based integers < entry index)" >&2
     exit 1
   fi
 done

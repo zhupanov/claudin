@@ -158,7 +158,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/validate-pieces-json.sh --pieces-f
 
 On non-zero exit, print the `ERROR=` line and abort. This is fail-closed: a malformed `pieces.json` must not silently produce an empty DAG. The validation runs before Step 3B.2 so that no children are created from a batch whose dependency metadata is invalid.
 
-`ITEMS_TOTAL` derivation: count lines matching the pattern `^###` followed by a space in `INPUT_FILE`. This is the same heading-count convention `parse-input.sh` uses in Path 3 (generic `--input-file` mode) to determine batch length; the count is used here solely for the `--count` alignment check against `pieces.json` array length. If the heading count is 0 (file has no level-3 headings), treat as a validation error — a `pieces.json` paired with an empty or non-batch input file is structurally invalid.
+`ITEMS_TOTAL` derivation: use `grep -c '^### ' "$INPUT_FILE"` to count level-3 headings. This is the same heading-count convention `parse-input.sh` uses in Path 3 (generic `--input-file` mode) to determine batch length; the count must align with `parse-input.sh`'s emitted `ITEMS_TOTAL` when both operate on the same file. If the heading count is 0 (file has no level-3 headings), treat as a validation error — a `pieces.json` paired with an empty or non-batch input file is structurally invalid.
 
 ### 3B.2 — Batch-create children via /issue
 
