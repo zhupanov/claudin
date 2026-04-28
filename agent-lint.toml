@@ -399,6 +399,13 @@ exclude = [
   "scripts/lib-count-commits.sh",
   "scripts/test-verify-skill-called.sh",
   "scripts/test-check-bump-version.sh",
+  # scripts/test-drop-bump-commit.sh is the regression harness for
+  # scripts/drop-bump-commit.sh (#856). It is referenced only from Makefile
+  # (test-drop-bump-commit target) and scripts/drop-bump-commit.md
+  # (sibling contract), matching the same Makefile-only pattern as the other
+  # test-* harnesses above.
+  "scripts/test-drop-bump-commit.sh",
+  "scripts/drop-bump-commit.md",
   # scripts/test-ci-wait-exit-trap.sh is the regression harness for
   # scripts/ci-wait.sh's EXIT-trap-writes-.done behavior under SIGTERM and
   # the backward-compat default-mode (stdout) contract. Closes #842 (leaked

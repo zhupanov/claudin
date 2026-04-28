@@ -7,9 +7,17 @@
 #   1. Working tree is clean (no staged, unstaged, or untracked changes).
 #   2. HEAD subject matches ^Bump version to [0-9]+\.[0-9]+\.[0-9]+$.
 #   3. HEAD~1 exists (branch has at least 2 commits).
-#   4. HEAD touches only .claude-plugin/plugin.json, optionally together
-#      with CHANGELOG.md (the two-file amended-bump shape produced by
-#      /implement Step 8a), and nothing else.
+#   4. HEAD touches only allowed bump files (optionally together with
+#      CHANGELOG.md), and nothing else.
+#
+# Guard 4 allowed-file set:
+#   - When LARCH_BUMP_FILES is unset: defaults to .claude-plugin/plugin.json
+#     (exact two-string equality, byte-identical to pre-configuration behavior).
+#   - When LARCH_BUMP_FILES is set: colon-separated list of bump files
+#     (replacement semantics — replaces the default, not additive).
+#     Membership check: every file in the diff must be in the allowed set.
+#     Fail-closed on empty parse.
+#   CHANGELOG.md is always allowed (never required) on both paths.
 #
 # If any check fails, the script prints DROPPED=false and exits 0 (no-op).
 # A stderr WARN line explains which guard refused the drop, for callers that
@@ -56,19 +64,59 @@ if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
 fi
 
 # --- Guard 4: commit must touch only allowed bump files ---
-# Use diff --name-only against HEAD~1. A legitimate bump commit produced by
-# apply-bump.sh stages .claude-plugin/plugin.json. Step 8a of /implement may
-# additionally amend CHANGELOG.md into the same commit. Both are acceptable.
 CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | LC_ALL=C sort)
-# ALLOWED_* constants must match `sort`'s ASCII byte ordering (forced above via LC_ALL=C):
-# '.' (0x2E) sorts before 'C' (0x43), so '.claude-plugin/plugin.json' comes before 'CHANGELOG.md'.
-# Do NOT reorder alphabetically by filename — that would break the match against the sorted input.
-ALLOWED_ONE=".claude-plugin/plugin.json"
-ALLOWED_TWO=$'.claude-plugin/plugin.json\nCHANGELOG.md'
-if [[ "$CHANGED_FILES" != "$ALLOWED_ONE" && "$CHANGED_FILES" != "$ALLOWED_TWO" ]]; then
-    echo "WARN: HEAD subject matches bump pattern but commit touches unexpected files (changed: $CHANGED_FILES); refusing to drop" >&2
-    echo "DROPPED=false"
-    exit 0
+
+if [[ -n "${LARCH_BUMP_FILES+x}" ]]; then
+    # Custom path: LARCH_BUMP_FILES is set (replacement semantics).
+    # Parse colon-separated list, strip whitespace, skip empty segments.
+    ALLOWED_SET=()
+    IFS=':' read -ra _segments <<< "$LARCH_BUMP_FILES" || true
+    for _seg in "${_segments[@]+"${_segments[@]}"}"; do
+        _trimmed="${_seg#"${_seg%%[![:space:]]*}"}"
+        _trimmed="${_trimmed%"${_trimmed##*[![:space:]]}"}"
+        [[ -n "$_trimmed" ]] && ALLOWED_SET+=("$_trimmed")
+    done
+    if [[ ${#ALLOWED_SET[@]} -eq 0 ]]; then
+        echo "WARN: LARCH_BUMP_FILES is set but empty after parsing; refusing to drop (fail-closed)" >&2
+        echo "DROPPED=false"
+        exit 0
+    fi
+    # CHANGELOG.md is always allowed (never required).
+    ALLOWED_SET+=("CHANGELOG.md")
+
+    # Membership check: every changed file must be in the allowed set.
+    ALLOWED_FAILED=false
+    while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+        FOUND=false
+        for allowed in "${ALLOWED_SET[@]}"; do
+            if [[ "$file" == "$allowed" ]]; then
+                FOUND=true
+                break
+            fi
+        done
+        if [[ "$FOUND" != "true" ]]; then
+            ALLOWED_FAILED=true
+            break
+        fi
+    done <<< "$CHANGED_FILES"
+
+    if [[ "$ALLOWED_FAILED" == "true" ]]; then
+        echo "WARN: HEAD subject matches bump pattern but commit touches unexpected files (changed: $CHANGED_FILES); refusing to drop" >&2
+        echo "DROPPED=false"
+        exit 0
+    fi
+else
+    # Default path: exact two-string equality (byte-identical to pre-configuration behavior).
+    # ALLOWED_* constants must match `sort`'s ASCII byte ordering (forced above via LC_ALL=C):
+    # '.' (0x2E) sorts before 'C' (0x43), so '.claude-plugin/plugin.json' comes before 'CHANGELOG.md'.
+    ALLOWED_ONE=".claude-plugin/plugin.json"
+    ALLOWED_TWO=$'.claude-plugin/plugin.json\nCHANGELOG.md'
+    if [[ "$CHANGED_FILES" != "$ALLOWED_ONE" && "$CHANGED_FILES" != "$ALLOWED_TWO" ]]; then
+        echo "WARN: HEAD subject matches bump pattern but commit touches unexpected files (changed: $CHANGED_FILES); refusing to drop" >&2
+        echo "DROPPED=false"
+        exit 0
+    fi
 fi
 
 # --- All guards passed: capture SHA and drop ---
