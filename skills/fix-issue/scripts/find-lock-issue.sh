@@ -108,11 +108,11 @@
 #
 # Umbrella support (explicit-issue path only — auto-pick mode never selects
 # umbrellas, per the design dialectic's DECISION_1):
-#   When the explicit issue is detected as an umbrella (body literal
-#   "Umbrella tracking issue." OR title — case-sensitive, after stripping
-#   zero or more leading bracket-blocks of the form `[...]` and/or `(...)`
-#   per #819 — that begins with `Umbrella: ` or `Umbrella — `), delegate to
-#   umbrella-handler.sh to either:
+#   When the explicit issue is detected as an umbrella (title-only post-#846
+#   — case-sensitive, after stripping zero or more leading bracket-blocks of
+#   the form `[...]` and/or `(...)` per #819, the remainder begins with
+#   `Umbrella: ` or `Umbrella — `; body content is NOT consulted), delegate
+#   to umbrella-handler.sh to either:
 #     - dispatch to the next-eligible child (pick-child returns CHILD_NUMBER),
 #       lock the CHILD using --lock-no-go (no GO required), rename the CHILD
 #       to [IN PROGRESS]. Emit IS_UMBRELLA=true UMBRELLA_NUMBER=<U>

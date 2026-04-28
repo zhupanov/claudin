@@ -14,21 +14,21 @@
 #   list-children --issue N
 #   pick-child   --issue N
 #
-# Detection (FINDING_13 — body primary, title fallback):
-#   1. Body literal "Umbrella tracking issue." (anywhere in body) — primary
-#      signal. /umbrella-rendered umbrellas always emit this literal as the
-#      first paragraph (see skills/umbrella/scripts/render-umbrella-body.sh).
-#   2. Title-fallback (per #819): a title where, after stripping zero or more
-#      leading bracket-blocks of the form `[...]` and/or `(...)` (each with
-#      optional surrounding whitespace) via a bounded peel loop (cap=16,
-#      fail-closed on unbalanced/unclosed leading bracket), the remainder
-#      starts with `Umbrella: ` or `Umbrella — ` — case-sensitive. Catches
-#      hand-authored umbrellas like #348 whose body is free-form prose with
-#      the marker missing, including titles that already carry an operator
-#      tag (e.g. `[IN PROGRESS] Umbrella: foo`, `(urgent) Umbrella: foo`).
-#      See `is_umbrella_title` (below) for the implementation and the
-#      sibling `umbrella-handler.md` Title-fallback section for the full
-#      grammar contract (non-nesting, cap=16, silent fail-closed).
+# Detection (title-only, post-#846):
+#   A title where, after stripping zero or more leading bracket-blocks of the
+#   form `[...]` and/or `(...)` (each with optional surrounding whitespace)
+#   via a bounded peel loop (cap=16, fail-closed on unbalanced/unclosed
+#   leading bracket), the remainder starts with `Umbrella: ` or `Umbrella — `
+#   — case-sensitive. Catches /umbrella-created umbrellas (whose titles follow
+#   the `Umbrella: <hint>` convention) and hand-authored umbrellas like #348,
+#   including titles that already carry an operator tag (e.g.
+#   `[IN PROGRESS] Umbrella: foo`, `(urgent) Umbrella: foo`). The body is NOT
+#   consulted — see `is_umbrella_title` (below) for the implementation and
+#   the sibling `umbrella-handler.md` Detection section for the full grammar
+#   contract (non-nesting, cap=16, silent fail-closed). Body-based detection
+#   was removed in #846 because the prior substring match on the literal
+#   `Umbrella tracking issue.` produced false positives on issues that
+#   *quoted* the marker in prose or code spans (e.g., #753).
 #
 # Child enumeration grammar (DECISION_3 — task-list checklist only):
 #   Only matches markdown task-list items with a same-repo `#N` reference:
@@ -91,19 +91,6 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-# is_umbrella_body — return 0 if the body contains the literal
-# "Umbrella tracking issue." emitted by /umbrella's render-umbrella-body.sh.
-# The check is case-sensitive: "umbrella tracking issue" (lowercase) does NOT
-# match. Whitespace-tolerant on either side of the literal — the literal is
-# expected on its own paragraph.
-is_umbrella_body() {
-    local body="$1"
-    case "$body" in
-        *"Umbrella tracking issue."*) return 0 ;;
-        *)                            return 1 ;;
-    esac
-}
 
 # is_umbrella_title — return 0 if the title, after stripping zero or more
 # leading bracket-blocks of the form [...] and/or (...) (each with optional
@@ -350,17 +337,10 @@ cmd_detect() {
         echo "ERROR=Failed to fetch issue #$issue"
         exit 1
     }
-    # Body-primary, title-fallback (FINDING_13).
-    if is_umbrella_body "$ISSUE_BODY"; then
-        echo "IS_UMBRELLA=true"
-        echo "UMBRELLA_TITLE=$ISSUE_TITLE"
-        echo "DETECTION=body"
-        return 0
-    fi
+    # Title-only detection (post-#846 — body is no longer consulted).
     if is_umbrella_title "$ISSUE_TITLE"; then
         echo "IS_UMBRELLA=true"
         echo "UMBRELLA_TITLE=$ISSUE_TITLE"
-        echo "DETECTION=title"
         return 0
     fi
     echo "IS_UMBRELLA=false"

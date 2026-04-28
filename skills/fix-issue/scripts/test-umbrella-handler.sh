@@ -155,9 +155,12 @@ assert_not_contains() {
 echo "Running test-umbrella-handler against $SCRIPT"
 
 # ---------------------------------------------------------------------------
-# Fixture 1: detect — body literal primary signal
+# Fixture 1: detect — body-literal-but-plain-title is NOT umbrella (#753 / #846)
+# Plain title with the body literal `Umbrella tracking issue.` quoted in the
+# body must NOT be detected as an umbrella. Body content is no longer
+# consulted by detect (post-#846).
 # ---------------------------------------------------------------------------
-echo "Fixture 1: detect — body literal"
+echo "Fixture 1: detect — body literal with plain title is NOT umbrella (#753)"
 run_fixture "fixture-1"
 cat > "$STUB_STATE_FILE" <<'STATE_EOF'
 ISSUE_100_TITLE='Some random title'
@@ -165,13 +168,12 @@ ISSUE_100_BODY=$'Umbrella tracking issue.\n\n## Summary\nFoo bar.\n\n## Children
 ISSUE_100_STATE=OPEN
 STATE_EOF
 OUT=$("$SCRIPT" detect --issue 100 2>&1) || true
-assert_contains "$OUT" "IS_UMBRELLA=true" "[1] body literal sets IS_UMBRELLA=true"
-assert_contains "$OUT" "DETECTION=body" "[1] DETECTION=body"
+assert_contains "$OUT" "IS_UMBRELLA=false" "[1] plain title + body literal → IS_UMBRELLA=false (body ignored)"
 
 # ---------------------------------------------------------------------------
-# Fixture 2: detect — title prefix fallback
+# Fixture 2: detect — title prefix
 # ---------------------------------------------------------------------------
-echo "Fixture 2: detect — title prefix fallback"
+echo "Fixture 2: detect — title prefix"
 run_fixture "fixture-2"
 cat > "$STUB_STATE_FILE" <<'STATE_EOF'
 ISSUE_200_TITLE='Umbrella: Move /implement meta-info to tracking issue'
@@ -180,7 +182,6 @@ ISSUE_200_STATE=OPEN
 STATE_EOF
 OUT=$("$SCRIPT" detect --issue 200 2>&1) || true
 assert_contains "$OUT" "IS_UMBRELLA=true" "[2] title prefix sets IS_UMBRELLA=true"
-assert_contains "$OUT" "DETECTION=title" "[2] DETECTION=title"
 
 # ---------------------------------------------------------------------------
 # Fixture 3: detect — non-umbrella
@@ -380,7 +381,6 @@ ISSUE_140_STATE=OPEN
 STATE_EOF
 OUT=$("$SCRIPT" detect --issue 140 2>&1) || true
 assert_contains "$OUT" "IS_UMBRELLA=true" "[14] [IN PROGRESS] Umbrella: → IS_UMBRELLA=true"
-assert_contains "$OUT" "DETECTION=title" "[14] DETECTION=title"
 
 # ---------------------------------------------------------------------------
 # Fixture 15: detect — [IN PROGRESS] (urgent) Umbrella: foo (#819 positive)
@@ -395,7 +395,6 @@ ISSUE_150_STATE=OPEN
 STATE_EOF
 OUT=$("$SCRIPT" detect --issue 150 2>&1) || true
 assert_contains "$OUT" "IS_UMBRELLA=true" "[15] [IN PROGRESS] (urgent) Umbrella: → IS_UMBRELLA=true"
-assert_contains "$OUT" "DETECTION=title" "[15] DETECTION=title"
 
 # ---------------------------------------------------------------------------
 # Fixture 16: detect — [IN PROGRESS] Do something umbrella related (#819 negative)
