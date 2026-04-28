@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `scripts/git-force-push.md` — sibling contract document for `scripts/git-force-push.sh`, documenting the stdout contract (`BRANCH`, `PUSHED`, `STATUS`), exit codes, callers, dependencies, and edit-in-sync rules per the AGENTS.md "Per-script contracts live beside the script" convention.
 
+### Fixed
+
+- `docs/installation-and-setup.md` — updated the `### Claude` settings snippet to match actual `~/.claude/settings.json` values: effort level `high` (was `xhigh`), model `claude-opus-4-6` (was `opus`).
+
 ## [7.17.51] - 2026-04-27
 
 ### Fixed
