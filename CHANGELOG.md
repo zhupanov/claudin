@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.38] - 2026-04-27
+
+### Added
+
+- `skills/implement/SKILL.md` — added new **Step 8b** (rebase onto latest main before PR creation) between Step 8a (CHANGELOG amend) and Step 9 (Create PR). Step 8b is inline (NOT a fifth Rebase Checkpoint Macro call site) because its contract differs from the macro's `--skip-if-pushed` semantics — it always rebases so resumed Branch 1/2/3 runs are refreshed before the PR is opened. On rebase exit 1 (conflict) or exit 3 (other failure), bails to Step 18 with `STALL_TRACKING=true`. On rebase success, distinguishes `git ls-remote --exit-code --heads` exit 0 (branch exists → force-push via `git-force-push.sh`), exit 2 (positively absent → fresh-branch path, skip force-push), and other non-zero (transport/auth failure → bail rather than silently degrading and letting `create-pr.sh:69` swallow a non-fast-forward push). Step 8 `HAS_BUMP=false` now skips to Step 8b (was: Step 9) so repos without a `/bump-version` skill also benefit from the freshness rebase. Skipped entirely when `repo_unavailable=true`. Updated `scripts/test-implement-rebase-macro.sh` assertion (H) to expect 3 `--no-push`-only call sites (was: 2). Closes #818.
+
 ## [7.17.37] - 2026-04-27
 
 ### Fixed
