@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.59] - 2026-04-27
+
+### Added
+
+- `LARCH_BUMP_FILES` env var — colon-separated list of bump files for `drop-bump-commit.sh` Guard 4, enabling consumer repos whose `/bump-version` touches files beyond `.claude-plugin/plugin.json` (e.g., `version.go`, `package.json`, `Cargo.toml`) to configure the allowed set.
+- `scripts/test-drop-bump-commit.sh` — 16-case offline regression harness for `drop-bump-commit.sh` Guard 4, wired into `make test-harnesses`.
+- `scripts/drop-bump-commit.md` — sibling contract document for `drop-bump-commit.sh`.
+
+### Changed
+
+- `scripts/drop-bump-commit.sh` Guard 4 — dual-path: exact equality when `LARCH_BUMP_FILES` unset (byte-identical default), membership check with `BUMP_FILE_FOUND` fail-closed gate when set. Empty-diff and CHANGELOG-only commits are rejected on both paths.
+- `skills/implement/references/conflict-resolution.md` Phase 1 — `LARCH_BUMP_FILES` entries classified as trivial only for bump-commit conflicts (not feature-commit conflicts), preserving multi-purpose file changes during rebase.
+
 ## [7.17.57] - 2026-04-27
 
 ### Changed

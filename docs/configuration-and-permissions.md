@@ -247,3 +247,25 @@ Per-million-token cost rate (USD) used by `/research`'s Step 4 token report (`##
 - The `$` column is omitted; the report shows only token counts.
 
 **Scope**: Token telemetry covers Claude subagent (Agent-tool) invocations only. Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from both the totals and the cost column. The report labels itself "Claude tokens only; external lanes excluded" so operators see the coverage honestly. See [`scripts/token-tally.md`](../scripts/token-tally.md) for the helper contract and `--token-budget` interaction.
+
+### `LARCH_BUMP_FILES`
+
+Colon-separated list of bump files that `scripts/drop-bump-commit.sh` Guard 4 accepts as the allowed non-changelog file set. Uses **replacement semantics**: when set, this list replaces the built-in default (`.claude-plugin/plugin.json`) — it is NOT additive. `CHANGELOG.md` is always allowed regardless of this setting (never required, always optional).
+
+This variable controls which commit shapes the Rebase + Re-bump Sub-procedure's step 1 (`drop-bump-commit.sh`) considers safe for destructive `git reset --hard HEAD~1`. Consumer repos whose `/bump-version` touches additional version files (e.g., `version.go`, `package.json`, `Cargo.toml`) should set this so the bump commit can be cleanly dropped before rebasing.
+
+Paths must match `git diff --name-only` output format (repo-root-relative, no `./` prefix). Paths must not contain `:` (the delimiter).
+
+**When set:**
+- Guard 4 parses the colon-separated list, strips whitespace from each segment, and skips empty segments
+- Every file in the bump commit's diff must appear in the parsed list (plus `CHANGELOG.md`, which is always allowed)
+- If parsing produces zero entries (e.g., `LARCH_BUMP_FILES=""`), the guard fails closed (`DROPPED=false`)
+
+**When not set:**
+- Guard 4 uses exact two-string equality against `.claude-plugin/plugin.json` alone or `.claude-plugin/plugin.json` + `CHANGELOG.md` — byte-identical to the pre-configuration behavior
+
+**Examples:**
+- `LARCH_BUMP_FILES="version.go"` — consumer repo that bumps only `version.go`
+- `LARCH_BUMP_FILES=".claude-plugin/plugin.json:version.go"` — hybrid repo that bumps both `plugin.json` and `version.go`
+- `LARCH_BUMP_FILES="package.json:package-lock.json"` — Node.js consumer repo
+- `LARCH_BUMP_FILES="Cargo.toml:Cargo.lock"` — Rust consumer repo
