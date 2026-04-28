@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.33] - 2026-04-27
+
+### Fixed
+
+- `skills/research/SKILL.md` — replaced the stale `(1 / 3+3 / 5+5)` lane-shape parenthetical on the `--scale=` flag bullet (line 31) with `(3+0 / 3+3 / 5+5)` to match the file's `description:` on line 3 and the canonical scale matrix (per #520, `quick = 3+0`). Same family of stale-lane-count fix as #782 (which fixed `skills/research/diagram.svg`), different file. Documentation-only correction; runtime behavior unchanged. Closes #823.
+
 ## [7.17.32] - 2026-04-27
 
 ### Changed
