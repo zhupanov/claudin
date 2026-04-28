@@ -34,7 +34,7 @@ make test-eval-research-baseline-flag
 
 - A stub `claude` is planted in a `mktemp -d` PATH-prefix so `eval-research.sh`'s `require_tool claude` check succeeds. The real binary is never invoked because `--id nonexistent-id-zzz` causes the eval loop to iterate zero entries.
 - A stub `jq` is planted similarly. The only `jq` call before the baseline block is `validate_baseline_json`'s `jq -e '.version and .scale and (.entries | type == "array")' <file>`, which only checks exit status. The stub returns exit 0 unconditionally. The committed `eval-baseline.json` is a schema-only stub, so any real `jq` would also pass.
-- The PATH-stub pattern mirrors `scripts/test-loop-improve-skill-driver.sh:25` and is the repo precedent for offline operation in tests that exercise `claude`-dependent scripts.
+- The PATH-stub pattern mirrors `scripts/test-loop-improve-skill-driver.sh` and is the repo precedent for offline operation in tests that exercise `claude`-dependent scripts.
 
 ## Edit-in-sync
 
