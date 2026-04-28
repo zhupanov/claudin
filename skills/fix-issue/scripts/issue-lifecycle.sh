@@ -281,6 +281,7 @@ cmd_close() {
             --issue) issue="${2:?--issue requires a value}"; shift 2 ;;
             --comment) comment="${2:?--comment requires a value}"; shift 2 ;;
             --pr-url) pr_url="${2:?--pr-url requires a value}"; shift 2 ;;
+            --repo) shift 2 ;;
             *) echo "Unknown option for close: $1" >&2; exit 2 ;;
         esac
     done

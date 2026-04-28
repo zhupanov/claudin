@@ -44,7 +44,7 @@ DETAIL=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --issue-number) ISSUE_NUMBER="${2:?--issue-number requires a value}"; shift 2 ;;
+        --issue-number|--issue) ISSUE_NUMBER="${2:?--issue-number requires a value}"; shift 2 ;;
         --status) STATUS="${2:?--status requires a value}"; shift 2 ;;
         --repo) REPO="${2:?--repo requires a value}"; shift 2 ;;
         --token) TOKEN="${2:?--token requires a value}"; shift 2 ;;

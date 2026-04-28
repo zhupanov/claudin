@@ -350,6 +350,20 @@ combined_log=$(cat "$TMPROOT/f7a/gh-invocations.log" "$TMPROOT/f7b/gh-invocation
 done_comment_count=$(printf '%s\n' "$combined_log" | grep -c '^comment|42|DONE$' || true)
 assert_eq "[f7] DONE comment posted exactly twice across retry sequence" 2 "$done_comment_count"
 
+# --- Fixture 8: --repo silently ignored ----------------------------------
+# The LLM occasionally passes --repo to close (the script resolves repo
+# internally via gh repo view). Verify --repo is silently consumed without
+# affecting stdout or close behavior.
+echo ""
+echo "=== 8: close with spurious --repo (silently ignored) ==="
+run_case "f8" "OPEN" "0" "0" --issue 42 --comment DONE --repo "owner/repo"
+assert_eq "[f8] exit code" 0 "$RC"
+assert_contains "$CLOSE_STDOUT" "CLOSED=true" "[f8] stdout has CLOSED=true"
+assert_not_contains "$CLOSE_STDOUT" "CLOSED=false" "[f8] stdout has no CLOSED=false"
+log8=$(cat "$TMPROOT/f8/gh-invocations.log")
+assert_contains "$log8" "comment|42|DONE" "[f8] DONE comment posted"
+assert_contains "$log8" "close|42" "[f8] gh issue close invoked"
+
 # --- Summary --------------------------------------------------------------
 echo ""
 echo "=== Summary ==="

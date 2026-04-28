@@ -24,6 +24,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --dir) DIR="${2:?--dir requires a value}"; shift 2 ;;
         --help) usage; exit 0 ;;
+        /tmp/*|/private/tmp/*) DIR="$1"; shift ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
 done
