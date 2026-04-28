@@ -66,12 +66,12 @@ Pin the load-bearing literals of the new `created-eq-1` bypass branch (closes #7
   - (c1) one-shot filed: `✅ /umbrella: filed #<N> — <url>`
   - (c2) one-shot dedup'd: `ℹ /umbrella: dedup'd to #<N> — <url>`
   - (c3) one-shot failed: `**⚠ /umbrella: failed — <error>**`
-  - (c4) multi-piece success: `✅ /umbrella: filed umbrella #<M> with <N> children, <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`
-  - (c5) multi-piece dry-run: `ℹ /umbrella: dry-run — would file umbrella with <N> children`
-  - (c6) multi-piece partial — fallback (no `UMBRELLA_FAILURE_REASON`): `**⚠ /umbrella: <N> children created but umbrella creation failed. Children remain unlinked.**`
-  - (c6b) multi-piece partial — with `UMBRELLA_FAILURE_REASON` parenthetical: `**⚠ /umbrella: <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**`
-  - (c7) multi-piece children-batch-failed (umbrella never attempted): `**⚠ /umbrella: /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`
-  - (c8) created-eq-1 bypass — multi-piece downgraded one-shot (added in #717): `✅ /umbrella: filed #<N> — <url> (multi-piece downgraded — created-eq-1, <D> sibling(s) deduplicated to existing issues, no umbrella issue created)`
+  - (c4) multi-piece success: `✅ /umbrella: <T> pieces, filed umbrella #<M> with <C> children (<D> deduplicated), <E> dependency edge(s), <B> back-link(s) — <umbrella-url>`
+  - (c5) multi-piece dry-run: `ℹ /umbrella: dry-run — <T> pieces, would file umbrella with <N> children`
+  - (c6) multi-piece partial — fallback (no `UMBRELLA_FAILURE_REASON`): `**⚠ /umbrella: <T> pieces → <N> children created but umbrella creation failed. Children remain unlinked.**`
+  - (c6b) multi-piece partial — with `UMBRELLA_FAILURE_REASON` parenthetical: `**⚠ /umbrella: <T> pieces → <N> children created but umbrella creation failed (<UMBRELLA_FAILURE_REASON>). Children remain unlinked.**`
+  - (c7) multi-piece children-batch-failed (umbrella never attempted): `**⚠ /umbrella: <T> pieces → /issue batch reported <F> failure(s); refusing to create a half-populated umbrella. <N> children remain unlinked.**`
+  - (c8) created-eq-1 bypass — multi-piece downgraded one-shot (added in #717): `✅ /umbrella: <T> pieces → 1 created, <D> deduplicated; filed #<N> — <url> (downgraded — created-eq-1, no umbrella issue created)`
 
   Issue #602 specifies "the four canonical shape templates" but explicitly includes "dry-run and partial-failure variants of multi-piece as documented in Step 4". On disk, Step 4 now contains nine concrete breadcrumb literals — the multi-piece partial case has dual shapes (with-reason / fallback) that #644 surfaced as both load-bearing, the children-batch-failed variant was added after #602 was filed, and the created-eq-1 bypass shape was added in #717. The harness pins each concrete literal to guard against silent shape deletion — pinning fewer would let one variant disappear unnoticed.
 
@@ -128,7 +128,7 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 
 ## Edit-in-sync rules
 
-- Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the eight concrete literals — c1–c7 plus c6b) requires a same-PR update to the corresponding assertion literal in this harness.
+- Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the nine concrete literals — c1–c8 plus c6b) requires a same-PR update to the corresponding assertion literal in this harness.
 - Any change to helpers.md `emit-output` subsection (stderr discipline sentence, the orchestrator-emits-breadcrumb sentence, or the wire-dag carve-out) requires the same.
 - Renaming or renumbering Step 2, Step 3B.1, Step 3B.2, Step 3B.3, Step 3B.4, or Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
 - Any change to SKILL.md Step 3B.1's "Bundle very small work items" rule (sizing magnitude clause, security/permissions carve-out, pairwise-incomparable rule, merged-`depends_on` union rule, `###` prohibition with `parse-input.sh` WHY including the fenced-block clarification, the keep-N-at-least-2 rule, or the same-area cohesion criterion) requires a same-PR update to the corresponding `(j1)`–`(j7)` assertion literal here. Each clause is pinned individually so silently dropping any one clause cannot pass the harness — do NOT collapse them into a single shared-substring assertion.
