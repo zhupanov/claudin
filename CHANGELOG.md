@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.7] - 2026-04-28
+
+### Fixed
+
+- `get-issue-details.sh` — replaced `echo` with `printf '%s\n'` for issue body and comment body serialization to prevent corruption when bodies start with `-n` or `-e`.
+- `get-issue-details.sh` — fixed empty-label fallback from `join(", ") // "none"` (jq `//` does not substitute for empty string) to explicit `if length == 0` check.
+
 ## [12.0.1] - 2026-04-28
 
 ### Removed
