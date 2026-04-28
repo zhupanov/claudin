@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.42] - 2026-04-27
+
+### Fixed
+
+- `skills/research/scripts/validate-citations.sh` — moved `export __VC_SETSID_DONE=1` inside the `command -v setsid` branch so the marker accurately reflects "running in the dedicated setsid session", and gated the Linux budget-exhaustion `kill -- -$$` on `__VC_SETSID_DONE=1`. When `setsid` is absent from PATH the timeout handler now falls back to per-PID `kill` over `CURL_PIDS` (orphan curl children bounded by `--per-fetch-timeout`) instead of self-signaling the validator's own process group. Restores the documented "always exits 0" fail-soft contract on Linux hosts where `setsid` is missing — previously the script could exit 143 with no sidecar. Sibling contract docs (`skills/research/scripts/validate-citations.md`, `skills/research/references/citation-validation-phase.md`) updated to describe the dual role of `__VC_SETSID_DONE` and the no-setsid fallback. Closes #779.
+
 ## [7.17.41] - 2026-04-27
 
 ### Fixed
