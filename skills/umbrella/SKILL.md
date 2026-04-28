@@ -126,6 +126,17 @@ Decompose `TASK` into N concrete work-pieces (`N >= 2`). Each piece must be smal
 - `body` — markdown, the implementation contract for that piece (problem, suggested approach, acceptance criteria).
 - `depends-on` — comma-separated 1-based indices of earlier pieces this one depends on (empty if none).
 
+**Bundle very small work items into fewer pieces** (token-cost optimization for downstream `/implement`). When two or more candidate pieces are each "very small" — expected to be under ~10 lines of change, especially when touching only 1-3 files — bias toward merging them into a single composed `(title, body, depends-on)` tuple rather than filing each as its own issue. **Exception — low-risk subject matter only**: a 6-line auth, permissions, or security-critical change is small but NOT bundle-safe; keep such items as separate pieces so review and rollback granularity remain crisp.
+
+Bundling criteria (all required):
+
+- **Same area**: bundled items touch the same component, the same skill, or the same script-and-its-test pair.
+- **Pairwise incomparable in the dependency graph**: for every pair of bundled items, no directed path exists between them in either direction in the combined `depends_on` graph. Direct-edge absence alone is not sufficient — in chain `1 → 2 → 3`, items `1` and `3` are transitively comparable via `2`, so bundling them while leaving `2` separate breaks ordering.
+- **Merged `depends_on` = sorted unique union of all bundled items' predecessors**, mapped to new 1-based indices after the array is compacted. Forbid self-references and out-of-range refs.
+- **Body shape**: enumerate sub-tasks as a markdown checklist using `- [ ]` bullets only. **Do NOT use `###` sub-headers anywhere inside the bundled body, including inside fenced code blocks** — `/issue`'s `parse-input.sh` is line-based and treats any `^### <title>` line as a new-item boundary in generic mode (Path 3: flush current item + start new), which would silently undo the bundle. Use `**bold**` headings or `####` level-4 for any internal structure.
+
+Bundling must keep at least 2 final pieces. If every candidate item is genuinely tiny enough that even two thematic groups feel artificial, fall through to the existing `decomposition-lt-2` one-shot path below — filing the original `TASK` as a single issue is consistent with the "fewer issues" goal.
+
 If decomposition produces fewer than 2 pieces, fall back to one-shot: print three strict KV lines — `UMBRELLA_VERDICT=one-shot` (preserving the Step 2 `UMBRELLA_VERDICT=<one-shot|multi-piece>` token grammar), `UMBRELLA_DOWNGRADE=decomposition-lt-2` (shell-safe machine token capturing the downgrade trigger on a separate KV line), and `UMBRELLA_RATIONALE=Downgraded from multi-piece — fewer than two decomposed pieces` (preserving the Step 2 verdict + rationale shape required by the "NEVER skip the user-visible classification verdict" anti-pattern) — and execute Step 3A with the original `TASK`. Carry `UMBRELLA_DOWNGRADE=decomposition-lt-2` through to Step 4's `output.kv` (see the optional schema entry).
 
 Render the batch-input markdown file:

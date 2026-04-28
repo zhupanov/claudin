@@ -10,7 +10,18 @@ This is a *structural* test (literal-substring assertions on `awk`-extracted blo
 
 ## Coverage
 
-Forty assertions, fail-fast on first miss.
+Forty-six assertions, fail-fast on first miss.
+
+### Step 3B.1 block (extracted from SKILL.md) — very-small-item bundling rule
+
+Pin the six load-bearing clauses of the new "Bundle very small work items" rule. The rule biases `/umbrella`'s LLM-driven decomposition toward merging "very small" items (expected <10 LOC, especially affecting 1-3 files) into fewer composed pieces, to reduce downstream `/implement` token cost. The `j*` family pins each load-bearing clause separately so any future edit that silently drops or rewords a clause breaks CI (per the harness's pin-each-load-bearing-clause discipline established by `g*` for created-eq-1 and `i*` for PROBE_FAILED).
+
+- (j1) Step 3B.1 sizing-magnitude clause: ``expected to be under ~10 lines of change, especially when touching only 1-3 files``. Pins the user-supplied "very small" definition.
+- (j2) Step 3B.1 low-risk / security carve-out: ``auth, permissions, or security-critical change is small but NOT bundle-safe``. Pins the carve-out that prevents bundling tiny-but-risky items where review and rollback granularity matter.
+- (j3) Step 3B.1 pairwise-incomparable bundling rule (transitive): ``Pairwise incomparable in the dependency graph``. Pins the requirement that bundled items have no directed path between them in either direction (not merely no direct edge — an edge-only check would permit transitively-comparable bundling like `1` and `3` in chain `1 → 2 → 3`).
+- (j4) Step 3B.1 merged-`depends_on` union rule: `` Merged `depends_on` = sorted unique union of all bundled items' predecessors ``. Pins the construction rule for the bundled piece's `depends_on` after compaction so Step 3B.4's blocked-by edges remain ordering-correct.
+- (j5) Step 3B.1 `###` prohibition with `parse-input.sh` WHY (including fenced blocks): `` Do NOT use `###` sub-headers anywhere inside the bundled body, including inside fenced code blocks ``. Pins the cross-script contract guard — `/issue`'s `parse-input.sh` is line-based and treats `^### <title>` as an item-split boundary in generic mode (Path 3) even inside fenced code blocks, which would silently undo the bundle.
+- (j6) Step 3B.1 keep-N-at-least-2 rule: ``Bundling must keep at least 2 final pieces``. Pins the floor that prevents collapse to 1 piece, which would trip `decomposition-lt-2` and discard the bundled title/body in favor of the raw `TASK`.
 
 ### Step 2 block (extracted from SKILL.md) — added in #724
 
@@ -90,6 +101,7 @@ The Step 3B.4 block now documents the three-way wire-dag probe classification (i
 | Block | Start regex | End regex |
 |-------|-------------|-----------|
 | SKILL.md Step 2 | `^## Step 2 — Classify One-Shot vs Multi-Piece` (full heading) | `^## Step 3A` (prefix only) |
+| SKILL.md Step 3B.1 | `^### 3B\.1` plus space (subheading prefix) | `^### 3B\.2` plus space (next subheading prefix) |
 | SKILL.md Step 3B.2 | `^### 3B\.2` plus space (subheading prefix) | `^### 3B\.3` plus space (next subheading prefix) |
 | SKILL.md Step 3B.3 | `^### 3B\.3` plus space (subheading prefix) | `^### 3B\.4` plus space (next subheading prefix) |
 | SKILL.md Step 3B.4 | `^### 3B\.4` plus space (subheading prefix) | `^## Step 4 — Emit Output` (full heading) |
@@ -104,7 +116,8 @@ The Step 5 end regex is deliberately a prefix match (not the full heading): it t
 
 - Any change to SKILL.md Step 4 prose (orchestrator-attribution sentence, single-emission-point invariant, or any of the eight concrete literals — c1–c7 plus c6b) requires a same-PR update to the corresponding assertion literal in this harness.
 - Any change to helpers.md `emit-output` subsection (stderr discipline sentence, the orchestrator-emits-breadcrumb sentence, or the wire-dag carve-out) requires the same.
-- Renaming or renumbering Step 2, Step 3B.2, Step 3B.3, Step 3B.4, or Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
+- Renaming or renumbering Step 2, Step 3B.1, Step 3B.2, Step 3B.3, Step 3B.4, or Step 4 in SKILL.md, or renaming the `emit-output` subcommand in helpers.md, requires updating the boundary regexes here AND in the table above.
+- Any change to SKILL.md Step 3B.1's "Bundle very small work items" rule (sizing magnitude clause, low-risk/security carve-out, pairwise-incomparable rule, merged-`depends_on` union rule, `###` prohibition with `parse-input.sh` WHY including the fenced-block clarification, or the keep-N-at-least-2 rule) requires a same-PR update to the corresponding `(j1)`–`(j6)` assertion literal here. Each clause is pinned individually so silently dropping any one clause cannot pass the harness — do NOT collapse them into a single shared-substring assertion.
 - Any change to SKILL.md Step 3B.2's `created-eq-1` bypass branch (predicate, precedence note, "do NOT execute Step 3A" guardrail, condition heading) requires a same-PR update to the corresponding `(g1)`–`(g4)` assertion literal here.
 - Any change to SKILL.md Step 4's UMBRELLA_DOWNGRADE schema parenthetical (the enumeration of emission sites) requires preserving all 3 downgrade tokens (`decomposition-lt-2`, `input-file-distinct-lt-2`, `created-eq-1`); pinned by `(a3)`, `(a3b)`, `(a3c)`.
 - Adding a new canonical breadcrumb shape to SKILL.md Step 4: add a corresponding `(c<N>)` assertion here.
