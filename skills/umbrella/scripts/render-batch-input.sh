@@ -72,6 +72,19 @@ for i in $(seq 0 $((PIECES_TOTAL - 1))); do
   if [ -z "$body" ]; then
     echo "ERROR=pieces.json entry $((i + 1)) is missing 'body'" >&2; exit 1
   fi
+  # Reject bodies with line-start `### ` patterns: each piece body flows
+  # verbatim into batch-input.md after a `### <title>` heading and is consumed
+  # by /issue --input-file's line-based parser. In generic mode (which all
+  # /umbrella pieces enter via Path 3 at parse-input.sh:393-423), any body line
+  # matching `^### ` triggers flush_item + a new generic item — silently
+  # splitting one piece into multiple parsed items with corrupted titles and
+  # broken depends_on index alignment. Mechanical enforcement parallel to the
+  # case-(d) embedded-LF-in-title guard above; producer-side prompt directive
+  # in /umbrella SKILL.md Step 3B.1 is the first-line rule.
+  case "$body" in '### '*|*$'\n### '*)
+    echo "ERROR=pieces.json entry $((i + 1)) body contains line starting with '### '" >&2; exit 1
+    ;;
+  esac
   # depends_on must be an array of numbers, each in [1, i].
   deps_type=$(jq -r ".[$i].depends_on // [] | type" "$PIECES_FILE")
   if [ "$deps_type" != "array" ]; then

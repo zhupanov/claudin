@@ -158,6 +158,43 @@ assert_invalid_title() {
   PASS=$((PASS + 1))
 }
 
+# assert_invalid_body — feed valid JSON whose entry 1 has a body containing a
+# line starting with `### ` and verify the per-entry validator rejects it with
+# the documented `ERROR=pieces.json entry <i> body contains line starting
+# with '### '` line + exit 1. Closes #847 — without the guard, a piece body
+# containing a `### ` line flows verbatim into batch-input.md and `/issue
+# --input-file`'s line-based parser (parse-input.sh Path 3, generic mode)
+# treats it as a new-item boundary, silently splitting one piece into multiple
+# parsed items with corrupted titles and broken depends_on index alignment.
+# The JSON `\n` escape materializes via jq -r as a real LF in the captured
+# shell value.
+assert_invalid_body() {
+  local label="$1"
+  local content="$2"
+  local pieces="$TMP/pieces.json"
+  printf '%s' "$content" > "$pieces"
+  local stderr_file="$TMP/stderr.txt"
+  local exit_code=0
+  bash "$SCRIPT" --tmpdir "$TMP" --pieces-file "$pieces" >/dev/null 2>"$stderr_file" || exit_code=$?
+
+  if [[ "$exit_code" -ne 1 ]]; then
+    printf '  ❌ %s — expected exit 1, got %d (stderr: %s)\n' \
+      "$label" "$exit_code" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  if ! grep -qF "ERROR=pieces.json entry 1 body contains line starting with '### '" "$stderr_file"; then
+    printf '  ❌ %s — stderr missing "ERROR=pieces.json entry 1 body contains line starting with '\''### '\''" line. Got: %s\n' \
+      "$label" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  printf '  ✅ %s — exit 1 + body ### line-start rejection present\n' "$label"
+  PASS=$((PASS + 1))
+}
+
 # assert_unwritable_tmpdir — feed a valid pieces.json but point --tmpdir at a
 # directory whose write bit is cleared, and verify the script rejects it BEFORE
 # any redirect under $TMPDIR (which would otherwise produce a raw bash
@@ -275,6 +312,16 @@ assert_invalid_depends_on "fractional depends_on" '[{"title":"a","body":"b","dep
 # materializes via jq -r as a real LF in the captured shell value.
 assert_invalid_title "embedded newline in title" '[{"title":"Multi\nline title","body":"b","depends_on":[]},{"title":"second","body":"c","depends_on":[]}]'
 
+# Body containing a line starting with `### `: per-entry validator must reject
+# such bodies so they cannot flow verbatim into batch-input.md and split into
+# multiple parsed items downstream in /issue --input-file's parser (closes #847).
+# Mid-body case — `### ` after a `\n`.
+assert_invalid_body "body with ### at line start (mid-body)" '[{"title":"a","body":"intro paragraph\n### subheading\nmore body","depends_on":[]},{"title":"b","body":"c","depends_on":[]}]'
+
+# Body whose first line starts with `### ` (no preceding newline) — must also
+# be rejected, exercising the leading-position branch of the case glob.
+assert_invalid_body "body with ### at body start" '[{"title":"a","body":"### subheading\nbody continues","depends_on":[]},{"title":"b","body":"c","depends_on":[]}]'
+
 # Unwritable --tmpdir: writability preflight must reject the directory BEFORE
 # any redirect under $TMPDIR (`2>"$JQ_PARSE_ERR"`, `: > "$OUT"`) produces a raw
 # bash "Permission denied" line that breaks the documented `ERROR=...` grammar
@@ -283,6 +330,39 @@ assert_unwritable_tmpdir "unwritable tmpdir"
 
 # Valid 2-piece baseline: confirms the new guard doesn't regress the happy path.
 assert_valid_baseline "valid 2-piece baseline"
+
+# Body with non-triggering hash patterns (`## `, `#### `, `###X` without trailing
+# space) and `### ` not at line start: the case-(f) guard MUST NOT false-positive
+# on these — only `^### ` (three hashes + space at line start) triggers
+# parse-input.sh Path 3, so the guard's match grammar is intentionally narrow.
+assert_valid_baseline_with_body() {
+  local label="$1"
+  local body_content="$2"
+  local pieces="$TMP/pieces.json"
+  jq -n --arg b "$body_content" '[
+    {title: "First piece", body: $b, depends_on: []},
+    {title: "Second piece", body: "Second body content.", depends_on: [1]}
+  ]' > "$pieces"
+  local stdout_file="$TMP/stdout.txt"
+  local stderr_file="$TMP/stderr.txt"
+  local exit_code=0
+  bash "$SCRIPT" --tmpdir "$TMP" --pieces-file "$pieces" >"$stdout_file" 2>"$stderr_file" || exit_code=$?
+
+  if [[ "$exit_code" -ne 0 ]]; then
+    printf '  ❌ %s — expected exit 0, got %d (stderr: %s)\n' \
+      "$label" "$exit_code" "$(cat "$stderr_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  printf '  ✅ %s — exit 0, guard correctly skipped non-triggering patterns\n' "$label"
+  PASS=$((PASS + 1))
+}
+
+assert_valid_baseline_with_body "body with ## (2 hashes)" $'intro\n## subheading\nmore'
+assert_valid_baseline_with_body "body with #### (4 hashes)" $'intro\n#### subheading\nmore'
+assert_valid_baseline_with_body "body with ### no trailing space" $'intro\n###heading\nmore'
+assert_valid_baseline_with_body "body with ### mid-line (not at line start)" $'intro paragraph mentioning ### in prose\nmore'
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
