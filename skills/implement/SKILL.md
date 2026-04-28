@@ -747,11 +747,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/check-bump-version.sh --mode pre
 
 Parse `HAS_BUMP`, `COMMITS_BEFORE`, `STATUS` (`ok|missing_main_ref|git_error` per #172). If `STATUS != ok`, the pre-mode count is untrustworthy — log `**⚠ 8: version bump — pre-check STATUS=$STATUS, commit count may be unreliable. Continuing.**` to `Warnings` and proceed. Step 8 is pre-PR and permissive; last-chance enforcement is in the Rebase + Re-bump Sub-procedure step 4 invoked by Step 12 (step12 family), which hard-bails on non-`ok` STATUS from either pre- or post-check.
 
-**If `HAS_BUMP=false`**: print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 9.
+**If `HAS_BUMP=false`**: print `**⚠ VERSION BUMP SKIPPED: No /bump-version skill found at .claude/skills/bump-version/SKILL.md. To enable automatic version bumps, create a /bump-version skill in this repo. The skill should determine the current version, classify the bump type, compute the new version, edit the version file, and commit.**` and skip to Step 8b. The freshness rebase at Step 8b still runs so resumed Branch 1/2/3 runs in repos without a `/bump-version` skill are refreshed before PR creation; Step 8a (CHANGELOG amend) is bypassed because there is no bump commit to amend.
 
 **If `HAS_BUMP=true`**:
 
-> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: `HAS_BUMP=false` skips to Step 9 per the control-flow directive above, which overrides this rule.)
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: `HAS_BUMP=false` skips to Step 8b per the control-flow directive above, which overrides this rule.)
 
 1. Invoke `/bump-version` via the Skill tool.
 2. **Capture the reasoning file path**: when invoked via Skill tool, `IMPLEMENT_TMPDIR` does not always propagate to the skill's bash env, so `classify-bump.sh` may write `bump-version-reasoning.md` to `${TMPDIR:-/tmp}`. The authoritative path is on stdout as `REASONING_FILE=<path>`. Parse and save as `BUMP_REASONING_FILE` for step 3b, Step 9a, and the sub-procedure step 6.
@@ -772,7 +772,7 @@ Compose the `version-bump-reasoning` fragment from the contents of `$BUMP_REASON
 
 ## Step 8a — CHANGELOG Update
 
-Skip and proceed to Step 8b if `CHANGELOG.md` does not exist in the project root (print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`) or if Step 8 was skipped (`HAS_BUMP=false`; print `⏩ 8a: changelog — skipped (no version bump) (<elapsed>)`). The freshness rebase at Step 8b still runs on these paths so resumed Branch 1/2/3 runs are refreshed before PR creation. (Note: Step 8's earlier `HAS_BUMP=false` directive skips directly to Step 9, intentionally bypassing both Step 8a and Step 8b — see "If `HAS_BUMP=false`" above.)
+Skip and proceed to Step 8b if `CHANGELOG.md` does not exist in the project root (print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`). The freshness rebase at Step 8b still runs on this path so resumed Branch 1/2/3 runs are refreshed before PR creation. (Step 8's `HAS_BUMP=false` directive bypasses Step 8a entirely and skips directly to Step 8b — there is no CHANGELOG amend without a bump commit to amend.)
 
 Otherwise: read `CHANGELOG.md` and `NEW_VERSION` (from `/bump-version` output in Step 8). Compose a brief changelog entry using the Summary bullets from the implementation (same 1-3 bullets as Step 9a's PR body `## Summary`). Today's date. Format:
 
@@ -819,23 +819,30 @@ Capture the exit code as `rc`. Branch:
 
 If `repo_unavailable=true`: skip the force-push branch entirely (no `git ls-remote` / `git-force-push.sh` calls — neither has a `gh` dependency, but the convention is to keep Step 8b's network surface minimal in `repo_unavailable=true` mode parallel to Step 0.5 / 10 / 12 / 18). Proceed to Step 9.
 
-Otherwise, detect whether the feature branch already exists on `origin`:
+Otherwise, detect whether the feature branch already exists on `origin`. Capture the exit code of `git ls-remote --exit-code --heads`:
 
 ```bash
 git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1
+ls_remote_rc=$?
 ```
 
-If exit 0 (branch exists on origin), the local rebase may have rewritten history that origin still points at; force-push to align them:
+`git ls-remote --exit-code` returns 0 when the named ref is found, 2 when it is positively confirmed absent, and other non-zero (typically 128) on transport / auth / network failures. Distinguish the three:
 
-```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/git-force-push.sh
-```
+- **Exit 0** (branch exists on origin): the local rebase may have rewritten history that origin still points at; force-push to align them:
 
-Parse `STATUS`:
-- `STATUS=pushed` or `STATUS=noop_same_ref`: print `✅ 8b: rebase — force-pushed to origin (<elapsed>)`. Proceed to Step 9.
-- `STATUS=diverged_retry_failed` (exit 1): print `**⚠ Step 8b: force-push failed after rebase (lease check refused). Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/git-force-push.sh
+  ```
 
-If `git ls-remote` exits non-zero (branch does NOT exist on origin — the fresh-branch path), skip the force-push entirely; Step 9b's `create-pr.sh` will perform the initial push. Detection is Git-based (not via `gh pr view`) so transient GitHub API failures do not silently degrade to a stale-remote path — see issue #818 for the failure-mode rationale.
+  Parse `STATUS`:
+  - `STATUS=pushed` or `STATUS=noop_same_ref`: print `✅ 8b: rebase — force-pushed to origin (<elapsed>)`. Proceed to Step 9.
+  - `STATUS=diverged_retry_failed` (exit 1): print `**⚠ Step 8b: force-push failed after rebase (lease check refused). Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+
+- **Exit 2** (branch positively confirmed absent on origin — the fresh-branch path): skip the force-push entirely; Step 9b's `create-pr.sh` will perform the initial push.
+
+- **Other non-zero exit** (transport / auth / network failure — e.g., 128): do NOT degrade to the fresh-branch path, because that would silently mask a real network problem and let `create-pr.sh`'s existing-PR fast-path swallow the subsequent non-fast-forward push failure. Print `**⚠ Step 8b: git ls-remote --heads failed (exit $ls_remote_rc; transport or auth error). Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18.
+
+Detection is Git-based (not via `gh pr view`) so transient GitHub API failures do not silently degrade to a stale-remote path — see issue #818 for the failure-mode rationale.
 
 ## Step 9 — Create PR
 

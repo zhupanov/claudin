@@ -147,7 +147,8 @@ sed -n "${macro_section_start},${macro_section_end}p" "$SKILL_MD" | grep -Fq '**
 # (H) Exactly 1 occurrence of 'rebase-push.sh --no-push --skip-if-pushed' (macro M2 only).
 #     Before the refactor, the four blocks at 1.r/4.r/7.r/7a.r each had this exact flag combo.
 #     After the refactor, only the macro has it — so a residual inline block would push the
-#     count to 2+ and fail this assertion. Step 1.m and Sub-procedure use `--no-push` alone.
+#     count to 2+ and fail this assertion. Step 1.m, Step 8b, and Sub-procedure use
+#     `--no-push` alone (see the secondary sanity check below for the three-site count).
 # ---------------------------------------------------------------------------
 rebase_push_skip_count=$(grep -cF '${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push --skip-if-pushed' "$SKILL_MD" || true)
 [[ "$rebase_push_skip_count" == "1" ]] \
