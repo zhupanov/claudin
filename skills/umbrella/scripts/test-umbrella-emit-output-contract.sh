@@ -418,5 +418,21 @@ assert_contains "j7: 3B.1 same-area cohesion criterion" \
     '**Same area**: bundled items touch the same component' \
     "$STEP3B1_BLOCK"
 
+# (k*) Issue #778 pieces-json inter-piece dependency edges. Pins the Step 3B.4
+# edge composition from PIECES_JSON, the Step 3B.1.5 validation call, and the
+# Step 3B.2 --intra-batch-deps-file forwarding.
+assert_contains "k1: 3B.4 PIECES_JSON non-empty sub-case" \
+    'When `PIECES_JSON` is non-empty' \
+    "$STEP3B4_BLOCK"
+assert_contains "k2: 3B.4 PIECES_JSON edge composition references validated file" \
+    'validated `PIECES_JSON` (validated at Step 3B.1.5)' \
+    "$STEP3B4_BLOCK"
+assert_contains "k3: 3B.1(.5) validate-pieces-json.sh call" \
+    'validate-pieces-json.sh --pieces-file' \
+    "$STEP3B1_BLOCK"
+assert_contains "k4: 3B.2 --intra-batch-deps-file forwarding" \
+    '--intra-batch-deps-file' \
+    "$STEP3B2_BLOCK"
+
 echo
 echo "All $PASS_COUNT assertions passed."

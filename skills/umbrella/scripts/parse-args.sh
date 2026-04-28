@@ -16,6 +16,7 @@
 #   DEBUG=<true|false>
 #   INPUT_FILE=<path — empty if --input-file not specified>
 #   UMBRELLA_SUMMARY_FILE=<path — empty if --umbrella-summary-file not specified>
+#   PIECES_JSON=<path — empty if --pieces-json not specified>
 #   TASK=<verbatim remainder of $ARGS_STR after the flag prefix — may be
 #         empty; preserves embedded whitespace AND any quote/escape characters>
 #   UMBRELLA_TMPDIR=<absolute path — newly-created mktemp dir owned by this run>
@@ -35,6 +36,8 @@
 #   ERROR=embedded newline in quoted value at offset <N>
 #   ERROR=embedded newline in unquoted value at offset <N>
 #   ERROR=embedded newline in TASK at offset <N>
+#   ERROR=--pieces-json requires a value
+#   ERROR=--pieces-json requires --input-file
 #   ERROR=--input-file and --umbrella-summary-file must be passed together
 #   ERROR=--input-file is mutually exclusive with positional TASK
 #
@@ -58,6 +61,7 @@ GO="false"
 DEBUG="false"
 INPUT_FILE=""
 UMBRELLA_SUMMARY_FILE=""
+PIECES_JSON=""
 
 # Single positional argument: the entire $ARGUMENTS string from the SKILL.
 ARGS_STR="${1:-}"
@@ -307,6 +311,11 @@ while :; do
           i="$TOKEN_END"
           UMBRELLA_SUMMARY_FILE="$TOKEN_VALUE"
           ;;
+        --pieces-json)
+          read_flag_value "--pieces-json" "$i"
+          i="$TOKEN_END"
+          PIECES_JSON="$TOKEN_VALUE"
+          ;;
         *)
           echo "ERROR=Unknown flag: $tok" >&2
           exit 1
@@ -364,6 +373,12 @@ if [ -n "$INPUT_FILE" ] && [ -n "$TASK" ]; then
   exit 1
 fi
 
+# --pieces-json requires --input-file.
+if [ -n "$PIECES_JSON" ] && [ -z "$INPUT_FILE" ]; then
+  echo "ERROR=--pieces-json requires --input-file" >&2
+  exit 1
+fi
+
 # --- mktemp (only after parse success) ---
 
 UMBRELLA_TMPDIR=$(mktemp -d -t claude-umbrella-XXXXXX)
@@ -385,5 +400,6 @@ printf 'GO=%s\n' "$GO"
 printf 'DEBUG=%s\n' "$DEBUG"
 printf 'INPUT_FILE=%s\n' "$INPUT_FILE"
 printf 'UMBRELLA_SUMMARY_FILE=%s\n' "$UMBRELLA_SUMMARY_FILE"
+printf 'PIECES_JSON=%s\n' "$PIECES_JSON"
 printf 'TASK=%s\n' "$TASK"
 printf 'UMBRELLA_TMPDIR=%s\n' "$UMBRELLA_TMPDIR"
