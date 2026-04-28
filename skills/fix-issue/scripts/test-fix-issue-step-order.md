@@ -11,8 +11,8 @@ Thirteen assertions against `skills/fix-issue/SKILL.md` — ten textual literal 
 5. Anti-pattern #1 contains `treat Step 0 as structural`.
 6. Find & lock success breadcrumb literal `✅ 0: find & lock` present.
 7. Find & lock failure breadcrumb literal `⚠ 0: find & lock` present.
-8. No stale `1: lock` breadcrumb remains (catches both `✅ 1: lock` and `⚠ 1: lock` patterns).
-9. No stale `2: lock` breadcrumb remains.
+8. No stale `| 1 | lock |` step-name-registry row remains (narrowed from bare `1: lock` substring to avoid false positives on unrelated text — see #889).
+9. No stale `| 2 | lock |` step-name-registry row remains (same narrowing).
 10. The Step 0 block contains the `find-lock-issue.sh` invocation.
 11. The Step 0 block does NOT contain `session-setup.sh` (operational ordering).
 12. The Step 1 block contains `session-setup.sh --prefix claude-fix-issue --skip-branch-check`.

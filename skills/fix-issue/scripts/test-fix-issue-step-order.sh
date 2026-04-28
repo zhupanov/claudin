@@ -17,8 +17,8 @@
 #   (5) Anti-pattern #1 contains "treat Step 0 as structural".
 #   (6) Find & lock success breadcrumb literal "✅ 0: find & lock" present.
 #   (7) Find & lock failure breadcrumb literal "⚠ 0: find & lock" present.
-#   (8) No stale "1: lock" breadcrumb remains.
-#   (9) No stale "2: lock" breadcrumb remains.
+#   (8) No stale "| 1 | lock |" step-name-registry row remains.
+#   (9) No stale "| 2 | lock |" step-name-registry row remains.
 #  (10) Step 0 (Find and Lock) block contains the find-lock-issue.sh invocation.
 #  (11) Step 0 block does NOT contain `session-setup.sh` (operational ordering).
 #  (12) Step 1 (Setup) block contains the session-setup.sh invocation.
@@ -99,9 +99,9 @@ assert_contains 'treat Step 0 as structural' '(5) anti-pattern #1 says "treat St
 assert_contains '✅ 0: find & lock' '(6) find & lock success breadcrumb uses "0: find & lock"'
 assert_contains '⚠ 0: find & lock' '(7) find & lock failure breadcrumb uses "0: find & lock"'
 
-# (8)-(9) No stale "lock" breadcrumbs from the pre-fold structure
-assert_not_contains '1: lock' '(8) no stale "1: lock" breadcrumb'
-assert_not_contains '2: lock' '(9) no stale "2: lock" breadcrumb'
+# (8)-(9) No stale "lock" step-name-registry rows from the pre-fold structure
+assert_not_contains '| 1 | lock |' '(8) no stale "| 1 | lock |" registry row'
+assert_not_contains '| 2 | lock |' '(9) no stale "| 2 | lock |" registry row'
 
 # (10)-(12) Operational-ordering assertions on awk-scoped step blocks.
 # These guard against a future edit that keeps the headings/registry/
