@@ -25,6 +25,8 @@
 #  18. detect — unclosed leading [ → fail-closed, NOT umbrella (#819 fail-closed)
 #  19. detect — unclosed leading ( → fail-closed, NOT umbrella (#819 fail-closed)
 #  20. detect — >16 bracket-block prefix → cap exhausted, NOT umbrella (#819)
+#  21. pick-child — skips prose-blocked first child to next ready sibling (#768 positive)
+#  22. pick-child — fail-open preserved on prose state-lookup failure (#768 negative)
 #
 # Run manually:
 #   bash skills/fix-issue/scripts/test-umbrella-handler.sh
@@ -63,6 +65,27 @@ if [[ -n "${STUB_STATE_FILE:-}" && -f "${STUB_STATE_FILE}" ]]; then
     source "$STUB_STATE_FILE"
 fi
 
+# --jq filter handling (FINDING_10 — issue #768): callers like prose_open_blockers
+# invoke `gh issue view <N> --json state --jq '.state'` expecting the bare state
+# string, not the full JSON object. We extract --jq <expr> from the arg list and
+# apply it to the constructed JSON below before emission.
+STUB_JQ_FILTER=""
+STUB_PREV=""
+for STUB_ARG in "$@"; do
+    if [[ "$STUB_PREV" == "--jq" ]]; then
+        STUB_JQ_FILTER="$STUB_ARG"
+    fi
+    STUB_PREV="$STUB_ARG"
+done
+
+emit_json() {
+    if [[ -n "$STUB_JQ_FILTER" ]]; then
+        printf '%s' "$1" | jq -r "$STUB_JQ_FILTER"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
 case "$1" in
     repo)
         case "$2" in
@@ -76,16 +99,26 @@ case "$1" in
                 # body OR state OR createdAt — emit a JSON object. The stub
                 # uses the per-issue lookup table provided by the fixture
                 # state file (ISSUE_<N>_TITLE / _BODY / _STATE).
+                #
+                # If a fixture-injected error is configured for this number
+                # (ISSUE_<N>_VIEW_FAIL=true), exit non-zero with no stdout —
+                # this exercises prose_open_blockers' fail-open boundary on
+                # per-ref state lookup failures (FINDING_9 — issue #768).
                 STUB_ISSUE_NUM="$3"
+                STUB_VAR_FAIL="ISSUE_${STUB_ISSUE_NUM}_VIEW_FAIL"
+                if [[ "${!STUB_VAR_FAIL:-}" == "true" ]]; then
+                    exit 1
+                fi
                 STUB_VAR_TITLE="ISSUE_${STUB_ISSUE_NUM}_TITLE"
                 STUB_VAR_BODY="ISSUE_${STUB_ISSUE_NUM}_BODY"
                 STUB_VAR_STATE="ISSUE_${STUB_ISSUE_NUM}_STATE"
                 STUB_TITLE="${!STUB_VAR_TITLE:-Default title}"
                 STUB_BODY="${!STUB_VAR_BODY:-Default body}"
                 STUB_STATE_VAL="${!STUB_VAR_STATE:-OPEN}"
-                jq -n --arg title "$STUB_TITLE" --arg body "$STUB_BODY" --arg state "$STUB_STATE_VAL" \
+                STUB_JSON=$(jq -n --arg title "$STUB_TITLE" --arg body "$STUB_BODY" --arg state "$STUB_STATE_VAL" \
                   --arg createdAt "2024-01-01T00:00:00Z" \
-                  '{title: $title, body: $body, state: $state, createdAt: $createdAt}'
+                  '{title: $title, body: $body, state: $state, createdAt: $createdAt}')
+                emit_json "$STUB_JSON"
                 exit 0 ;;
         esac
         ;;
@@ -466,6 +499,84 @@ ISSUE_200_TITLE_VAL='[a][b][c][d][e][f][g][h][i][j][k][l][m][n][o][p][q] Umbrell
 } > "$STUB_STATE_FILE"
 OUT=$("$SCRIPT" detect --issue 200 2>&1) || true
 assert_contains "$OUT" "IS_UMBRELLA=false" "[20] >16 bracket-block prefix → cap exhausted, not umbrella"
+
+# ---------------------------------------------------------------------------
+# Fixture 21: pick-child — skips prose-blocked first child to next ready sibling
+#
+# Issue #768 regression: handle_umbrella stalled when the first child returned
+# by pick-child had a prose-only blocker (e.g., body containing "Depends on
+# #999" with #999 OPEN). Fix pushed the full native+prose check (all_open_blockers
+# from blocker-helpers.sh) into child_eligible so pick-child iterates past
+# prose-blocked siblings.
+#
+# Setup: umbrella body lists #2101 + #2102; #2101 body has "Depends on #2199"
+# with #2199 OPEN; #2102 has clean body. Expected: pick-child returns #2102.
+# Required (FINDING_5): assert STUB_LOG contains the prose state-lookup gh
+# call for #2199 to demonstrate the prose path actually fired (otherwise the
+# test could pass for the wrong reason via fail-open).
+# ---------------------------------------------------------------------------
+echo "Fixture 21: pick-child — skips prose-blocked first child to next ready sibling (#768)"
+run_fixture "fixture-21"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_2100_TITLE='Umbrella: prose-blocker regression'
+ISSUE_2100_BODY=$'Umbrella tracking issue.\n\n- [ ] #2101 — first (prose-blocked)\n- [ ] #2102 — second (ready)\n'
+ISSUE_2100_STATE=OPEN
+ISSUE_2101_TITLE='First child (prose-blocked)'
+ISSUE_2101_BODY=$'## Description\n\nDepends on #2199 — must wait for that to land.\n'
+ISSUE_2101_STATE=OPEN
+ISSUE_2101_COMMENTS='[[]]'
+ISSUE_2102_TITLE='Second child (ready)'
+ISSUE_2102_BODY='Clean body, no prose blockers.'
+ISSUE_2102_STATE=OPEN
+ISSUE_2102_COMMENTS='[[]]'
+ISSUE_2199_TITLE='External blocker'
+ISSUE_2199_BODY='External blocker body.'
+ISSUE_2199_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" pick-child --issue 2100 2>&1) || true
+assert_contains "$OUT" "CHILD_NUMBER=2102" "[21] picks ready sibling, not prose-blocked first child"
+assert_not_contains "$OUT" "CHILD_NUMBER=2101" "[21] does NOT pick the prose-blocked first child"
+assert_not_contains "$OUT" "NO_ELIGIBLE_CHILD=true" "[21] does NOT stall the umbrella"
+# FINDING_5: assert the prose path actually fired by checking STUB_LOG for
+# the per-ref state lookup. Without this, an under-mocked stub could let
+# fail-open silently bypass the prose check and pass for the wrong reason.
+STUB_LOG_CONTENTS=$(cat "$STUB_LOG")
+assert_contains "$STUB_LOG_CONTENTS" "issue view 2199" "[21] STUB_LOG shows prose state-lookup for #2199 fired"
+
+# ---------------------------------------------------------------------------
+# Fixture 22: pick-child — fail-open preserved when prose state-lookup fails
+#
+# Negative regression for issue #768: moving all_open_blockers into
+# child_eligible introduces multiple new fail-open boundaries (body fetch,
+# comments fetch, parser, per-ref state lookup). Verify pick-child still
+# degrades open on those failures — the change must not accidentally turn
+# pick-child into a fail-closed gate.
+#
+# Setup: same as fixture 21, except gh issue view #2299 fails (ISSUE_2299_VIEW_FAIL=true).
+# Expected: pick-child returns #2201 (the prose-mentioning child) because
+# prose_open_blockers' per-ref state lookup fail-opens to "no prose blockers
+# known" — the child is treated as eligible.
+# ---------------------------------------------------------------------------
+echo "Fixture 22: pick-child — fail-open preserved on prose state-lookup failure (#768 negative)"
+run_fixture "fixture-22"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_2200_TITLE='Umbrella: prose state-lookup fail-open'
+ISSUE_2200_BODY=$'Umbrella tracking issue.\n\n- [ ] #2201 — first (prose-mentions #2299, lookup fails)\n- [ ] #2202 — second (ready)\n'
+ISSUE_2200_STATE=OPEN
+ISSUE_2201_TITLE='First child (prose-mentions blocker)'
+ISSUE_2201_BODY=$'## Description\n\nDepends on #2299 — gh state lookup will fail.\n'
+ISSUE_2201_STATE=OPEN
+ISSUE_2201_COMMENTS='[[]]'
+ISSUE_2202_TITLE='Second child (ready)'
+ISSUE_2202_BODY='Clean body, no prose blockers.'
+ISSUE_2202_STATE=OPEN
+ISSUE_2202_COMMENTS='[[]]'
+# Inject the fail-open boundary: gh issue view 2299 returns non-zero with no stdout.
+ISSUE_2299_VIEW_FAIL=true
+STATE_EOF
+OUT=$("$SCRIPT" pick-child --issue 2200 2>&1) || true
+assert_contains "$OUT" "CHILD_NUMBER=2201" "[22] fail-open preserved: first child eligible despite prose mention"
+assert_not_contains "$OUT" "NO_ELIGIBLE_CHILD=true" "[22] fail-open prevents fail-closed gate"
 
 # ---------------------------------------------------------------------------
 # Summary

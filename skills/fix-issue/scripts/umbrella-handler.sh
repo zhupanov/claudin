@@ -50,12 +50,13 @@
 #     ([IN PROGRESS] / [DONE] / [STALLED])
 #   - last comment is NOT exactly "IN PROGRESS" (not locked by a concurrent
 #     /fix-issue runner)
-#   - child_native_blockers is empty — the native-only blocker probe
-#     (defined below, called from child_eligible) so pick-child iterates past
-#     natively-blocked siblings to the next ready child. The full
-#     all_open_blockers (native + prose) pass is owned by find-lock-issue.sh
-#     and runs once on the chosen child before locking — defense in depth
-#     on top of the native-only filter inside pick-child.
+#   - all_open_blockers (from blocker-helpers.sh) returns empty — i.e., no
+#     OPEN native or prose blockers. The full native+prose check is INSIDE
+#     child_eligible so pick-child iterates past prose-blocked siblings to
+#     the next ready child (issue #768). find-lock-issue.sh still runs the
+#     same all_open_blockers once on the chosen child before locking —
+#     that call is now defense in depth, no longer load-bearing for
+#     sibling iteration.
 #
 # pick-child outcomes (one of three on stdout):
 #   CHILD_NUMBER=<C>
@@ -87,6 +88,28 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || {
     echo "ERROR=Failed to resolve repository name"
+    exit 1
+}
+
+# ---------------------------------------------------------------------------
+# Source the shared blocker-resolution helpers. Defines:
+#   - native_open_blockers <issue-number>
+#   - prose_open_blockers  <issue-number>
+#   - all_open_blockers    <issue-number>  (native ∪ prose, native-first short-circuit)
+#
+# See skills/fix-issue/scripts/blocker-helpers.{sh,md}. child_eligible (below)
+# uses all_open_blockers so pick-child iterates past prose-blocked siblings,
+# fixing issue #768 (handle_umbrella stalled when the first child returned by
+# pick-child had a prose-only blocker).
+#
+# Guarded source: an unguarded `source` failure under `set -euo pipefail`
+# would abort this script before emitting the documented `ERROR=...` contract,
+# breaking callers that parse stdout for the per-subcommand shape.
+# ---------------------------------------------------------------------------
+BLOCKER_HELPERS="$(dirname "${BASH_SOURCE[0]}")/blocker-helpers.sh"
+# shellcheck source=skills/fix-issue/scripts/blocker-helpers.sh
+source "$BLOCKER_HELPERS" || {
+    echo "ERROR=Failed to source blocker-helpers.sh: $BLOCKER_HELPERS"
     exit 1
 }
 
@@ -241,26 +264,6 @@ parse_children_from_body() {
     ' <<< "$nums"
 }
 
-# child_native_blockers — minimal blocker probe inlined into umbrella-handler
-# so pick-child can iterate past blocked children rather than aborting on the
-# first one. Mirrors find-lock-issue.sh's `native_open_blockers` exactly:
-# queries GitHub's blocked_by dependency API with --paginate + per-page jq
-# filter; emits a space-separated list of OPEN blocker issue numbers (empty
-# = no native blockers known); fail-open on API failure (returns empty +
-# exit 0). The full prose-blocker scan from find-lock-issue.sh is NOT
-# duplicated here — pick-child uses native blockers only as a cheap
-# proportionate filter, and the caller (find-lock-issue.sh handle_umbrella)
-# applies the full all_open_blockers (native + prose) once on the chosen
-# child as a final guard before locking. This keeps umbrella-handler.sh
-# focused without re-implementing the full blocker pipeline.
-child_native_blockers() {
-    local num="$1"
-    local nums
-    nums=$(gh api --paginate "repos/${REPO}/issues/${num}/dependencies/blocked_by" \
-        --jq '.[] | select(.state == "open") | .number' 2>/dev/null) || return 0
-    echo "$nums" | tr '\n' ' ' | sed 's/[[:space:]]*$//'
-}
-
 # child_eligible — returns 0 if the child issue is eligible for dispatch; 1
 # otherwise. Sets CHILD_TITLE on eligibility-success or BLOCKING_REASON on
 # ineligibility (closed cases excluded — those are checked by the caller).
@@ -269,13 +272,15 @@ child_native_blockers() {
 #   - state == OPEN
 #   - title does NOT start with a managed lifecycle prefix
 #   - last comment is NOT exactly "IN PROGRESS"
-#   - child_native_blockers returns empty (no open native blockers)
-# Native blocker check is INSIDE child_eligible so pick-child iterates past
-# blocked children to the next ready one (FINDING_5 from the umbrella-PR
-# code-review panel). The caller still runs the full all_open_blockers
-# (native + prose) on the chosen child once before locking — this is
-# defense in depth: prose blockers are rare on /umbrella-rendered children
-# and the redundant final check costs at most one paginated comment fetch.
+#   - all_open_blockers returns empty (no native or prose open blockers)
+# The full native+prose blocker check is INSIDE child_eligible so pick-child
+# iterates past blocked children — including prose-only-blocked children —
+# to the next ready one (issue #768; superseded the prior native-only filter
+# from FINDING_5 of the umbrella-PR code-review panel). The shared blocker
+# implementation lives in blocker-helpers.sh, sourced near the top of this
+# file. The caller (find-lock-issue.sh handle_umbrella) still runs the same
+# all_open_blockers once on the chosen child before locking — this is
+# defense in depth, no longer load-bearing for sibling iteration.
 child_eligible() {
     local n="$1"
     local title state
@@ -306,10 +311,13 @@ child_eligible() {
         BLOCKING_REASON="child #$n is locked (last comment: IN PROGRESS)"
         return 1
     fi
-    # Native blocker check (FINDING_5) — pick-child must iterate past
-    # blocked children, not abort on the first one.
+    # Full native+prose blocker check (issue #768) — pick-child must iterate
+    # past prose-blocked children too, not just natively-blocked ones. The
+    # shared all_open_blockers helper from blocker-helpers.sh applies the
+    # native-first short-circuit, so prose pagination only fires when the
+    # child has no native blockers.
     local blockers
-    blockers=$(child_native_blockers "$n")
+    blockers=$(all_open_blockers "$n")
     if [[ -n "$blockers" ]]; then
         local formatted
         formatted=$(echo "$blockers" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
