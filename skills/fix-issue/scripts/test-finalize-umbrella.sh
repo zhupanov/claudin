@@ -47,6 +47,13 @@ fi
 PASS=0
 FAIL=0
 FAILED_TESTS=()
+# run_script_capture's OUT/ERR/EC are written as implicit globals from inside
+# the function. Initialize them here so any future fixture that reads
+# $OUT/$ERR/$EC before the first run_script_capture call cannot trip
+# `set -u`'s unbound-variable error.
+OUT=""
+ERR=""
+EC=0
 
 TMPROOT=$(mktemp -d "${TMPDIR:-/tmp}/test-finalize-umbrella-XXXXXX")
 # shellcheck disable=SC2317
