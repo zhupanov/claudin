@@ -25,7 +25,7 @@ PUSHED=true|false
 STATUS=pushed|noop_same_ref|diverged_retry_failed
 ```
 
-- `BRANCH` is always emitted first (even on exit 2, it is not emitted — only the stderr message is).
+- `BRANCH` is always the first key emitted. On exit 2, no stdout keys are emitted (only a stderr message).
 - `PUSHED=true` with `STATUS=pushed`: force-push succeeded on first or retry attempt.
 - `PUSHED=true` with `STATUS=noop_same_ref`: push appeared to fail but local HEAD matches `origin/<branch>` after refresh — the push landed in a race window.
 - `PUSHED=false` with `STATUS=diverged_retry_failed`: both push attempts failed and local/remote diverge.
