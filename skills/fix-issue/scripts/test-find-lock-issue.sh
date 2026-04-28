@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Ten executed fixtures plus one deferred-coverage
+# refactor (closes #496). Eleven executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -36,6 +36,11 @@
 #      Confirms the integration of pick-child's full native+prose blocker
 #      check (issue #768 fix), the post-pick all_open_blockers defense-in-
 #      depth, and the lock-no-go + rename pipeline.
+#  12. auto-pick skips umbrella issue (Anti-pattern #7 regression,
+#      closes #753) → exit 1; ELIGIBLE=false. A single candidate with
+#      umbrella-style title ("Umbrella: …") and GO as last comment is
+#      skipped in auto-pick mode. Confirms the umbrella-detection block
+#      in the auto-pick loop prevents umbrella issues from being picked.
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -767,6 +772,41 @@ assert_contains "$OUT" "RENAMED=true" "[11] RENAMED=true (lock-no-go + rename pi
 ERR=$(cat "$ERR_FILE")
 assert_not_contains "$ERR" "WARNING: title rename failed" "[11] no rename-failure warning on stderr"
 unset RUNTIME_COMMENTS_DIR
+
+# ---------------------------------------------------------------------------
+# Fixture 12: auto-pick skips umbrella issues (Anti-pattern #7 regression).
+# A single candidate with an umbrella-style title ("Umbrella: ...") and GO
+# as its last comment must be skipped in auto-pick mode. The auto-pick loop
+# calls `umbrella-handler.sh detect` on each GO-tagged candidate; when
+# IS_UMBRELLA=true, the candidate is skipped with a diagnostic on stderr.
+# With no other candidates, the scan ends with exit 1 (no eligible issues).
+# ---------------------------------------------------------------------------
+echo "Fixture 12: auto-pick skips umbrella issue (Anti-pattern #7 regression)"
+run_fixture "fixture-12"
+{
+    echo "ISSUE_STATE=OPEN"
+    OPEN_ISSUES_LINES='{"number":200,"title":"Umbrella: deploy pipeline refactor (3 children)"}'
+    printf "OPEN_ISSUES_JSON='%s'\n" "$OPEN_ISSUES_LINES"
+    echo "ISSUE_200_TITLE='Umbrella: deploy pipeline refactor (3 children)'"
+    echo "ISSUE_200_BODY='No task-list children in this fixture.'"
+    echo "ISSUE_200_STATE=OPEN"
+    echo "ISSUE_200_COMMENTS='$(make_comments_json GO)'"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+OUT_FILE="$TMPROOT/fixture-12/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-12/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+ERR=$(cat "$ERR_FILE")
+
+assert_equal "$EXIT_CODE" "1" "[12] exit code 1 (no eligible candidates — umbrella skipped)"
+assert_contains "$OUT" "ELIGIBLE=false" "[12] ELIGIBLE=false on stdout"
+assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[12] LOCK_ACQUIRED= absent (lock never attempted)"
+assert_contains "$ERR" "Skipping issue #200: umbrella issue" "[12] stderr diagnostic confirms umbrella skip"
 
 # ---------------------------------------------------------------------------
 # Summary
