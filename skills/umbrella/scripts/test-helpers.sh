@@ -1239,8 +1239,11 @@ unset STUB_PROBE_RESPONSE_1 STUB_PROBE_RESPONSE_2 STUB_PROBE_RC_1 STUB_PROBE_RC_
   fi
 }
 
-# t_probe_dry_run_includes_probe_failed — dry-run output must include PROBE_FAILED=0
-# (initialized before DRY_RUN early-exit so set -u cannot trip the printf).
+# t_probe_dry_run_includes_probe_failed — dry-run stdout must include the
+# literal line PROBE_FAILED=0. The dry-run early-exit (issue #769) returns
+# before the probe block runs, so PROBE_FAILED is never assigned on this
+# path; the line on stdout comes from the fixed printf as a literal, which
+# is what the parse-only contract pins.
 {
   printf '20\tsome-child\thttp://x\n' > "$TMP/children.tsv"
   printf '10\t20\n' > "$TMP/edges.tsv"

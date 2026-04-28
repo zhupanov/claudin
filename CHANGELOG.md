@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.40] - 2026-04-27
+
+### Fixed
+
+- `skills/umbrella/scripts/helpers.sh` — hoisted the `wire-dag` subcommand's `--dry-run` early-return from after the GitHub `/dependencies/blocked_by` probe block to immediately after argument validation, mirroring the `prefix-titles` subcommand's existing pattern. As a result, `wire-dag --dry-run` is fully side-effect-free: no `gh api` round-trip (or its 5xx/empty-status retry), no `**⚠ /umbrella: wire-dag probe failed (HTTP <code>): ...**` stderr warnings, no `UMBRELLA_PROBE_TARGET_FILE` write, no `EXISTING_EDGES_TSV` population. Stdout grammar (eight zeroed keys including the literal `PROBE_FAILED=0`) is preserved exactly. Sibling docs (`helpers.md`, `test-helpers.md`, `test-helpers.sh`) updated to describe the new ordering. Closes #769.
+
 ## [7.17.39] - 2026-04-27
 
 ### Fixed

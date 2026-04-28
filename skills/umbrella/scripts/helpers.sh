@@ -159,6 +159,17 @@ case "$SUBCMD" in
       echo "ERROR=wire-dag --umbrella must be a positive integer (got: '$UMBRELLA')" >&2; exit 1
     fi
 
+    # Dry-run short-circuit: hoisted ahead of the probe block (issue #769) so
+    # `--dry-run` is side-effect-free — no GitHub API round-trip, no stderr
+    # warnings, no UMBRELLA_PROBE_TARGET_FILE write. Mirrors the prefix-titles
+    # subcommand's pattern below. Stdout grammar is preserved (8 keys including
+    # PROBE_FAILED=0 as a literal so the parse-only contract holds without
+    # depending on the variable's later initialization).
+    if [ "$DRY_RUN" = "true" ]; then
+      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nPROBE_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_EXISTING=0\n'
+      exit 0
+    fi
+
     # Feature-detect the GitHub blocked-by API surface. As of late-2024 / 2026 GitHub
     # exposed REST endpoints under /repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by
     # but availability is org/feature-flag dependent. We probe with a HEAD/GET on the
@@ -182,8 +193,9 @@ case "$SUBCMD" in
     # PROBE_FAILED=0|1 (issue #728): parse-only disambiguator distinguishing
     # confirmed feature-missing (PROBE_FAILED=0) from transient/operational
     # probe failure (PROBE_FAILED=1). Initialized here so it has a defined
-    # value on every code path including the empty-probe-target path below
-    # and the DRY_RUN early-exit further down.
+    # value on every code path including the empty-probe-target path below.
+    # The DRY_RUN early-exit (above) emits PROBE_FAILED=0 as a literal in its
+    # stdout printf and never reaches this initialization.
     PROBE_FAILED=0
 
     # Resolve the canonical secret-scrubber and the one-time redact-fallback
@@ -446,11 +458,6 @@ case "$SUBCMD" in
 
     EXISTING_EDGES_TSV="$TMPDIR/existing-edges.tsv"
     : > "$EXISTING_EDGES_TSV"
-
-    if [ "$DRY_RUN" = "true" ]; then
-      printf 'EDGES_ADDED=0\nEDGES_REJECTED_CYCLE=0\nEDGES_SKIPPED_EXISTING=0\nEDGES_SKIPPED_API_UNAVAILABLE=0\nEDGES_FAILED=0\nPROBE_FAILED=0\nBACKLINKS_POSTED=0\nBACKLINKS_SKIPPED_EXISTING=0\n'
-      exit 0
-    fi
 
     # Emit one redacted stderr warning per EDGES_FAILED event (issue #720).
     # Pipes captured response through scripts/redact-secrets.sh when present;
