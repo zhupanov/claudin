@@ -71,7 +71,7 @@ Standard mode keeps the same 3+3 lane count and launch order it has always had; 
 
 ## Planner pre-pass — scale interaction
 
-`--plan` is supported with `RESEARCH_SCALE=standard` (the 3-lane shape) and `RESEARCH_SCALE=deep` (the 5-lane shape with named angle prompts). With `RESEARCH_SCALE=quick` (single lane, no fan-out), downgrade `--plan` to `false` with a visible warning at the start of Step 1 — do NOT silently ignore the flag, and do NOT reject the run. **Resolution rule applied AFTER Step 0.5** (so `RESEARCH_SCALE` and `SCALE_SOURCE` are both already resolved by the classifier or by the operator override) and BEFORE Step 1 begins. The warning text branches on `SCALE_SOURCE` so the operator never sees a warning citing a flag they did not type:
+`--plan` is supported with `RESEARCH_SCALE=standard` (the 3-lane shape) and `RESEARCH_SCALE=deep` (the 5-lane shape with named angle prompts). With `RESEARCH_SCALE=quick` (K=3 homogeneous lanes, no per-angle differentiation), downgrade `--plan` to `false` with a visible warning at the start of Step 1 — do NOT silently ignore the flag, and do NOT reject the run. **Resolution rule applied AFTER Step 0.5** (so `RESEARCH_SCALE` and `SCALE_SOURCE` are both already resolved by the classifier or by the operator override) and BEFORE Step 1 begins. The warning text branches on `SCALE_SOURCE` so the operator never sees a warning citing a flag they did not type:
 
 - `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=quick` AND `SCALE_SOURCE=override`: print `**⚠ /research: --plan is not applicable to --scale=quick (K homogeneous Claude lanes, no per-angle differentiation → no decomposition benefit). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
 - `RESEARCH_PLAN=true` AND `RESEARCH_SCALE=quick` AND `SCALE_SOURCE` ∈ {`auto`, `fallback`}: print `**⚠ /research: --plan is not applicable when adaptive scaling auto-routes to quick (K homogeneous Claude lanes, no per-angle differentiation → no decomposition benefit). Disabling --plan for this run.**`, set `RESEARCH_PLAN=false`, continue.
@@ -177,7 +177,7 @@ Step Name Registry:
 | 3 | report |
 | 4 | cleanup |
 
-(Step 0.5 runs unconditionally on every `/research` invocation — it skips the classifier with a one-line `⏩ manual override` breadcrumb when `--scale=` is set, and otherwise invokes the deterministic shell classifier to resolve `RESEARCH_SCALE`. Step 1.1 and 1.2 are sub-steps of Step 1 that execute only when `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN=true`. Step 1.1.c additionally requires `RESEARCH_PLAN_INTERACTIVE=true`. They are skipped on every other path — single-lane quick mode has no fan-out to assign subquestions to.)
+(Step 0.5 runs unconditionally on every `/research` invocation — it skips the classifier with a one-line `⏩ manual override` breadcrumb when `--scale=` is set, and otherwise invokes the deterministic shell classifier to resolve `RESEARCH_SCALE`. Step 1.1 and 1.2 are sub-steps of Step 1 that execute only when `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN=true`. Step 1.1.c additionally requires `RESEARCH_PLAN_INTERACTIVE=true`. They are skipped on every other path — quick mode has no per-angle differentiation to assign subquestions to.)
 
 ### Verbosity Control
 
