@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.31] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/SKILL.md` — rewrote the "Umbrella concurrent finalize is comment-idempotent" Known-Limitations bullet (line 354) to reflect the current `finalize-umbrella.sh cmd_finalize` idempotency-guard semantics. The pre-FINDING_3 wording claimed any of the three idempotency signals (state=CLOSED, `[DONE]` title prefix, marker comment) triggered a strict short-circuit emitting `FINALIZED=false ALREADY_FINALIZED=true`. The new bullet enumerates three cases consistently with `skills/fix-issue/scripts/finalize-umbrella.md` Idempotency-guard section: (a) state=CLOSED → strict short-circuit; (b) OPEN with `[DONE]` title → skip rename, proceed to close path (still posts `--comment` when marker absent), emit `FINALIZED=true CLOSED=true RENAMED=false`; (c) OPEN with marker → skip comment-post, close-only retry, emit `FINALIZED=true CLOSED=true RENAMED=<bool>`. Documentation-only sibling-doc drift correction; runtime behavior unchanged. Closes #814.
+
 ## [7.17.30] - 2026-04-27
 
 ### Fixed
