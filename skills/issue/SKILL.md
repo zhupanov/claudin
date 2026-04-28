@@ -170,7 +170,7 @@ Worked examples (per the formula):
 
 **Step D — capture stdout and check exit code.** On success the allocator writes EXACTLY ONE line to stdout: `CANDIDATES=<comma-separated issue numbers, ascending>`. ALL diagnostics (dropped-row warnings, the N>30 banner) go to stderr only.
 
-- On exit 0: parse the stdout `CANDIDATES=` value and use it as the input to Step 5's `fetch-issue-details.sh --numbers` flag.
+- On exit 0: parse the stdout `CANDIDATES=` value. If `CANDIDATES` is non-empty, use it as the input to Step 5's `fetch-issue-details.sh --numbers` flag. If `CANDIDATES` is empty (allocator ran but all rows were dropped) and `N_NON_MALFORMED >= 2`, proceed to Step 5 for intra-batch dependency analysis (same as the Step E redirect). If `CANDIDATES` is empty and `N_NON_MALFORMED < 2`, jump to Step 6 with `ITEM_<i>_VERDICT=CREATE` for every non-malformed item, with empty `ITEM_<i>_BLOCKED_BY` / `ITEM_<i>_BLOCKS` lines.
 - On non-zero exit (usage error or unexpected internal failure): emit `**⚠ /issue: allocate-candidates.sh failed (exit <N>); skipping dedup, creating all items with no dep edges.**` on stderr and **jump to Step 6** with empty CANDIDATES — do NOT abort the run. This matches the existing fail-open posture used by the `LIST_STATUS=failed` branch above.
 
 **Step E — empty-CAND short-circuit.** If Tier-1 emitted zero CAND rows (snapshot is empty, or no candidates look suspicious in either category for any item), skip the allocator invocation entirely and set `CANDIDATES=""`. If `N_NON_MALFORMED >= 2`, proceed to Step 5 for intra-batch dependency analysis (Step 5's gate admits this path). Otherwise (`N_NON_MALFORMED < 2`), jump to Step 6 with `ITEM_<i>_VERDICT=CREATE` for every non-malformed item, with empty `ITEM_<i>_BLOCKED_BY` / `ITEM_<i>_BLOCKS` lines.
@@ -179,7 +179,7 @@ The allocator's regression coverage lives in `${CLAUDE_PLUGIN_ROOT}/skills/issue
 
 Note on Phase 2 fetch drops: the per-item floor guarantees a candidate **enters** the union, NOT that its body is **successfully fetched** in Step 5. `FETCH_STATUS_<N>=failed` rows are dropped from Phase 2 reasoning per the existing contract — "floor ⇒ deep coverage" is best-effort, not a guarantee.
 
-The Step 4E/Step 5 gating logic and intra-batch dependency decoupling are pinned by `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-intra-batch-deps.sh` (sibling contract: `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-intra-batch-deps.md`; wired into `make lint` via the `test-intra-batch-deps` target — same pattern as `test-body-file-title`). The harness asserts presence of the `N_NON_MALFORMED >= 2` gate, conditional fetch skip, empty-CANDIDATES verdict guidance, and absence of the old unconditional short-circuit clause.
+The Step 4E/Step 5 gating logic and intra-batch dependency decoupling are pinned by `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-intra-batch-deps.sh` (sibling contract: `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-intra-batch-deps.md`; wired into `make lint` via the `test-intra-batch-deps` target — same pattern as `test-body-file-title`). The harness asserts presence of the `N_NON_MALFORMED >= 2` gate, conditional fetch skip, empty-CANDIDATES verdict guidance, no-external-refs validation rule, FETCH_STATUS scope narrowing, and absence of the old unconditional short-circuit clause.
 
 ## Step 5 — Phase 2: Body+Comments Semantic Filter
 
@@ -198,7 +198,7 @@ When `CANDIDATES` is empty (intra-batch-only path), skip `fetch-issue-details.sh
 
 `$ISSUE_TMPDIR` was created at the top of Step 3 (along with the `$ISSUE_TMPDIR/bodies/` subdirectory that carries per-item body files). It persists through Phase 1/2 and Step 6 create and is removed at Step 9.
 
-Parse stdout for `FETCH_STATUS_<N>=ok|failed`. Drop any `failed` numbers from the Phase 2 context — do not reason on skewed evidence.
+After a successful `fetch-issue-details.sh` invocation, parse stdout for `FETCH_STATUS_<N>=ok|failed`. Drop any `failed` numbers from the Phase 2 context — do not reason on skewed evidence. When fetch was skipped (empty `CANDIDATES`), there are no `FETCH_STATUS_*` lines to parse.
 
 **Body content retrieval (MANDATORY preamble to Phase 2 reasoning)**: the parser's stdout provides only `ITEM_<i>_BODY_FILE=<path>` for each non-malformed item — body content is NOT inline. Before composing the per-item `<new_item_<i>>` blocks, run a Bash tool call for each **non-malformed** new item (i.e., every `i` that does NOT have `ITEM_<i>_MALFORMED=true` AND has an `ITEM_<i>_BODY_FILE=<path>` line from Step 3) to read the body:
 
@@ -238,7 +238,7 @@ For each non-malformed new item, emit exactly one verdict line plus zero or more
 
 6. **DUPLICATE_OF_ITEM as topological prerequisite** (new): for each `ITEM_<i>_VERDICT=DUPLICATE DUPLICATE_OF_ITEM=<j>`, add a synthetic edge `j → i` to the graph used by Step 6's topological scheduler. This ensures `ISSUE_<j>_NUMBER` / `ISSUE_<j>_URL` are resolved before the duplicate `i` is processed (preserves the existing intra-batch duplicate-resolution invariant under the new topological create order). The synthetic edges feed into the same Step 5 cycle-resolution pass so they cannot conflict with dep edges.
 
-**Empty-CANDIDATES + multi-item path**: when `CANDIDATES` is empty and `N_NON_MALFORMED >= 2`, Phase 2 runs for intra-batch reasoning only. Emit `ITEM_<i>_VERDICT=CREATE` for every non-malformed item (no external duplicates are possible without a fetched corpus). Intra-batch `BLOCKED_BY` / `BLOCKS` edges using `ITEM_<j>` references are emitted normally. Intra-batch `DUPLICATE_OF_ITEM=<j>` is permitted. External-number `DUPLICATE_OF=<N>`, `BLOCKED_BY=<N>`, and `BLOCKS=<N>` entries are structurally invalid on this path — if any appear, the validation step below rejects them (replace with empty).
+**Empty-CANDIDATES + multi-item path**: when `CANDIDATES` is empty and `N_NON_MALFORMED >= 2`, Phase 2 runs for intra-batch reasoning only. The default verdict is `ITEM_<i>_VERDICT=CREATE` for each non-malformed item (no external duplicates are possible without a fetched corpus), unless an intra-batch duplicate is justified via `ITEM_<i>_DUPLICATE_OF_ITEM=<j>` (which requires `ITEM_<i>_VERDICT=DUPLICATE`). Intra-batch `BLOCKED_BY` / `BLOCKS` edges using `ITEM_<j>` references are emitted normally. External-number `DUPLICATE_OF=<N>`, `BLOCKED_BY=<N>`, and `BLOCKS=<N>` entries are structurally invalid on this path — if any appear, the validation step below rejects them (replace with empty).
 
 **Validation rule — no-external-refs on empty-CANDIDATES path**: when `CANDIDATES` is empty, any numeric (non-`ITEM_<j>`) entry in `DUPLICATE_OF`, `BLOCKED_BY`, or `BLOCKS` is invalid — the external corpus was not fetched, so numeric references cannot be validated against fetched content. Override `DUPLICATE_OF=<N>` to `VERDICT=CREATE`; drop numeric `BLOCKED_BY=<N>` and `BLOCKS=<N>` entries silently with `**⚠ /issue: dropping external dep-edge on empty-CANDIDATES path: ITEM_<i>_<field>=<N>.**`
 

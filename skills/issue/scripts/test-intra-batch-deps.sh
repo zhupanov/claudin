@@ -40,13 +40,19 @@ assert_present "step4e-redirect-to-step5" \
     "If \`N_NON_MALFORMED >= 2\`, proceed to Step 5"
 
 assert_present "step5-gate-n-non-malformed" \
-    "N_NON_MALFORMED >= 2"
+    "CANDIDATES\` is non-empty OR \`N_NON_MALFORMED >= 2"
 
 assert_present "step5-conditional-fetch-skip" \
     "skip \`fetch-issue-details.sh\` entirely"
 
 assert_present "step5-empty-candidates-verdict" \
     "Empty-CANDIDATES + multi-item path"
+
+assert_present "step5-no-external-refs-rule" \
+    "Validation rule — no-external-refs on empty-CANDIDATES path"
+
+assert_present "step5-fetch-status-scope" \
+    "When fetch was skipped (empty \`CANDIDATES\`), there are no \`FETCH_STATUS_*\` lines to parse"
 
 assert_absent "step4e-old-unconditional-shortcircuit" \
     "short-circuits cleanly via its existing"
