@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Use when reviewing code changes (current branch diff, or a verbal slice of the repo) with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Slice mode supports file-batch review and inline /umbrella filing for /loop-review."
+description: "Use when reviewing code changes (current branch diff, or a verbal slice of the repo) with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Slice mode supports file-batch review and inline /umbrella filing."
 argument-hint: "[--debug] [--session-env <path>] [--slice <text> | --slice-file <path>] [--create-issues [<slice-text>]] [--label <label>] [--security-output <path>]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 ---
@@ -17,7 +17,7 @@ Review code changes (default: current branch diff vs `main`; slice mode: a verba
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) including reviewer health state (`CODEX_HEALTHY`, `CURSOR_HEALTHY`). If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full health probe at Step 0).
 - `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"5.::code review"` (numeric `5.`, path `code review`), `"5."` (numeric only, backward compat). Default: empty (standalone numbering). Internal orchestration flag.
 - `--slice <text>`: Set `SLICE_TEXT` to the given verbal description (e.g., `--slice "implementation of /research skill"`). Mutually exclusive with `--slice-file`. Activates **slice mode** (see "Slice Mode" section below). Used for human-invoked slice reviews where the description is short.
-- `--slice-file <path>`: Set `SLICE_FILE` to the given path; the verbal description is read from that file (single-line file). Mutually exclusive with `--slice`. Activates **slice mode**. Used for driver-invoked slice reviews (e.g., from `/loop-review`'s `driver.sh`) where file-based handoff bypasses argv shell-quoting hazards on verbal descriptions containing quotes, parens, ampersands, etc.
+- `--slice-file <path>`: Set `SLICE_FILE` to the given path; the verbal description is read from that file (single-line file). Mutually exclusive with `--slice`. Activates **slice mode**. Used for driver-invoked slice reviews where file-based handoff bypasses argv shell-quoting hazards on verbal descriptions containing quotes, parens, ampersands, etc.
 - `--create-issues`: Set `CREATE_ISSUES=true`. After voting completes, file every accepted finding (in-scope-accepted AND OOS-accepted, 2+ YES) as GitHub issues by delegating to `/umbrella` (which wraps `/issue` for batch creation and produces an umbrella tracking issue when ≥2 distinct issues are filed; ≤1 distinct → no umbrella). See Step 4b for the full mapping. **Requires slice mode.** Slice mode may be activated three ways: (a) `--slice <text>`, (b) `--slice-file <path>`, or (c) by passing the slice description as trailing positional text after `--create-issues` (equivalent to `--slice <text>`). If none of these are provided (no slice flag AND no positional remainder), print `**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**` and exit. Security-tagged findings are written to `--security-output` and never auto-filed (per SECURITY.md).
 - `--label <label>`: Set `ISSUE_LABEL` to the given label. Forwarded to `/issue` when `--create-issues` is set. Default: empty (no label).
 - `--security-output <path>`: Set `SECURITY_OUTPUT_PATH` to the given path. In slice mode, accepted security-tagged findings are written verbatim to this file before `/review` exits. Default: `$REVIEW_TMPDIR/security-findings.md` (printed to terminal verbatim before tmpdir cleanup if `--security-output` is unset).
@@ -82,8 +82,6 @@ When `--slice <text>` is set, `--slice-file <path>` is set, or trailing position
 - Step 3 (Review Cycle): runs ONE round only (no recursive re-review loop). After voting, either compose a findings batch and invoke `/umbrella` via the Skill tool (if `--create-issues`) or just print the findings.
 - Step 3e (Implement Fixes): SKIPPED in slice mode — slice mode is read-only review for issue filing, not implement-fixes.
 - Step 4 (Final Summary): writes accepted security findings to `--security-output` path; emits a `### slice-result` KV footer for driver consumption.
-
-The slice-mode protocol is consumed by `/loop-review`'s driver (`skills/loop-review/scripts/driver.sh`) which invokes `claude -p /review --slice-file ... --create-issues --label loop-review --security-output ...` per slice and parses the KV footer.
 
 ## Step 0 — Session Setup
 
@@ -355,7 +353,7 @@ Print an informational line summarizing the outcome (above the KV footer): `file
 ### 4c — Write security findings (slice mode only)
 
 If slice mode is ON, collect any accepted security-tagged findings (focus-area=security; both in-scope-accepted and OOS-accepted with 2+ YES). Write them verbatim to:
-- `--security-output` path if set (provided by `/loop-review`'s driver as `$LOOP_TMPDIR/security-findings-slice-${N}.md`).
+- `--security-output` path if set.
 - `$REVIEW_TMPDIR/security-findings.md` otherwise (default; printed verbatim to terminal at end of run before tmpdir cleanup).
 
 Format each entry:
@@ -384,7 +382,7 @@ Then print: `**⚠ Handle these findings per SECURITY.md's vulnerability-disclos
 
 ### 4d — Slice-mode KV footer (slice mode only)
 
-Print the `### slice-result` KV footer immediately before exiting Step 4. The driver in `/loop-review` parses this footer.
+Print the `### slice-result` KV footer immediately before exiting Step 4.
 
 ```
 ### slice-result

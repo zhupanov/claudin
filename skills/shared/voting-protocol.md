@@ -1,6 +1,6 @@
 # Voting Protocol
 
-Shared voting protocol for adjudicating review findings. Used by `/design` (plan review) and `/review` (code review). This protocol **replaces** the Negotiation Protocol for `/design` and `/review`. `/loop-review` post-overhaul (PR #434) delegates to per-slice `/review --slice-file` subprocesses, each running this Voting Protocol via `/review`'s standard 3-lane panel. `/research` continues using the Negotiation Protocol in `external-reviewers.md`.
+Shared voting protocol for adjudicating review findings. Used by `/design` (plan review) and `/review` (code review). This protocol **replaces** the Negotiation Protocol for `/design` and `/review`. `/research` continues using the Negotiation Protocol in `external-reviewers.md`.
 
 ## Overview
 
@@ -20,7 +20,7 @@ FINDING_2: <reviewer attribution> — <finding description>
 ...
 ```
 
-Include the reviewer attribution (`Code`, `Codex`, or `Cursor`) so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it. The same three-attribution shape applies across all reviewer panels: `/design` and `/review` (Voting Protocol — including the per-slice `/review --slice-file` subprocesses that `/loop-review` delegates to post-#434), as well as `/research` (Negotiation Protocol). `/research` does not participate in voting — it uses the Negotiation Protocol instead.
+Include the reviewer attribution (`Code`, `Codex`, or `Cursor`) so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it. The same three-attribution shape applies across all reviewer panels: `/design` and `/review` (Voting Protocol), as well as `/research` (Negotiation Protocol). `/research` does not participate in voting — it uses the Negotiation Protocol instead.
 
 ## Voter Output Format
 

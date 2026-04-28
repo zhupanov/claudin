@@ -136,18 +136,7 @@ out_nonplugin=$("$HINTS" --target-dir "/tmp/smoke/foo" --plugin false)
 assert_not_contains "$out_nonplugin" "docs/workflow-lifecycle.md" "workflow-lifecycle.md reminder absent when --plugin false"
 assert_not_contains "$out_nonplugin" "AGENTS.md Canonical sources" "AGENTS.md canonical sources reminder absent when --plugin false"
 
-echo "=== Section 3: --plugin true, NAME=loop-review (ASCII edge case) ==="
-
-# NAME starting with 'l' is the edge case where Skill(larch:NAME) sorts
-# BEFORE Skill(NAME) in strict ASCII order. The hints script itself just
-# emits both lines — the sort-and-interleave is a human step. This case
-# confirms the two lines are still both emitted verbatim.
-
-out=$("$HINTS" --target-dir "/tmp/smoke/loop-review" --plugin true)
-assert_count_eq "$out" '"Skill(loop-review)"' 1 "bare Skill(loop-review) appears for edge-case name"
-assert_count_eq "$out" '"Skill(larch:loop-review)"' 1 "qualified Skill(larch:loop-review) appears for edge-case name"
-
-echo "=== Section 4: --target-dir required flag ==="
+echo "=== Section 3: --target-dir required flag ==="
 
 # Missing --target-dir must exit non-zero and print ERROR= to stderr.
 set +e

@@ -28,7 +28,6 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
 - **[Reviewer competition scoring](docs/point-competition.md)** — Reviewers earn points based on finding quality; a scoreboard tracks accepted, neutral, exonerated, and rejected findings.
 - **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation and initial CI wait in one command; `--merge` adds the CI+rebase+merge loop, local cleanup, and main verification. Each run also posts a single Slack status message about its tracking issue near the end (✅ closed / 📝 PR opened / ❌ blocked / ❓ user input needed) when Slack is configured — opt out with `--no-slack`. `--draft` creates a draft PR and keeps the branch for further iteration.
 - **[External reviewer integration](docs/external-reviewers.md)** — Codex and Cursor participate alongside Claude subagents as sketch agents, debaters, judges, reviewers, and voters.
-- **[Systematic codebase review](skills/loop-review/SKILL.md)** — `/loop-review` partitions the repo into slices, reviews each with a 3-reviewer panel, and files every actionable finding as a deduplicated GitHub issue. Security-tagged findings are held locally per `SECURITY.md`.
 - **[Tracked runs](skills/implement/SKILL.md)** — `/implement` PRs link to a tracking issue whose anchor comment is the single source of truth for full report content (voting tallies, rejected findings, version-bump reasoning, diagrams, OOS links, execution issues, run statistics).
 
 ## Skills
@@ -79,12 +78,6 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><code>[--input-file FILE] [--title-prefix P] [--label L]... [--body-file F] [--dry-run] [--go] [&lt;issue description&gt;]</code></td>
     </tr>
     <tr><td colspan="2">Create one or more GitHub issues with LLM-based semantic duplicate detection and always-on inter-issue blocker-dependency analysis.</td></tr>
-    <tr><td colspan="2"><hr></td></tr>
-    <tr>
-      <td><a href="docs/skills.md#loop-review"><code>/loop-review</code></a></td>
-      <td><code>[--debug] [partition criteria]</code></td>
-    </tr>
-    <tr><td colspan="2">Systematic code review of the entire repository; files every actionable finding as a deduplicated GitHub issue.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#relevant-checks"><code>/relevant-checks</code></a></td>

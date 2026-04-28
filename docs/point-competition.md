@@ -62,4 +62,4 @@ The competition scoring system is active in skills that use the [voting protocol
 - **`/design`** — Plan review findings are scored after the voting panel adjudicates
 - **`/review`** — Code review findings (round 1) are scored after voting
 
-Skills that use the negotiation protocol (`/research`, `/loop-review`) do not use competition scoring.
+Skills that use the negotiation protocol (`/research`) do not use competition scoring.

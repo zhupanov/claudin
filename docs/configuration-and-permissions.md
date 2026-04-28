@@ -29,21 +29,19 @@
 "Skill(larch:imaq)",
 "Skill(larch:implement)",
 "Skill(larch:issue)",
-"Skill(larch:loop-review)",
 "Skill(larch:research)",
 "Skill(larch:review)",
 "Skill(larch:umbrella)",
-"Skill(loop-review)",
 "Skill(research)",
 "Skill(review)",
 "Skill(umbrella)"
 ```
 
-Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, all `larch:`-prefixed entries sort **before** `Skill(loop-review)`, `Skill(research)`, and `Skill(review)` (whose first letters are `l`-then-`o`, `r`, and `r`). Sort the whole block with `sort -u` to verify if you extend it. This section reflects currently-documented Claude Code behavior; consult the upstream docs above if matching semantics change in a future release.
+Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, all `larch:`-prefixed entries sort **before** `Skill(research)`, `Skill(review)`, and `Skill(umbrella)` (whose first letters are `r`, `r`, and `u`). Sort the whole block with `sort -u` to verify if you extend it. This section reflects currently-documented Claude Code behavior; consult the upstream docs above if matching semantics change in a future release.
 
 ## `claude -p` permission propagation
 
-Larch's loop drivers spawn `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` subprocesses (after `cd "$REPO_ROOT"`). **Direct `claude -p` callers**: `skills/loop-review/scripts/driver.sh`, `scripts/eval-research.sh`. This section documents how the project-level `.claude/settings.json` propagates to all `claude -p` children regardless of which layer launched them. Audit issue: [#586](https://github.com/zhupanov/larch/issues/586). Tested against Claude Code CLI version `2.1.119`.
+Larch's loop drivers spawn `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` subprocesses (after `cd "$REPO_ROOT"`). **Direct `claude -p` callers**: `scripts/eval-research.sh`. This section documents how the project-level `.claude/settings.json` propagates to all `claude -p` children regardless of which layer launched them. Audit issue: [#586](https://github.com/zhupanov/larch/issues/586). Tested against Claude Code CLI version `2.1.119`.
 
 ### Empirical findings
 

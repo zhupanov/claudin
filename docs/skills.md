@@ -9,7 +9,6 @@ Reference for every slash command shipped by the larch plugin. Each section belo
 - [`/fix-issue`](#fix-issue)
 - [`/implement`](#implement)
 - [`/issue`](#issue)
-- [`/loop-review`](#loop-review)
 - [`/relevant-checks`](#relevant-checks)
 - [`/research`](#research)
 - [`/review`](#review)
@@ -84,14 +83,6 @@ Create one or more GitHub issues with LLM-based semantic duplicate detection. Tw
 
 **Always-on inter-issue blocker-dependency analysis** (issue #546): every invocation analyzes the new item(s) against existing OPEN issues and applies hard GitHub-native blocker dependencies via the Issue Dependencies REST API on detected pairs (merge-conflict risk or "must land first"). Hard-fail with retries (3 tries, 10s/30s sleeps); on retry exhaustion the failed item is rolled back (orphan close) — when multiple items are processed, unrelated items continue — and the run exits non-zero if any item failed, yielding a clean "create-then-close" recovery rather than a dangling issue with missing dependency wiring.
 
-## `/loop-review`
-
-**Arguments**: `[--debug] [partition criteria]`
-
-**Source**: [`skills/loop-review/SKILL.md`](../skills/loop-review/SKILL.md) · [Diagram](../skills/loop-review/diagram.svg)
-
-Systematic code review of entire repository by partitioning into slices, reviewing each with a 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, if available), and filing every actionable finding as a deduplicated GitHub issue via `/issue --input-file --label loop-review`. Uses the Negotiation Protocol to merge per-slice reviewer findings. Security-tagged findings are held locally per SECURITY.md. Batches accumulate up to 3 slices per `/issue` flush so its 2-phase LLM dedup runs once per batch. The optional argument specifies how to partition the codebase (e.g., by directory, by file type). The `loop-review` label should be pre-created in the target repository — `/issue` silently drops unknown labels with a stderr warning.
-
 ## `/relevant-checks`
 
 **Arguments**: *(none)*
@@ -125,7 +116,7 @@ Falls back cleanly to single-question mode on any planner failure (count out of 
 
 All scales produce a structured report with findings, risk assessment, difficulty estimates, and feasibility verdict (the report's lane-count headers reflect the configured scale dynamically). With `--adjudicate` (default off, composes with any `--scale` and with `--plan`), runs an additional 3-judge dialectic adjudication step (Step 2.5) over reviewer findings the orchestrator rejected during validation merge/dedup; majority binds, with reinstated findings folded into the validated synthesis before the report renders — see [`skills/research/references/adjudication-phase.md`](../skills/research/references/adjudication-phase.md). When `--scale=quick` is set, Step 2 is skipped so there are no rejections to adjudicate and Step 2.5 short-circuits cleanly.
 
-**Token telemetry and budget** (`--token-budget=N`): Step 4 always renders a `## Token Spend` section before tmpdir cleanup, summarizing per-phase Claude subagent tokens (lanes whose Agent-tool return carries `<usage>total_tokens: N</usage>`). Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from the totals; the report labels itself "Claude tokens only" so the operator sees the coverage honestly. Optional `--token-budget=N` enforces a cap between phases (after Steps 1, 2, 2.5) — on overage, the run aborts before the next phase, skips Step 3 entirely, and renders the partial token report with the `(aborted: budget exceeded)` completion suffix. Budget governs measurable Claude subagent tokens only; unmeasurable lanes are reported separately. When env var `LARCH_TOKEN_RATE_PER_M` is set (USD per million tokens), the report includes a `$` cost column. See [`scripts/token-tally.md`](../scripts/token-tally.md) for the helper contract. Tracked repo files are not modified by the Claude `Edit | Write | NotebookEdit` tool surface — scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook). Bash and external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see [`SECURITY.md` § External reviewer write surface in /research and /loop-review](../SECURITY.md#external-reviewer-write-surface-in-research-and-loop-review). `/issue` may be invoked via the Skill tool to file research-result issues.
+**Token telemetry and budget** (`--token-budget=N`): Step 4 always renders a `## Token Spend` section before tmpdir cleanup, summarizing per-phase Claude subagent tokens (lanes whose Agent-tool return carries `<usage>total_tokens: N</usage>`). Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from the totals; the report labels itself "Claude tokens only" so the operator sees the coverage honestly. Optional `--token-budget=N` enforces a cap between phases (after Steps 1, 2, 2.5) — on overage, the run aborts before the next phase, skips Step 3 entirely, and renders the partial token report with the `(aborted: budget exceeded)` completion suffix. Budget governs measurable Claude subagent tokens only; unmeasurable lanes are reported separately. When env var `LARCH_TOKEN_RATE_PER_M` is set (USD per million tokens), the report includes a `$` cost column. See [`scripts/token-tally.md`](../scripts/token-tally.md) for the helper contract. Tracked repo files are not modified by the Claude `Edit | Write | NotebookEdit` tool surface — scratch writes are permitted only under canonical `/tmp` (enforced mechanically by the skill-scoped `scripts/deny-edit-write.sh` PreToolUse hook). Bash and external Cursor/Codex reviewers run with full filesystem access and are prompt-enforced only — see [`SECURITY.md` § External reviewer write surface in /research](../SECURITY.md#external-reviewer-write-surface-in-research). `/issue` may be invoked via the Skill tool to file research-result issues.
 
 ## `/review`
 

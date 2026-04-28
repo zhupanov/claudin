@@ -157,11 +157,7 @@ jobs:
           # security") that does not match a stable enum-like regex. They are
           # maintained by hand during Phase 2 and are not mechanically
           # checked here. /research is intentionally excluded — its
-          # external-reviewer prose uses a different taxonomy. /loop-review
-          # post-overhaul is a thin delegator whose SKILL.md does NOT carry
-          # reviewer prompts at all (loop control moved to driver.sh; the
-          # per-slice /review subprocess carries the prompts via
-          # skills/review/SKILL.md, which IS in UNQUOTED_FILES above).
+          # external-reviewer prose uses a different taxonomy.
           exit_code=0
 
           # shellcheck disable=SC2016
