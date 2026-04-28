@@ -7,7 +7,7 @@
 - **Input**: exactly one positional argument — the raw prompt string.
 - **Output (stdout)**: <code>&nbsp;/max-mode on. Prompt: &lt;prompt&gt;</code> (leading `U+0020` space intentional, no trailing newline).
 - **Exit codes**: `0` on success; `1` if no argument supplied.
-- **Implementation**: `printf '%s'` (not `echo`) so the prompt content passes through literally without re-interpreting backslash escapes.
+- **Implementation**: `printf ' /max-mode on. Prompt: %s'` (not `echo`) so the prompt content passes through literally without re-interpreting backslash escapes.
 
 ## Why
 
