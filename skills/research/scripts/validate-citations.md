@@ -187,7 +187,7 @@ a stub-curl fixture that hangs deliberately past the budget; the Linux
 | `__VC_SKIP_DNS` | skip real DNS resolution |
 | `__VC_STUB_RESOLVE` | semicolon-separated `host=ip` pairs for fake resolution |
 | `__VC_DRY_RUN` | exit after extraction; print extracted lists to stderr |
-| `__VC_SETSID_DONE` | internal idempotency guard for the Linux setsid re-exec |
+| `__VC_SETSID_DONE` | internal marker for the Linux `setsid` re-exec — set just before `exec setsid` so the re-exec'd child inherits it (idempotency guard preventing infinite recursion) AND the budget-exhaustion handler reads it as the "running in dedicated session" gate that authorizes `kill -- -$$` on Linux |
 
 These are NOT documented in `--help` and MUST NOT be relied upon by
 operators or callers — they are private to the test harness.

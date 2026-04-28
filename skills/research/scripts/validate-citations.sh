@@ -60,8 +60,14 @@
 # concern (research-report-final.md prelude lines).
 #
 # Process-group kill on budget exhaustion:
-#   Linux: setsid puts curl children in the script's session, so a single
-#     kill -- -$$ signals every descendant.
+#   Linux (setsid available): setsid puts curl children in the script's
+#     session, so a single kill -- -$$ signals every descendant. Gated on
+#     __VC_SETSID_DONE=1 (the dedicated-session marker).
+#   Linux (setsid absent): the re-exec is skipped; the timeout path falls
+#     back to per-PID kill of CURL_PIDS — `kill -- -$$` would self-signal
+#     the validator (which is not a session leader on this branch) and
+#     break the fail-soft contract. Cleanup is best-effort: orphan curl
+#     children are bounded by --per-fetch-timeout, not by the global kill.
 #   macOS: set -m places each backgrounded fetch_url subshell in its own
 #     process group (pgid == $!). The script records every $! in CURL_PIDS
 #     and on timeout runs kill -- -<pid> for each one, terminating the
@@ -70,7 +76,6 @@
 #     would also signal the validator itself (which lives in $$'s group),
 #     producing exit 143 with no sidecar and breaking the fail-soft
 #     contract.
-#   Either path ensures orphaned curl processes do not outlive the budget.
 #
 # Portability: bash 3.2 (macOS default) and bash 5+ (Ubuntu CI). Uses awk
 # (POSIX), grep -E (BSD + GNU), curl >= 7.21 for --noproxy. Optional: host
