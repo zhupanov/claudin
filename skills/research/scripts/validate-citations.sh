@@ -60,8 +60,14 @@
 # concern (research-report-final.md prelude lines).
 #
 # Process-group kill on budget exhaustion:
-#   Linux: setsid puts curl children in the script's session, so a single
-#     kill -- -$$ signals every descendant.
+#   Linux (setsid available): setsid puts curl children in the script's
+#     session, so a single kill -- -$$ signals every descendant. Gated on
+#     __VC_SETSID_DONE=1 (the dedicated-session marker).
+#   Linux (setsid absent): the re-exec is skipped; the timeout path falls
+#     back to per-PID kill of CURL_PIDS — `kill -- -$$` would self-signal
+#     the validator (which is not a session leader on this branch) and
+#     break the fail-soft contract. Cleanup is best-effort: orphan curl
+#     children are bounded by --per-fetch-timeout, not by the global kill.
 #   macOS: set -m places each backgrounded fetch_url subshell in its own
 #     process group (pgid == $!). The script records every $! in CURL_PIDS
 #     and on timeout runs kill -- -<pid> for each one, terminating the
@@ -70,7 +76,6 @@
 #     would also signal the validator itself (which lives in $$'s group),
 #     producing exit 143 with no sidecar and breaking the fail-soft
 #     contract.
-#   Either path ensures orphaned curl processes do not outlive the budget.
 #
 # Portability: bash 3.2 (macOS default) and bash 5+ (Ubuntu CI). Uses awk
 # (POSIX), grep -E (BSD + GNU), curl >= 7.21 for --noproxy. Optional: host
@@ -657,8 +662,15 @@ fi
 case "$(uname -s 2>/dev/null)" in
     Linux*)
         if [[ "${__VC_SETSID_DONE:-}" != "1" ]]; then
-            export __VC_SETSID_DONE=1
             if command -v setsid >/dev/null 2>&1; then
+                # Set the marker BEFORE exec so the re-exec'd child inherits
+                # it (preventing an infinite re-exec loop) AND so the kill
+                # site below can use it as a "running in dedicated session"
+                # signal. Setting it earlier — before `command -v setsid` —
+                # would make `kill -- -$$` unsafe in the setsid-missing
+                # branch because the original (non-re-exec'd) process would
+                # carry the marker without actually being in its own session.
+                export __VC_SETSID_DONE=1
                 # Re-exec under setsid so curl children share our session.
                 exec setsid -w "$0" \
                     --report "$REPORT" --output "$OUTPUT" --tmpdir "$TMPDIR" \
@@ -742,7 +754,21 @@ if [[ "$TIMED_OUT" == "true" ]]; then
     # Process-group kill.
     case "$(uname -s 2>/dev/null)" in
         Linux*)
-            kill -- -$$ 2>/dev/null || true
+            # `kill -- -$$` is only safe when this process is the leader of
+            # its own session (set up by the setsid re-exec earlier). When
+            # setsid was absent at startup, __VC_SETSID_DONE is unset, the
+            # validator runs in its caller's process group, and signaling
+            # $$ would also signal the validator itself — breaking the
+            # documented "always exits 0" fail-soft contract. Fall back to
+            # per-PID kill of the recorded subshells in that case; orphan
+            # curl children are bounded by $PER_FETCH_TIMEOUT.
+            if [[ "${__VC_SETSID_DONE:-}" == "1" ]]; then
+                kill -- -$$ 2>/dev/null || true
+            else
+                for _kill_pid in "${CURL_PIDS[@]}"; do
+                    kill "$_kill_pid" 2>/dev/null || true
+                done
+            fi
             ;;
         Darwin*)
             # The earlier Darwin case stanza enables `set -m`, which puts

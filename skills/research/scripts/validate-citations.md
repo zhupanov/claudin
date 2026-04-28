@@ -154,11 +154,17 @@ must be terminated cleanly. OS-specific:
 
 - **Linux**: when `setsid` is available, `setsid` puts curl children in
   the script's session. The script self-execs into a new session if not
-  already a session leader (idempotency guard: `__VC_SETSID_DONE=1` env
-  var prevents infinite recursion). A single `kill -- -$$` then signals
-  every descendant. When `setsid` is unavailable, the re-exec is skipped
-  and the timeout `kill -- -$$` may signal the script's own group — a
-  pre-existing degraded path that #662 did not change.
+  already a session leader; `__VC_SETSID_DONE=1` is exported just before
+  the `exec setsid` so the re-exec'd child inherits it (idempotency guard
+  preventing infinite recursion) AND so the budget-exhaustion handler can
+  use it as a "running in dedicated session" signal. A single `kill -- -$$`
+  then signals every descendant. When `setsid` is unavailable, the re-exec
+  is skipped, `__VC_SETSID_DONE` stays unset, and the budget-exhaustion
+  handler falls back to per-PID `kill "$pid"` over `CURL_PIDS` — the
+  validator runs in its caller's process group on this branch, so
+  `kill -- -$$` would also signal the validator itself and break the
+  fail-soft contract (issue #779). Orphan curl children on this fallback
+  are bounded by `$PER_FETCH_TIMEOUT`.
 - **macOS**: `set -m` (job control) places each backgrounded `fetch_url`
   subshell in its own process group with `pgid == $!`. The script records
   every `$!` in `CURL_PIDS` and on timeout runs `kill -- -<pid>` for each
@@ -181,7 +187,7 @@ a stub-curl fixture that hangs deliberately past the budget; the Linux
 | `__VC_SKIP_DNS` | skip real DNS resolution |
 | `__VC_STUB_RESOLVE` | semicolon-separated `host=ip` pairs for fake resolution |
 | `__VC_DRY_RUN` | exit after extraction; print extracted lists to stderr |
-| `__VC_SETSID_DONE` | internal idempotency guard for the Linux setsid re-exec |
+| `__VC_SETSID_DONE` | internal marker for the Linux `setsid` re-exec — set just before `exec setsid` so the re-exec'd child inherits it (idempotency guard preventing infinite recursion) AND the budget-exhaustion handler reads it as the "running in dedicated session" gate that authorizes `kill -- -$$` on Linux |
 
 These are NOT documented in `--help` and MUST NOT be relied upon by
 operators or callers — they are private to the test harness.
