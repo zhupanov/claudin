@@ -441,7 +441,7 @@ See https://example-hang.invalid/page1 and https://example-hang.invalid/page2.
 REPORT
             # Hermetic clean-bin: symlink common tools into a directory that
             # explicitly omits `setsid`. PATH=$CLEAN_BIN forces the
-            # validator's `command -v setsid` check (validate-citations.sh:665)
+            # validator's `command -v setsid` check (validate-citations.sh:669)
             # to fail so it takes the no-setsid Linux branch (the production
             # scenario under test). Directory-stripping `/usr/bin` is unsafe
             # on merged-/usr distros (would also remove grep/awk/etc.).
@@ -505,7 +505,7 @@ FAKEEOF
             # any leaked marker from the parent environment that would
             # otherwise route the validator into the unsafe kill branch.
             # PATH=$CLEAN_BIN strips setsid from the validator's own PATH so
-            # `command -v setsid` at :665 fails (the production no-setsid
+            # `command -v setsid` at :669 fails (the production no-setsid
             # scenario under test). The setsid binary used by the outer
             # wrapper is resolved from the runner's PATH (not the clean-bin).
             __VC_FAKE_CURL="$FAKE_CURL_PIDREC" __VC_LAST_ARGV="$ARGV_LOG" \
