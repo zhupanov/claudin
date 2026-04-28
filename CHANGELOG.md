@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.30] - 2026-04-27
+
+### Fixed
+
+- `scripts/test-eval-research-baseline-flag.md` — dropped the stale absolute line-number reference in the `claude` PATH-stub paragraph ("`require_tool claude` check at line 130"). The actual call drifted to a different line after subsequent growth in `scripts/eval-research.sh`, and per the user's stated principle ("There should be no line number references like this, since it is obviously a maintenance nightmare") the line-number clause is removed entirely — the script-name + function-name pair (`eval-research.sh` `require_tool claude`) is already a precise machine-greppable identifier and is robust to future drift. Documentation-only; runtime behavior unchanged. Closes #789.
+
 ## [7.17.29] - 2026-04-27
 
 ### Fixed
