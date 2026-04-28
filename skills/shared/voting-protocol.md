@@ -222,4 +222,4 @@ External reviewers (Codex, Cursor) **in diff mode** use single-list prompts and 
 
 ## Zero Accepted Findings
 
-If voting filters out **all** in-scope findings (every in-scope finding rejected by the panel), print: `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` and skip the implementation/revision step. Proceed directly to the rejected findings report. (OOS items accepted for issue filing are processed separately — by `/implement` Step 9a.1 in diff mode, or by `/review` Step 4b via `/umbrella` in slice mode — and do not count as implementation work.)
+If voting filters out **all** in-scope findings (every in-scope finding rejected by the panel), print: `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` and skip the implementation/revision step. Proceed directly to the rejected findings report. (OOS items accepted for issue filing are processed separately — by `/implement` Step 9a.1, or by `/review` Step 4b via `/umbrella` in slice mode with `--create-issues` — and do not count as implementation work.)
