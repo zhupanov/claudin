@@ -228,7 +228,7 @@ External reviewer output collection, validation, and retry are handled by the sh
 
 ### 3a — Collect
 
-**Process the Claude finding immediately** — do not wait for external reviewers before starting. After the Claude Code Reviewer subagent returns:
+**Round 1 (three-reviewer panel):** Process the Claude finding immediately — do not wait for external reviewers before starting. After the Claude Code Reviewer subagent returns:
 
 1. Collect findings from the Claude Code Reviewer subagent right away. It produces **dual-list output** with section headers '### In-Scope Findings' and '### Out-of-Scope Observations'. Parse both lists.
 2. **Then** collect and validate external reviewer outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
@@ -237,6 +237,8 @@ External reviewer output collection, validation, and retry are handled by the sh
    ```
    Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. **In slice mode**, external reviewers (Codex, Cursor) produce **dual-list output** with '### In-Scope Findings' and '### Out-of-Scope Observations' section headers — parse both sections. Section-header fail-open rules: (1) if exactly one section header is present, the missing section is interpreted as empty (NOT a parse error); (2) if both section headers are absent AND the entire output is the literal 'NO_ISSUES_FOUND', the reviewer reported nothing — proceed; (3) if both section headers are absent AND the output is not 'NO_ISSUES_FOUND' (legacy unsectioned output), treat the entire body as in-scope (preserves backward compatibility with the diff-mode single-list contract). **In diff mode**, external reviewers produce **single-list output** — treat their entire output as in-scope findings.
 3. Merge external reviewer in-scope findings (and any Claude fallback findings when externals were unavailable) into the Claude in-scope findings. **In slice mode**, also merge external reviewer OOS observations into the Claude OOS observations pool — both lists flow through the same dedup pipeline. Deduplicate in-scope findings and OOS observations separately. If the same issue appears in both lists from different reviewers, merge under the in-scope finding.
+
+**Rounds 2+ (diff mode only, single reviewer):** If Cursor was launched, collect its output via `collect-reviewer-results.sh` with only `$REVIEW_TMPDIR/cursor-output.txt` (no Claude-first gate, no Codex path). If `STATUS` is not `OK`, follow Runtime Timeout Fallback (flip `cursor_available=false`) and retry the round with a Claude Code Reviewer subagent. If the Claude Code Reviewer fallback was launched, process its Agent tool output directly — skip external collection.
 
 OOS observations are only collected in round 1 — rounds 2+ (diff mode only) use a single Cursor reviewer (Claude Code Reviewer fallback when `cursor_available` is false) without OOS collection.
 
