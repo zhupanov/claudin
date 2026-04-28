@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Eight executed fixtures plus one deferred-coverage
+# refactor (closes #496). Ten executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -763,6 +763,9 @@ assert_contains "$OUT" "UMBRELLA_NUMBER=1100" "[11] UMBRELLA_NUMBER=1100"
 assert_contains "$OUT" "ISSUE_NUMBER=1102" "[11] ISSUE_NUMBER=1102 (skipped prose-blocked #1101)"
 assert_not_contains "$OUT" "ISSUE_NUMBER=1101" "[11] does NOT lock prose-blocked first child"
 assert_contains "$OUT" "LOCK_ACQUIRED=true" "[11] LOCK_ACQUIRED=true"
+assert_contains "$OUT" "RENAMED=true" "[11] RENAMED=true (lock-no-go + rename pipeline succeeded)"
+ERR=$(cat "$ERR_FILE")
+assert_not_contains "$ERR" "WARNING: title rename failed" "[11] no rename-failure warning on stderr"
 unset RUNTIME_COMMENTS_DIR
 
 # ---------------------------------------------------------------------------

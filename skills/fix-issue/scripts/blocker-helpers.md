@@ -28,12 +28,12 @@ Unions native and prose blocker sets, dedupes, and returns a space-separated lis
 
 | File | Relationship |
 |---|---|
-| `scripts/parse-prose-blockers.sh` | The regex parser invoked by `prose_open_blockers`. Resolved at function call time via `$(dirname "${BASH_SOURCE[0]}")/parse-prose-blockers.sh` so the path stays correct regardless of which script sources the library. |
-| `scripts/parse-prose-blockers.md` | Sibling-doc contract for the parser. Names this library as the orchestration owner. |
-| `scripts/find-lock-issue.sh` | Caller; sources this library after `REPO` is resolved. Existing call sites (`handle_umbrella` post-pick guard, explicit-issue gate, etc.) are unchanged from before the extraction. |
-| `scripts/umbrella-handler.sh` | Caller; sources this library after `REPO` is resolved. `child_eligible` calls `all_open_blockers` (instead of the previous native-only `child_native_blockers`). |
-| `scripts/test-find-lock-issue.sh` | Test harness; covers the explicit-issue blocker pipeline including prose paths. New e2e umbrella-dispatch fixture covers the post-extraction integration. |
-| `scripts/test-umbrella-handler.sh` | Test harness; new fixtures cover prose-skip iteration and fail-open negative paths. |
+| `skills/fix-issue/scripts/parse-prose-blockers.sh` | The regex parser invoked by `prose_open_blockers`. Resolved at function call time via `$(dirname "${BASH_SOURCE[0]}")/parse-prose-blockers.sh` so the path stays correct regardless of which script sources the library. |
+| `skills/fix-issue/scripts/parse-prose-blockers.md` | Sibling-doc contract for the parser. Names this library as the orchestration owner. |
+| `skills/fix-issue/scripts/find-lock-issue.sh` | Caller; sources this library after `REPO` is resolved. Existing call sites (`handle_umbrella` post-pick guard, explicit-issue gate, etc.) are unchanged from before the extraction. |
+| `skills/fix-issue/scripts/umbrella-handler.sh` | Caller; sources this library after `REPO` is resolved. `child_eligible` calls `all_open_blockers` (instead of the previous native-only `child_native_blockers`). |
+| `skills/fix-issue/scripts/test-find-lock-issue.sh` | Test harness; covers the explicit-issue blocker pipeline including prose paths. New e2e umbrella-dispatch fixture covers the post-extraction integration. |
+| `skills/fix-issue/scripts/test-umbrella-handler.sh` | Test harness; new fixtures cover prose-skip iteration and fail-open negative paths. |
 | `agent-lint.toml` | Both `blocker-helpers.sh` and `blocker-helpers.md` are excluded from agent-lint — the script is sourced-only (agent-lint does not follow `source`); the sibling `.md` mirrors the `parse-prose-blockers.md` exclusion pattern. |
 
 ## When edits to this file require updates elsewhere

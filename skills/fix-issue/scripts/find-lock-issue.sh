@@ -621,7 +621,8 @@ if [[ -n "$ISSUE_ARG" ]]; then
     # globally-last comment via `add // [] | .[-1]`. The older `--jq '.[-1].body'`
     # pattern ran the filter per page and was only accidentally correct because
     # the last page contains the globally-last comment. See `prose_open_blockers`
-    # above for the canonical reference use of this pattern.
+    # in `blocker-helpers.sh` for the canonical reference use of this `add // []`
+    # slurp pattern.
     LAST_COMMENT=$(gh api --paginate --slurp "repos/${REPO}/issues/${ISSUE_NUM}/comments" 2>/dev/null \
         | jq -r 'add // [] | .[-1].body // empty') || {
         echo "ELIGIBLE=false"
