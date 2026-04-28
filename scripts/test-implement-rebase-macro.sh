@@ -9,10 +9,11 @@
 #  (F) Macro header line number is BETWEEN `### Verbosity Control` and `## Step 0`.
 #  (G) Macro section body contains the rebase-push.sh invocation and the bail-on-failure line.
 #  (H) Exactly 1 `rebase-push.sh --no-push --skip-if-pushed` occurrence (only the macro M2 uses
-#      that flag combo; Step 1.m and the Rebase + Re-bump Sub-procedure use `--no-push` alone).
-#      This catches residual inline rebase blocks that were supposed to be dedup'd into the macro.
-#      Also asserts the 7.r Apply invocation is inside the Step 7 slice and that the Step 1.m and
-#      Sub-procedure `--no-push` call sites remain (must NOT have been accidentally removed).
+#      that flag combo; Step 1.m, Step 8b, and the Rebase + Re-bump Sub-procedure use `--no-push`
+#      alone). This catches residual inline rebase blocks that were supposed to be dedup'd into
+#      the macro. Also asserts the 7.r Apply invocation is inside the Step 7 slice and that all
+#      three `--no-push`-only call sites (Step 1.m + Step 8b + Sub-procedure) remain (must NOT
+#      have been accidentally removed).
 #  (I) Macro body contains the two placeholder-pinned SKIPPED format strings.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
@@ -152,16 +153,18 @@ rebase_push_skip_count=$(grep -cF '${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh 
 [[ "$rebase_push_skip_count" == "1" ]] \
   || fail "(H) expected exactly 1 'rebase-push.sh --no-push --skip-if-pushed' occurrence (macro M2 only), found $rebase_push_skip_count — residual inline rebase block may have survived the refactor"
 
-# Sanity check: both non-macro --no-push call sites must still exist (Step 1.m in SKILL.md +
-# Rebase + Re-bump Sub-procedure, now extracted to references/rebase-rebump-subprocedure.md).
+# Sanity check: all three non-macro --no-push call sites must still exist:
+#   - Step 1.m in SKILL.md (pre-Step-1 main freshness)
+#   - Step 8b in SKILL.md (pre-PR-creation freshness, issue #818)
+#   - Rebase + Re-bump Sub-procedure in references/rebase-rebump-subprocedure.md
 # Count lines ending with 'rebase-push.sh --no-push' across both files (indentation tolerated;
-# --skip-if-pushed excluded because its lines do NOT end with --no-push). Expect exactly 2 —
-# one per call site. This catches accidental removal of EITHER site.
+# --skip-if-pushed excluded because its lines do NOT end with --no-push). Expect exactly 3 —
+# one per call site. This catches accidental removal of ANY site.
 SUBPROC_MD="$REPO_ROOT/skills/implement/references/rebase-rebump-subprocedure.md"
 [[ -f "$SUBPROC_MD" ]] || fail "(H) references/rebase-rebump-subprocedure.md missing: $SUBPROC_MD"
 no_push_only_count=$(grep -chE 'rebase-push\.sh --no-push$' "$SKILL_MD" "$SUBPROC_MD" | awk '{s+=$1} END {print s+0}')
-[[ "$no_push_only_count" == "2" ]] \
-  || fail "(H) expected exactly 2 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites across SKILL.md + references/rebase-rebump-subprocedure.md, found $no_push_only_count — Step 1.m or Rebase + Re-bump Sub-procedure was accidentally altered"
+[[ "$no_push_only_count" == "3" ]] \
+  || fail "(H) expected exactly 3 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites across SKILL.md (Step 1.m + Step 8b) + references/rebase-rebump-subprocedure.md, found $no_push_only_count — Step 1.m, Step 8b, or Rebase + Re-bump Sub-procedure was accidentally altered"
 
 # ---------------------------------------------------------------------------
 # (I) Macro body placeholder-pinned SKIPPED format strings.
