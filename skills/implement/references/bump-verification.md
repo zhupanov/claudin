@@ -46,7 +46,7 @@
      - **`VERIFIED=false` AND `COMMITS_AFTER != COMMITS_BEFORE`** (unexpected state — `/bump-version` created more than one commit, or somehow decreased the count):
        - **step12 family**: **HARD FAILURE**. Print `**⚠ 12: CI+merge loop — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Bailing to 12d.**` Bail to 12d.
        - **step10 family**: log warning and break to Step 11.
-       - **step8b family**: **HARD FAILURE** — set `STALL_TRACKING=true` and skip to Step 18. Print `**⚠ 8b: rebase — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Setting STALL_TRACKING=true and skipping to Step 18.**`
+       - **step8b family**: **HARD FAILURE** — set `STALL_TRACKING=true` and skip to Step 18. Print `**⚠ 8b: rebase — /bump-version created wrong commit count (expected $EXPECTED, got $COMMITS_AFTER). Setting STALL_TRACKING=true and skipping to Step 18.**` Log to `CI Issues`.
 
      After the commit-delta check completes (regardless of VERIFIED outcome above), also run the reasoning-file sentinel check (per #160 — mirrors Step 8 step 3b; see Block γ below for the full rationale and invocation).
 
