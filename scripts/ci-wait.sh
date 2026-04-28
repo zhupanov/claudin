@@ -138,12 +138,16 @@ emit_output() {
     fi
 }
 # Capture the script's exit status FIRST (before emit_output mutates $?),
-# then publish the KV payload, then write the numeric exit code to <path>.done.
-# The .done write is guarded with `|| true` so a sentinel-write failure
-# (disk full, permission) does not change the captured exit code; the
-# preceding payload publish chain decides whether <path> exists.
-# Mirrors scripts/run-external-reviewer.sh:70 byte-for-byte.
-trap 'EXIT_STATUS=$?; emit_output; if [[ -n "$OUTPUT_FILE" ]]; then printf "%s\n" "$EXIT_STATUS" > "${OUTPUT_FILE}.done" 2>/dev/null || true; fi' EXIT
+# then publish the KV payload. In file-mode, the .done sentinel write
+# is gated on emit_output's success — without that gate, a publish failure
+# (disk full, mv error) would still create .done, leading consumers to
+# parse a missing or stale <path> (closes the fail-closed-contract gap
+# flagged by review of #842). The .done write itself is guarded with
+# `|| true` so a sentinel-write failure does not change the captured
+# exit code; the preceding emit_output success gate decides whether
+# .done is written at all. Same consumer contract (numeric exit code in
+# .done) as scripts/run-external-reviewer.sh:70.
+trap 'EXIT_STATUS=$?; if emit_output && [[ -n "$OUTPUT_FILE" ]]; then printf "%s\n" "$EXIT_STATUS" > "${OUTPUT_FILE}.done" 2>/dev/null || true; fi' EXIT
 
 # --- Polling loop ---
 SECONDS=0

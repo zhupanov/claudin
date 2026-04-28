@@ -227,6 +227,70 @@ else
 fi
 
 # ----------------------------------------------------------------------
+# Sub-test C — fail-closed: publish failure must NOT produce .done sentinel
+# ----------------------------------------------------------------------
+# Forces the atomic publish (mv -f) to fail by directing --output-file at a
+# path inside a read-only directory. The trap should NOT write .done when
+# emit_output's publish chain fails — consumers waiting on .done time out
+# rather than parsing a missing or stale <path>. Closes the regression vector
+# flagged by /review's panel where the trap previously wrote .done unconditionally.
+echo
+echo "Sub-test C: fail-closed — publish failure must NOT create .done"
+
+C_DIR="$TMPDIR_BASE/C"
+mkdir -p "$C_DIR"
+cp "$REPO_ROOT/scripts/ci-wait.sh" "$C_DIR/ci-wait.sh"
+chmod +x "$C_DIR/ci-wait.sh"
+
+# Stub helpers — same shape as Sub-test B (ACTION=merge, exit cleanly).
+cat > "$C_DIR/ci-status.sh" <<'SH'
+#!/usr/bin/env bash
+echo "CI_STATUS=pass"
+echo "BEHIND_COUNT=0"
+echo "FAILED_RUN_ID="
+SH
+chmod +x "$C_DIR/ci-status.sh"
+
+cat > "$C_DIR/ci-decide.sh" <<'SH'
+#!/usr/bin/env bash
+echo "ACTION=merge"
+echo "BAIL_REASON="
+SH
+chmod +x "$C_DIR/ci-decide.sh"
+
+# Read-only directory — atomic publish (mv into a read-only dir) MUST fail.
+RO_DIR="$C_DIR/ro"
+mkdir -p "$RO_DIR"
+chmod 555 "$RO_DIR"
+C_OUT_PATH="$RO_DIR/out.txt"
+
+set +e
+bash "$C_DIR/ci-wait.sh" \
+    --pr 999 --repo test/repo --timeout 5 \
+    --output-file "$C_OUT_PATH" \
+    > "$C_DIR/stdout.log" 2> "$C_DIR/stderr.log"
+set -e
+
+# Restore writability so EXIT cleanup can rm -rf the tmpdir.
+chmod 755 "$RO_DIR"
+
+# Assertion 9: <path>.done MUST NOT exist on publish failure (fail-closed).
+if [ ! -f "${C_OUT_PATH}.done" ]; then
+    ok "C: <output-file>.done correctly absent on publish failure (fail-closed)"
+else
+    fail "C: <output-file>.done was written despite publish failure — fail-closed contract violated"
+fi
+
+# Assertion 10: <path> MUST NOT exist (or if it does, it should not be the
+# stale-clear leftover the script removes at startup) — confirms publish
+# never produced the final file.
+if [ ! -f "$C_OUT_PATH" ]; then
+    ok "C: <output-file> correctly absent on publish failure"
+else
+    fail "C: <output-file> exists despite read-only directory — atomic publish unexpectedly succeeded"
+fi
+
+# ----------------------------------------------------------------------
 echo
 echo "Summary: $PASS_COUNT passed, $FAIL_COUNT failed"
 if [ "$FAIL_COUNT" -gt 0 ]; then
