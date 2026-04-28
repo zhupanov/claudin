@@ -12,5 +12,8 @@
 5. Step 5 contains "Validation rule — no-external-refs on empty-CANDIDATES path" — pins the no-external-refs rule.
 6. Step 5 contains "When fetch was skipped (empty \`CANDIDATES\`), there are no \`FETCH_STATUS_*\` lines to parse" — pins the FETCH_STATUS scope narrowing.
 7. Step 4E does NOT contain "short-circuits cleanly via its existing" — asserts removal of old clause (assert_absent).
+8. Step 1 contains "intra-batch-deps-file FILE" — pins the new flag in the supported flags list (needle omits leading `--` to avoid grep flag collision).
+9. Step 5 contains "Caller-supplied intra-batch deps merge" — pins the merge semantics heading.
+10. Step 1 contains "max 500 lines, max 64KB file size" — pins the parser-side limits.
 
 **Edit-in-sync rules**: if the asserted strings in SKILL.md change (e.g., rewording the Step 4E redirect or Step 5 gate), update this harness's `assert_present`/`assert_absent` needles in the same PR.

@@ -3,7 +3,7 @@
 #
 # Pins the stdout grammar (LABELS_COUNT + LABEL_<i>, TITLE_PREFIX, REPO,
 # CLOSED_WINDOW_DAYS, DRY_RUN, GO, DEBUG, INPUT_FILE, UMBRELLA_SUMMARY_FILE,
-# TASK, UMBRELLA_TMPDIR), the frozen ERROR= templates, the quoting subset,
+# PIECES_JSON, TASK, UMBRELLA_TMPDIR), the frozen ERROR= templates, the quoting subset,
 # the paired-flag and TASK-mutual-exclusion validation rules for --input-file
 # / --umbrella-summary-file, and the TASK byte-preservation contract documented
 # in scripts/parse-args.md.
@@ -55,6 +55,7 @@ run_parser() {
     -e '/^UMBRELLA_TMPDIR=/d' \
     -e '/^INPUT_FILE=$/d' \
     -e '/^UMBRELLA_SUMMARY_FILE=$/d' \
+    -e '/^PIECES_JSON=$/d' \
     "$stdout_file"
   rm -f "$stdout_file.bak"
   printf '%s' "$exit_code"
@@ -329,6 +330,21 @@ assert_error "case 30: --input-file requires a value" \
 assert_error "case 31: --umbrella-summary-file requires a value" \
   "--umbrella-summary-file" \
   "--umbrella-summary-file requires a value"
+
+# 32. --pieces-json accepted with --input-file (emits PIECES_JSON=<path>).
+assert_raw_stdout_contains "case 32: --pieces-json with --input-file" \
+  "--input-file /tmp/foo.md --umbrella-summary-file /tmp/bar.txt --pieces-json /tmp/deps.json" \
+  "PIECES_JSON=/tmp/deps.json"
+
+# 33. --pieces-json without --input-file → error.
+assert_error "case 33: --pieces-json requires --input-file" \
+  "--pieces-json /tmp/deps.json" \
+  "--pieces-json requires --input-file"
+
+# 34. --pieces-json requires a value (frozen ERROR template).
+assert_error "case 34: --pieces-json requires a value" \
+  "--input-file /tmp/foo.md --umbrella-summary-file /tmp/bar.txt --pieces-json" \
+  "--pieces-json requires a value"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

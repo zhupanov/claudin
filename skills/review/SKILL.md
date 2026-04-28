@@ -334,9 +334,11 @@ Then invoke `/umbrella` via the Skill tool:
 
 > **Continue after child returns.** When `/umbrella` returns, parse its stdout machine lines per `/umbrella`'s Step 4 emit-output grammar — `UMBRELLA_VERDICT=`, `CHILDREN_CREATED=`, `CHILDREN_DEDUPLICATED=`, `CHILDREN_FAILED=`, `UMBRELLA_NUMBER=`, `UMBRELLA_URL=` (and optional `UMBRELLA_DOWNGRADE=`, `UMBRELLA_FAILURE_REASON=`) — and continue to Step 4c — do NOT end the turn or write a summary. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
+**Compose `pieces.json` for inter-finding dependency edges**: before invoking `/umbrella`, build a `pieces.json` at `$REVIEW_TMPDIR/pieces.json` encoding inter-finding `depends_on` edges derived from file-overlap metadata. For each accepted finding, the `**File**` field names one or more paths. Two findings have a dependency edge when: (a) they share at least one overlapping file path (after canonicalizing paths — strip leading `./`, resolve `..` segments, case-preserve), AND (b) one finding's description or suggested fix explicitly references sequential dependency on the other (e.g., "this requires the refactor in finding N to land first", "depends on the API change above", "must run after the schema migration"). File overlap alone is necessary but NOT sufficient — it indicates potential conflict, not proven dependency. The `depends_on` array for each piece uses 1-based indices matching the batch markdown's `### <title>` order. Write the JSON array to `$REVIEW_TMPDIR/pieces.json` using the Write tool. If no inter-finding dependencies are detected (common case — most review findings are independent), write a JSON array with empty `depends_on` arrays for each entry and still pass `--pieces-json` (the validator accepts all-empty deps).
+
 Skill invocation:
 - Try skill `"umbrella"` first (bare name). If no skill matches, try `"larch:umbrella"`.
-- args: `--input-file $REVIEW_TMPDIR/findings-batch.md --umbrella-summary-file $REVIEW_TMPDIR/umbrella-summary.txt [--label $ISSUE_LABEL]`
+- args: `--input-file $REVIEW_TMPDIR/findings-batch.md --umbrella-summary-file $REVIEW_TMPDIR/umbrella-summary.txt --pieces-json $REVIEW_TMPDIR/pieces.json [--label $ISSUE_LABEL]`
 
 Only forward `--label $ISSUE_LABEL` if `ISSUE_LABEL` is non-empty. Do NOT forward `--debug`, `--auto`, `--merge`, or other flags `/umbrella` does not accept.
 

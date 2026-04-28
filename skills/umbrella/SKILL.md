@@ -1,7 +1,7 @@
 ---
 name: umbrella
 description: "Use when planning or breaking up a task or plan into GitHub issues — auto-classifies one-shot vs multi-piece, delegates to /issue (batch mode plus umbrella tracking issue), and wires native blocked-by edges plus child→umbrella back-links."
-argument-hint: "[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] <task description or empty to deduce from context>"
+argument-hint: "[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] [--pieces-json PATH] <task description or empty to deduce from context>"
 allowed-tools: Bash, Read, Skill
 ---
 
@@ -34,6 +34,7 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 | `--debug` | Verbose mode for this skill's own helpers. |
 | `--input-file PATH` | Activates pre-decomposed-input mode. Bypasses Step 1 (task resolve) and Step 3B.1 (LLM decomposition). The file MUST be a pre-built `/issue --input-file` batch markdown. Required to be paired with `--umbrella-summary-file`. Mutually exclusive with positional TASK. |
 | `--umbrella-summary-file PATH` | Caller-composed 1-2 sentence summary paragraph for the umbrella issue body's lead in Step 3B.3 (replaces the LLM-composed summary). Required to be paired with `--input-file`. |
+| `--pieces-json PATH` | Optional. Caller-supplied inter-piece dependency edges for pre-decomposed-input mode. JSON array of `{title, body, depends_on: [int,...]}` objects matching the `/issue --input-file` batch items by index. Required to be paired with `--input-file` (asymmetric: `--input-file` does NOT require `--pieces-json`). When supplied, Step 3B.4 reads `depends_on` fields to compose inter-child edges (resolving piece indices to issue numbers via `/issue` batch return). Validated by `validate-pieces-json.sh` before Step 3B.2. |
 
 ## Step 0 — Setup
 
@@ -41,7 +42,7 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 ${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
 ```
 
-Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `INPUT_FILE` (path — empty if `--input-file` not specified), `UMBRELLA_SUMMARY_FILE` (path — empty if `--umbrella-summary-file` not specified), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
+Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `INPUT_FILE` (path — empty if `--input-file` not specified), `UMBRELLA_SUMMARY_FILE` (path — empty if `--umbrella-summary-file` not specified), `PIECES_JSON` (path — empty if `--pieces-json` not specified), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
 
 **Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty (and `UMBRELLA_SUMMARY_FILE` is also non-empty by paired-flag validation in `parse-args.sh`), skip Step 1 (task resolve) and Step 3B.1 (LLM decomposition); Step 2 classification is replaced by post-3B.2 distinct-resolved-child-count rule (see Step 2 below). Mutual exclusion with positional `TASK` is enforced at the parser layer.
 
@@ -147,12 +148,24 @@ ${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/render-batch-input.sh --tmpdir "$U
 
 Write `$UMBRELLA_TMPDIR/pieces.json` (a JSON array of `{title, body, depends_on: [int,...]}` objects in pieces order) BEFORE invoking the renderer using the Write tool. The renderer emits `BATCH_INPUT_FILE=<path>`, `PIECES_TOTAL=<N>`, plus per-piece `PIECE_<i>_TITLE` and `PIECE_<i>_DEPENDS_ON` lines. On non-zero exit, print `ERROR=` and abort.
 
+### 3B.1.5 — Validate caller-supplied pieces.json (pre-decomposed-input mode only)
+
+**Skip this sub-step when `PIECES_JSON` is empty.** When `PIECES_JSON` is non-empty, count the items in `INPUT_FILE` (the number of `### <title>` headings in the batch markdown — this is `ITEMS_TOTAL` from `/issue`'s `parse-input.sh` contract) and validate:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/validate-pieces-json.sh --pieces-file "$PIECES_JSON" --count $ITEMS_TOTAL
+```
+
+On non-zero exit, print the `ERROR=` line and abort. This is fail-closed: a malformed `pieces.json` must not silently produce an empty DAG. The validation runs before Step 3B.2 so that no children are created from a batch whose dependency metadata is invalid.
+
+`ITEMS_TOTAL` derivation: count lines matching the pattern `^###` followed by a space in `INPUT_FILE`. This is the same heading-count convention `parse-input.sh` uses in Path 3 (generic `--input-file` mode) to determine batch length; the count is used here solely for the `--count` alignment check against `pieces.json` array length. If the heading count is 0 (file has no level-3 headings), treat as a validation error — a `pieces.json` paired with an empty or non-batch input file is structurally invalid.
+
 ### 3B.2 — Batch-create children via /issue
 
 Invoke the Skill tool:
 
 - Try skill `"issue"` first. Fall back to `"larch:issue"`.
-- args: `--input-file <BATCH_INPUT_FILE> [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go]` — flags forwarded verbatim. Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0. Do NOT pass `<TASK>` (batch mode rejects a trailing description).
+- args: `--input-file <BATCH_INPUT_FILE> [--intra-batch-deps-file <INTRA_BATCH_DEPS_FILE>] [--label L]... [--title-prefix P] [--repo R] [--closed-window-days N] [--dry-run] [--go]` — flags forwarded verbatim. Reconstruct `[--label L]...` by emitting one `--label <value>` for each `LABEL_1` through `LABEL_<LABELS_COUNT>` parsed in Step 0. Do NOT pass `<TASK>` (batch mode rejects a trailing description). When `PIECES_JSON` is non-empty, generate `INTRA_BATCH_DEPS_FILE` by writing a TSV file at `$UMBRELLA_TMPDIR/intra-batch-deps.tsv` (one row per edge: `<blocker-1based>\t<blocked-1based>`, derived from `pieces.json`'s `depends_on` arrays — for piece `i` with `depends_on=[j,...]`, emit row `<j>\t<i+1>` for each `j`), and include `--intra-batch-deps-file $UMBRELLA_TMPDIR/intra-batch-deps.tsv` in the `/issue` invocation. When `PIECES_JSON` is empty, omit `--intra-batch-deps-file`.
 
 Parse the per-item `ISSUE_<i>_NUMBER`, `ISSUE_<i>_URL`, `ISSUE_<i>_TITLE`, `ISSUE_<i>_DUPLICATE_OF_NUMBER`, `ISSUE_<i>_DUPLICATE_OF_URL`, `ISSUE_<i>_DRY_RUN`, `ISSUE_<i>_FAILED`, plus aggregate `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED`.
 
@@ -218,7 +231,12 @@ Parse `ISSUE_1_NUMBER` (capture as `UMBRELLA_NUMBER`), `ISSUE_1_URL` (capture as
 
 Skip this entire sub-step when `DRY_RUN=true` (no children actually exist on GitHub). Print `⏭️ /umbrella: dependency wiring + back-links skipped (--dry-run)` and jump to Step 4.
 
-**Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty, `pieces.json` does not exist (Step 3B.1 was skipped). The caller's pre-built batch input has no inter-piece dependency information, so the inter-child edges are empty by construction — but the **child→umbrella edges** are still deterministic (each child blocks the umbrella, gating its completion on the children's). Compose one row per resolved child of the form `<child-number>\t<UMBRELLA_NUMBER>`, writing the result to `$UMBRELLA_TMPDIR/proposed-edges.tsv` via the Write tool. The "resolved children" set is the rows of `$UMBRELLA_TMPDIR/children.tsv` (which Step 3B.3 wrote before this sub-step). The back-link comment fallback (`Part of umbrella #M — <umbrella-title>` comments on each child) and the back-link comment-existence idempotency check remain active.
+**Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty, Step 3B.1 was skipped. Two sub-cases:
+
+- **When `PIECES_JSON` is non-empty**: the caller supplied inter-piece dependency edges. Read the validated `PIECES_JSON` (validated at Step 3B.1.5) and compose inter-child edges: for each piece index `i` (0-based in JSON, 1-based as batch item `i+1`) with `depends_on=[j, k, ...]`, resolve piece indices to issue numbers via the `/issue` batch return (`ISSUE_<j>_NUMBER` if newly created, or `ISSUE_<j>_DUPLICATE_OF_NUMBER` if dedup'd; skip if `ISSUE_<j>_FAILED=true`) and propose edges `<resolved-j>\t<resolved-i+1-number>`, `<resolved-k>\t<resolved-i+1-number>`, etc. Then append the **child→umbrella edges**: for each resolved child `c`, append `<c>\t<UMBRELLA_NUMBER>`. Write all rows to `$UMBRELLA_TMPDIR/proposed-edges.tsv` via the Write tool.
+- **When `PIECES_JSON` is empty**: the caller's pre-built batch input has no inter-piece dependency information, so the inter-child edges are empty by construction — but the **child→umbrella edges** are still deterministic (each child blocks the umbrella, gating its completion on the children's). Compose one row per resolved child of the form `<child-number>\t<UMBRELLA_NUMBER>`, writing the result to `$UMBRELLA_TMPDIR/proposed-edges.tsv` via the Write tool.
+
+In both sub-cases, the "resolved children" set is the rows of `$UMBRELLA_TMPDIR/children.tsv` (which Step 3B.3 wrote before this sub-step). The back-link comment fallback (`Part of umbrella #M — <umbrella-title>` comments on each child) and the back-link comment-existence idempotency check remain active.
 
 **Normal mode**: compose the proposed edge list in two parts. First, the inter-child edges: from the `depends-on` field of each piece — for piece index `i` with `depends_on=[j, k, ...]`, propose edges `child[j] blocks child[i]`, `child[k] blocks child[i]`, etc. (using the resolved issue numbers from 3B.2). Then, **child→umbrella edges**: for each successfully-resolved child issue number `c` from 3B.2 (newly-created via `ISSUE_<i>_NUMBER` OR deduplicated via `ISSUE_<i>_DUPLICATE_OF_NUMBER`, excluding `ISSUE_<i>_FAILED=true` items), append the row `<c>\t<UMBRELLA_NUMBER>` so the umbrella is gated on its children's completion. Write all rows to `$UMBRELLA_TMPDIR/proposed-edges.tsv` (one row per edge: `<blocker-number>\t<blocked-number>`) using the Write tool. The umbrella-blocker row set deliberately covers every resolved child — a partial set would leave the umbrella's blocked-by graph incomplete and downstream DAG-aware automation would see only some children as gating the umbrella.
 
@@ -301,6 +319,8 @@ Each script under `scripts/` has a sibling contract `.md` documenting CLI surfac
 - `scripts/parse-args.sh` — Step 0 flag parser; contract `scripts/parse-args.md`.
 - `scripts/render-batch-input.sh` — Step 3B.1 batch-input renderer (`pieces.json` → `/issue --input-file` markdown); contract `scripts/render-batch-input.md`.
 - `scripts/render-umbrella-body.sh` — Step 3B.3 umbrella-body composer (summary + children TSV → markdown body with GitHub-native checklist); contract `scripts/render-umbrella-body.md`.
+- `scripts/validate-pieces-json.sh` — Step 3B.1.5 caller-supplied `pieces.json` dep-edge validator; contract `scripts/validate-pieces-json.md`.
+- `scripts/test-validate-pieces-json.sh` — regression harness for `validate-pieces-json.sh`; contract `scripts/test-validate-pieces-json.md`. Wired into `make lint` via the `test-validate-pieces-json` Makefile target.
 - `scripts/helpers.sh` — Steps 3B.4 / 4 consolidated helpers exposing `check-cycle`, `wire-dag`, `prefix-titles`, and `emit-output` subcommands; contract `scripts/helpers.md`. `prefix-titles` is the Step 3B.4 child-title rename pass — prepends the literal <code>(Umbrella: &lt;N&gt;) </code> marker on newly-created children only.
 - `scripts/test-helpers.sh` — regression harness for `helpers.sh check-cycle` (pure logic), `helpers.sh wire-dag` (PATH-stub `gh` for the per-edge POST classifier and counter categorization, including `EDGES_FAILED`), and `helpers.sh prefix-titles` (PATH-stub `gh` for the title-rename loop, idempotency guards, and per-row failure handling); contract `scripts/test-helpers.md`. Wired into `make lint` via the `test-umbrella-helpers` Makefile target.
 - `scripts/test-umbrella-parse-args.sh` — regression harness for `parse-args.sh`; contract `scripts/test-umbrella-parse-args.md`. Wired into `make lint` via the `test-umbrella-parse-args` Makefile target alongside `test-umbrella-helpers`.

@@ -57,6 +57,15 @@ assert_present "step5-fetch-status-scope" \
 assert_absent "step4e-old-unconditional-shortcircuit" \
     "short-circuits cleanly via its existing"
 
+assert_present "intra-batch-deps-file-flag" \
+    "intra-batch-deps-file FILE"
+
+assert_present "intra-batch-deps-file-merge" \
+    "Caller-supplied intra-batch deps merge"
+
+assert_present "intra-batch-deps-file-parser-limits" \
+    "max 500 lines, max 64KB file size"
+
 echo "---"
 echo "Results: $PASS_COUNT passed, $FAIL_COUNT failed"
 
