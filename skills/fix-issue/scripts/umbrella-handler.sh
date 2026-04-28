@@ -18,10 +18,17 @@
 #   1. Body literal "Umbrella tracking issue." (anywhere in body) — primary
 #      signal. /umbrella-rendered umbrellas always emit this literal as the
 #      first paragraph (see skills/umbrella/scripts/render-umbrella-body.sh).
-#   2. Title prefix "Umbrella:" or "Umbrella —" (case-sensitive, anchored at
-#      start) — fallback for hand-authored umbrellas like #348 whose body is
-#      free-form prose with the marker missing. Tool-created umbrellas may also
-#      derive titles that happen to start with the prefix; this is harmless.
+#   2. Title-fallback (per #819): a title where, after stripping zero or more
+#      leading bracket-blocks of the form `[...]` and/or `(...)` (each with
+#      optional surrounding whitespace) via a bounded peel loop (cap=16,
+#      fail-closed on unbalanced/unclosed leading bracket), the remainder
+#      starts with `Umbrella: ` or `Umbrella — ` — case-sensitive. Catches
+#      hand-authored umbrellas like #348 whose body is free-form prose with
+#      the marker missing, including titles that already carry an operator
+#      tag (e.g. `[IN PROGRESS] Umbrella: foo`, `(urgent) Umbrella: foo`).
+#      See `is_umbrella_title` (below) for the implementation and the
+#      sibling `umbrella-handler.md` Title-fallback section for the full
+#      grammar contract (non-nesting, cap=16, silent fail-closed).
 #
 # Child enumeration grammar (DECISION_3 — task-list checklist only):
 #   Only matches markdown task-list items with a same-repo `#N` reference:
@@ -165,7 +172,7 @@ is_umbrella_title() {
     case "$remainder" in
         '['*|'('*) return 1 ;;
     esac
-    # Strip trailing leading whitespace before the marker check.
+    # Strip leading whitespace before the marker check.
     remainder="${remainder#"${remainder%%[![:space:]]*}"}"
     case "$remainder" in
         'Umbrella: '*)  return 0 ;;
