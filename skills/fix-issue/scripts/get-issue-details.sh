@@ -55,7 +55,7 @@ ISSUE_JSON=$(gh issue view "$ISSUE_NUMBER" --json title,body,labels,createdAt 2>
 
 TITLE=$(echo "$ISSUE_JSON" | jq -r '.title // "Untitled"')
 BODY=$(echo "$ISSUE_JSON" | jq -r '.body // "No description provided."')
-LABELS=$(echo "$ISSUE_JSON" | jq -r '[.labels[].name] | join(", ") // "none"')
+LABELS=$(echo "$ISSUE_JSON" | jq -r '[.labels[].name] | if length == 0 then "none" else join(", ") end')
 CREATED=$(echo "$ISSUE_JSON" | jq -r '.createdAt // "unknown"')
 
 # Fetch all comments (paginated)
@@ -66,20 +66,20 @@ COMMENTS=$(gh api --paginate --slurp "repos/${REPO}/issues/${ISSUE_NUMBER}/comme
 
 # Write structured output
 {
-    echo "# Issue #${ISSUE_NUMBER}: ${TITLE}"
-    echo "**Labels**: ${LABELS}"
-    echo "**Created**: ${CREATED}"
-    echo ""
-    echo "## Description"
-    echo ""
-    echo "$BODY"
-    echo ""
-    echo "## Comments"
-    echo ""
+    printf '%s\n' "# Issue #${ISSUE_NUMBER}: ${TITLE}"
+    printf '%s\n' "**Labels**: ${LABELS}"
+    printf '%s\n' "**Created**: ${CREATED}"
+    printf '%s\n' ""
+    printf '%s\n' "## Description"
+    printf '%s\n' ""
+    printf '%s\n' "$BODY"
+    printf '%s\n' ""
+    printf '%s\n' "## Comments"
+    printf '%s\n' ""
 
     COMMENT_COUNT=$(echo "$COMMENTS" | jq 'length')
     if [ "$COMMENT_COUNT" -eq 0 ]; then
-        echo "No comments."
+        printf '%s\n' "No comments."
     else
         echo "$COMMENTS" | jq -r '.[] | "### Comment by \(.user.login) at \(.created_at)\n\n\(.body)\n"'
     fi
