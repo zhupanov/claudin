@@ -16,7 +16,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Sixteen assertions:
+# Seventeen assertions (assertion 17 added per #842):
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -538,5 +538,97 @@ if grep -Fq -- "$NEGATIVE_PHRASE_16D" "$SKILL_MD"; then
   fail "(16d) skills/implement/SKILL.md still contains the legacy plan-goals-test composition phrase (\`/design\`'s \`## Goal\` and \`## Test plan\` sections) — /design never emits those sections; rewrite the plan-goals-test composition bullet to synthesize from /design's '## Implementation Plan' (closes #749)"
 fi
 
-echo "PASS: test-implement-structure.sh — all 16 structural invariants hold"
+# ---------------------------------------------------------------------------
+# (17) ci-wait.sh synchronous-only invocation pin (closes #842) — guards both
+#      `skills/implement/SKILL.md` and
+#      `skills/implement/references/rebase-rebump-subprocedure.md` against
+#      regressions that would re-introduce the leaked-polling-loop failure
+#      mode from PR #821. Two scoped checks per file:
+#      (17a) Negative pin: scoped to `ci-wait.sh` adjacency. Fail if any line
+#            within ±5 lines of a line containing `ci-wait.sh` ALSO contains
+#            `run_in_background: true`. The window is intentionally local —
+#            this assertion does NOT ban `run_in_background: true` globally
+#            because Step 5 quick-mode reviewer launches and `/design`
+#            Step 2a sketch launches legitimately use it. Implementation:
+#            awk pass that tracks line-distance from the most recent line
+#            containing `ci-wait.sh`; when distance ≤5 AND the current line
+#            contains `run_in_background: true`, fail.
+#      (17b) Positive pin: each of the two files must contain at least one
+#            line with the literal `ci-wait.sh MUST be invoked synchronously`.
+#            This guards against a future edit that silently deletes the
+#            guardrail paragraph next to the ci-wait.sh invocation block.
+#            FINDING_3 from the design panel asked for per-site count
+#            enforcement (e.g., exactly 2 occurrences in SKILL.md); the
+#            panel voted EXONERATE — the per-site count would force lockstep
+#            updates whenever a legitimate new ci-wait.sh invocation block
+#            is added. The single-occurrence check + the FINDING_8 explicit
+#            site enumeration in scripts/ci-wait.md provide proportionate
+#            coverage.
+# ---------------------------------------------------------------------------
+REBASE_REBUMP_MD="$REFS_DIR/rebase-rebump-subprocedure.md"
+
+[[ -f "$REBASE_REBUMP_MD" ]] || fail "(17) skills/implement/references/rebase-rebump-subprocedure.md missing: $REBASE_REBUMP_MD"
+
+# (17a) Negative pin via awk — scoped to ci-wait.sh adjacency only.
+# Lines that contain the literal "MUST be invoked synchronously" are the
+# guardrail-defining sentence that legitimately mentions both `ci-wait.sh`
+# and the negated phrase `run_in_background: true` ("no `run_in_background:
+# true`"); they are whitelisted from the negative scan. The positive pin
+# (17b) ensures that literal is present, so the whitelist cannot be
+# silently exploited to re-introduce a backgrounded invocation block.
+check_ci_wait_adjacency_negative() {
+    local file="$1"
+    local label="$2"
+    awk -v label="$label" '
+        function is_violation(line) {
+            # Lines containing the synchronous-only guardrail literal are
+            # not violations — they document the rule, they do not break it.
+            return (line ~ /run_in_background: true/) && (line !~ /MUST be invoked synchronously/)
+        }
+        /ci-wait\.sh/ { last_ci_wait_line = NR }
+        last_ci_wait_line > 0 && (NR - last_ci_wait_line) <= 5 && is_violation($0) {
+            printf "FAIL: %s line %d contains run_in_background: true within 5 lines of a ci-wait.sh reference (line %d) — see #842\n", label, NR, last_ci_wait_line
+            found = 1
+        }
+        # Also check lines BEFORE a ci-wait.sh line (look-behind via buffering).
+        # Buffer the last 5 lines so we can re-check when we hit a ci-wait.sh line.
+        {
+            buf[NR % 6] = $0
+            line_num[NR % 6] = NR
+        }
+        /ci-wait\.sh/ {
+            for (i = 1; i <= 5; i++) {
+                idx = (NR - i) % 6
+                if (line_num[idx] >= 1 && is_violation(buf[idx])) {
+                    printf "FAIL: %s line %d contains run_in_background: true within 5 lines BEFORE a ci-wait.sh reference (line %d) — see #842\n", label, line_num[idx], NR
+                    found = 1
+                }
+            }
+        }
+        END { exit found ? 1 : 0 }
+    ' "$file"
+}
+
+if ! check_ci_wait_adjacency_negative "$SKILL_MD" "skills/implement/SKILL.md" >&2; then
+    fail "(17a) skills/implement/SKILL.md has run_in_background: true adjacent to a ci-wait.sh reference — see #842 (the leaked-polling-loop failure mode); ci-wait.sh MUST be invoked synchronously"
+fi
+
+if ! check_ci_wait_adjacency_negative "$REBASE_REBUMP_MD" "skills/implement/references/rebase-rebump-subprocedure.md" >&2; then
+    fail "(17a) skills/implement/references/rebase-rebump-subprocedure.md has run_in_background: true adjacent to a ci-wait.sh reference — see #842; ci-wait.sh MUST be invoked synchronously"
+fi
+
+# (17b) Positive pin: synchronous-only guidance literal must appear in each file.
+# The actual prose may format `ci-wait.sh` with markdown backticks
+# (`` `ci-wait.sh` `` / `**`ci-wait.sh`**`), so the byte-pinned literal is the
+# stable suffix `MUST be invoked synchronously`. The leading `ci-wait.sh` is
+# implied by the per-file scoping (we only run this check against files known
+# to reference ci-wait.sh) and by the negative pin (17a) which guarantees
+# adjacency.
+SYNC_GUIDANCE_LITERAL='MUST be invoked synchronously'
+grep -Fq -- "$SYNC_GUIDANCE_LITERAL" "$SKILL_MD" \
+    || fail "(17b) skills/implement/SKILL.md missing the synchronous-only guardrail literal '$SYNC_GUIDANCE_LITERAL' near the ci-wait.sh invocation blocks (Step 10 / Step 12a) — closes #842 regression"
+grep -Fq -- "$SYNC_GUIDANCE_LITERAL" "$REBASE_REBUMP_MD" \
+    || fail "(17b) skills/implement/references/rebase-rebump-subprocedure.md missing the synchronous-only guardrail literal '$SYNC_GUIDANCE_LITERAL' near step 7's ci-wait.sh re-invocation directives — closes #842 regression"
+
+echo "PASS: test-implement-structure.sh — all 17 structural invariants hold"
 exit 0

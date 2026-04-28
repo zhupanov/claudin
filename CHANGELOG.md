@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.49] - 2026-04-27
+
+### Fixed
+
+- `scripts/ci-wait.sh` — added optional `--output-file <path>` mode that publishes the 7 KV-line payload via atomic write (`<path>.tmp` then `mv -f`) and emits a numeric `<path>.done` sentinel on any trap-deliverable exit path (SIGTERM included). The EXIT trap captures `$?` first, calls `emit_output`, and writes `.done` only when `emit_output` succeeded — fail-closed if the publish step fails (no `.done`, consumers time out instead of reading stale state). Default mode (no `--output-file`) preserves the prior 7-KV-on-stdout contract verbatim. Mirrors the consumer contract (numeric exit code in `.done`) of `scripts/run-external-reviewer.sh:70`.
+- `scripts/ci-wait.md` — sibling contract added per AGENTS.md per-script contracts rule. Documents the synchronous-only invocation contract (`ci-wait.sh` MUST NOT be invoked with `run_in_background: true`), default I/O contract, optional `--output-file` semantics (atomic publish, `emit_output`-gated `.done` sentinel, fail-closed publish), trusted-path discipline, SIGTERM-trappable vs SIGKILL-uncatchable distinction, test harness wiring, and the 6 invocation sites that must stay in sync.
+- `skills/implement/SKILL.md` Step 10, Step 12a — added explicit synchronous-only guardrail prose paragraph after each `ci-wait.sh` Bash invocation block, documenting the leaked-polling-loop failure mode that occurs when the wrapper shell is signal-killed mid-poll while running in the background.
+- `skills/implement/references/rebase-rebump-subprocedure.md` step 7 — added matching synchronous-only guardrail paragraph covering all five caller-kind branches that re-invoke `ci-wait.sh` (`step12_rebase`, `step12_phase4`, `step12_rebase_then_evaluate`, `step10_rebase`, `step10_rebase_then_evaluate`).
+- `scripts/test-ci-wait-exit-trap.sh` — new regression harness with 3 sub-tests: (A) `--output-file` SIGTERM-mid-poll convergence using a stub `ci-status.sh` that touches a `loop-entered` ready signal; (B) default-mode (stdout) backward-compat asserting all 7 KV keys appear in order with no implicit file-mode side effects; (C) fail-closed regression using a read-only directory to force `mv -f` to fail and asserting `<path>.done` is absent (10/10 assertions pass).
+- `scripts/test-implement-structure.sh` — added assertion 17 with scoped negative pin (awk-window adjacency check that fails if `run_in_background: true` appears within ±5 lines of `ci-wait.sh` references in `skills/implement/SKILL.md` or `skills/implement/references/rebase-rebump-subprocedure.md`, with whitelist for guardrail prose lines containing the literal `MUST be invoked synchronously`) plus positive pin requiring the literal in each affected file.
+- `Makefile`, `agent-lint.toml`, `docs/linting.md` — wired the new test harness into `make test-ci-wait-exit-trap` and `test-harnesses`; excluded the new test fixtures from `agent-lint`. Closes #842.
+
 ## [7.17.48] - 2026-04-27
 
 ### Fixed
