@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Eleven executed fixtures plus one deferred-coverage
+# refactor (closes #496). Twelve executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -41,6 +41,11 @@
 #      umbrella-style title ("Umbrella: …") and GO as last comment is
 #      skipped in auto-pick mode. Confirms the umbrella-detection block
 #      in the auto-pick loop prevents umbrella issues from being picked.
+#  13. explicit-target detect failure exits 2 (issue #891 regression).
+#      umbrella-handler.sh detect fails (gh issue view for title,body
+#      returns non-zero) → exit 2; ELIGIBLE=false with detect-failure
+#      error. Confirms detect failures are fatal in explicit-target mode
+#      instead of silently falling through to the ordinary-issue path.
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -127,6 +132,19 @@ dispatch_issue_view() {
     local var_fail="ISSUE_${issue}_VIEW_FAIL"
     if [[ "${!var_fail:-}" == "true" ]]; then
         echo "Error: stubbed issue view failure" >&2
+        exit 1
+    fi
+    # Per-issue VIEW_FAIL_BODY injection — fails only when --json includes
+    # "body" (the umbrella-handler.sh detect call). Lets the initial
+    # find-lock-issue.sh fetch (--json number,state,title,url) succeed.
+    local json_arg="" prev_a=""
+    for a in "$@"; do
+        if [[ "$prev_a" == "--json" ]]; then json_arg="$a"; fi
+        prev_a="$a"
+    done
+    local var_fail_body="ISSUE_${issue}_VIEW_FAIL_BODY"
+    if [[ "${!var_fail_body:-}" == "true" && "$json_arg" == *body* ]]; then
+        echo "Error: stubbed issue view failure (body-json)" >&2
         exit 1
     fi
     local var_title="ISSUE_${issue}_TITLE"
@@ -807,6 +825,39 @@ assert_equal "$EXIT_CODE" "1" "[12] exit code 1 (no eligible candidates — umbr
 assert_contains "$OUT" "ELIGIBLE=false" "[12] ELIGIBLE=false on stdout"
 assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[12] LOCK_ACQUIRED= absent (lock never attempted)"
 assert_contains "$ERR" "Skipping issue #200: umbrella issue" "[12] stderr diagnostic confirms umbrella skip"
+
+# ---------------------------------------------------------------------------
+# Fixture 13: explicit-target detect failure exits 2 (issue #891 regression).
+# When umbrella-handler.sh detect fails (non-zero exit) in explicit-target
+# mode, find-lock-issue.sh must surface the error (exit 2) instead of
+# silently falling through to the ordinary-issue path. Setup: issue #300
+# with an umbrella-style title, VIEW_FAIL_BODY=true makes the detect call's
+# gh issue view (--json title,body) fail while the initial find-lock-issue.sh
+# fetch (--json number,state,title,url) succeeds.
+# ---------------------------------------------------------------------------
+echo "Fixture 13: explicit-target detect failure exits 2 (#891)"
+run_fixture "fixture-13"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='Umbrella: detect failure test'"
+    echo "ISSUE_BODY='No body.'"
+    echo "ISSUE_300_VIEW_FAIL_BODY=true"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+OUT_FILE="$TMPROOT/fixture-13/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-13/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" 300 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+
+assert_equal "$EXIT_CODE" "2" "[13] exit code 2 (detect failure is fatal in explicit-target mode)"
+assert_contains "$OUT" "ELIGIBLE=false" "[13] ELIGIBLE=false on stdout"
+assert_contains "$OUT" "ERROR=umbrella-handler.sh detect failed" "[13] ERROR mentions detect failure"
+assert_contains "$OUT" "#300" "[13] ERROR mentions issue number"
+assert_not_contains "$OUT" "LOCK_ACQUIRED=" "[13] LOCK_ACQUIRED= absent (lock never attempted)"
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -600,6 +600,11 @@ if [[ -n "$ISSUE_ARG" ]]; then
                 handle_umbrella "$ISSUE_NUM" "$ISSUE_TITLE"
                 # terminal — exits 0/3/4/5
             fi
+        else
+            DETECT_ERROR=$(echo "$UMBRELLA_DETECT_OUT" | awk -F= '/^ERROR=/ { v=substr($0,index($0,"=")+1) } END { print v }')
+            echo "ELIGIBLE=false"
+            echo "ERROR=umbrella-handler.sh detect failed for issue #$ISSUE_NUM: ${DETECT_ERROR:-unknown error}"
+            exit 2
         fi
     fi
 
