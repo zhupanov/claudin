@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.57] - 2026-04-27
+
+### Changed
+
+- `/issue` now accepts `--body-file FILE` combined with a trailing positional argument — the trailing arg becomes the explicit title and the file content becomes the body. Previously rejected as mutually exclusive. Updated `/umbrella` SKILL.md Step 3B.3 and `render-umbrella-body.md` to reflect explicit-title semantics.
+
+### Added
+
+- `skills/issue/scripts/test-body-file-title.sh` — structural regression harness pinning the `--body-file` + trailing title two-source branching, `EXPLICIT_TITLE` variable, and backward-compatible derive-from-first-line path.
+
 ## [7.17.56] - 2026-04-27
 
 ### Fixed
