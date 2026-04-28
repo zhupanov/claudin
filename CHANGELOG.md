@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.37] - 2026-04-27
+
+### Fixed
+
+- `CHANGELOG.md` — rewrote the v7.17.27 entry to drop the absolute line-number references `(line 833)` and `(line 928)` in `skills/improve-skill/scripts/iteration.sh`. The line-number anchors went stale as soon as `iteration.sh` gained or lost lines above those sites (same maintenance-nightmare anti-pattern that drove #789 / #828). The bullet now refers to "the primary `/larch:design` and `/larch:im` prompt builders in `iteration.sh`" — a stable phrase that survives future edits to the script. Documentation-only correction; runtime behavior unchanged. Closes #827.
+
 ## [7.17.36] - 2026-04-27
 
 ### Fixed
@@ -64,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `skills/improve-skill/scripts/iteration.sh` — prepended `--auto` to the primary `/larch:design` invocation (line 833) and the primary `/larch:im` invocation (line 928), matching the rescue retry which already passed `--auto`. Without `--auto`, the iteration kernel's `claude -p` subprocesses had no interactive user but `/design` and `/implement` were free to invoke `AskUserQuestion` (`/design` Steps 1c, 1d, 3.5 when `auto_mode=false`), stalling the subprocess until the 3600s watchdog fired. Updated the sibling `iteration.md` contract with a new "Non-interactive `--auto` flag forwarding" subsection and added Tier 1 regression-guard pins (`/larch:design --auto`, `/larch:im --auto`) to `scripts/test-improve-skill-iteration.sh`. Closes #758 and the merged duplicate #761.
+- `skills/improve-skill/scripts/iteration.sh` — prepended `--auto` to the primary `/larch:design` and `/larch:im` prompt builders in `iteration.sh`, matching the rescue retry which already passed `--auto`. Without `--auto`, the iteration kernel's `claude -p` subprocesses had no interactive user but `/design` and `/implement` were free to invoke `AskUserQuestion` (`/design` Steps 1c, 1d, 3.5 when `auto_mode=false`), stalling the subprocess until the 3600s watchdog fired. Updated the sibling `iteration.md` contract with a new "Non-interactive `--auto` flag forwarding" subsection and added Tier 1 regression-guard pins (`/larch:design --auto`, `/larch:im --auto`) to `scripts/test-improve-skill-iteration.sh`. Closes #758 and the merged duplicate #761.
 
 ## [7.17.26] - 2026-04-27
 
