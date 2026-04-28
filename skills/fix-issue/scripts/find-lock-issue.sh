@@ -108,11 +108,11 @@
 #
 # Umbrella support (explicit-issue path only — auto-pick mode never selects
 # umbrellas, per the design dialectic's DECISION_1):
-#   When the explicit issue is detected as an umbrella (body literal
-#   "Umbrella tracking issue." OR title — case-sensitive, after stripping
-#   zero or more leading bracket-blocks of the form `[...]` and/or `(...)`
-#   per #819 — that begins with `Umbrella: ` or `Umbrella — `), delegate to
-#   umbrella-handler.sh to either:
+#   When the explicit issue is detected as an umbrella (title-only post-#846
+#   — case-sensitive, after stripping zero or more leading bracket-blocks of
+#   the form `[...]` and/or `(...)` per #819, the remainder begins with
+#   `Umbrella: ` or `Umbrella — `; body content is NOT consulted), delegate
+#   to umbrella-handler.sh to either:
 #     - dispatch to the next-eligible child (pick-child returns CHILD_NUMBER),
 #       lock the CHILD using --lock-no-go (no GO required), rename the CHILD
 #       to [IN PROGRESS]. Emit IS_UMBRELLA=true UMBRELLA_NUMBER=<U>
@@ -651,11 +651,12 @@ if [[ -n "$ISSUE_ARG" ]]; then
     # `[STALLED] Umbrella: foo`) reach the umbrella dispatcher. Without
     # this ordering, `is_umbrella_title`'s post-#819 bracket-prefix peel
     # would be unreachable in the explicit-target path for hand-authored
-    # umbrellas without the body literal — see issue #819 design DECISION_1
-    # (voted, 2-1) for the rationale. Auto-pick path is intentionally NOT
-    # mirrored: auto-pick excludes umbrellas regardless of order. The
-    # umbrella's body literal AND/OR title prefix is the approval signal —
-    # children inherit approval from the umbrella's existence.
+    # umbrellas — see issue #819 design DECISION_1 (voted, 2-1) for the
+    # rationale. Auto-pick path is intentionally NOT mirrored: auto-pick
+    # excludes umbrellas regardless of order. Detection is title-only
+    # post-#846 (the prior body-literal substring match caused false
+    # positives like #753); the umbrella's existence is the approval signal
+    # — children inherit approval from the umbrella's existence.
     UMBRELLA_HANDLER="$(dirname "${BASH_SOURCE[0]}")/umbrella-handler.sh"
     if [[ -x "$UMBRELLA_HANDLER" ]]; then
         UMBRELLA_DETECT_OUT=""

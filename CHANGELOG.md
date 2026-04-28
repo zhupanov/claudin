@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.46] - 2026-04-27
+
+### Changed
+
+- `skills/fix-issue/scripts/umbrella-handler.sh` — removed body-based umbrella detection. Detection becomes title-only, using the existing post-#819 bracket-prefix-peel grammar (<code>Umbrella: </code> or <code>Umbrella — </code> after stripping leading `[…]` / `(…)` blocks). The prior body-literal substring match on `Umbrella tracking issue.` produced false positives on issues that *quoted* the marker in code spans or prose (e.g., #753, whose body documented the marker inside backticks). Removed the `is_umbrella_body()` helper and the `DETECTION=body|title` field from `cmd_detect`'s stdout (no in-repo consumers). Sibling contracts (`skills/fix-issue/scripts/umbrella-handler.md`, `skills/fix-issue/scripts/test-umbrella-handler.md`) and the test harness (`skills/fix-issue/scripts/test-umbrella-handler.sh`) updated; Fixture 1 converted into a #753 regression check (body literal present + plain title → `IS_UMBRELLA=false`). `skills/fix-issue/SKILL.md`, `skills/fix-issue/scripts/find-lock-issue.sh`, `skills/fix-issue/scripts/find-lock-issue.md`, `docs/skills.md`, and `docs/workflow-lifecycle.md` updated to describe title-only detection and the operator migration path (rename hand-authored umbrellas relying on body-only detection to start with <code>Umbrella: </code> to restore detection). Body content remains used by `parse_children_from_body` for child enumeration — the change is scoped to the umbrella-vs-not decision. All 31 `test-umbrella-handler` fixtures and 45 `test-find-lock-issue` fixtures pass. Closes #846.
+
 ## [7.17.45] - 2026-04-27
 
 ### Fixed
