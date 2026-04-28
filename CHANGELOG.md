@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.44] - 2026-04-27
+
+### Fixed
+
+- `scripts/test-improve-skill-iteration.sh` — replaced the file-wide `check_contains '/larch:design --auto'` regression guard (which silently passed because the rescue prompt at `skills/improve-skill/scripts/iteration.sh` line 875 also carries the token) with a new `check_count` helper that pins exactly **2** non-overlapping occurrences of `/larch:design --auto` (the primary `DESIGN_PROMPT` site + the rescue `RESCUE_PROMPT` site). Helper uses `grep -oF | wc -l` rather than `grep -F -c` so a future single-line collapse of both tokens still trips the guard. The `/larch:im --auto` guard at the same location is unchanged: only one occurrence in `iteration.sh` (the primary). Sibling contract doc `scripts/test-improve-skill-iteration.md` updated with the dual call-site rationale and an edit-in-sync rule for adding/removing `/larch:design --auto` invocation sites. Closes #838.
+
 ## [7.17.43] - 2026-04-27
 
 ### Changed
