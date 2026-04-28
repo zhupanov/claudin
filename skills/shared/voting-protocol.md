@@ -186,7 +186,7 @@ For out-of-scope items, the vote meanings are:
 - **NO**: Not worth tracking — the observation is trivial or incorrect.
 - **EXONERATE**: Legitimate observation worth documenting, but not worth filing a GitHub issue.
 
-If an OOS item receives 2+ YES votes, it is **accepted** and will be filed as a GitHub issue by `/implement`. Otherwise it remains an observation reported in the PR body.
+If an OOS item receives 2+ YES votes, it is **accepted** and will be filed as a GitHub issue by `/implement`. In `/review` slice mode (with `--create-issues`), accepted OOS items are filed by `/review` Step 4b directly via `/umbrella`, not by `/implement`. Otherwise it remains an observation reported in the PR body.
 
 **OOS items are never implemented in the current PR** — accepted OOS items result in issue creation only. This cleanly separates "fix now" (in-scope findings) from "fix later" (OOS observations).
 
@@ -222,4 +222,4 @@ External reviewers (Codex, Cursor) **in diff mode** use single-list prompts and 
 
 ## Zero Accepted Findings
 
-If voting filters out **all** in-scope findings (every in-scope finding rejected by the panel), print: `**ℹ Voting panel rejected all findings. No changes to implement.**` and skip the implementation/revision step. Proceed directly to the rejected findings report. (OOS items accepted for issue filing are processed separately by `/implement` and do not count as implementation work.)
+If voting filters out **all** in-scope findings (every in-scope finding rejected by the panel), print: `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` and skip the implementation/revision step. Proceed directly to the rejected findings report. (OOS items accepted for issue filing are processed separately — by `/implement` Step 9a.1, or by `/review` Step 4b via `/umbrella` in slice mode with `--create-issues` — and do not count as implementation work.)
