@@ -29,7 +29,8 @@ the sidecar body contains the expected `Status` / `Reason` tokens.
 | Git-root-unavailable | non-git cwd → `UNKNOWN(git-root-unavailable)` |
 | DOI syntax | malformed `10.123/...` (3 digits) → not extracted (regex tier) |
 | URL dedup | duplicate URL appears in exactly one ledger row |
-| Darwin budget exhaustion (Test 20, Darwin-only) | hung fake-curl + `--budget-seconds 1` → exit 0, sidecar present with `UNKNOWN`/`timeout` rows for hung URLs, no surviving fake-curl PIDs after kill loop. Linux runners skip and rely on the existing CI pipeline to exercise the `setsid` branch end-to-end. |
+| Darwin budget exhaustion (Test 20, Darwin-only) | hung fake-curl + `--budget-seconds 1` → exit 0, sidecar present with `UNKNOWN`/`timeout` rows for hung URLs, no surviving fake-curl PIDs after kill loop. Exercises the macOS `set -m` per-PG-kill branch. Linux runners skip; Test 21 covers the Linux no-setsid path. Test 20 runs on developer macOS (current CI is Ubuntu-only). |
+| Linux no-setsid budget exhaustion (Test 21, Linux-only, #849) | outer `setsid -w` wraps the validator in its own session; hermetic clean-bin (symlinks excluding `setsid`, including `uname`) makes `command -v setsid` fail inside the validator so the no-setsid branch (`validate-citations.sh:765`) is exercised; hung fake-curl honoring `--max-time` + `--budget-seconds 1` → exit 0, sidecar present, `UNKNOWN`/`timeout` rows for both hung URLs, no orphan fake-curl PIDs after `--per-fetch-timeout` window. Runs when `setsid` is available on the runner PATH (so the harness can isolate the validator session); otherwise skipped with note. Demonstrably fails if the `__VC_SETSID_DONE` marker gate at `validate-citations.sh:765` is reverted to unconditional `kill -- -$$` (validator gets SIGTERM under outer setsid → exit 143). Test 21 is exercised by current Ubuntu CI. |
 
 ## Test seams (env vars exercised by the harness)
 

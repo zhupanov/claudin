@@ -228,5 +228,19 @@ fixture inputs with stubbed curl and stubbed DNS. Verified scenarios:
 - HEAD 3xx → `redirect-not-followed`.
 - Darwin budget-exhaustion no-orphan-curl (Test 20, Darwin-only): a hanging
   fake-curl fixture is run with `--budget-seconds 1`; after the kill loop
-  no fake-curl PID survives. Linux runners skip this assertion and rely on
-  CI to exercise the `setsid` branch end-to-end.
+  no fake-curl PID survives. Exercises the macOS `set -m` per-PG-kill
+  branch. Test 20 runs on developer macOS (current CI is Ubuntu-only).
+- Linux no-setsid budget-exhaustion fail-soft (Test 21, Linux-only, #849):
+  the validator is invoked under outer `setsid -w` (so a hypothetical
+  regression of the marker gate at line 765 only kills the validator's
+  own session) with a hermetic clean-bin in PATH that omits `setsid`. The
+  validator's `command -v setsid` check fails, so it takes the no-setsid
+  Linux branch (per-PID `kill <subshell>` over `CURL_PIDS`). A
+  PID-recording fake-curl that honors `--max-time` is used so orphan
+  curls naturally die after `--per-fetch-timeout` per the documented
+  contract. Asserts: exit 0 (fail-soft), sidecar present, `UNKNOWN`/`timeout`
+  rows for both hung URLs, no orphan fake-curl PIDs after the
+  per-fetch-timeout window. Runs when `setsid` is available on the runner
+  (otherwise skipped with note); exercised by current Ubuntu CI. The
+  earlier "Linux runners rely on CI for end-to-end coverage" note is
+  superseded — the no-setsid Linux branch is now offline-asserted.

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.51] - 2026-04-27
+
+### Fixed
+
+- `skills/research/scripts/test-validate-citations.sh` — added Test 21, a Linux-only fixture that exercises the no-`setsid` budget-exhaustion fail-soft branch in `validate-citations.sh:765`. Outer `setsid -w env -u __VC_SETSID_DONE PATH=$CLEAN_BIN` wraps the validator in its own POSIX session; a hermetic clean-bin built from symlinks (omitting `setsid`, including `uname` returning `Linux`) makes `command -v setsid` fail inside the validator so the no-setsid branch is the only path taken. Hung fake-curl honoring `--max-time` (parses both `--max-time N` and `--max-time=N`) plus `--budget-seconds 1` drives the per-fetch-timeout window; assertions cover exit 0, sidecar produced, `UNKNOWN`/`timeout` rows for both URLs, and zero orphan fake-curl PIDs after kill loop. Demonstrably fails if the `__VC_SETSID_DONE` marker gate at `validate-citations.sh:765` is reverted to unconditional `kill -- -$$` (validator gets SIGTERM under outer setsid → exit 143). Test 21 runs on current Ubuntu CI; complements Test 20 (Darwin-only, exercised on developer macOS). Test 20 skip line rephrased to `"skip: Darwin-only (Linux no-setsid path covered by Test 21)"`.
+- `skills/research/scripts/test-validate-citations.md`, `skills/research/scripts/validate-citations.md`, `skills/research/references/citation-validation-phase.md` — sibling-contract / phase-doc updates document Test 21's coverage of the Linux no-setsid path and replace the previous "Linux runners skip and rely on CI" wording with explicit Test 20 / Test 21 attribution. Closes #849.
+
 ## [7.17.50] - 2026-04-27
 
 ### Changed
