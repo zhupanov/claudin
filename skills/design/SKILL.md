@@ -328,7 +328,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `code-reviewer`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
+**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
 
 ### Codex Reviewer (if `codex_available`)
 
@@ -343,11 +343,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$D
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `code-reviewer`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
+**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
 
 ### Claude Code Reviewer Subagent (1 reviewer)
 
-Launch the Claude subagent **last** in the same message (it finishes fastest). Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filled per the archetype block in `plan-review.md` (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`), with the Competition notice from `plan-review.md` appended. Invoke via Agent tool with `subagent_type: code-reviewer`.
+Launch the Claude subagent **last** in the same message (it finishes fastest). Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filled per the archetype block in `plan-review.md` (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`), with the Competition notice from `plan-review.md` appended. Invoke via Agent tool with `subagent_type: larch:code-reviewer`.
 
 ### Collecting, Voting, Finalize, Track Rejected
 

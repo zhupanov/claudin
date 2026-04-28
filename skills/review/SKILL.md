@@ -130,7 +130,7 @@ Set `DIFF_FILE` to empty (no diff in slice mode). Set `FILE_LIST_FILE` to `$REVI
 
 ## Step 2 — Launch Review Subagents in Parallel
 
-Launch **all 3 reviewers** in a **single message**: Cursor and Codex via `Bash` tool (background), plus 1 Claude Code Reviewer subagent via the `Agent` tool (subagent_type: `code-reviewer`). When an external tool is unavailable, launch a Claude Code Reviewer fallback subagent instead so the total reviewer count always remains 3. **Spawn order matters for parallelism** — launch the slowest reviewer first: Cursor (slowest), then Codex, then the Claude subagent (fastest). Each reviewer must **only report findings** — never edit files.
+Launch **all 3 reviewers** in a **single message**: Cursor and Codex via `Bash` tool (background), plus 1 Claude Code Reviewer subagent via the `Agent` tool (subagent_type: `larch:code-reviewer`). When an external tool is unavailable, launch a Claude Code Reviewer fallback subagent instead so the total reviewer count always remains 3. **Spawn order matters for parallelism** — launch the slowest reviewer first: Cursor (slowest), then Codex, then the Claude subagent (fastest). Each reviewer must **only report findings** — never edit files.
 
 The reviewer prompts differ between diff mode and slice mode. Use the appropriate Bash block below based on which mode is active.
 
@@ -150,7 +150,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `code-reviewer`) with the same code-review context.
+**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`) with the same code-review context.
 
 #### Codex Reviewer — diff mode (if `codex_available`)
 
@@ -165,7 +165,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$R
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `code-reviewer`).
+**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`).
 
 ### Slice mode reviewers
 
@@ -208,7 +208,7 @@ Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
 - **`{CONTEXT_BLOCK}`**: includes a `<reviewer_slice_description>` block (verbal description) and a `<reviewer_canonical_file_list>` block (contents of `$REVIEW_TMPDIR/slice-files.txt`). Instruct the reviewer to read each file in the canonical list, mark any finding about a file NOT in the canonical list as OOS, and walk the same five focus areas.
 - **`{OUTPUT_INSTRUCTION}`** = `"File path and line number(s)"` + `"What the issue is"` + `"Suggested fix"`. Reviewer must produce dual-list output (In-Scope + OOS) per `reviewer-templates.md`.
 
-Invoke via Agent tool with subagent_type: `code-reviewer`. Any fallback Claude launches use the same subagent.
+Invoke via Agent tool with subagent_type: `larch:code-reviewer`. Any fallback Claude launches use the same subagent.
 
 Append the following competition context to each reviewer's prompt (Claude subagent and external reviewers, both modes):
 

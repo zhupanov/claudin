@@ -93,7 +93,7 @@ EOF
 mv "$LANE_STATUS_TMP" "$LANE_STATUS_FILE"
 ```
 
-Then follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the research-validation archetype bindings below. This preserves the configured lane count for the active `RESEARCH_SCALE` (3 lanes in standard mode, 5 lanes in deep mode). Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
+Then follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` — set `cursor_available=false`, do NOT add `$RESEARCH_TMPDIR/cursor-validation-output.txt` to `COLLECT_ARGS`, and launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: larch:code-reviewer`) using the research-validation archetype bindings below. This preserves the configured lane count for the active `RESEARCH_SCALE` (3 lanes in standard mode, 5 lanes in deep mode). Token vocabulary is documented in `${CLAUDE_PLUGIN_ROOT}/scripts/render-lane-status.md`.
 
 **On success**, launch in background:
 
@@ -105,7 +105,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false at lane-launch time, e.g., binary not found at session-setup): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the research-validation variable bindings below. Attribute as `Code`.
+**Cursor fallback** (if `cursor_available` is false at lane-launch time, e.g., binary not found at session-setup): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: larch:code-reviewer`) using the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md` with the research-validation variable bindings below. Attribute as `Code`.
 
 ## Codex Reviewer (if `codex_available`)
 
@@ -150,11 +150,11 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$R
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false at lane-launch time): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: code-reviewer`) using the unified Code Reviewer archetype with the research-validation variable bindings below. Attribute as `Code`.
+**Codex fallback** (if `codex_available` is false at lane-launch time): Launch **1 Claude Code Reviewer subagent** via the Agent tool (`subagent_type: larch:code-reviewer`) using the unified Code Reviewer archetype with the research-validation variable bindings below. Attribute as `Code`.
 
 ## Claude Code Reviewer Subagent (always-on lane — launched **last** in the parallel message)
 
-Launch the always-on Claude Code Reviewer subagent lane via the Agent tool (`subagent_type: code-reviewer`) in the same parallel message as Cursor and Codex above. It finishes fastest, so launch it last. Attribute as `Code`.
+Launch the always-on Claude Code Reviewer subagent lane via the Agent tool (`subagent_type: larch:code-reviewer`) in the same parallel message as Cursor and Codex above. It finishes fastest, so launch it last. Attribute as `Code`.
 
 Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filling in the variables for **research validation**:
 
@@ -177,7 +177,7 @@ Use the unified Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/share
 
 ## Deep-mode extra Claude lanes (RESEARCH_SCALE=deep only)
 
-When `RESEARCH_SCALE=deep`, in the same parallel message that launches Cursor + Codex + the always-on Claude lane above, ALSO launch 2 extra Claude Code Reviewer subagent lanes via the Agent tool (`subagent_type: code-reviewer`) carrying lane-local emphasis on the **unified Code Reviewer archetype** — NOT new agent slugs. Both extra lanes reuse the SAME `{CONTEXT_BLOCK}` XML wrapper (`<reviewer_research_question>` / `<reviewer_research_findings>`) and the SAME literal-delimiter instruction prefix as the always-on Claude lane above (defense-in-depth against prompt injection in the research report). Only `{OUTPUT_INSTRUCTION}` differs:
+When `RESEARCH_SCALE=deep`, in the same parallel message that launches Cursor + Codex + the always-on Claude lane above, ALSO launch 2 extra Claude Code Reviewer subagent lanes via the Agent tool (`subagent_type: larch:code-reviewer`) carrying lane-local emphasis on the **unified Code Reviewer archetype** — NOT new agent slugs. Both extra lanes reuse the SAME `{CONTEXT_BLOCK}` XML wrapper (`<reviewer_research_question>` / `<reviewer_research_findings>`) and the SAME literal-delimiter instruction prefix as the always-on Claude lane above (defense-in-depth against prompt injection in the research report). Only `{OUTPUT_INSTRUCTION}` differs:
 
 - **Lane "Code-Sec"** (security emphasis). Attribute as `Code-Sec`. `{REVIEW_TARGET}` = `"research findings"`. `{CONTEXT_BLOCK}` = identical to the always-on lane above. `{OUTPUT_INSTRUCTION}` = `"Prioritize the security focus area: injection vectors, authn/authz gaps, secret handling, crypto choices, deserialization risks, SSRF, path traversal, dependency CVEs, and any other security-relevant exposure surfaced by the research findings. What the concern is (inaccuracy, omission, or unsupported claim, with security as the lens)"` + `"Suggested correction or addition"`.
 

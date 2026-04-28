@@ -122,8 +122,8 @@ Unlike the debater phase (which **skips** decisions whose assigned tool is unava
 
 | Slot | Primary | Replacement (when primary unavailable) |
 |---|---|---|
-| 1 | Cursor (via `run-external-reviewer.sh --tool cursor --capture-stdout`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `code-reviewer`) |
-| 2 | Codex (via `run-external-reviewer.sh --tool codex`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `code-reviewer`) |
+| 1 | Cursor (via `run-external-reviewer.sh --tool cursor --capture-stdout`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `larch:code-reviewer`) |
+| 2 | Codex (via `run-external-reviewer.sh --tool codex`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `larch:code-reviewer`) |
 | 3 | Claude Code Reviewer subagent (Agent tool, always inline) | — |
 
 The user's "no Claude in dialectic" rule is **debater-specific**, not judge-specific. The rationale is that debaters produce adversarial arguments (where model-specific writing style might encode tool identity), whereas judges merely adjudicate between pre-authored defenses — a role Claude performs well without attribution leak risk.
@@ -184,7 +184,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor judge replacement** (if `judge_cursor_available` is false): launch a Claude subagent via the Agent tool (subagent_type: `code-reviewer`) with the judge prompt inlined (ballot content passed in the prompt, or ballot-path reference if the subagent can read files). The replacement's vote is returned in the Agent tool's return value.
+**Cursor judge replacement** (if `judge_cursor_available` is false): launch a Claude subagent via the Agent tool (subagent_type: `larch:code-reviewer`) with the judge prompt inlined (ballot content passed in the prompt, or ballot-path reference if the subagent can read files). The replacement's vote is returned in the Agent tool's return value.
 
 **Codex judge** (if `judge_codex_available`):
 
@@ -202,7 +202,7 @@ Use `run_in_background: true` and `timeout: 1860000`.
 
 **Codex judge replacement** (if `judge_codex_available` is false): same as Cursor replacement — Claude subagent via Agent tool, inline.
 
-**Claude Code Reviewer subagent judge** (always present): launch via the Agent tool (subagent_type: `code-reviewer`) with the judge prompt. Pass the ballot content inline (either the full ballot text or a file path for the subagent to Read).
+**Claude Code Reviewer subagent judge** (always present): launch via the Agent tool (subagent_type: `larch:code-reviewer`) with the judge prompt. Pass the ballot content inline (either the full ballot text or a file path for the subagent to Read).
 
 ## Collecting Judge Results (split pattern)
 

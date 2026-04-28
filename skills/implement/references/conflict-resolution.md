@@ -74,12 +74,12 @@ The per-file conflict context blocks above are sufficient for reviewer evaluatio
 
 Follow `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` for launch order (Cursor first, Codex, then the Claude subagent), background execution, sentinel polling via `wait-for-reviewers.sh`, and output validation. Use `$IMPLEMENT_TMPDIR/conflict-review/` as the tmpdir for all reviewer output files, sentinel files, and ballot files.
 
-**Claude fallbacks when externals unavailable** (F_11): mirror the `/design` and `/review` fallback rules — when Cursor is unavailable, launch a Claude Code Reviewer fallback subagent (subagent_type: `code-reviewer`); when Codex is unavailable, launch another Claude Code Reviewer fallback subagent. This preserves the 3-reviewer invariant and the 3-voter invariant. Without these fallbacks, both externals being down would collapse the panel to a single reviewer and skip voting — exactly when rigor matters most (merge-conflict resolution).
+**Claude fallbacks when externals unavailable** (F_11): mirror the `/design` and `/review` fallback rules — when Cursor is unavailable, launch a Claude Code Reviewer fallback subagent (subagent_type: `larch:code-reviewer`); when Codex is unavailable, launch another Claude Code Reviewer fallback subagent. This preserves the 3-reviewer invariant and the 3-voter invariant. Without these fallbacks, both externals being down would collapse the panel to a single reviewer and skip voting — exactly when rigor matters most (merge-conflict resolution).
 
 **3d-ii. Collect and deduplicate**: After all reviewers complete, collect their findings. Parse the Claude subagent dual-list output (in-scope findings only — **discard OOS observations** from conflict-review context, as conflict resolution is a narrow validation context not suitable for OOS issue filing). Read and validate external reviewer outputs per `external-reviewers.md`. Merge all in-scope findings, deduplicate (same file + same issue = one finding), assign stable sequential IDs (`FINDING_1`, `FINDING_2`, etc.), and write the ballot to `$IMPLEMENT_TMPDIR/conflict-review/ballot.txt` following the ballot format in `voting-protocol.md`. **Do not include OOS items on the conflict-review ballot.**
 
 **3e. Voting**: Run the voting protocol from `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` with code review voter composition:
-- **Voter 1**: Claude Code Reviewer subagent (fresh Agent invocation, subagent_type: `code-reviewer`)
+- **Voter 1**: Claude Code Reviewer subagent (fresh Agent invocation, subagent_type: `larch:code-reviewer`)
 - **Voter 2**: Codex (if available) — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor (if available) — via `run-external-reviewer.sh`
 

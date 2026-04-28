@@ -51,12 +51,12 @@ When voting is skipped due to insufficient voters, print: `**⚠ Voting skipped 
 ## Voter Panel Composition
 
 **For plan review** (`/design` Step 3):
-- **Voter 1**: Claude Code Reviewer subagent — launched as a fresh Agent tool invocation (subagent_type: `code-reviewer`) with a focused voting prompt (separate from the reviewer subagents)
+- **Voter 1**: Claude Code Reviewer subagent — launched as a fresh Agent tool invocation (subagent_type: `larch:code-reviewer`) with a focused voting prompt (separate from the reviewer subagents)
 - **Voter 2**: Codex — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor — via `run-external-reviewer.sh`
 
 **For code review** (`/review` Step 3):
-- **Voter 1**: Claude Code Reviewer subagent — launched as a fresh Agent tool invocation (subagent_type: `code-reviewer`)
+- **Voter 1**: Claude Code Reviewer subagent — launched as a fresh Agent tool invocation (subagent_type: `larch:code-reviewer`)
 - **Voter 2**: Codex — via `run-external-reviewer.sh`
 - **Voter 3**: Cursor — via `run-external-reviewer.sh`
 
