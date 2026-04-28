@@ -118,16 +118,19 @@ if [[ "$PROBE" == "true" ]]; then
         if [[ -f "$PROBE_DIR/codex-probe.txt.done" ]]; then
             CODEX_EXIT=$(cat "$PROBE_DIR/codex-probe.txt.done")
             if [[ "$CODEX_EXIT" == "0" ]]; then
-                # Verify output is non-empty
                 if [[ -s "$PROBE_DIR/codex-probe.txt" ]]; then
-                    CODEX_HEALTHY="true"
+                    CODEX_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/codex-probe.txt")
+                    if [[ "$CODEX_PROBE_REPLY" == "OK" ]]; then
+                        CODEX_HEALTHY="true"
+                    else
+                        CODEX_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt")"
+                    fi
                 elif [[ -f "$PROBE_DIR/codex-probe.txt.diag" ]]; then
                     CODEX_PROBE_ERROR=$(cat "$PROBE_DIR/codex-probe.txt.diag")
                 else
                     CODEX_PROBE_ERROR="Probe exited successfully but produced no output"
                 fi
             else
-                # Read .diag file if available, fall back to exit code
                 if [[ -f "$PROBE_DIR/codex-probe.txt.diag" ]]; then
                     CODEX_PROBE_ERROR=$(cat "$PROBE_DIR/codex-probe.txt.diag")
                 else
@@ -145,7 +148,12 @@ if [[ "$PROBE" == "true" ]]; then
             CURSOR_EXIT=$(cat "$PROBE_DIR/cursor-probe.txt.done")
             if [[ "$CURSOR_EXIT" == "0" ]]; then
                 if [[ -s "$PROBE_DIR/cursor-probe.txt" ]]; then
-                    CURSOR_HEALTHY="true"
+                    CURSOR_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/cursor-probe.txt")
+                    if [[ "$CURSOR_PROBE_REPLY" == "OK" ]]; then
+                        CURSOR_HEALTHY="true"
+                    else
+                        CURSOR_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt")"
+                    fi
                 elif [[ -f "$PROBE_DIR/cursor-probe.txt.diag" ]]; then
                     CURSOR_PROBE_ERROR=$(cat "$PROBE_DIR/cursor-probe.txt.diag")
                 else
@@ -220,10 +228,14 @@ if [[ "$PROBE" == "true" ]]; then
             if [[ -f "$PROBE_DIR/codex-probe.txt.done" ]]; then
                 CODEX_EXIT=$(cat "$PROBE_DIR/codex-probe.txt.done")
                 if [[ "$CODEX_EXIT" == "0" && -s "$PROBE_DIR/codex-probe.txt" ]]; then
-                    CODEX_HEALTHY="true"
-                    CODEX_PROBE_ERROR=""  # retry succeeded, clear error
+                    CODEX_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/codex-probe.txt")
+                    if [[ "$CODEX_PROBE_REPLY" == "OK" ]]; then
+                        CODEX_HEALTHY="true"
+                        CODEX_PROBE_ERROR=""
+                    else
+                        CODEX_PROBE_ERROR="Retry returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt")"
+                    fi
                 else
-                    # Update error with retry failure info
                     if [[ -f "$PROBE_DIR/codex-probe.txt.diag" ]]; then
                         CODEX_PROBE_ERROR="Retry also failed: $(cat "$PROBE_DIR/codex-probe.txt.diag")"
                     elif [[ "$CODEX_EXIT" == "0" ]]; then
@@ -242,8 +254,13 @@ if [[ "$PROBE" == "true" ]]; then
             if [[ -f "$PROBE_DIR/cursor-probe.txt.done" ]]; then
                 CURSOR_EXIT=$(cat "$PROBE_DIR/cursor-probe.txt.done")
                 if [[ "$CURSOR_EXIT" == "0" && -s "$PROBE_DIR/cursor-probe.txt" ]]; then
-                    CURSOR_HEALTHY="true"
-                    CURSOR_PROBE_ERROR=""  # retry succeeded, clear error
+                    CURSOR_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/cursor-probe.txt")
+                    if [[ "$CURSOR_PROBE_REPLY" == "OK" ]]; then
+                        CURSOR_HEALTHY="true"
+                        CURSOR_PROBE_ERROR=""
+                    else
+                        CURSOR_PROBE_ERROR="Retry returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt")"
+                    fi
                 else
                     if [[ -f "$PROBE_DIR/cursor-probe.txt.diag" ]]; then
                         CURSOR_PROBE_ERROR="Retry also failed: $(cat "$PROBE_DIR/cursor-probe.txt.diag")"
