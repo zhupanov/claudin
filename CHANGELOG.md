@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.41] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/test-finalize-umbrella.sh` — initialized `OUT=""`, `ERR=""`, `EC=0` as globals near the top of the harness (alongside `PASS=0`, `FAIL=0`). The `run_script_capture` helper writes to these as implicit globals while the script runs under `set -euo pipefail`; without the explicit init, any future fixture that read `$OUT`/`$ERR`/`$EC` before the first `run_script_capture` call would trip `set -u`'s unbound-variable error. Defensive — current fixtures all call `run_script_capture` first, so behavior is unchanged. Closes #839.
+
 ## [7.17.40] - 2026-04-27
 
 ### Fixed
