@@ -41,7 +41,6 @@ DELEGATORS=(
   "skills/im/SKILL.md"
   "skills/imaq/SKILL.md"
   "skills/create-skill/SKILL.md"
-  "skills/loop-review/SKILL.md"  # thin bash-driver wrapper post-overhaul; forwards to driver.sh via Bash+Monitor; no Skill tool calls
   "skills/simplify-skill/SKILL.md"  # pure delegator: validate target + build feature description + forward to /im; no post-delegation logic
   "skills/compress-skill/SKILL.md"  # pure delegator: validate target + build feature description + forward to /imaq; no post-delegation logic
 )

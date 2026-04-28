@@ -21,4 +21,4 @@ When changes touch `.claude/settings.json`, verify that the `permissions.allow` 
 When changes touch files under `scripts/` or `skills/shared/`, verify the changes do not introduce repo-specific content: no repo-specific paths (e.g., `server/`, `cli/`, `myservice`), cluster names (e.g., `prod-1`, `staging-2`), service-specific environment variable names, or hardcoded project references that would break when the file is used in a different repository.
 
 - **Generic directories**: `scripts/`, `skills/shared/` — changes to files here must not introduce repo-specific references.
-- **Repo-specific directories**: individual skill-specific script directories (e.g., `skills/implement/scripts/`, `skills/loop-review/scripts/`), and the private `.claude/skills/relevant-checks/` skill — files here are repo-specific by design and exempt from this rule.
+- **Repo-specific directories**: individual skill-specific script directories (e.g., `skills/implement/scripts/`), and the private `.claude/skills/relevant-checks/` skill — files here are repo-specific by design and exempt from this rule.

@@ -72,9 +72,9 @@ Voting-Protocol skills (`/design`, `/review`, `/implement` Phase 3 conflict revi
 📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
 ```
 
-Negotiation-Protocol skills `/loop-review` and `/research` use a 3-lane composition (per slice in `/loop-review`; per phase in `/research --scale=standard`, the default — Phase 1 research, Phase 2 validation). `/research --scale=quick` uses 1 lane in Phase 1 and skips Phase 2 entirely. `/research --scale=deep` uses 5 lanes in each phase.
+`/research` uses a 3-lane composition (per phase in `/research --scale=standard`, the default — Phase 1 research, Phase 2 validation). `/research --scale=quick` uses 1 lane in Phase 1 and skips Phase 2 entirely. `/research --scale=deep` uses 5 lanes in each phase.
 
-For review-shaped lanes (`/loop-review` Step 3c and `/research --scale=standard` Phase 2 validation), the attribution is `Code` / `Codex` / `Cursor`:
+For review-shaped lanes (`/research --scale=standard` Phase 2 validation), the attribution is `Code` / `Codex` / `Cursor`:
 
 ```
 📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |

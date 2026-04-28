@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.0] - 2026-04-28
+
+### Removed
+
+- `/loop-review` skill deleted entirely — SKILL.md, driver.sh, driver.md, diagram.svg, test harnesses, Makefile targets, settings entries, and all references across docs, shared skills, CI config, SECURITY.md, and agent-lint.toml. Closes #884.
+
 ## [7.17.61] - 2026-04-27
 
 ### Fixed

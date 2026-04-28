@@ -1,6 +1,6 @@
 # Voting Process
 
-The voting protocol is used by `/design` (plan review) and `/review` (code review) to adjudicate review findings. It replaces the older Negotiation Protocol for these skills. (`/research` and `/loop-review` continue using the Negotiation Protocol; `/research` with `--adjudicate` runs an additional dialectic-adjudication layer over post-merge orchestrator-rejected findings — see [`skills/research/references/adjudication-phase.md`](../skills/research/references/adjudication-phase.md) and [`skills/shared/dialectic-protocol.md`](../skills/shared/dialectic-protocol.md).)
+The voting protocol is used by `/design` (plan review) and `/review` (code review) to adjudicate review findings. It replaces the older Negotiation Protocol for these skills. (`/research` continues using the Negotiation Protocol; `/research` with `--adjudicate` runs an additional dialectic-adjudication layer over post-merge orchestrator-rejected findings — see [`skills/research/references/adjudication-phase.md`](../skills/research/references/adjudication-phase.md) and [`skills/shared/dialectic-protocol.md`](../skills/shared/dialectic-protocol.md).)
 
 ## Overview
 
@@ -109,7 +109,7 @@ Claude subagent reviewers always produce OOS observations (via their dual-list o
 ## Connection to Other Protocols
 
 - **Voting Protocol** is used by `/design` and `/review` — see this document
-- **Negotiation Protocol** is used by `/research` and `/loop-review` — up to N rounds of back-and-forth with external reviewers, where Claude makes the final call
+- **Negotiation Protocol** is used by `/research` — up to N rounds of back-and-forth with external reviewers, where Claude makes the final call
 - **Dialectic Protocol** is used by `/design` Step 2a.5 (contested design decisions) and `/research` Step 2.5 (when `--adjudicate` is set, over orchestrator-rejected reviewer findings) — see [Relationship to Dialectic Protocol](#relationship-to-dialectic-protocol) below
 - The key difference: voting uses a democratic panel with threshold rules; negotiation uses bilateral dialogue with Claude as arbiter; dialectic adjudicates binary debater defenses
 

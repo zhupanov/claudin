@@ -148,7 +148,7 @@ See FINDING_9 in the design review.
 
 ## Operator security note
 
-`--keep-sidecar` is an opt-in workspace write. Operators should review the sidecar (and apply redaction if needed) before filing — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane. The post-cleanup advertisement in SKILL.md Step 4 prints `/issue --input-file <path> --label research --dry-run` (NOT `--go`) so the operator manually escalates after review. See SECURITY.md "External reviewer write surface in /research and /loop-review" and FINDING_7 in the design review.
+`--keep-sidecar` is an opt-in workspace write. Operators should review the sidecar (and apply redaction if needed) before filing — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane. The post-cleanup advertisement in SKILL.md Step 4 prints `/issue --input-file <path> --label research --dry-run` (NOT `--go`) so the operator manually escalates after review. See SECURITY.md "External reviewer write surface in /research" and FINDING_7 in the design review.
 
 ## Test harness
 
