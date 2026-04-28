@@ -184,8 +184,8 @@ assert_invalid_body() {
     return
   fi
 
-  if ! grep -qF "ERROR=pieces.json entry 1 body contains line starting with '### '" "$stderr_file"; then
-    printf '  ❌ %s — stderr missing "ERROR=pieces.json entry 1 body contains line starting with '\''### '\''" line. Got: %s\n' \
+  if ! grep -qxF "ERROR=pieces.json entry 1 body contains line starting with '### '" "$stderr_file"; then
+    printf '  ❌ %s — stderr missing exact-line "ERROR=pieces.json entry 1 body contains line starting with '\''### '\''". Got: %s\n' \
       "$label" "$(cat "$stderr_file")"
     FAIL=$((FAIL + 1))
     return
@@ -355,7 +355,21 @@ assert_valid_baseline_with_body() {
     return
   fi
 
-  printf '  ✅ %s — exit 0, guard correctly skipped non-triggering patterns\n' "$label"
+  if ! grep -q '^BATCH_INPUT_FILE=' "$stdout_file"; then
+    printf '  ❌ %s — stdout missing BATCH_INPUT_FILE=. Got: %s\n' \
+      "$label" "$(cat "$stdout_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  if ! grep -q '^PIECES_TOTAL=2' "$stdout_file"; then
+    printf '  ❌ %s — stdout missing PIECES_TOTAL=2. Got: %s\n' \
+      "$label" "$(cat "$stdout_file")"
+    FAIL=$((FAIL + 1))
+    return
+  fi
+
+  printf '  ✅ %s — exit 0 + happy-path stdout shape, guard correctly skipped non-triggering patterns\n' "$label"
   PASS=$((PASS + 1))
 }
 
