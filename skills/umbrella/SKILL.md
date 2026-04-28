@@ -126,7 +126,7 @@ Decompose `TASK` into N concrete work-pieces (`N >= 2`). Each piece must be smal
 - `body` — markdown, the implementation contract for that piece (problem, suggested approach, acceptance criteria).
 - `depends-on` — comma-separated 1-based indices of earlier pieces this one depends on (empty if none).
 
-**Bundle very small work items into fewer pieces** (token-cost optimization for downstream `/implement`). When two or more candidate pieces are each "very small" — expected to be under ~10 lines of change, especially when touching only 1-3 files — bias toward merging them into a single composed `(title, body, depends-on)` tuple rather than filing each as its own issue. **Exception — low-risk subject matter only**: a 6-line auth, permissions, or security-critical change is small but NOT bundle-safe; keep such items as separate pieces so review and rollback granularity remain crisp.
+**Bundle very small work items into fewer pieces** (token-cost optimization for downstream `/implement`). When two or more candidate pieces are each "very small" — expected to be under ~10 lines of change, especially when touching only 1-3 files — bias toward merging them into a single composed `(title, body, depends-on)` tuple rather than filing each as its own issue. **Security / permissions carve-out (never bundle these)**: a 6-line auth, permissions, or security-critical change is small but NOT bundle-safe; keep such items as separate pieces so review and rollback granularity remain crisp.
 
 Bundling criteria (all required):
 

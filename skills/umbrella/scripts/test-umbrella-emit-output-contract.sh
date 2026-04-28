@@ -21,6 +21,11 @@
 # and CHILD_<i>_URL.
 # Extended for #728 to pin the Step 3B.4 wire-dag PROBE_FAILED parse-only key
 # + retry policy + transient-probe stderr literal (i1–i6).
+# Extended for the very-small-item bundling rule to pin the Step 3B.1 prose
+# (j1–j7: sizing magnitude, security/permissions carve-out, pairwise
+# incomparability, merged depends_on union, ### prohibition with
+# parse-input.sh WHY including fenced blocks, keep-N>=2 floor, and same-area
+# cohesion criterion).
 # The intent is a cheap CI guard against regression of the same drift;
 # test-helpers.sh explicitly leaves emit-output out of scope (see
 # test-helpers.md "Out of scope").
@@ -387,10 +392,10 @@ assert_contains "i6: 3B.4 EDGES_SKIPPED_API_UNAVAILABLE semantic-preservation no
     '`EDGES_SKIPPED_API_UNAVAILABLE` semantics are intentionally preserved as broad "repo-wide skip"' \
     "$STEP3B4_BLOCK"
 
-# (j*) Step 3B.1 very-small-item bundling rule. Pins the six load-bearing clauses
-# of the new rule so any future edit that silently drops or rewords a clause
-# breaks CI (parallel to (g*) for created-eq-1 and (i*) for PROBE_FAILED). The
-# prior letter (i) was taken; (j) is the next free letter.
+# (j*) Step 3B.1 very-small-item bundling rule. Pins the seven load-bearing
+# clauses of the new rule so any future edit that silently drops or rewords a
+# clause breaks CI (parallel to (g*) for created-eq-1 and (i*) for PROBE_FAILED).
+# The prior letter (i) was taken; (j) is the next free letter.
 assert_contains "j1: 3B.1 very-small sizing magnitude" \
     'expected to be under ~10 lines of change, especially when touching only 1-3 files' \
     "$STEP3B1_BLOCK"
@@ -408,6 +413,9 @@ assert_contains "j5: 3B.1 ### prohibition with parse-input.sh WHY (incl. fenced 
     "$STEP3B1_BLOCK"
 assert_contains "j6: 3B.1 keep-N-at-least-2 rule" \
     'Bundling must keep at least 2 final pieces' \
+    "$STEP3B1_BLOCK"
+assert_contains "j7: 3B.1 same-area cohesion criterion" \
+    '**Same area**: bundled items touch the same component' \
     "$STEP3B1_BLOCK"
 
 echo
