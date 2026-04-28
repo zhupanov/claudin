@@ -84,14 +84,17 @@ if [[ -n "${LARCH_BUMP_FILES+x}" ]]; then
     # CHANGELOG.md is always allowed (never required).
     ALLOWED_SET+=("CHANGELOG.md")
 
-    # Membership check: every changed file must be in the allowed set.
+    # Membership check: every changed file must be in the allowed set,
+    # AND at least one configured bump file (not CHANGELOG.md) must be present.
     ALLOWED_FAILED=false
+    BUMP_FILE_FOUND=false
     while IFS= read -r file; do
         [[ -z "$file" ]] && continue
         FOUND=false
         for allowed in "${ALLOWED_SET[@]}"; do
             if [[ "$file" == "$allowed" ]]; then
                 FOUND=true
+                [[ "$file" != "CHANGELOG.md" ]] && BUMP_FILE_FOUND=true
                 break
             fi
         done
@@ -103,6 +106,12 @@ if [[ -n "${LARCH_BUMP_FILES+x}" ]]; then
 
     if [[ "$ALLOWED_FAILED" == "true" ]]; then
         echo "WARN: HEAD subject matches bump pattern but commit touches unexpected files (changed: $CHANGED_FILES); refusing to drop" >&2
+        echo "DROPPED=false"
+        exit 0
+    fi
+
+    if [[ "$BUMP_FILE_FOUND" != "true" ]]; then
+        echo "WARN: HEAD subject matches bump pattern but commit touches no configured bump files; refusing to drop (fail-closed)" >&2
         echo "DROPPED=false"
         exit 0
     fi

@@ -148,6 +148,26 @@ REPO="$TMPDIR_BASE/test14"
 setup_repo "$REPO" version.go CHANGELOG.md
 run_test "CHANGELOG.md in custom set → DROPPED=true" "true" "version.go:CHANGELOG.md"
 
+# Test 15: CHANGELOG-only on custom path (must reject — no configured bump file touched)
+REPO="$TMPDIR_BASE/test15"
+setup_repo "$REPO" CHANGELOG.md
+run_test "Custom: CHANGELOG-only → DROPPED=false" "false" "version.go"
+
+# Test 16: empty-diff bump commit on custom path (must reject — no files at all)
+REPO="$TMPDIR_BASE/test16"
+mkdir -p "$REPO"
+cd "$REPO"
+git init -q
+git config user.email "test@test.com"
+git config user.name "Test"
+mkdir -p .claude-plugin
+echo '{}' > .claude-plugin/plugin.json
+echo '' > CHANGELOG.md
+git add -A
+git commit -q -m "Initial commit"
+git commit --allow-empty -q -m "Bump version to 1.2.3"
+run_test "Custom: empty-diff → DROPPED=false" "false" "version.go"
+
 # --- Summary ---
 TOTAL=$((PASS + FAIL))
 echo ""

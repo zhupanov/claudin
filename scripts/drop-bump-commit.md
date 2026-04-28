@@ -11,7 +11,7 @@
 3. **HEAD~1 exists** — branch must have at least 2 commits.
 4. **Allowed files** — every file in `git diff --name-only HEAD~1 HEAD` must be in the allowed set:
    - **When `LARCH_BUMP_FILES` is unset**: exact two-string equality against `.claude-plugin/plugin.json` alone or `.claude-plugin/plugin.json` + `CHANGELOG.md` (byte-identical to pre-configuration behavior).
-   - **When `LARCH_BUMP_FILES` is set**: colon-separated list parsed with whitespace trimming and empty-segment skipping. Replacement semantics — replaces the default `.claude-plugin/plugin.json`, not additive. `CHANGELOG.md` is always appended (allowed but never required). Membership check: every changed file must appear in the allowed set. Fail-closed on empty parse.
+   - **When `LARCH_BUMP_FILES` is set**: colon-separated list parsed with whitespace trimming and empty-segment skipping. Replacement semantics — replaces the default `.claude-plugin/plugin.json`, not additive. `CHANGELOG.md` is always appended (allowed but never required). Two-gate membership check: (a) every changed file must appear in the allowed set, and (b) at least one configured bump file (not `CHANGELOG.md`) must be present in the diff. Fail-closed on empty parse and on empty/CHANGELOG-only diffs.
 
 ## Environment variable
 
