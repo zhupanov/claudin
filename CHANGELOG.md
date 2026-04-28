@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.37] - 2026-04-27
+
+### Fixed
+
+- `CHANGELOG.md` — rewrote the v7.17.27 entry to drop the absolute line-number references `(line 833)` and `(line 928)` in `skills/improve-skill/scripts/iteration.sh`. The line-number anchors went stale as soon as `iteration.sh` gained or lost lines above those sites (same maintenance-nightmare anti-pattern that drove #789 / #828). The bullet now refers to "the primary `/larch:design` and `/larch:im` prompt builders in `iteration.sh`" — a stable phrase that survives future edits to the script. Documentation-only correction; runtime behavior unchanged. Closes #827.
+
 ## [7.17.36] - 2026-04-27
 
 ### Fixed
