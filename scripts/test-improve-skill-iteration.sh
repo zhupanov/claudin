@@ -70,12 +70,16 @@ check_contains() {
 # primary prompt has regressed. `check_count` asserts the exact occurrence
 # count, anchoring both call sites (primary + rescue) so dropping `--auto`
 # from either trips the guard.
+#
+# Use `grep -oF | wc -l` to count true occurrences rather than matching lines
+# — `grep -F -c` would count lines containing at least one match and could
+# silently report 1 if both tokens were ever collapsed onto a single line.
 check_count() {
   local needle="$1"
   local expected="$2"
   local label="$3"
   local got
-  got="$(LC_ALL=C grep -F -c -- "$needle" "$KERNEL" || true)"
+  got="$(LC_ALL=C grep -oF -- "$needle" "$KERNEL" | LC_ALL=C wc -l | tr -d ' ' || true)"
   if [[ "$got" == "$expected" ]]; then
     pass "iteration.sh has $expected occurrences of: $label"
   else
