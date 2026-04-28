@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.48] - 2026-04-27
+
+### Fixed
+
+- `skills/umbrella/scripts/render-batch-input.sh` — added per-entry case-(f) guard rejecting any piece `body` whose lines begin with `###` followed by an ASCII space, with stable `ERROR=pieces.json entry <i> body contains line starting with '### '` stderr line + exit 1. Mechanical backstop for the producer-side prohibition documented in PR #848 / `/umbrella` SKILL.md Step 3B.1: without it, a body line with the `###`-plus-space prefix flowed verbatim into `batch-input.md` and was re-parsed by `/issue --input-file`'s line-based parser (`parse-input.sh` Path 3, generic mode) as a new-item boundary, silently splitting one piece into multiple parsed items with corrupted titles and broken `depends_on` index alignment.
+- `skills/umbrella/scripts/test-render-batch-input.sh` — added `assert_invalid_body` harness coverage (mid-body and body-start positions, line-anchored stderr assertion via `grep -qxF`) plus four `assert_valid_baseline_with_body` negative baselines (`##` two-hash, `####` four-hash, `###X` no-separator, mid-line `###` prefix) confirming the guard's match grammar is intentionally narrow. 16/16 tests pass.
+- `skills/umbrella/scripts/render-batch-input.md` — documented case-(f) alongside cases (a)-(e) in the Test coverage paragraph; revised the Single-line stdout free-text fields paragraph (`body` is no longer fully exempt); added a Conservative-rejection note covering both the bare-heading false positive (Path 3 requires non-empty title capture) and the `### OOS_<N>:` absorption case (`parse-input.sh` OOS-before-plain ordering with #132 generic-body absorption guard) as accepted intentional collateral per #847's "pick the simpler approach" directive. Closes #847.
+
 ## [7.17.47] - 2026-04-27
 
 ### Changed
