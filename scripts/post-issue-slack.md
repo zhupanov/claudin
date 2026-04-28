@@ -24,7 +24,7 @@ Posts as the human git user via `git config user.name` → `--username` on `post
 
 | Flag             | Required | Purpose |
 |------------------|----------|---------|
-| `--issue-number` | Yes      | GitHub issue number (integer). |
+| `--issue-number` | Yes      | GitHub issue number (integer). Alias: `--issue`. |
 | `--status`       | Yes      | One of `closed`, `pr-opened`, `blocked`, `user-input`. Unknown values cause exit 1. |
 | `--repo`         | Yes      | `OWNER/REPO` used for link-composition fallback when `gh issue view` fails. |
 | `--token`        | Yes      | Slack bot token (whitespace-stripped before use). |
