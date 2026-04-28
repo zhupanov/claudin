@@ -33,7 +33,7 @@ Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
   ```
 - **`{OUTPUT_INSTRUCTION}`** = `"What the concern is"` + `"Suggested revision to the plan"`
 
-Invoke via Agent tool with subagent_type: `larch:code-reviewer`. The agent file's checklist matches the shared template; any fallback Claude launches (when Codex or Cursor are unavailable) use the same subagent. Append the Competition notice blockquote above to the prompt of every reviewer (Claude subagent + external reviewers).
+Invoke via Agent tool with subagent_type: `larch:code-reviewer` and model: `"sonnet"`. The agent file's checklist matches the shared template; any fallback Claude launches (when Codex or Cursor are unavailable) use the same subagent type and model override. Append the Competition notice blockquote above to the prompt of every reviewer (Claude subagent + external reviewers).
 
 ---
 
