@@ -605,7 +605,7 @@ if [[ -n "$ISSUE_ARG" ]]; then
 
     # Exclude issues with a managed lifecycle title prefix
     # ([IN PROGRESS] / [DONE] / [STALLED]). These are machine-owned
-    # tracking issues (/implement, /improve-skill, /loop-improve-skill),
+    # tracking issues (/implement),
     # not candidates for /fix-issue automated work. Runs AFTER umbrella
     # detection (per #819 DECISION_1) so an umbrella whose title carries
     # a managed-prefix (e.g. `[IN PROGRESS] Umbrella: foo`) reaches

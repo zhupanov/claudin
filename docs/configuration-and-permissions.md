@@ -19,7 +19,6 @@
 "Skill(im)",
 "Skill(imaq)",
 "Skill(implement)",
-"Skill(improve-skill)",
 "Skill(issue)",
 "Skill(larch:alias)",
 "Skill(larch:compress-skill)",
@@ -29,14 +28,11 @@
 "Skill(larch:im)",
 "Skill(larch:imaq)",
 "Skill(larch:implement)",
-"Skill(larch:improve-skill)",
 "Skill(larch:issue)",
-"Skill(larch:loop-improve-skill)",
 "Skill(larch:loop-review)",
 "Skill(larch:research)",
 "Skill(larch:review)",
 "Skill(larch:umbrella)",
-"Skill(loop-improve-skill)",
 "Skill(loop-review)",
 "Skill(research)",
 "Skill(review)",
@@ -47,7 +43,7 @@ Note the ordering: because `Skill(larch:...)` begins with `l` followed by `a`, a
 
 ## `claude -p` permission propagation
 
-Larch's loop drivers spawn `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` subprocesses (after `cd "$REPO_ROOT"`) at two distinct topology layers. **Direct `claude -p` callers**: `skills/improve-skill/scripts/iteration.sh` (the shared kernel for `/improve-skill` and `/loop-improve-skill`), `skills/loop-review/scripts/driver.sh`, `scripts/eval-research.sh`. **Indirect via the shared kernel**: `skills/loop-improve-skill/scripts/driver.sh` invokes `iteration.sh` as a direct bash subprocess (not `claude -p`); the `claude -p` children in that topology are spawned inside `iteration.sh` for the per-iteration `/skill-judge`, `/design`, and `/im` phases. This section documents how the project-level `.claude/settings.json` propagates to all `claude -p` children regardless of which layer launched them. Audit issue: [#586](https://github.com/zhupanov/larch/issues/586). Tested against Claude Code CLI version `2.1.119`.
+Larch's loop drivers spawn `claude -p --plugin-dir "$CLAUDE_PLUGIN_ROOT"` subprocesses (after `cd "$REPO_ROOT"`). **Direct `claude -p` callers**: `skills/loop-fix-issue/scripts/driver.sh`, `skills/loop-review/scripts/driver.sh`, `scripts/eval-research.sh`. This section documents how the project-level `.claude/settings.json` propagates to all `claude -p` children regardless of which layer launched them. Audit issue: [#586](https://github.com/zhupanov/larch/issues/586). Tested against Claude Code CLI version `2.1.119`.
 
 ### Empirical findings
 
@@ -82,7 +78,7 @@ Project settings cannot be silently downgraded by user-level files for entries t
 
 ### Implication for the umbrella stall (issue #566)
 
-Because the bare `"Edit"` allow rule IS honored by `claude -p` and `defaultMode: bypassPermissions` IS in effect, the umbrella stall reported in [#566](https://github.com/zhupanov/larch/issues/566) (where `/loop-improve-skill /umbrella` iteration 1 hit a permission-prompt stall on `Edit` against `skills/umbrella/SKILL.md`) is **not caused by missing or insufficient on-disk permissions**. The decisive remedy is the kernel-side fix tracked in [#585](https://github.com/zhupanov/larch/issues/585) (pin the permission contract at the `invoke_claude_p` invocation site, e.g., via explicit `--permission-mode bypassPermissions` and/or `--allowedTools` flags), which removes the dependence on settings discovery entirely.
+Because the bare `"Edit"` allow rule IS honored by `claude -p` and `defaultMode: bypassPermissions` IS in effect, the umbrella stall reported in [#566](https://github.com/zhupanov/larch/issues/566) is **not caused by missing or insufficient on-disk permissions**. The decisive remedy is the kernel-side fix tracked in [#585](https://github.com/zhupanov/larch/issues/585) (pin the permission contract at the `invoke_claude_p` invocation site, e.g., via explicit `--permission-mode bypassPermissions` and/or `--allowedTools` flags), which removes the dependence on settings discovery entirely.
 
 This audit therefore does **not** modify `.claude/settings.json`. The settings are correct as-shipped; no path-qualified `Edit($PWD/.claude/skills/**)` entry is needed.
 

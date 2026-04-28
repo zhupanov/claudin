@@ -48,7 +48,7 @@ SECURITY_FINDINGS_HELD=<n>
 PARSE_STATUS=ok
 ```
 
-Mirrors `### iteration-result` from `skills/improve-skill/scripts/iteration.sh`. Driver awk-scopes the KV parse to lines AFTER the `### slice-result` header.
+Driver awk-scopes the KV parse to lines AFTER the `### slice-result` header.
 
 `PARSE_STATUS=ok` indicates a successful slice run. Any other value (or absence of the footer) is treated as slice failure: the driver logs a warning, increments the failure counter, sets `LOOP_PRESERVE_TMPDIR=true`, and continues to the next slice.
 

@@ -4,11 +4,11 @@ Sibling per-script-contract doc per `AGENTS.md`. Edit this file in lockstep with
 
 ## Purpose
 
-Isolated reproducer for the `claude -p` Edit-permission stall first observed in #566. Validates the kernel fix (#585) and the related settings audit independently of the full `/loop-improve-skill` pipeline.
+Isolated reproducer for the `claude -p` Edit-permission stall first observed in #566. Validates the kernel fix (#585) and the related settings audit independently of the full skill improvement pipeline.
 
 The script invokes a single `claude -p --plugin-dir "$REPO_ROOT"` subprocess against the project's permission stack (`.claude/settings.json` + `.claude/settings.local.json` + `hooks/hooks.json` PreToolUse hooks), asks the model to perform a trivial edit on a tracked file under `skills/**`, and classifies the outcome by combining a pinned stall-regex grep on combined stdout+stderr with a `git diff` ground-truth check on the edit target.
 
-Opt-in operator instrumentation. NOT a CI gate. Depends on a real authenticated `claude` binary, costs API tokens, and is timing-sensitive. Same shape as `scripts/eval-research.sh` and `scripts/test-loop-improve-skill-halt-rate.sh`.
+Opt-in operator instrumentation. NOT a CI gate. Depends on a real authenticated `claude` binary, costs API tokens, and is timing-sensitive. Same shape as `scripts/eval-research.sh`.
 
 ## Invariants
 
@@ -119,7 +119,7 @@ rm -f .claude/settings.json.repro.new
 
 ## Test harness
 
-This script's structural correctness is exercised by its own `--smoke-test` mode. There is no separate `test-repro-claude-p-edit-permissions.sh` harness — the smoke-test IS the offline regression harness. `make lint` is unaffected (the script is excluded from `agent-lint --pedantic` via `agent-lint.toml` — same Makefile-only / opt-in pattern as `eval-research.sh` and `test-loop-improve-skill-halt-rate.sh`).
+This script's structural correctness is exercised by its own `--smoke-test` mode. There is no separate `test-repro-claude-p-edit-permissions.sh` harness — the smoke-test IS the offline regression harness. `make lint` is unaffected (the script is excluded from `agent-lint --pedantic` via `agent-lint.toml` — same Makefile-only / opt-in pattern as `eval-research.sh`).
 
 ## Edit-in-sync rules
 
@@ -135,5 +135,5 @@ When changing this script:
 - #566 — original stall incident.
 - #585 — kernel fix that this reproducer validates.
 - #587 — this reproducer.
-- `scripts/eval-research.sh` and `scripts/test-loop-improve-skill-halt-rate.sh` — pattern templates for opt-in `claude -p` operator harnesses.
+- `scripts/eval-research.sh` — pattern template for opt-in `claude -p` operator harnesses.
 - `AGENTS.md` "Per-script contracts live beside the script" — the rule that mandates this `.md` exist beside the script.

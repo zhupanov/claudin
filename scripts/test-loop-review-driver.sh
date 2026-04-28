@@ -22,7 +22,7 @@
 #      - prompt-file on STDIN via < $prompt_file (FINDING_9)
 #      - stderr to <out>.stderr sidecar via 2> $stderr_file (FINDING_10)
 #   H) Has parse_slice_kv awk-scoped to lines AFTER `### slice-result`
-#      (mirrors parse_kv awk pattern from loop-improve-skill driver.sh).
+#      (awk-scoped KV parse pattern).
 #   I) Per-slice claude -p invocation uses --slice-file (file-based handoff,
 #      bypasses argv shell-quoting) and NOT --slice <argv>.
 #   J) References LARCH_LOOP_REVIEW_CLAUDE_OVERRIDE for Tier-2 test override.

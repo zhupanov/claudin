@@ -315,10 +315,8 @@ mkdir -p "$WORK_DIR"
 printf 'eval-research: work dir = %s\n' "$WORK_DIR"
 
 # ---- Per-question subprocess invocation ----------------------------------
-# Mirrors the stdin-file + stderr-sidecar + poll-loop pattern from
-# skills/improve-skill/scripts/iteration.sh's invoke_claude_p, with
-# numeric timeouts decoupled (this harness's defaults are higher to
-# accommodate /research's composite budget).
+# Uses the stdin-file + stderr-sidecar + poll-loop subprocess pattern, with
+# numeric timeouts set higher to accommodate /research's composite budget.
 build_research_prompt() {
   local question="$1"
   # Forward --scale=$SCALE so /research's adaptive classifier (issue #513) is

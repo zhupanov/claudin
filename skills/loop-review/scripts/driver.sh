@@ -36,7 +36,7 @@
 #             print SECURITY.md disclaimer
 #   Step 7 — cleanup-tmpdir.sh on success via EXIT trap (retained on failure)
 #
-# Security posture (mirrors loop-improve-skill/driver.sh):
+# Security posture:
 #   - LOOP_TMPDIR MUST begin with /tmp/ or /private/tmp/ AND MUST NOT contain
 #     `..` as a path component.
 #   - Per-slice artifacts (slice-N-desc.txt, slice-N-cmd.txt, slice-N-review.txt,

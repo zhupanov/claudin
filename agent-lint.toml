@@ -19,12 +19,10 @@ suppress = [
   "nested-ref-deep",
   # tools-unknown (S040) is suppressed because agent-lint 2.3.2's built-in
   # tool registry predates the `Monitor` tool (introduced in Claude Code
-  # after the agent-lint release shipped). `Monitor` is a first-party
-  # Claude Code tool used by `skills/loop-improve-skill/SKILL.md` (closes
-  # #291) for passive log-tailing observability over the driver's output
-  # file. Suppression is global because agent-lint 2.3.2 does not support
-  # per-file or per-token exceptions for this rule. Revisit when agent-lint
-  # is upgraded — once the registry includes Monitor, remove this entry.
+  # after the agent-lint release shipped). Suppression is global because
+  # agent-lint 2.3.2 does not support per-file or per-token exceptions
+  # for this rule. Revisit when agent-lint is upgraded — once the registry
+  # includes Monitor, remove this entry.
   "tools-unknown",
 ]
 
@@ -199,12 +197,10 @@ suppress = [
 # scripts/test-anti-halt-banners.sh is the regression harness for the
 # anti-halt continuation banner (closes #177). The harness asserts banner
 # presence in 5 orchestrator SKILL.md files (fix-issue, implement, review,
-# alias, research) and absence in 8 pure-delegator SKILL.md files (im,
-# imaq, create-skill, loop-improve-skill, loop-review, improve-skill,
-# simplify-skill, compress-skill). The retired loop-improve-skill-iter
-# skill is no longer named; /loop-improve-skill and /loop-review are now
-# pure delegators whose runtimes live in scripts/driver.sh (#273 and the
-# loop-review inversion-of-control overhaul respectively).
+# alias, research) and absence in 6 pure-delegator SKILL.md files (im,
+# imaq, create-skill, loop-review, simplify-skill, compress-skill).
+# /loop-review is a pure delegator whose runtime lives in
+# scripts/driver.sh (the loop-review inversion-of-control overhaul).
 # It is structurally referenced from Makefile (test-anti-halt target) and
 # skills/shared/subskill-invocation.md (normative scope-list source),
 # matching the same Makefile-only pattern as the other test-* harnesses above.
@@ -217,32 +213,6 @@ suppress = [
 # only from Makefile (test-subskill-anchors target) and
 # scripts/test-subskill-anchors.md (sibling contract), matching the same
 # Makefile-only pattern as the other test-* harnesses above.
-#
-# scripts/test-loop-improve-skill-driver.sh is the regression harness for
-# skills/loop-improve-skill/scripts/driver.sh (the Option B bash-driver
-# topology introduced by #273 that replaces the previous outer→inner→three-
-# children Skill-tool chain; /loop-improve-skill-iter and the prior
-# continuation harness are retired). The harness performs structural asserts
-# on driver.sh source (parse-skill-judge-grade.sh invocation, claude --version
-# forensic capture, set -euo pipefail, verify-skill-called.sh --stdout-line
-# mechanical gate, LOOP_TMPDIR /tmp/ + /private/tmp/ prefix literals, `..`
-# rejection check, file-based prompt writes via $LOOP_TMPDIR/iter-${ITER}-*-
-# prompt.txt, redact-secrets.sh in gh-comment pipeline) plus a small number of
-# behavioral smoke fixtures with stubbed `claude` and `gh` on PATH. It is
-# referenced only from Makefile (test-loop-improve-skill-driver target) and
-# scripts/test-loop-improve-skill-driver.md (sibling contract), matching the
-# same Makefile-only pattern as the other test-* harnesses above.
-#
-# scripts/test-parse-skill-judge-grade.sh is the regression harness for
-# scripts/parse-skill-judge-grade.sh (the /skill-judge output parser
-# consumed by /loop-improve-skill's grade-gated termination contract).
-# The parser itself IS structurally referenced from
-# skills/loop-improve-skill/scripts/driver.sh (both the in-loop Phase 1.v
-# grade parse and the Step 5a final post-iter-cap re-evaluation) and is
-# therefore not excluded; the test harness is referenced only from
-# Makefile (test-parse-skill-judge-grade target) and
-# scripts/parse-skill-judge-grade.md (sibling contract), matching the
-# same Makefile-only pattern as the other test-* harnesses above.
 #
 # scripts/test-implement-structure.sh is the structural regression harness
 # for skills/implement/SKILL.md and skills/implement/references/ invariants
@@ -273,50 +243,6 @@ suppress = [
 # scripts/test-references-headers.md (sibling contract), matching the
 # same Makefile-only pattern as the other test-* harnesses above.
 #
-# scripts/test-loop-improve-skill-skill-md.sh is the structural regression
-# harness for skills/loop-improve-skill/SKILL.md (closes #291 — the live-
-# streaming pattern: background Bash launch + Monitor attach, visible log-
-# path emission, filter-regex parity with driver.sh breadcrumb helpers).
-# Companion to scripts/test-loop-improve-skill-driver.sh: the driver harness
-# pins driver.sh contract tokens; this harness pins the SKILL.md contract
-# tokens introduced by the #291 pattern. It is referenced only from Makefile
-# (test-loop-improve-skill-skill-md target) and
-# scripts/test-loop-improve-skill-skill-md.md (sibling contract), matching
-# the Makefile-only pattern as the other test-* harnesses above.
-#
-# scripts/test-improve-skill-iteration.sh is the two-tier regression harness
-# for skills/improve-skill/scripts/iteration.sh — the per-iteration kernel
-# factored out from the pre-#273 loop driver and shared by /improve-skill
-# (standalone) and /loop-improve-skill (loop body). Pins kernel contract
-# tokens (subprocess security invariants, argv flags, per-iter artifact
-# filename template, KV-footer schema, amended /design four-rule directive
-# set including the rule-4 pushback carve-out) plus four behavioral fixtures
-# (grade_a / no_plan / design_refusal / im_verification_failed). Referenced
-# only from Makefile (test-improve-skill-iteration target) and
-# scripts/test-improve-skill-iteration.md (sibling contract), matching the
-# Makefile-only pattern as the other test-* harnesses above.
-#
-# scripts/test-improve-skill-skill-md.sh is the structural regression
-# harness for skills/improve-skill/SKILL.md. Companion to
-# scripts/test-improve-skill-iteration.sh (which pins iteration.sh source
-# tokens); this harness pins the SKILL.md contract tokens (allowed-tools
-# Bash+Monitor, IMPROVE_SKILL_LOG_FILE env with /tmp/ validation, log-path
-# visibility, run_in_background/persistent Monitor directives, byte-verbatim
-# filter regex, filter-regex parity with iteration.sh breadcrumb printfs).
-# Referenced only from Makefile (test-improve-skill-skill-md target) and
-# scripts/test-improve-skill-skill-md.md (sibling contract), matching the
-# Makefile-only pattern as the other test-* harnesses above.
-#
-# scripts/test-loop-improve-skill-halt-rate.sh is the opt-in halt-rate
-# regression probe for /larch:loop-improve-skill (closes #278). Referenced
-# only from Makefile (halt-rate-probe target, NOT a lint prerequisite) and
-# scripts/test-loop-improve-skill-halt-rate.md (sibling contract); matches
-# the Makefile-only pattern as the other harnesses above.
-# scripts/lib-loop-improve-halt-ledger.sh is the sourced-only helper that
-# classify_halt_location lives in; referenced only via `source` from the
-# halt-rate probe and its test harness, which agent-lint does not follow.
-# scripts/test-lib-loop-improve-halt-ledger.sh is the offline regression
-# harness for the ledger lib, referenced only from Makefile
 # (test-lib-halt-ledger target).
 #
 # scripts/test-orchestrator-scope-sync.sh is the cross-validation harness
@@ -491,11 +417,6 @@ exclude = [
   "scripts/test-implement-structure.sh",
   "scripts/test-references-headers.sh",
   "scripts/test-subskill-anchors.sh",
-  "scripts/test-loop-improve-skill-driver.sh",
-  "scripts/test-loop-improve-skill-skill-md.sh",
-  "scripts/test-improve-skill-iteration.sh",
-  "scripts/test-improve-skill-skill-md.sh",
-  "scripts/test-parse-skill-judge-grade.sh",
   # scripts/test-parse-args.sh is the regression harness for
   # skills/create-skill/scripts/parse-args.sh (closes the sibling parse-args.md
   # "add a dedicated harness when the stdout grammar changes materially"
@@ -510,9 +431,6 @@ exclude = [
   # (test-prepare-description target); same Makefile-only pattern as the
   # test-parse-args entry above.
   "scripts/test-prepare-description.sh",
-  "scripts/test-loop-improve-skill-halt-rate.sh",
-  "scripts/lib-loop-improve-halt-ledger.sh",
-  "scripts/test-lib-loop-improve-halt-ledger.sh",
   "scripts/test-orchestrator-scope-sync.sh",
   "scripts/test-quick-mode-docs-sync.sh",
   "scripts/test-research-structure.sh",
@@ -586,8 +504,7 @@ exclude = [
   # Referenced only from its sibling .md contract — no Makefile target,
   # no SKILL.md reference, no CI wiring (depends on a real authenticated
   # `claude` binary, costs API tokens, timing-sensitive). Same opt-in
-  # operator-instrumentation shape as eval-research.sh and
-  # test-loop-improve-skill-halt-rate.sh.
+  # operator-instrumentation shape as eval-research.sh.
   "scripts/repro-claude-p-edit-permissions.sh",
   # scripts/test-eval-research-baseline-flag.sh is the standalone offline
   # regression harness for the --baseline flag handling in

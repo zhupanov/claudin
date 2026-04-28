@@ -81,16 +81,10 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2">Create one or more GitHub issues with LLM-based semantic duplicate detection and always-on inter-issue blocker-dependency analysis.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
-      <td><a href="docs/skills.md#improve-skill"><code>/improve-skill</code></a></td>
-      <td><code>[--no-slack] [--issue &lt;N&gt;] &lt;skill-name&gt;</code></td>
+      <td><a href="docs/skills.md#loop-fix-issue"><code>/loop-fix-issue</code></a></td>
+      <td><code>[--debug] [--max-iterations N] [--no-slack] [--no-admin-fallback]</code></td>
     </tr>
-    <tr><td colspan="2">Run exactly one iteration of the judge → design → implement loop against an existing larch skill. Amended <code>/design</code> prompt carries a narrow per-finding pushback carve-out for skill-judge findings that appear erroneous (detailed per-finding justification required).</td></tr>
-    <tr><td colspan="2"><hr></td></tr>
-    <tr>
-      <td><a href="docs/skills.md#loop-improve-skill"><code>/loop-improve-skill</code></a></td>
-      <td><code>[--no-slack] &lt;skill-name&gt;</code></td>
-    </tr>
-    <tr><td colspan="2">Iteratively improve an existing larch skill via a judge → design → implement loop (up to 10 rounds); reuses the <code>/improve-skill</code> iteration kernel.</td></tr>
+    <tr><td colspan="2">Repeatedly invoke <code>/fix-issue</code> (one approved GitHub issue per iteration) until the queue is empty; thin SKILL.md delegates to a bash driver, terminating on the absence of <code>/fix-issue</code>'s Step 1 setup breadcrumb.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#loop-review"><code>/loop-review</code></a></td>
