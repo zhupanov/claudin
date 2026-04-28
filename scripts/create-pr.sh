@@ -25,6 +25,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 usage() { echo "Usage: create-pr.sh --title TEXT --body-file FILE [--draft]" >&2; }
 
 TITLE=""
@@ -65,8 +67,30 @@ if [[ -n "$EXISTING_PR" ]]; then
         PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number // empty' 2>/dev/null || echo "")
         PR_URL=$(echo "$EXISTING_PR" | jq -r '.url // empty' 2>/dev/null || echo "")
         if [[ -n "$PR_NUMBER" ]] && [[ -n "$PR_URL" ]]; then
-            # Push any new local commits before returning
-            git push -u origin HEAD >/dev/null 2>&1 || true
+            # Push any new local commits before returning. Fail closed on real
+            # push errors rather than swallowing them — a stale remote on an
+            # OPEN PR is exactly the silent-failure mode this branch must avoid.
+            PUSH_STDERR=$(mktemp)
+            trap 'rm -f "$PUSH_STDERR"' EXIT
+            if git push -u origin HEAD >/dev/null 2>"$PUSH_STDERR"; then
+                : # plain push succeeded (fast-forward or already-in-sync)
+            else
+                # Plain push failed — commonly non-fast-forward after history
+                # rewrite (e.g., /implement Step 12 rebase + re-bump). Escalate
+                # to force-with-lease via the shared helper, which encodes
+                # lease + race-recovery + single retry.
+                # The helper does `git push --force-with-lease` with no refspec
+                # and requires upstream tracking + a populated origin/$BRANCH ref:
+                git fetch origin "$BRANCH" 2>/dev/null || true
+                git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
+                # Suppress helper stdout (BRANCH=/PUSHED=/STATUS= keys) so the
+                # PR_* stdout contract this script publishes stays intact;
+                # capture helper stderr to surface on real failure.
+                if ! "$SCRIPT_DIR/git-force-push.sh" >/dev/null 2>>"$PUSH_STDERR"; then
+                    echo "ERROR: Failed to push branch on existing-PR fast-path: $(cat "$PUSH_STDERR")" >&2
+                    exit 1
+                fi
+            fi
             # Fetch the existing PR title
             PR_TITLE=$(echo "$EXISTING_PR" | jq -r '.title // empty' 2>/dev/null || echo "")
             if [[ -z "$PR_TITLE" ]]; then
