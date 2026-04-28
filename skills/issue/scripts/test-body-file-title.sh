@@ -49,6 +49,10 @@ assert_present "step3-explicit-title-branch" \
 assert_present "derive-from-description" \
     "derived from \`DESCRIPTION\`"
 
+# Empty body file guard when EXPLICIT_TITLE is set
+assert_present "empty-body-file-guard" \
+    "body-file content is empty"
+
 echo "---"
 echo "Results: $PASS_COUNT passed, $FAIL_COUNT failed"
 

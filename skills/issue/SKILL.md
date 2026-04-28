@@ -50,6 +50,7 @@ After flag stripping:
 
 Validations:
 - `MODE=single` with empty `DESCRIPTION` and no `EXPLICIT_TITLE`: abort with `**ERROR: Usage: /issue [--go] [--title-prefix P] [--label L]... [--body-file F] <issue description or title>**`
+- `MODE=single` with `EXPLICIT_TITLE` set and empty `DESCRIPTION` (empty body file): abort with `**ERROR: --body-file content is empty.**`
 - `MODE=batch` + missing or empty `INPUT_FILE`: abort with `**ERROR: --input-file must point to a non-empty file.**`
 
 ## Step 2 — Resolve Repository
