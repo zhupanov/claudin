@@ -195,7 +195,7 @@ while true; do
         --behind "$BEHIND_COUNT" \
         --iteration "$ITERATION" \
         --rebase-count "$REBASE_COUNT" \
-        --fix-attempts "$FIX_ATTEMPTS" 2>&2)
+        --fix-attempts "$FIX_ATTEMPTS")
     DECIDE_EXIT=$?
 
     if [[ "$DECIDE_EXIT" -ne 0 ]]; then
