@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.8] - 2026-04-28
+
+### Fixed
+
+- `find-lock-issue.sh` explicit-target mode: `umbrella-handler.sh detect` non-zero exit is now fatal — emits `ELIGIBLE=false` with propagated error and exits 2, instead of silently falling through to the ordinary-issue path.
+
+### Added
+
+- `test-find-lock-issue.sh` fixture 13: regression test for detect-failure-exits-2 with `VIEW_FAIL_BODY` stub mechanism that differentiates `gh issue view` calls by `--json` fields.
+
 ## [12.0.7] - 2026-04-28
 
 ### Fixed
