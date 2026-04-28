@@ -64,6 +64,25 @@ check_contains() {
   fi
 }
 
+# Issue #838: file-wide grep -Fq passes as long as ANY occurrence of the
+# needle exists, so a guard like `check_contains '/larch:design --auto'`
+# silently passes even when ONLY the rescue prompt carries the token and the
+# primary prompt has regressed. `check_count` asserts the exact occurrence
+# count, anchoring both call sites (primary + rescue) so dropping `--auto`
+# from either trips the guard.
+check_count() {
+  local needle="$1"
+  local expected="$2"
+  local label="$3"
+  local got
+  got="$(LC_ALL=C grep -F -c -- "$needle" "$KERNEL" || true)"
+  if [[ "$got" == "$expected" ]]; then
+    pass "iteration.sh has $expected occurrences of: $label"
+  else
+    fail "iteration.sh expected $expected occurrences of: $label (needle: $needle), got $got"
+  fi
+}
+
 # ---------- Core security + subprocess contracts ----------
 check_contains 'parse-skill-judge-grade.sh'                    'parse-skill-judge-grade.sh invocation'
 check_contains 'claude --version'                              'claude --version forensic capture'
@@ -95,7 +114,14 @@ check_contains '/larch:im'                                     'fully-qualified 
 # subprocess-driven /design and /im runs are non-interactive (matching the
 # rescue retry which already passes --auto). Without these pins, the fix in
 # iteration.sh could silently regress.
-check_contains '/larch:design --auto'                          'primary /larch:design --auto prompt (issue #758)'
+#
+# Issue #838: `/larch:design --auto` appears at TWO sites in iteration.sh —
+# the primary prompt and the rescue prompt. A file-wide `check_contains`
+# would silently pass even if the primary regressed, because the rescue
+# would still satisfy the grep. Pin the exact count instead so dropping
+# `--auto` from EITHER site trips the guard. `/larch:im --auto` only has
+# one site (the primary), so check_contains there is still effective.
+check_count    '/larch:design --auto' 2                        'primary + rescue /larch:design --auto prompts (issues #758, #838)'
 check_contains '/larch:im --auto'                              'primary /larch:im --auto prompt (issue #758)'
 # FINDING_10: stderr MUST NOT merge into stdout (which is posted publicly).
 # shellcheck disable=SC2016
