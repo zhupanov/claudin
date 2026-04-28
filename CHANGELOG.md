@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.29] - 2026-04-27
+
+### Fixed
+
+- `skills/research/diagram.svg` — corrected two stale lane-count claims so the diagram matches the canonical `quick=3+0 / standard=3+3 / deep=5+5` scale matrix from `skills/research/SKILL.md`. The subtitle on line 15 now reads `quick=3 lanes no validation` (was `quick=1 lane no validation`), and the research-agents box label on line 24 now reads `3/3/5 Research Agents (scale-dependent)` (was `1/3/5`). Closes #782 (part of umbrella #784 — /research slice review).
+
 ## [7.17.28] - 2026-04-27
 
 ### Fixed
