@@ -18,6 +18,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PARSER="$SCRIPT_DIR/parse-prose-blockers.sh"
 
+# Intentionally stricter than blocker-helpers.sh (which uses `bash "$parser_script"`
+# and tolerates non-executable files): this harness requires +x to enforce the
+# shipped-executable-bit invariant at lint time.
 if [[ ! -x "$PARSER" ]]; then
     echo "ERROR: parser not found or not executable: $PARSER" >&2
     exit 1
@@ -121,6 +124,18 @@ assert_eq "trailing paren"           "150"   "Depends on #150 (fix)"
 # ---------------------------------------------------------------------------
 # NON-matching cases — enforce parser scope boundaries.
 # ---------------------------------------------------------------------------
+echo "NON-matching cases: inline code spans (backtick-wrapped keywords)"
+# shellcheck disable=SC2016
+assert_empty "keyword inside single code span"         '`Depends on #99`'
+# shellcheck disable=SC2016
+assert_empty "keyword inside code span mid-sentence"   'See `Blocked by #42` in the docs'
+# shellcheck disable=SC2016
+assert_empty "keyword inside code span with emphasis"   '`**Depends on #99**`'
+# shellcheck disable=SC2016
+assert_eq    "code span + real keyword same line" "150" '`Depends on #99` and Blocked by #150'
+# shellcheck disable=SC2016
+assert_empty "multiple code spans with keywords"        '`Depends on #10` and `Needs #20`'
+
 echo "NON-matching cases: missing keyword"
 assert_empty "bare #N with no keyword"              "See #150 for details"
 assert_empty "narrative 'issue #N'"                 "This is similar to issue #150"

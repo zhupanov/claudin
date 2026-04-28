@@ -82,10 +82,14 @@ prose_open_blockers() {
     local parser_script
     parser_script="$(dirname "${BASH_SOURCE[0]}")/parse-prose-blockers.sh"
 
-    # If the parser is missing (should never happen in a shipped install),
-    # fail open silently.
-    if [[ ! -x "$parser_script" ]]; then
+    # If the parser is missing entirely, fail open silently.
+    if [[ ! -f "$parser_script" ]]; then
         return 0
+    fi
+
+    # If the file exists but is not executable, warn and invoke via bash.
+    if [[ ! -x "$parser_script" ]]; then
+        echo "WARNING: parse-prose-blockers.sh exists but is not executable; invoking via bash" >&2
     fi
 
     # Fetch the issue body and all comment bodies. Failures at either fetch
@@ -103,7 +107,7 @@ prose_open_blockers() {
 
     if [[ -n "$body" ]]; then
         local body_refs
-        body_refs=$(printf '%s' "$body" | "$parser_script" 2>/dev/null) || body_refs=""
+        body_refs=$(printf '%s' "$body" | bash "$parser_script" 2>/dev/null) || body_refs=""
         if [[ -n "$body_refs" ]]; then
             refs="$refs"$'\n'"$body_refs"
         fi
@@ -116,7 +120,7 @@ prose_open_blockers() {
         local comment_body comment_refs
         comment_body=$(echo "$comments_array" | jq -r ".[$i].body // \"\"" 2>/dev/null) || comment_body=""
         if [[ -n "$comment_body" ]]; then
-            comment_refs=$(printf '%s' "$comment_body" | "$parser_script" 2>/dev/null) || comment_refs=""
+            comment_refs=$(printf '%s' "$comment_body" | bash "$parser_script" 2>/dev/null) || comment_refs=""
             if [[ -n "$comment_refs" ]]; then
                 refs="$refs"$'\n'"$comment_refs"
             fi

@@ -7,7 +7,9 @@
 # fabrication). Emits a deduplicated, sorted, one-per-line list of same-repo
 # issue numbers referenced via the five case-insensitive keyword phrases:
 # "Depends on", "Blocked by", "Blocked on", "Requires", "Needs", each followed
-# by `#<digits>`. Emphasis wrappers (`*`, `_`) between the keyword's
+# by `#<digits>`. Inline code spans (backtick-delimited) are stripped
+# before matching so keywords inside code like `Depends on #99` are not
+# false-positive matched. Emphasis wrappers (`*`, `_`) between the keyword's
 # whitespace and the `#` are tolerated (normalized away via sed) so the
 # common GitHub-issue formatting `Depends on **#150**` is matched — this is
 # the motivating case (issue #152's body used exactly this formatting).
@@ -31,6 +33,12 @@ set -euo pipefail
 # Read stdin into a variable. `cat` on closed/empty stdin returns empty string
 # without failure.
 text=$(cat)
+
+# Strip inline code spans (backtick-delimited) so keywords inside code
+# like `Depends on #99` are not false-positive matched. Matched backtick
+# pairs are removed entirely; unmatched trailing backticks are harmless.
+# shellcheck disable=SC2016
+text=$(printf '%s\n' "$text" | sed 's/`[^`]*`//g')
 
 # Normalize emphasis wrappers (bold/italic) so `**#150**`, `_#150_`, etc. match
 # the downstream whitespace+# regex. Link brackets `[` / `]` are preserved —
