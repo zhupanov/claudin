@@ -97,13 +97,23 @@ suppress = [
 #
 # skills/fix-issue/scripts/test-parse-prose-blockers.sh is the regression
 # harness for skills/fix-issue/scripts/parse-prose-blockers.sh (the prose-
-# dependency parser invoked by skills/fix-issue/scripts/find-lock-issue.sh).
+# dependency parser invoked by skills/fix-issue/scripts/blocker-helpers.sh's
+# prose_open_blockers function — sourced by both find-lock-issue.sh and
+# umbrella-handler.sh per issue #768).
 # The parser itself IS structurally referenced from skills/fix-issue/SKILL.md's
-# Step 0 (find / eligibility / dependencies / lock / rename) description and from find-lock-issue.sh's
+# Step 0 (find / eligibility / dependencies / lock / rename) description and from blocker-helpers.sh's
 # prose_open_blockers function, and is therefore not excluded; the test
 # harness is referenced only from Makefile (test-parse-prose-blockers target)
 # and skills/fix-issue/scripts/parse-prose-blockers.md (sibling contract),
 # matching the same Makefile-only pattern as the other test-* harnesses above.
+#
+# skills/fix-issue/scripts/blocker-helpers.sh is the shared blocker-resolution
+# library introduced by issue #768 — owns native_open_blockers,
+# prose_open_blockers, and all_open_blockers, sourced by both find-lock-issue.sh
+# and umbrella-handler.sh. Same "sourced library" shape as scripts/lib-count-commits.sh
+# above: no shebang dependence, referenced only via `source` directives, which
+# agent-lint does not follow. Excluded with its sibling .md (skills/fix-issue/
+# scripts/blocker-helpers.md, in the .md exclude block at the bottom of this file).
 #
 # skills/fix-issue/scripts/test-issue-lifecycle.sh is the regression harness
 # for skills/fix-issue/scripts/issue-lifecycle.sh close idempotency (Phase 2
@@ -404,6 +414,7 @@ exclude = [
   "scripts/ci-wait.md",
   "scripts/test-lint-skill-invocations.sh",
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
+  "skills/fix-issue/scripts/blocker-helpers.sh",
   "skills/fix-issue/scripts/test-issue-lifecycle.sh",
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.sh",
   "skills/fix-issue/scripts/test-fix-issue-step-order.sh",
@@ -615,6 +626,7 @@ exclude = [
   "skills/alias/scripts/resolve-target.md",
   "skills/issue/scripts/parse-input.md",
   "skills/fix-issue/scripts/parse-prose-blockers.md",
+  "skills/fix-issue/scripts/blocker-helpers.md",
   "skills/fix-issue/scripts/issue-lifecycle.md",
   "skills/fix-issue/scripts/test-fix-issue-bail-detection.md",
   "skills/fix-issue/scripts/test-fix-issue-step-order.md",

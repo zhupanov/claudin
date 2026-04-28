@@ -3,7 +3,7 @@
 #
 # Hermetic offline test using a PATH-prepended `gh` stub. Validates the
 # combined Find + Lock + Rename pipeline introduced by the fold-find-and-lock
-# refactor (closes #496). Eight executed fixtures plus one deferred-coverage
+# refactor (closes #496). Ten executed fixtures plus one deferred-coverage
 # note cover the script's exit-code matrix and stdout contract:
 #   1. eligible + lock OK + rename OK  → exit 0; LOCK_ACQUIRED=true RENAMED=true
 #   2. eligible + lock fail → exit 3; LOCK_ACQUIRED=false
@@ -30,6 +30,12 @@
 #      eligible-child. Confirms the explicit-target reorder (umbrella
 #      detect runs before has_managed_prefix) — pre-#819 this title
 #      would have been rejected with "managed lifecycle title prefix".
+#  11. e2e umbrella dispatch with prose-blocked first child + ready
+#      second child (closes #768) → exit 0; IS_UMBRELLA=true
+#      UMBRELLA_ACTION=dispatched UMBRELLA_NUMBER=1100 ISSUE_NUMBER=1102.
+#      Confirms the integration of pick-child's full native+prose blocker
+#      check (issue #768 fix), the post-pick all_open_blockers defense-in-
+#      depth, and the lock-no-go + rename pipeline.
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -100,14 +106,52 @@ dispatch_issue_view() {
     # Accept either a bare number or a full GitHub-style URL — `gh issue view`
     # resolves both natively, and find-lock-issue.sh's host-generic URL parser
     # (closes #766) passes URLs through unchanged.
+    #
+    # Per-issue state lookup (ISSUE_<N>_TITLE / _BODY / _STATE / _VIEW_FAIL)
+    # takes precedence over the single-issue defaults (ISSUE_TITLE / _BODY /
+    # _STATE). Fixtures that exercise multi-issue gh dispatch (e.g., umbrella
+    # e2e fixtures with parsed children) populate per-issue keys; legacy
+    # single-issue fixtures continue to work via the bare defaults.
     local arg="$1"
     local host="${ISSUE_URL_HOST:-github.com}"
     local issue="$arg"
     case "$arg" in
         http*://*) issue=$(echo "$arg" | sed -E 's|.*/issues/([0-9]+).*|\1|') ;;
     esac
-    printf '{"number":%s,"state":"%s","url":"https://%s/stub/repo/issues/%s","title":"%s","body":"%s"}\n' \
-        "$issue" "${ISSUE_STATE:-OPEN}" "$host" "$issue" "${ISSUE_TITLE:-Test issue}" "${ISSUE_BODY:-Test body}"
+    # Per-issue VIEW_FAIL injection for fail-open boundary testing.
+    local var_fail="ISSUE_${issue}_VIEW_FAIL"
+    if [[ "${!var_fail:-}" == "true" ]]; then
+        echo "Error: stubbed issue view failure" >&2
+        exit 1
+    fi
+    local var_title="ISSUE_${issue}_TITLE"
+    local var_body="ISSUE_${issue}_BODY"
+    local var_state="ISSUE_${issue}_STATE"
+    local title body state
+    title="${!var_title:-${ISSUE_TITLE:-Test issue}}"
+    body="${!var_body:-${ISSUE_BODY:-Test body}}"
+    state="${!var_state:-${ISSUE_STATE:-OPEN}}"
+    # Honor --jq <expr> by piping the constructed JSON through jq -r.
+    # prose_open_blockers calls `gh issue view <ref> --json state --jq '.state'`
+    # expecting the bare state string, not the full JSON object.
+    local jq_filter=""
+    local prev=""
+    for a in "$@"; do
+        if [[ "$prev" == "--jq" ]]; then
+            jq_filter="$a"
+        fi
+        prev="$a"
+    done
+    local json
+    json=$(printf '{"number":%s,"state":"%s","url":"https://%s/stub/repo/issues/%s","title":%s,"body":%s,"createdAt":"2024-01-01T00:00:00Z"}' \
+        "$issue" "$state" "$host" "$issue" \
+        "$(printf '%s' "$title" | jq -R -s '.')" \
+        "$(printf '%s' "$body" | jq -R -s '.')")
+    if [[ -n "$jq_filter" ]]; then
+        printf '%s' "$json" | jq -r "$jq_filter"
+    else
+        printf '%s\n' "$json"
+    fi
     exit 0
 }
 
@@ -116,6 +160,47 @@ dispatch_issue_edit() {
         echo "Error: failed to edit title" >&2
         exit 1
     fi
+    exit 0
+}
+
+# `gh issue comment N --body BODY` — used by issue-lifecycle.sh cmd_comment
+# to post the IN PROGRESS lock. Fixture-controlled failure surfaces as
+# cmd_comment exit 1 with LOCK_ACQUIRED=false.
+#
+# Stateful side-effect (closes #768 — needed by the e2e umbrella dispatch
+# fixture): record the posted comment in a per-issue runtime file under
+# $RUNTIME_COMMENTS_DIR. Subsequent `gh api .../comments` calls read that
+# file (merged on top of the static ISSUE_<N>_COMMENTS env var) so the
+# lock-no-go post-check can find the just-posted id.
+dispatch_issue_comment() {
+    if [[ "${COMMENT_FAIL:-false}" == "true" ]]; then
+        echo "Error: failed to post comment" >&2
+        exit 1
+    fi
+    if [[ -z "${RUNTIME_COMMENTS_DIR:-}" ]]; then
+        exit 0
+    fi
+    local cmt_issue="$1"
+    local cmt_body=""
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --body) cmt_body="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+    mkdir -p "$RUNTIME_COMMENTS_DIR"
+    local rt_file="$RUNTIME_COMMENTS_DIR/$cmt_issue.json"
+    local cmt_id=$(( 90000000 + RANDOM ))
+    local cmt_ts
+    cmt_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    if [[ ! -f "$rt_file" ]]; then
+        echo "[]" > "$rt_file"
+    fi
+    local updated
+    updated=$(jq --argjson id "$cmt_id" --arg body "$cmt_body" --arg ts "$cmt_ts" \
+        '. + [{id: $id, body: $body, created_at: $ts}]' "$rt_file")
+    printf '%s\n' "$updated" > "$rt_file"
     exit 0
 }
 
@@ -144,7 +229,33 @@ dispatch_api() {
             if [[ "$method" == "DELETE" ]]; then
                 exit 0
             fi
-            printf '%s\n' "${COMMENTS_JSON:-$default_comments}"
+            # Per-issue comments lookup (closes #768 — needed by umbrella
+            # e2e fixtures with multiple parsed children). Fall back to
+            # COMMENTS_JSON for legacy single-issue fixtures.
+            #
+            # When stateful comment-posting is enabled (RUNTIME_COMMENTS_DIR
+            # set), merge any runtime comments posted via `gh issue comment`
+            # on top of the env-var/default base. The script's `gh api
+            # --paginate --slurp .../comments | jq 'add // []'` pattern
+            # expects an outer array (a list of pages), each page being an
+            # array of comment objects.
+            local issue_n
+            issue_n=$(printf '%s' "$url" | sed -nE 's@.*/issues/([0-9]+)/comments@\1@p')
+            local var_comments="ISSUE_${issue_n}_COMMENTS"
+            local base_json
+            if [[ -n "${!var_comments:-}" ]]; then
+                base_json="${!var_comments}"
+            else
+                base_json="${COMMENTS_JSON:-$default_comments}"
+            fi
+            if [[ -n "${RUNTIME_COMMENTS_DIR:-}" && -f "$RUNTIME_COMMENTS_DIR/$issue_n.json" ]]; then
+                local rt_json
+                rt_json=$(cat "$RUNTIME_COMMENTS_DIR/$issue_n.json")
+                # Flatten base pages and append runtime comments as a final page.
+                printf '%s' "$base_json" | jq --argjson rt "$rt_json" '. + [$rt]'
+            else
+                printf '%s\n' "$base_json"
+            fi
             exit 0 ;;
         repos/stub/repo/issues\?*|"repos/stub/repo/issues?state=open"*)
             printf '%s\n' "${OPEN_ISSUES_JSON:-}"
@@ -162,18 +273,15 @@ case "$1" in
         ;;
     issue)
         case "$2" in
-            view) dispatch_issue_view "$3" ;;
+            view)
+                # Forward all post-`view` args so dispatch_issue_view can
+                # inspect --jq <expr> for state-only filter calls (closes
+                # #768 — prose_open_blockers' per-ref state lookup).
+                shift 2
+                dispatch_issue_view "$@" ;;
             comment)
-                # `gh issue comment N --body BODY` — used by issue-lifecycle.sh
-                # cmd_comment to post the IN PROGRESS lock. Fixture-controlled
-                # failure surfaces as cmd_comment exit 1 with
-                # LOCK_ACQUIRED=false.
-                if [[ "${COMMENT_FAIL:-false}" == "true" ]]; then
-                    echo "Error: failed to post comment" >&2
-                    exit 1
-                fi
-                exit 0
-                ;;
+                shift 2
+                dispatch_issue_comment "$@" ;;
             edit) dispatch_issue_edit ;;
             list) echo "[]"; exit 0 ;;
         esac
@@ -599,6 +707,66 @@ assert_contains "$OUT" "IS_UMBRELLA=true" "[10] IS_UMBRELLA=true (umbrella detec
 assert_contains "$OUT" "UMBRELLA_ACTION=no-eligible-child" "[10] UMBRELLA_ACTION=no-eligible-child"
 assert_contains "$OUT" "UMBRELLA_NUMBER=50" "[10] UMBRELLA_NUMBER=50"
 assert_not_contains "$OUT" "managed lifecycle title prefix" "[10] managed-prefix early-reject was bypassed (umbrella detection ran first)"
+
+# ---------------------------------------------------------------------------
+# Fixture 11: e2e umbrella dispatch with prose-blocked first child + ready
+# second child (issue #768). End-to-end integration covering the full
+# find-lock-issue.sh → umbrella-handler.sh → blocker-helpers.sh wiring,
+# including the post-pick all_open_blockers defense-in-depth check and the
+# lock-no-go + rename pipeline.
+#
+# Setup: umbrella #1100 with body "- [ ] #1101" (prose-blocked) and
+# "- [ ] #1102" (ready). Child #1101's body has "Depends on #1199" with
+# #1199 OPEN. Child #1102 has clean body. Expected: pick-child returns
+# #1102 (skipping prose-blocked #1101); the post-pick guard re-runs
+# all_open_blockers on #1102 (empty); lock-no-go succeeds; rename to
+# [IN PROGRESS] succeeds; emit IS_UMBRELLA=true UMBRELLA_ACTION=dispatched
+# UMBRELLA_NUMBER=1100 ISSUE_NUMBER=1102 LOCK_ACQUIRED=true RENAMED=true.
+# ---------------------------------------------------------------------------
+echo "Fixture 11: e2e umbrella dispatch with prose-blocked first child (#768)"
+run_fixture "fixture-11"
+# Enable stateful comment-posting so the lock-no-go post-check can find
+# the just-posted IN PROGRESS comment id.
+mkdir -p "$TMPROOT/fixture-11/runtime-comments"
+export RUNTIME_COMMENTS_DIR="$TMPROOT/fixture-11/runtime-comments"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+RUNTIME_COMMENTS_DIR="${RUNTIME_COMMENTS_DIR:-}"
+ISSUE_1100_TITLE='Umbrella: prose-blocker regression e2e'
+ISSUE_1100_BODY=$'Umbrella tracking issue.\n\n## Children\n\n- [ ] #1101 — first (prose-blocked)\n- [ ] #1102 — second (ready)\n'
+ISSUE_1100_STATE=OPEN
+ISSUE_1100_COMMENTS='[[]]'
+ISSUE_1101_TITLE='First child (prose-blocked)'
+ISSUE_1101_BODY=$'## Description\n\nDepends on #1199 — must wait for that to land.\n'
+ISSUE_1101_STATE=OPEN
+ISSUE_1101_COMMENTS='[[]]'
+ISSUE_1102_TITLE='Second child (ready)'
+ISSUE_1102_BODY='Clean body, no prose blockers.'
+ISSUE_1102_STATE=OPEN
+ISSUE_1102_COMMENTS='[[]]'
+ISSUE_1199_TITLE='External blocker'
+ISSUE_1199_BODY='External blocker body.'
+ISSUE_1199_STATE=OPEN
+RENAME_FAIL=false
+STATE_EOF
+
+OUT_FILE="$TMPROOT/fixture-11/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-11/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" 1100 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+
+assert_equal "$EXIT_CODE" "0" "[11] exit code 0 (umbrella dispatched successfully)"
+assert_contains "$OUT" "IS_UMBRELLA=true" "[11] IS_UMBRELLA=true"
+assert_contains "$OUT" "UMBRELLA_ACTION=dispatched" "[11] UMBRELLA_ACTION=dispatched"
+assert_contains "$OUT" "UMBRELLA_NUMBER=1100" "[11] UMBRELLA_NUMBER=1100"
+assert_contains "$OUT" "ISSUE_NUMBER=1102" "[11] ISSUE_NUMBER=1102 (skipped prose-blocked #1101)"
+assert_not_contains "$OUT" "ISSUE_NUMBER=1101" "[11] does NOT lock prose-blocked first child"
+assert_contains "$OUT" "LOCK_ACQUIRED=true" "[11] LOCK_ACQUIRED=true"
+assert_contains "$OUT" "RENAMED=true" "[11] RENAMED=true (lock-no-go + rename pipeline succeeded)"
+ERR=$(cat "$ERR_FILE")
+assert_not_contains "$ERR" "WARNING: title rename failed" "[11] no rename-failure warning on stderr"
+unset RUNTIME_COMMENTS_DIR
 
 # ---------------------------------------------------------------------------
 # Summary
