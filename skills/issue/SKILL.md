@@ -1,7 +1,7 @@
 ---
 name: issue
 description: "Use when creating GitHub issues with LLM-based semantic duplicate detection plus always-on inter-issue blocker-dependency analysis. Single or batch mode. Flags: --go, --dry-run, --title-prefix, --label."
-argument-hint: "[--input-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--sentinel-file PATH] [<issue description>]"
+argument-hint: "[--input-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--sentinel-file PATH] [<issue description or title>]"
 allowed-tools: Bash, Read, Write
 ---
 
@@ -33,7 +33,7 @@ Supported flags (all optional):
 - `--input-file FILE` — batch mode. Path to a markdown file with multiple issues (OOS format or generic `### <title>` + body). When present, any trailing free-form description is rejected as a usage error.
 - `--title-prefix PREFIX` — string prepended to every created issue's title (e.g. `[OOS]`). Case-insensitively deduplicates if the input title already carries the prefix.
 - `--label LABEL` — repeatable. Each label is probed against the target repo; missing labels are silently dropped with a stderr warning.
-- `--body-file FILE` — single-mode alternative to the inline description. Mutually exclusive with a trailing description arg.
+- `--body-file FILE` — single-mode body source. When combined with a trailing positional argument, the trailing arg is the explicit title and the file content is the body. When used alone, the file is both body and title source (title derived from first non-empty line).
 - `--dry-run` — run Phase 1+2 dedup normally; **do not** call `gh issue create`. Emit structured output tagged `DRY_RUN=true`. When combined with `--go`, the GO comment is suppressed (dry-run has no side effects) and no `ISSUE_<i>_GO_POSTED` lines are emitted.
 - `--go` — post `GO` as the final comment on each newly-created issue so it becomes eligible for `/fix-issue` automation. Works in both single and batch modes: Step 6 handles the GO post inline after each successful CREATE. Duplicates, failed creates, and dry-run items never get a GO comment.
 - `--repo OWNER/REPO` — explicit repo (otherwise inferred from the current working directory via `gh repo view`).
@@ -42,10 +42,15 @@ Supported flags (all optional):
 
 After flag stripping:
 - If `--input-file` is set, set `MODE=batch`. Save `INPUT_FILE`. If any trailing non-flag token remains, abort with `**ERROR: --input-file cannot be combined with a free-form description.**`
-- Otherwise set `MODE=single`. The remainder is `DESCRIPTION`. If `--body-file` is set, read it into `DESCRIPTION` (and reject any inline description).
+- Otherwise set `MODE=single`. If `--body-file` is set:
+  - If trailing positional text is also present, set `EXPLICIT_TITLE` from the trailing text and read the file into `DESCRIPTION`.
+  - If no trailing text, read the file into `DESCRIPTION` (derive title from first non-empty line — current behavior).
+  - If `EXPLICIT_TITLE` is set and its trimmed value is empty or whitespace-only, abort with usage error.
+  If `--body-file` is not set, the remainder is `DESCRIPTION`.
 
 Validations:
-- `MODE=single` with empty `DESCRIPTION`: abort with `**ERROR: Usage: /issue [--go] [--title-prefix P] [--label L]... [--body-file F] <issue description>**`
+- `MODE=single` with empty `DESCRIPTION` and no `EXPLICIT_TITLE`: abort with `**ERROR: Usage: /issue [--go] [--title-prefix P] [--label L]... [--body-file F] <issue description or title>**`
+- `MODE=single` with `EXPLICIT_TITLE` set and empty `DESCRIPTION` (empty body file): abort with `**ERROR: --body-file content is empty.**`
 - `MODE=batch` + missing or empty `INPUT_FILE`: abort with `**ERROR: --input-file must point to a non-empty file.**`
 
 ## Step 2 — Resolve Repository
@@ -72,8 +77,10 @@ Both single and batch modes use `ITEM_<i>_BODY_FILE=<absolute path to plain-text
 ### Single mode
 
 Produce a single-item list where item 1 is:
-- `ITEM_1_TITLE`: derived from `DESCRIPTION` (first non-empty line, trimmed; truncated to 80 chars with `…` on overflow; hard-cut at 80 if no whitespace in the first 80 chars).
+- `ITEM_1_TITLE`: if `EXPLICIT_TITLE` is set, use it directly (trimmed; truncated to 80 chars with `…` on overflow; hard-cut at 80 if no whitespace in the first 80 chars). Otherwise, derived from `DESCRIPTION` (first non-empty line, trimmed; same truncation rules).
 - `ITEM_1_BODY_FILE`: write `DESCRIPTION` verbatim to `$ISSUE_TMPDIR/bodies/item-1-body.txt` (preserving newlines; no trailing-newline injection), and set `ITEM_1_BODY_FILE` to that absolute path.
+
+Structural regression coverage for the `--body-file` + trailing title semantics lives in `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-body-file-title.sh` (sibling contract: `${CLAUDE_PLUGIN_ROOT}/skills/issue/scripts/test-body-file-title.md`; wired into `make lint` via the `test-body-file-title` target). The harness pins the two-source branching text, the `EXPLICIT_TITLE` variable, the Step 3 two-branch rule, and the backward-compatible derive-from-first-line path.
 
 ### Batch mode
 
