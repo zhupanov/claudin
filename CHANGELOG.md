@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.39] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/umbrella-handler.sh` — `is_umbrella_title` now recognizes umbrella titles that carry leading bracket-prefix tags. After stripping zero or more leading `[...]` and/or `(...)` blocks (with optional surrounding whitespace) via a bounded peel loop (cap=16, fail-closed on unbalanced/unclosed leading brackets), the remainder is matched against the existing case-sensitive <code>Umbrella: </code> / <code>Umbrella — </code> markers. Positive examples now detected: `[IN PROGRESS] Umbrella: foo`, `(urgent) Umbrella: foo`, `[IN PROGRESS] (urgent) Umbrella: foo`. Negative examples still rejected: `[IN PROGRESS] Do something umbrella related` (Umbrella mid-title after the prefix strip), `/umbrella ...` (lowercase command syntax). Body-literal detection unchanged.
+- `skills/fix-issue/scripts/find-lock-issue.sh` — coordinated explicit-target reorder so umbrella detection runs BEFORE the `has_managed_prefix` early-reject. Without this reorder the title widening above would be unreachable in the explicit-target flow for hand-authored umbrellas with managed-prefix titles (e.g., `[IN PROGRESS] Umbrella: foo`). Auto-pick path is intentionally NOT mirrored — auto-pick excludes umbrellas regardless of order. Also fixes a latent `set -euo pipefail` interaction in the umbrella branch's BLOCKERS union pipeline (`grep -v '^$'` returned 1 on all-empty input, aborting the script silently for any umbrella with zero blockers): added `|| true` bracket so empty unions propagate as empty strings and `handle_umbrella` is reached.
+- Documentation and harness contract sync: `skills/fix-issue/scripts/umbrella-handler.md` (Title-fallback grammar limitations and silent fail-closed contract), `skills/fix-issue/scripts/find-lock-issue.md` (new explicit-path order), `skills/fix-issue/scripts/test-umbrella-handler.md` (catalog F14-F20), `skills/fix-issue/scripts/test-find-lock-issue.md` (Fixture 10 entry), and `skills/fix-issue/SKILL.md` (Step 0 umbrella-issue exception widening, Known Limitations rewrites for "Umbrella support is explicit-target-only" and "Umbrella's own blockers gate dispatch"). Per design dialectic DECISION_1 (voted 2-1) and 10 accepted plan-review findings. Closes #819.
+
 ## [7.17.38] - 2026-04-27
 
 ### Added
