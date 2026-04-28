@@ -154,11 +154,17 @@ must be terminated cleanly. OS-specific:
 
 - **Linux**: when `setsid` is available, `setsid` puts curl children in
   the script's session. The script self-execs into a new session if not
-  already a session leader (idempotency guard: `__VC_SETSID_DONE=1` env
-  var prevents infinite recursion). A single `kill -- -$$` then signals
-  every descendant. When `setsid` is unavailable, the re-exec is skipped
-  and the timeout `kill -- -$$` may signal the script's own group — a
-  pre-existing degraded path that #662 did not change.
+  already a session leader; `__VC_SETSID_DONE=1` is exported just before
+  the `exec setsid` so the re-exec'd child inherits it (idempotency guard
+  preventing infinite recursion) AND so the budget-exhaustion handler can
+  use it as a "running in dedicated session" signal. A single `kill -- -$$`
+  then signals every descendant. When `setsid` is unavailable, the re-exec
+  is skipped, `__VC_SETSID_DONE` stays unset, and the budget-exhaustion
+  handler falls back to per-PID `kill "$pid"` over `CURL_PIDS` — the
+  validator runs in its caller's process group on this branch, so
+  `kill -- -$$` would also signal the validator itself and break the
+  fail-soft contract (issue #779). Orphan curl children on this fallback
+  are bounded by `$PER_FETCH_TIMEOUT`.
 - **macOS**: `set -m` (job control) places each backgrounded `fetch_url`
   subshell in its own process group with `pgid == $!`. The script records
   every `$!` in `CURL_PIDS` and on timeout runs `kill -- -<pid>` for each
