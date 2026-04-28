@@ -34,7 +34,7 @@ RAW=$(gh issue list --repo "$REPO" --state open --limit 200 \
 }
 
 if [[ -z "$RAW" || "$RAW" == "[]" ]]; then
-  TMPFILE=$(mktemp /tmp/combine-issues-XXXXXX.json)
+  TMPFILE=$(mktemp /tmp/combine-issues-XXXXXX)
   echo "[]" > "$TMPFILE"
   echo "ISSUES_FILE=$TMPFILE"
   echo "COUNT=0"
@@ -49,7 +49,7 @@ FILTERED=$(echo "$RAW" | jq '[
   )
 ]')
 
-TMPFILE=$(mktemp /tmp/combine-issues-XXXXXX.json)
+TMPFILE=$(mktemp /tmp/combine-issues-XXXXXX)
 echo "$FILTERED" > "$TMPFILE"
 COUNT=$(echo "$FILTERED" | jq 'length')
 
