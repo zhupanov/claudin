@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.47] - 2026-04-27
+
+### Changed
+
+- `skills/implement/SKILL.md` Step 8b — replace the exit-1 (rebase conflict) bail with an invocation of the existing Rebase + Re-bump Sub-procedure under a new `caller_kind=step8b_rebase` so concurrent main-bump conflicts in the 8a→9 window auto-recover. The typical case (concurrent `.claude-plugin/plugin.json` bump on main) is fully resolved by sub-procedure step 1's `drop-bump-commit.sh` removing the local bump before re-rebasing. On unrecoverable failures the existing bail behavior is preserved (`STALL_TRACKING=true` + skip to Step 18). Step 8b's exit-3 / other-non-zero handlers are unchanged. NEVER #8 added to the SKILL.md NEVER list to forbid reuse of `step12_rebase` / `step10_rebase` for Step 8b's invocation (wrong post-success control flow + wrong failure routing).
+- `skills/implement/references/rebase-rebump-subprocedure.md` — added third caller family (`step8b_rebase`) parallel to the existing `step12_*` and `step10_*` families: contract token list, Inputs schema, caller-family failure semantics, step-2 exit-1 / exit-3 branches, step-4 STATUS-degraded + HAS_BUMP=false branches (step12-strict semantics routed to STALL+18 instead of 12d), step-5 push SKIPPED for step8b (Step 8b's existing `git ls-remote` trichotomy handles fresh-branch path), step-7 return-to-caller branch (return to Step 8b's force-push gate; no `ci-wait.sh` re-invocation, no sleep, no counter updates). Per sketch-phase dialectic — DECISION_1 (3-0 narrow scope, no Phase 1-4), DECISION_2 (1-2 token name `step8b_rebase` over `step_8b`), DECISION_3 (3-0 step12-strict STATUS handling), DECISION_4 (3-0 skip step 5 for step8b).
+- `skills/implement/references/bump-verification.md` Block β — added step8b family rows for `STATUS=git_error`, `STATUS=missing_main_ref`, `VERIFIED=false AND COMMITS_AFTER == COMMITS_BEFORE`, and `VERIFIED=false AND COMMITS_AFTER != COMMITS_BEFORE` branches (all hard-fail to STALL+18). Also extended Block γ sentinel-check warning prefix to cover step8b family.
+- `skills/implement/references/conflict-resolution.md` — `Consumer` and `When to load` lines extended with step8b carve-out clarifying that step8b family deliberately does NOT enter Phase 1-4 (Phase 2-3 user-escalation + reviewer panel are post-PR machinery and inappropriate for the 8a→9 pre-PR window).
+- Documentation-only PR; no shell-script changes. Closes #840.
+
 ## [7.17.46] - 2026-04-27
 
 ### Changed
