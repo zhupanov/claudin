@@ -2,8 +2,10 @@
 # check-reviewers.sh — Check external reviewer binary availability and optional health probe.
 #
 # Checks if codex and cursor binaries are installed. With --probe, also sends a
-# trivial prompt to each available tool with a 60-second timeout to verify it is
-# actually responding (catches auth failures, network issues, outages).
+# trivial prompt ("Respond with OK") to each available tool with a 60-second
+# timeout and validates that the trimmed response is exactly "OK" (all whitespace
+# stripped). Catches auth failures, network issues, outages, and banner-style
+# responses that produce non-empty but non-OK output.
 # Failed probes are retried once to tolerate transient timeouts.
 #
 # Usage:
@@ -12,8 +14,8 @@
 # Outputs (key=value to stdout):
 #   CODEX_AVAILABLE=true|false    — binary exists on PATH
 #   CURSOR_AVAILABLE=true|false   — binary exists on PATH
-#   CODEX_HEALTHY=true|false      — (only with --probe) responded to trivial prompt within timeout
-#   CURSOR_HEALTHY=true|false     — (only with --probe) responded to trivial prompt within timeout
+#   CODEX_HEALTHY=true|false      — (only with --probe) exit 0 and trimmed output == "OK"
+#   CURSOR_HEALTHY=true|false     — (only with --probe) exit 0 and trimmed output == "OK"
 #
 # Exit codes:
 #   0 — always (availability/health are informational, not errors)
@@ -123,7 +125,7 @@ if [[ "$PROBE" == "true" ]]; then
                     if [[ "$CODEX_PROBE_REPLY" == "OK" ]]; then
                         CODEX_HEALTHY="true"
                     else
-                        CODEX_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt")"
+                        CODEX_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt" | tr '\n\r' '  ')"
                     fi
                 elif [[ -f "$PROBE_DIR/codex-probe.txt.diag" ]]; then
                     CODEX_PROBE_ERROR=$(cat "$PROBE_DIR/codex-probe.txt.diag")
@@ -152,7 +154,7 @@ if [[ "$PROBE" == "true" ]]; then
                     if [[ "$CURSOR_PROBE_REPLY" == "OK" ]]; then
                         CURSOR_HEALTHY="true"
                     else
-                        CURSOR_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt")"
+                        CURSOR_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt" | tr '\n\r' '  ')"
                     fi
                 elif [[ -f "$PROBE_DIR/cursor-probe.txt.diag" ]]; then
                     CURSOR_PROBE_ERROR=$(cat "$PROBE_DIR/cursor-probe.txt.diag")
@@ -233,7 +235,7 @@ if [[ "$PROBE" == "true" ]]; then
                         CODEX_HEALTHY="true"
                         CODEX_PROBE_ERROR=""
                     else
-                        CODEX_PROBE_ERROR="Retry returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt")"
+                        CODEX_PROBE_ERROR="Retry returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt" | tr '\n\r' '  ')"
                     fi
                 else
                     if [[ -f "$PROBE_DIR/codex-probe.txt.diag" ]]; then
@@ -259,7 +261,7 @@ if [[ "$PROBE" == "true" ]]; then
                         CURSOR_HEALTHY="true"
                         CURSOR_PROBE_ERROR=""
                     else
-                        CURSOR_PROBE_ERROR="Retry returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt")"
+                        CURSOR_PROBE_ERROR="Retry returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt" | tr '\n\r' '  ')"
                     fi
                 else
                     if [[ -f "$PROBE_DIR/cursor-probe.txt.diag" ]]; then
