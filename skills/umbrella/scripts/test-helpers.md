@@ -69,7 +69,7 @@ The probe classification suite uses the new per-attempt sequencing knobs (`STUB_
 - `probe 502 then feature-missing 404` (retry recovers to feature-missing) → `PROBE_FAILED=0`, legacy warning, 2 attempts.
 - `--no-backlinks ambiguous-404 first-child` (stale child, non-fingerprint 404) → `PROBE_FAILED=1` (operational, not feature-off).
 - `--no-backlinks empty CHILDREN_FILE` → `probe_target` is empty, no probe runs, `PROBE_FAILED=0`, no probe stderr.
-- dry-run path → stdout includes `PROBE_FAILED=0` literal (initialized before `--dry-run` early-exit so `set -u` cannot trip).
+- dry-run path → stdout includes the literal line `PROBE_FAILED=0`. The `--dry-run` early-exit (issue #769) returns before the probe block runs, so `PROBE_FAILED` is never assigned on this path; the line on stdout comes from the fixed `printf` as a literal, which is what the parse-only contract pins.
 
 The shared body fingerprint regex (`_wd_is_feature_missing_404`) is exercised at both call sites: the new probe-stage classifier AND the existing per-edge POST-stage 404 handler. The existing per-edge tests `(b)` and `(c)` continue to pin the per-edge fingerprint behavior; the probe-stage tests above mirror them at the probe stage. Drift between the two sites is structurally prevented by the shared shell function.
 
