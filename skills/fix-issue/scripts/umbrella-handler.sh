@@ -19,20 +19,22 @@
 #   form `[...]` and/or `(...)` (each with optional surrounding whitespace)
 #   via a bounded peel loop (cap=16, fail-closed on unbalanced/unclosed
 #   leading bracket), the remainder starts with `Umbrella: ` or `Umbrella — `
-#   — case-sensitive. Catches /umbrella-created umbrellas (whose titles follow
-#   the `Umbrella: <hint>` convention) and hand-authored umbrellas like #348,
-#   including titles that already carry an operator tag (e.g.
-#   `[IN PROGRESS] Umbrella: foo`, `(urgent) Umbrella: foo`). The body is NOT
-#   consulted — see `is_umbrella_title` (below) for the implementation and
-#   the sibling `umbrella-handler.md` Detection section for the full grammar
-#   contract (non-nesting, cap=16, silent fail-closed). Body-based detection
-#   was removed in #846 because the prior substring match on the literal
+#   — case-sensitive. The marker matches both /umbrella-created umbrellas
+#   (orchestrator-composed summaries conventionally start with "Umbrella:",
+#   not code-enforced — see existing umbrellas #774, #773, #770, #784) and
+#   hand-authored umbrellas like #348, including titles that already carry
+#   an operator tag (e.g. `[IN PROGRESS] Umbrella: foo`,
+#   `(urgent) Umbrella: foo`). The body is NOT consulted — see
+#   `is_umbrella_title` (below) for the implementation and the sibling
+#   `umbrella-handler.md` Detection section for the full grammar contract
+#   (non-nesting, cap=16, silent fail-closed). Body-based detection was
+#   removed in #846 because the prior substring match on the literal
 #   `Umbrella tracking issue.` produced false positives on issues that
 #   *quoted* the marker in prose or code spans (e.g., #753).
 #
 # Child enumeration grammar (DECISION_3 — task-list checklist only):
 #   Only matches markdown task-list items with a same-repo `#N` reference:
-#     ^[[:space:]]*- \[[ x]\] .*#([0-9]+)
+#     ^[[:space:]]*- \[[ xX]\] .*#([0-9]+)
 #   Captures both /umbrella-rendered children ("- [ ] #N — title") and
 #   hand-authored operator checklists ("- [ ] /fix-issue executes #N" as in
 #   #348). Same-repo only — the regex requires `#<digits>` not preceded by `/`,
@@ -103,7 +105,7 @@ REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || {
 # titles). Bracket blocks are non-nesting — the peel finds the FIRST `]` or
 # `)` after the opening delimiter; nested bracket content within a block
 # (e.g., `[outer [inner] outer]`) is intentionally NOT supported (false
-# negative — see `umbrella-handler.md` Title-fallback grammar limitations).
+# negative — see `umbrella-handler.md` Title-grammar limitations).
 # Fail-closed on unbalanced/unclosed leading bracket: `is_umbrella_title`
 # returns 1 (NOT umbrella). Callers (cmd_detect) treat any non-zero return
 # as "not umbrella" — the malformed-bracket case is intentionally

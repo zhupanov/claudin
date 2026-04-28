@@ -651,11 +651,12 @@ if [[ -n "$ISSUE_ARG" ]]; then
     # `[STALLED] Umbrella: foo`) reach the umbrella dispatcher. Without
     # this ordering, `is_umbrella_title`'s post-#819 bracket-prefix peel
     # would be unreachable in the explicit-target path for hand-authored
-    # umbrellas without the body literal — see issue #819 design DECISION_1
-    # (voted, 2-1) for the rationale. Auto-pick path is intentionally NOT
-    # mirrored: auto-pick excludes umbrellas regardless of order. The
-    # umbrella's body literal AND/OR title prefix is the approval signal —
-    # children inherit approval from the umbrella's existence.
+    # umbrellas — see issue #819 design DECISION_1 (voted, 2-1) for the
+    # rationale. Auto-pick path is intentionally NOT mirrored: auto-pick
+    # excludes umbrellas regardless of order. Detection is title-only
+    # post-#846 (the prior body-literal substring match caused false
+    # positives like #753); the umbrella's existence is the approval signal
+    # — children inherit approval from the umbrella's existence.
     UMBRELLA_HANDLER="$(dirname "${BASH_SOURCE[0]}")/umbrella-handler.sh"
     if [[ -x "$UMBRELLA_HANDLER" ]]; then
         UMBRELLA_DETECT_OUT=""

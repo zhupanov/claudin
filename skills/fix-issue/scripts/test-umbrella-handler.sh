@@ -5,9 +5,9 @@
 # detection / list-children / pick-child subcommands of umbrella-handler.sh.
 #
 # Fixtures cover:
-#   1. detect — body literal primary signal
-#   2. detect — title prefix fallback
-#   3. detect — non-umbrella (no body literal, no title prefix)
+#   1. detect — body literal with plain title is NOT umbrella (#753 / #846 regression)
+#   2. detect — title prefix marker
+#   3. detect — non-umbrella (no title marker)
 #   4. list-children — task-list grammar with /umbrella-rendered children
 #   5. list-children — operator-checklist with prose ("/fix-issue executes #N")
 #   6. list-children — cross-repo references rejected
