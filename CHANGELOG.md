@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.39] - 2026-04-27
+
+### Fixed
+
+- `skills/fix-issue/scripts/find-lock-issue.sh` — explicit-issue mode now treats `umbrella-handler.sh` detection as a hard validation gate (closes #765). Three abort conditions all emit `ELIGIBLE=false` + `ERROR=` on stdout, a human-readable message on stderr, and exit `2`: missing/non-executable helper, `detect` non-zero exit, and `detect` exit-0 with no recognized `IS_UMBRELLA=` value. The previous fall-through could misclassify `/fix-issue <umbrella#>` — passing the umbrella body downstream as a feature spec or locking the umbrella issue itself if its tail comment was `GO`. The auto-pick branch retains its fail-open umbrella-skip block by design. Adds Fixtures 10-13 to `test-find-lock-issue.sh` covering all four code paths via per-fixture tmpdir copies (renumbered from the pre-rebase 9-12 to coexist with main's GHE-host Fixture 9 from #766). Updates `SKILL.md` NEVER #7 wording and corrects the false `CI-backed: yes` claim (now CI-backed via Fixtures 10-13). Aligns three stale fixture counts.
+
 ## [7.17.38] - 2026-04-27
 
 ### Added
