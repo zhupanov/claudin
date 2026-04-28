@@ -25,6 +25,11 @@
 #   9. explicit issue with a GHE-style host (host-generic URL parsing —
 #      closes #766) → exit 0; ISSUE_NUMBER=55 LOCK_ACQUIRED=true
 #      RENAMED=true (mirrors fixture 1's full success contract)
+#  10. explicit-target umbrella with [IN PROGRESS] managed-prefix title
+#      (closes #819) → exit 5; IS_UMBRELLA=true UMBRELLA_ACTION=no-
+#      eligible-child. Confirms the explicit-target reorder (umbrella
+#      detect runs before has_managed_prefix) — pre-#819 this title
+#      would have been rejected with "managed lifecycle title prefix".
 #
 # Stub gh dispatches on positional + json args. Each fixture writes a stub
 # state file under a per-fixture tmpdir; the stub reads the file to decide
@@ -561,6 +566,39 @@ assert_contains "$OUT" "ISSUE_NUMBER=55" "[9] ISSUE_NUMBER=55 on stdout"
 assert_contains "$OUT" "LOCK_ACQUIRED=true" "[9] LOCK_ACQUIRED=true on stdout"
 assert_contains "$OUT" "RENAMED=true" "[9] RENAMED=true on stdout (mirrors Fixture 1)"
 assert_not_contains "$OUT" "Cannot parse repository from issue URL" "[9] no parse-failure error"
+
+# ---------------------------------------------------------------------------
+# Fixture 10: explicit-target umbrella with managed-prefix title (issue #819
+# DECISION_1 regression). Asserts the reorder lets `[IN PROGRESS] Umbrella:
+# foo` reach the umbrella dispatcher rather than failing the managed-prefix
+# early-reject. Slimmer NO_ELIGIBLE_CHILD design (per #819 plan-review
+# FINDING_7): title-only umbrella with no body literal and no parseable
+# task-list children → handle_umbrella emits exit 5 + UMBRELLA_ACTION=
+# no-eligible-child. Avoids coupling to issue-lifecycle.sh lock-no-go and
+# the stub's single-issue ISSUE_TITLE/BODY model.
+# ---------------------------------------------------------------------------
+echo "Fixture 10: explicit-target umbrella with [IN PROGRESS] managed-prefix title (#819)"
+run_fixture "fixture-10"
+{
+    echo "ISSUE_STATE=OPEN"
+    echo "ISSUE_TITLE='[IN PROGRESS] Umbrella: foo'"
+    echo "ISSUE_BODY='No body literal here. No task-list children either.'"
+    echo "COMMENTS_JSON='$(make_comments_json GO)'"
+    echo "RENAME_FAIL=false"
+} > "$STUB_STATE_FILE"
+
+OUT_FILE="$TMPROOT/fixture-10/stdout.txt"
+ERR_FILE="$TMPROOT/fixture-10/stderr.txt"
+EXIT_CODE=0
+"$SCRIPT" 50 >"$OUT_FILE" 2>"$ERR_FILE" || EXIT_CODE=$?
+
+OUT=$(cat "$OUT_FILE")
+
+assert_equal "$EXIT_CODE" "5" "[10] exit code 5 (umbrella, no eligible child)"
+assert_contains "$OUT" "IS_UMBRELLA=true" "[10] IS_UMBRELLA=true (umbrella detect fired)"
+assert_contains "$OUT" "UMBRELLA_ACTION=no-eligible-child" "[10] UMBRELLA_ACTION=no-eligible-child"
+assert_contains "$OUT" "UMBRELLA_NUMBER=50" "[10] UMBRELLA_NUMBER=50"
+assert_not_contains "$OUT" "managed lifecycle title prefix" "[10] managed-prefix early-reject was bypassed (umbrella detection ran first)"
 
 # ---------------------------------------------------------------------------
 # Summary

@@ -26,8 +26,14 @@
 # Urgent issue is still picked when no Urgent eligible candidate exists.
 #
 # With --issue: targets a specific issue (by number or GitHub URL), verifies
-# it is open, does not carry a managed lifecycle title prefix, has "GO" as
-# the last comment, and has no currently-open blocking dependencies.
+# it is open, runs umbrella detection FIRST (issue #819 DECISION_1 — if the
+# issue is an umbrella, the umbrella branch is taken and managed-prefix
+# rejection is bypassed so umbrellas with `[IN PROGRESS]` / `[DONE]` /
+# `[STALLED]` titles remain explicitly targetable), then for non-umbrellas
+# verifies the title does not carry a managed lifecycle title prefix, has
+# "GO" as the last comment, and has no currently-open blocking dependencies.
+# Auto-pick path is intentionally NOT mirrored — it excludes umbrellas
+# regardless of order.
 #
 # Two orthogonal mechanisms coexist:
 #   1) Comment-based "IN PROGRESS" lock — concurrency control on the
@@ -103,8 +109,10 @@
 # Umbrella support (explicit-issue path only — auto-pick mode never selects
 # umbrellas, per the design dialectic's DECISION_1):
 #   When the explicit issue is detected as an umbrella (body literal
-#   "Umbrella tracking issue." OR title prefix "Umbrella:" / "Umbrella —"),
-#   delegate to umbrella-handler.sh to either:
+#   "Umbrella tracking issue." OR title — case-sensitive, after stripping
+#   zero or more leading bracket-blocks of the form `[...]` and/or `(...)`
+#   per #819 — that begins with `Umbrella: ` or `Umbrella — `), delegate to
+#   umbrella-handler.sh to either:
 #     - dispatch to the next-eligible child (pick-child returns CHILD_NUMBER),
 #       lock the CHILD using --lock-no-go (no GO required), rename the CHILD
 #       to [IN PROGRESS]. Emit IS_UMBRELLA=true UMBRELLA_NUMBER=<U>
@@ -634,24 +642,20 @@ if [[ -n "$ISSUE_ARG" ]]; then
         exit 2
     fi
 
-    # Exclude issues with a managed lifecycle title prefix
-    # ([IN PROGRESS] / [DONE] / [STALLED]). These are machine-owned
-    # tracking issues (/implement, /improve-skill, /loop-improve-skill),
-    # not candidates for /fix-issue automated work. Placed BEFORE the
-    # comment pagination to save API calls on an obviously-excluded
-    # issue.
-    if has_managed_prefix "$ISSUE_TITLE"; then
-        echo "ELIGIBLE=false"
-        echo "ERROR=Issue #$ISSUE_NUM has a managed lifecycle title prefix ([IN PROGRESS] / [DONE] / [STALLED]); not a fix-issue candidate"
-        exit 2
-    fi
-
     # Umbrella detection (explicit-issue path only — auto-pick mode never
     # runs this; per the design dialectic's DECISION_1, auto-pick keeps its
-    # GO-tail invariant). Detection runs BEFORE the GO-tail check so umbrella
-    # issues do NOT need a GO comment. The umbrella's body literal AND/OR
-    # title prefix is the approval signal — children inherit approval from the
-    # umbrella's existence.
+    # GO-tail invariant). Detection runs BEFORE both the managed-prefix
+    # early-reject AND the GO-tail check so umbrella issues do NOT need a
+    # GO comment AND so umbrella titles carrying a managed lifecycle prefix
+    # (e.g. `[IN PROGRESS] Umbrella: foo`, `[DONE] Umbrella: foo`,
+    # `[STALLED] Umbrella: foo`) reach the umbrella dispatcher. Without
+    # this ordering, `is_umbrella_title`'s post-#819 bracket-prefix peel
+    # would be unreachable in the explicit-target path for hand-authored
+    # umbrellas without the body literal — see issue #819 design DECISION_1
+    # (voted, 2-1) for the rationale. Auto-pick path is intentionally NOT
+    # mirrored: auto-pick excludes umbrellas regardless of order. The
+    # umbrella's body literal AND/OR title prefix is the approval signal —
+    # children inherit approval from the umbrella's existence.
     UMBRELLA_HANDLER="$(dirname "${BASH_SOURCE[0]}")/umbrella-handler.sh"
     if [[ -x "$UMBRELLA_HANDLER" ]]; then
         UMBRELLA_DETECT_OUT=""
@@ -703,10 +707,15 @@ if [[ -n "$ISSUE_ARG" ]]; then
                 fi
                 PROSE_BLOCKERS=$(prose_open_blockers "$ISSUE_NUM")
                 # Union + dedupe (sort -u tolerates leading/trailing space and
-                # an empty-line input from concatenated empty sets).
+                # an empty-line input from concatenated empty sets). The
+                # `grep -v '^$'` filter exits 1 when given all-empty input
+                # (zero matches), which under `set -euo pipefail` would abort
+                # the script and silently swallow the umbrella with no
+                # blockers — `|| true` brackets the filter so empty unions
+                # propagate as empty strings instead of fatal exits.
                 BLOCKERS=$(printf '%s %s' "$NATIVE_BLOCKERS" "$PROSE_BLOCKERS" \
-                    | tr ' ' '\n' | grep -v '^$' | sort -u -n | tr '\n' ' ' \
-                    | sed 's/[[:space:]]*$//')
+                    | tr ' ' '\n' | { grep -v '^$' || true; } | sort -u -n \
+                    | tr '\n' ' ' | sed 's/[[:space:]]*$//')
                 if [ -n "$BLOCKERS" ]; then
                     FORMATTED=$(echo "$BLOCKERS" | tr ' ' '\n' | sed 's/^/#/' | paste -sd ',' -)
                     echo "ELIGIBLE=false"
@@ -719,6 +728,19 @@ if [[ -n "$ISSUE_ARG" ]]; then
                 # terminal — exits 0/3/4/5
             fi
         fi
+    fi
+
+    # Exclude issues with a managed lifecycle title prefix
+    # ([IN PROGRESS] / [DONE] / [STALLED]). These are machine-owned
+    # tracking issues (/implement, /improve-skill, /loop-improve-skill),
+    # not candidates for /fix-issue automated work. Runs AFTER umbrella
+    # detection (per #819 DECISION_1) so an umbrella whose title carries
+    # a managed-prefix (e.g. `[IN PROGRESS] Umbrella: foo`) reaches
+    # `handle_umbrella` above and never falls through here.
+    if has_managed_prefix "$ISSUE_TITLE"; then
+        echo "ELIGIBLE=false"
+        echo "ERROR=Issue #$ISSUE_NUM has a managed lifecycle title prefix ([IN PROGRESS] / [DONE] / [STALLED]); not a fix-issue candidate"
+        exit 2
     fi
 
     # Verify last comment is GO.

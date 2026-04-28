@@ -18,6 +18,13 @@
 #  11. pick-child — skips managed-prefix child
 #  12. pick-child — ALL_CLOSED with at least one parsed child
 #  13. pick-child — NO_ELIGIBLE_CHILD when zero parseable children (FINDING_3)
+#  14. detect — bracket-prefix title: [IN PROGRESS] Umbrella: foo (#819 positive)
+#  15. detect — multiple bracket prefixes: [IN PROGRESS] (urgent) Umbrella: foo
+#  16. detect — bracket prefix + Umbrella mid-title is NOT umbrella (#819 negative)
+#  17. detect — /umbrella command-syntax is NOT umbrella (#819 negative)
+#  18. detect — unclosed leading [ → fail-closed, NOT umbrella (#819 fail-closed)
+#  19. detect — unclosed leading ( → fail-closed, NOT umbrella (#819 fail-closed)
+#  20. detect — >16 bracket-block prefix → cap exhausted, NOT umbrella (#819)
 #
 # Run manually:
 #   bash skills/fix-issue/scripts/test-umbrella-handler.sh
@@ -359,6 +366,107 @@ OUT=$("$SCRIPT" pick-child --issue 130 2>&1) || true
 assert_contains "$OUT" "NO_ELIGIBLE_CHILD=true" "[13] zero children → NO_ELIGIBLE_CHILD"
 assert_contains "$OUT" "no parseable children" "[13] BLOCKING_REASON identifies cause"
 assert_not_contains "$OUT" "ALL_CLOSED=true" "[13] does NOT emit vacuous ALL_CLOSED"
+
+# ---------------------------------------------------------------------------
+# Fixture 14: detect — [IN PROGRESS] Umbrella: foo (#819 positive)
+# Bracket-prefix peel: stripping [IN PROGRESS] leaves "Umbrella: foo" → umbrella.
+# ---------------------------------------------------------------------------
+echo "Fixture 14: detect — [IN PROGRESS] Umbrella: foo"
+run_fixture "fixture-14"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_140_TITLE='[IN PROGRESS] Umbrella: do something'
+ISSUE_140_BODY='No body literal here.'
+ISSUE_140_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" detect --issue 140 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=true" "[14] [IN PROGRESS] Umbrella: → IS_UMBRELLA=true"
+assert_contains "$OUT" "DETECTION=title" "[14] DETECTION=title"
+
+# ---------------------------------------------------------------------------
+# Fixture 15: detect — [IN PROGRESS] (urgent) Umbrella: foo (#819 positive)
+# Multiple peelable prefix blocks of mixed bracket types.
+# ---------------------------------------------------------------------------
+echo "Fixture 15: detect — [IN PROGRESS] (urgent) Umbrella: foo"
+run_fixture "fixture-15"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_150_TITLE='[IN PROGRESS] (urgent) Umbrella: do something'
+ISSUE_150_BODY='No body literal here.'
+ISSUE_150_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" detect --issue 150 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=true" "[15] [IN PROGRESS] (urgent) Umbrella: → IS_UMBRELLA=true"
+assert_contains "$OUT" "DETECTION=title" "[15] DETECTION=title"
+
+# ---------------------------------------------------------------------------
+# Fixture 16: detect — [IN PROGRESS] Do something umbrella related (#819 negative)
+# After stripping [IN PROGRESS], remainder starts with "Do" not "Umbrella".
+# ---------------------------------------------------------------------------
+echo "Fixture 16: detect — [IN PROGRESS] Do something umbrella related (negative)"
+run_fixture "fixture-16"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_160_TITLE='[IN PROGRESS] Do something umbrella related'
+ISSUE_160_BODY='No body literal here.'
+ISSUE_160_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" detect --issue 160 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=false" "[16] umbrella mid-title (after prefix strip) → not umbrella"
+
+# ---------------------------------------------------------------------------
+# Fixture 17: detect — /umbrella should do X Y Z (#819 negative)
+# Lowercase + slash-command syntax is not the umbrella marker.
+# ---------------------------------------------------------------------------
+echo "Fixture 17: detect — /umbrella should do X Y Z (negative)"
+run_fixture "fixture-17"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_170_TITLE='/umbrella should do X Y Z'
+ISSUE_170_BODY='No body literal here.'
+ISSUE_170_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" detect --issue 170 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=false" "[17] /umbrella command-syntax → not umbrella"
+
+# ---------------------------------------------------------------------------
+# Fixture 18: detect — unclosed leading [ (#819 fail-closed)
+# Peel cannot find closing ']' → fail-closed, NOT umbrella.
+# ---------------------------------------------------------------------------
+echo "Fixture 18: detect — unclosed [ (fail-closed)"
+run_fixture "fixture-18"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_180_TITLE='[unclosed Umbrella: foo'
+ISSUE_180_BODY='No body literal here.'
+ISSUE_180_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" detect --issue 180 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=false" "[18] unclosed [ → fail-closed, not umbrella"
+
+# ---------------------------------------------------------------------------
+# Fixture 19: detect — unclosed leading ( (#819 fail-closed)
+# ---------------------------------------------------------------------------
+echo "Fixture 19: detect — unclosed ( (fail-closed)"
+run_fixture "fixture-19"
+cat > "$STUB_STATE_FILE" <<'STATE_EOF'
+ISSUE_190_TITLE='(unclosed Umbrella: foo'
+ISSUE_190_BODY='No body literal here.'
+ISSUE_190_STATE=OPEN
+STATE_EOF
+OUT=$("$SCRIPT" detect --issue 190 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=false" "[19] unclosed ( → fail-closed, not umbrella"
+
+# ---------------------------------------------------------------------------
+# Fixture 20: detect — >16 bracket-block prefix (#819 cap exhausted)
+# Pathological title: 17 bracket blocks before Umbrella:. Loop cap=16 → fail.
+# ---------------------------------------------------------------------------
+echo "Fixture 20: detect — >16 bracket-block prefix (cap)"
+run_fixture "fixture-20"
+# Build a title with 17 [.] blocks followed by Umbrella: foo.
+ISSUE_200_TITLE_VAL='[a][b][c][d][e][f][g][h][i][j][k][l][m][n][o][p][q] Umbrella: foo'
+{
+  printf "ISSUE_200_TITLE='%s'\n" "$ISSUE_200_TITLE_VAL"
+  echo "ISSUE_200_BODY='No body literal here.'"
+  echo "ISSUE_200_STATE=OPEN"
+} > "$STUB_STATE_FILE"
+OUT=$("$SCRIPT" detect --issue 200 2>&1) || true
+assert_contains "$OUT" "IS_UMBRELLA=false" "[20] >16 bracket-block prefix → cap exhausted, not umbrella"
 
 # ---------------------------------------------------------------------------
 # Summary
