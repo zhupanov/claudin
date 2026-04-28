@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.17.45] - 2026-04-27
+
+### Fixed
+
+- `scripts/create-pr.sh` — the existing-PR fast-path's `git push -u origin HEAD >/dev/null 2>&1 || true` (line 69) silently swallowed every push failure (non-fast-forward, lease failures, network errors), causing the script to emit `PR_STATUS=existing` and exit 0 while origin's branch tip was actually stale. Replaced with a plain-push-first / force-with-lease-fallback strategy that surfaces real push failures via exit 1, mirroring the new-PR path's exit-1 channel (lines 88-91). Plain `git push -u origin HEAD` handles the routine fast-forward case; on non-fast-forward (commonly after `/implement` Step 12 rebase + re-bump), escalation delegates to `scripts/git-force-push.sh` which already encodes lease + fetch + race-recovery + single retry. Helper stdout is suppressed to `/dev/null` so its `BRANCH=`/`PUSHED=`/`STATUS=` keys do not leak into create-pr.sh's documented `PR_*` stdout contract; helper stderr is captured and surfaced on real failure. Defensive `git fetch origin "$BRANCH"` + `git branch --set-upstream-to=origin/$BRANCH` guards run before the helper invocation, since git-force-push.sh requires upstream tracking + a populated origin/$BRANCH ref. `scripts/git-force-push.sh` and the new-PR path at line 88 are not modified. Per design dialectic DECISION_1 (voted 2-1 ALTERNATIVE — plain-push-first chosen over unconditional force-with-lease) and DECISION_2 (voted 2-1 THESIS — exit-code-only preserved over a new `PUSH_STATUS` stdout key); 2 accepted plan-review findings (defensive fetch before set-upstream; testing-strategy phrasing). Adds sibling `scripts/create-pr.md` per AGENTS.md "Per-script contracts live beside the script". Closes #837.
+
 ## [7.17.44] - 2026-04-27
 
 ### Fixed
