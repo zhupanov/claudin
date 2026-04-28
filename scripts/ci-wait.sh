@@ -6,8 +6,14 @@
 # Prints compact dot-based progress to stderr (like wait-for-reviewers.sh).
 # Outputs machine-parseable results to stdout when the action is NOT "wait".
 #
+# **Synchronous-only invocation contract**: callers MUST invoke ci-wait.sh
+# synchronously (no run_in_background: true in Bash tool calls). Use
+# `timeout: 1860000` to allow up to 31 minutes of blocking. Backgrounding
+# disconnects the orchestrator from the script's return code and creates
+# a leaked-polling-loop risk on signal-kill (#842). See scripts/ci-wait.md.
+#
 # Usage:
-#   ci-wait.sh --pr NUMBER --repo OWNER/REPO [--rebase-count N] [--fix-attempts N] [--iteration N] [--timeout SECONDS]
+#   ci-wait.sh --pr NUMBER --repo OWNER/REPO [--rebase-count N] [--fix-attempts N] [--iteration N] [--timeout SECONDS] [--output-file PATH]
 #
 # Options:
 #   --pr             PR number (required)
@@ -16,8 +22,14 @@
 #   --fix-attempts   Current fix attempt count, passed through to ci-decide.sh (default: 0)
 #   --iteration      Starting iteration count (default: 0). Incremented internally each poll cycle.
 #   --timeout        Wall-clock timeout in seconds (default: 1800 = 30 minutes)
+#   --output-file    Optional. Redirect KV output to <path> via atomic publish
+#                    (write to <path>.tmp, then mv -f to <path>) and write the
+#                    numeric exit code to <path>.done on any trap-deliverable
+#                    exit path. When absent, default behavior (stdout output,
+#                    no sentinel) is byte-identical to today.
 #
-# Outputs (stdout, key=value — always all lines, in order):
+# Outputs (stdout when --output-file absent; otherwise the file at <path>):
+#   key=value — always all lines, in order:
 #   ACTION=merge|rebase|already_merged|rebase_then_evaluate|evaluate_failure|bail
 #   CI_STATUS=pass|fail|pending|merged
 #   BEHIND_COUNT=<N>
@@ -26,11 +38,18 @@
 #   ITERATION=<N>               (final iteration count)
 #   ELAPSED=<N>                 (seconds elapsed)
 #
+# Sentinel (only when --output-file is set):
+#   <path>.done contains the numeric exit code on any trap-deliverable exit
+#   path (mirror of scripts/run-external-reviewer.sh:70). Consumers MUST
+#   wait for <path>.done before parsing <path>. SIGKILL is uncatchable —
+#   no shell-side mechanism can write the sentinel under SIGKILL; the
+#   synchronous-only invocation contract above is the operational defense.
+#
 # Progress (stderr):
 #   Dots every 10s, status line every ~1 minute (every 6th check)
 #
 # Exit codes:
-#   0 — valid decision reached (read ACTION from stdout)
+#   0 — valid decision reached (read ACTION from stdout or <output-file>)
 #   1 — usage/argument error
 
 # No -e: we must guarantee output on all paths. Subshell failures handled explicitly.
@@ -38,7 +57,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-usage() { echo "Usage: ci-wait.sh --pr NUMBER --repo OWNER/REPO [--rebase-count N] [--fix-attempts N] [--iteration N] [--timeout SECONDS]" >&2; }
+usage() { echo "Usage: ci-wait.sh --pr NUMBER --repo OWNER/REPO [--rebase-count N] [--fix-attempts N] [--iteration N] [--timeout SECONDS] [--output-file PATH]" >&2; }
 
 # --- Defaults ---
 PR_NUMBER=""
@@ -47,6 +66,7 @@ REBASE_COUNT=0
 FIX_ATTEMPTS=0
 ITERATION=0
 TIMEOUT=1800
+OUTPUT_FILE=""
 
 # --- Parse arguments (before installing EXIT trap to avoid emitting output on usage errors) ---
 while [[ $# -gt 0 ]]; do
@@ -57,6 +77,7 @@ while [[ $# -gt 0 ]]; do
         --fix-attempts) FIX_ATTEMPTS="${2:?--fix-attempts requires a value}"; shift 2 ;;
         --iteration) ITERATION="${2:?--iteration requires a value}"; shift 2 ;;
         --timeout) TIMEOUT="${2:?--timeout requires a value}"; shift 2 ;;
+        --output-file) OUTPUT_FILE="${2:?--output-file requires a value}"; shift 2 ;;
         --help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
@@ -76,6 +97,13 @@ for var_name in REBASE_COUNT FIX_ATTEMPTS ITERATION TIMEOUT; do
     fi
 done
 
+# --- Clear stale output / sentinel from a prior crashed run (file-mode only) ---
+# Done after validation but before installing the EXIT trap, so a consumer
+# polling for <path>.done never sees a stale sentinel from a previous run.
+if [[ -n "$OUTPUT_FILE" ]]; then
+    rm -f "$OUTPUT_FILE" "${OUTPUT_FILE}.done" "${OUTPUT_FILE}.tmp"
+fi
+
 # --- Output defaults (emitted via trap on any exit after validation passes) ---
 ACTION="bail"
 CI_STATUS="pending"
@@ -84,16 +112,38 @@ FAILED_RUN_ID=""
 BAIL_REASON="ci-wait.sh exited unexpectedly"
 
 emit_output() {
-    echo "ACTION=$ACTION"
-    echo "CI_STATUS=$CI_STATUS"
-    echo "BEHIND_COUNT=$BEHIND_COUNT"
-    echo "FAILED_RUN_ID=$FAILED_RUN_ID"
-    echo "BAIL_REASON=$BAIL_REASON"
-    echo "ITERATION=$ITERATION"
-    # ELAPSED is per-invocation only (resets each time ci-wait.sh is called)
-    echo "ELAPSED=$SECONDS"
+    if [[ -n "$OUTPUT_FILE" ]]; then
+        # File-mode: atomic publish via tmp + mv. Chained with && so a
+        # write/mv failure aborts before the trap proceeds to .done write,
+        # leaving consumers waiting on .done that never arrives (fail-closed).
+        {
+            echo "ACTION=$ACTION"
+            echo "CI_STATUS=$CI_STATUS"
+            echo "BEHIND_COUNT=$BEHIND_COUNT"
+            echo "FAILED_RUN_ID=$FAILED_RUN_ID"
+            echo "BAIL_REASON=$BAIL_REASON"
+            echo "ITERATION=$ITERATION"
+            echo "ELAPSED=$SECONDS"
+        } > "${OUTPUT_FILE}.tmp" && mv -f "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
+    else
+        # Default: stdout (byte-identical to the original behavior).
+        echo "ACTION=$ACTION"
+        echo "CI_STATUS=$CI_STATUS"
+        echo "BEHIND_COUNT=$BEHIND_COUNT"
+        echo "FAILED_RUN_ID=$FAILED_RUN_ID"
+        echo "BAIL_REASON=$BAIL_REASON"
+        echo "ITERATION=$ITERATION"
+        # ELAPSED is per-invocation only (resets each time ci-wait.sh is called)
+        echo "ELAPSED=$SECONDS"
+    fi
 }
-trap 'emit_output' EXIT
+# Capture the script's exit status FIRST (before emit_output mutates $?),
+# then publish the KV payload, then write the numeric exit code to <path>.done.
+# The .done write is guarded with `|| true` so a sentinel-write failure
+# (disk full, permission) does not change the captured exit code; the
+# preceding payload publish chain decides whether <path> exists.
+# Mirrors scripts/run-external-reviewer.sh:70 byte-for-byte.
+trap 'EXIT_STATUS=$?; emit_output; if [[ -n "$OUTPUT_FILE" ]]; then printf "%s\n" "$EXIT_STATUS" > "${OUTPUT_FILE}.done" 2>/dev/null || true; fi' EXIT
 
 # --- Polling loop ---
 SECONDS=0

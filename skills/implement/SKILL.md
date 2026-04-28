@@ -916,6 +916,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/ci-wait.sh --pr <PR-NUMBER> --repo $REPO \
 
 Use `timeout: 1860000` on the Bash call. Parse `ACTION`, `CI_STATUS`, `BEHIND_COUNT`, `FAILED_RUN_ID`, `BAIL_REASON`, `ITERATION`, `ELAPSED`. Update `iteration` from returned `ITERATION`.
 
+**`ci-wait.sh` MUST be invoked synchronously** (no `run_in_background: true`). The `timeout: 1860000` allows up to 31 minutes of blocking; do NOT background it. Backgrounding `ci-wait.sh` disconnects the orchestrator from its return code and creates a leaked-polling-loop risk if a later session-exit attempt force-kills the shell mid-poll (closes #842). See `${CLAUDE_PLUGIN_ROOT}/scripts/ci-wait.md` for the full contract.
+
 **Execute**:
 
    - **`ACTION=merge`**: CI passed, branch up-to-date. Print `✅ 10: CI monitor — CI passed! (<elapsed>)` and proceed to Step 11. **Do NOT merge here** — Step 12 handles merging.
@@ -971,6 +973,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/ci-wait.sh --pr <PR-NUMBER> --repo $REPO \
 ```
 
 Use `timeout: 1860000` on the Bash call. Parse the same fields as Step 10.
+
+**`ci-wait.sh` MUST be invoked synchronously** (no `run_in_background: true`). The `timeout: 1860000` allows up to 31 minutes of blocking; do NOT background it. Backgrounding `ci-wait.sh` disconnects the orchestrator from its return code and creates a leaked-polling-loop risk if a later session-exit attempt force-kills the shell mid-poll (closes #842). See `${CLAUDE_PLUGIN_ROOT}/scripts/ci-wait.md` for the full contract.
 
 **Execute**:
 

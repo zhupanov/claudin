@@ -389,6 +389,19 @@ exclude = [
   "scripts/lib-count-commits.sh",
   "scripts/test-verify-skill-called.sh",
   "scripts/test-check-bump-version.sh",
+  # scripts/test-ci-wait-exit-trap.sh is the regression harness for
+  # scripts/ci-wait.sh's EXIT-trap-writes-.done behavior under SIGTERM and
+  # the backward-compat default-mode (stdout) contract. Closes #842 (leaked
+  # polling-loop on signal-kill). Two sub-tests exercise file-mode and
+  # default-mode invariants. Referenced only from Makefile
+  # (test-ci-wait-exit-trap target) and scripts/test-ci-wait-exit-trap.md
+  # (sibling contract). scripts/ci-wait.md is the sibling contract for
+  # scripts/ci-wait.sh, referenced from skills/implement/SKILL.md (Steps 10
+  # and 12a) and skills/implement/references/rebase-rebump-subprocedure.md
+  # via prose pointers — agent-lint reachability follows the harness pattern.
+  "scripts/test-ci-wait-exit-trap.sh",
+  "scripts/test-ci-wait-exit-trap.md",
+  "scripts/ci-wait.md",
   "scripts/test-lint-skill-invocations.sh",
   "skills/fix-issue/scripts/test-parse-prose-blockers.sh",
   "skills/fix-issue/scripts/test-issue-lifecycle.sh",
