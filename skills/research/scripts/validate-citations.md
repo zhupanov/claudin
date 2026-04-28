@@ -154,11 +154,13 @@ must be terminated cleanly. OS-specific:
 
 - **Linux**: when `setsid` is available, `setsid` puts curl children in
   the script's session. The script self-execs into a new session if not
-  already a session leader; `__VC_SETSID_DONE=1` is exported just before
-  the `exec setsid` so the re-exec'd child inherits it (idempotency guard
-  preventing infinite recursion) AND so the budget-exhaustion handler can
-  use it as a "running in dedicated session" signal. A single `kill -- -$$`
-  then signals every descendant. When `setsid` is unavailable, the re-exec
+  already a session leader, forwarding the original argv via a saved
+  `__vc_orig_args` array (so new flags added to the parser are
+  automatically included in the re-exec). `__VC_SETSID_DONE=1` is
+  exported just before the `exec setsid` so the re-exec'd child inherits
+  it (idempotency guard preventing infinite recursion) AND so the
+  budget-exhaustion handler can use it as a "running in dedicated session"
+  signal. A single `kill -- -$$` then signals every descendant. When `setsid` is unavailable, the re-exec
   is skipped, `__VC_SETSID_DONE` stays unset, and the budget-exhaustion
   handler falls back to per-PID `kill "$pid"` over `CURL_PIDS` — the
   validator runs in its caller's process group on this branch, so

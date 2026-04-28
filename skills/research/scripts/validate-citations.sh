@@ -123,6 +123,10 @@ __VC_STUB_RESOLVE="${__VC_STUB_RESOLVE:-}"
 # assert claim parsing without making any network call.
 __VC_DRY_RUN="${__VC_DRY_RUN:-}"
 
+# Preserve original argv for the Linux setsid re-exec below (the while
+# loop consumes $@ via shift).
+__vc_orig_args=("$@")
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --report) REPORT="${2:?--report requires a value}"; shift 2 ;;
@@ -672,11 +676,7 @@ case "$(uname -s 2>/dev/null)" in
                 # carry the marker without actually being in its own session.
                 export __VC_SETSID_DONE=1
                 # Re-exec under setsid so curl children share our session.
-                exec setsid -w "$0" \
-                    --report "$REPORT" --output "$OUTPUT" --tmpdir "$TMPDIR" \
-                    --budget-seconds "$BUDGET_SECONDS" \
-                    --per-fetch-timeout "$PER_FETCH_TIMEOUT" \
-                    --max-claims "$MAX_CLAIMS"
+                exec setsid -w "$0" "${__vc_orig_args[@]}"
             fi
         fi
         ;;
