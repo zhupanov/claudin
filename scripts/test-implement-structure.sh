@@ -461,10 +461,13 @@ fi
 #      test-design-structure.sh (7) patterns: each filter stage threads one
 #      literal while preserving line granularity. A future edit that drops
 #      either flag, or splits the invocation across multiple lines, fails
-#      closed under `set -o pipefail`. SKILL.md only contains one
-#      collect-agent-results.sh invocation (the Step 5 quick-mode reviewer
-#      collector); dialectic-execution and adjudication invocations live in
-#      sibling skill references, not in this SKILL.md.
+#      closed under `set -o pipefail`. SKILL.md contains multiple
+#      collect-agent-results.sh invocations (Step 2 Codex implementation
+#      collector without --substantive-validation, and the Step 5 quick-mode
+#      reviewer collector with it); this assertion pins the Step 5 invocation
+#      specifically because the pipeline requires all four tokens on one line.
+#      Dialectic-execution and adjudication invocations live in sibling skill
+#      references, not in this SKILL.md.
 # ---------------------------------------------------------------------------
 grep 'collect-agent-results.sh' "$SKILL_MD" \
   | grep -F -- '--timeout 1860' \

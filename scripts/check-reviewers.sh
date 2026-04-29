@@ -64,14 +64,16 @@ if [[ "$PROBE" == "true" ]]; then
     if [[ "$CODEX_AVAILABLE" == "true" && "$SKIP_CODEX_PROBE" == "true" ]]; then
         CODEX_HEALTHY="false"
     elif [[ "$CODEX_AVAILABLE" == "true" ]]; then
-        # Build codex command with optional model from LARCH_CODEX_MODEL
-        CODEX_MODEL_ARGS=$("$SCRIPT_DIR/agent-model-args.sh" --tool codex)
-        # shellcheck disable=SC2086
+        # Health probe tests basic Codex availability without forcing a model.
+        # agent-model-args.sh defaults to gpt-5.5, which may not be available
+        # on all accounts; the probe should verify Codex works, not that a
+        # specific model is accessible. Operators set LARCH_CODEX_MODEL to
+        # control the model used in actual work.
         "$SCRIPT_DIR/run-external-agent.sh" \
             --tool codex \
             --output "$PROBE_DIR/codex-probe.txt" \
             --timeout 60 \
-            -- codex exec --full-auto -C "$PWD" $CODEX_MODEL_ARGS \
+            -- codex exec --full-auto -C "$PWD" \
             --output-last-message "$PROBE_DIR/codex-probe.txt" \
             "Respond with OK" \
             >"$PROBE_DIR/codex-wrapper.log" 2>&1 &
