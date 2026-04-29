@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.0.9] - 2026-04-29
+
+### Added
+
+- `/implement` Step 2 Codex coding delegation: one-shot `codex exec --full-auto` with `gpt-5.5` model and high reasoning effort, monitored via `run-external-agent.sh` with sentinel-based collection and automatic fallback to inline implementation.
+- Pre-launch baseline snapshot in Step 2 for accurate diff attribution in resumed sessions.
+- `--default-model` flag in `agent-model-args.sh` for per-call-site model override.
+
+### Changed
+
+- Renamed `run-external-reviewer.sh` → `run-external-agent.sh`, `collect-reviewer-results.sh` → `collect-agent-results.sh`, `reviewer-model-args.sh` → `agent-model-args.sh` to reflect broader agent usage beyond reviews.
+- Codex default model changed from empty (Codex CLI default) to `gpt-5.5` across all work invocations.
+- Health probes in `check-reviewers.sh` bypass the `gpt-5.5` default to test basic Codex availability without model-specific coupling.
+- Progress strings in `run-external-agent.sh` updated from "review" to "agent" terminology.
+
 ## [12.0.8] - 2026-04-28
 
 ### Fixed
