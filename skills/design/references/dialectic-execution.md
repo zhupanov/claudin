@@ -12,7 +12,7 @@
 
 ---
 
-**Thesis/antithesis prompt templates**: these are loaded from the reference file below. Template bodies are byte-identical to Phase 1; only the delivery channel (external CLI via `run-external-reviewer.sh` rather than the Agent tool) and the call-site effort suffix change.
+**Thesis/antithesis prompt templates**: these are loaded from the reference file below. Template bodies are byte-identical to Phase 1; only the delivery channel (external CLI via `run-external-agent.sh` rather than the Agent tool) and the call-site effort suffix change.
 
 **MANDATORY — READ ENTIRE FILE before rendering debate prompts (step 6 below)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-debate.md` completely. It contains the byte-preserved Thesis agent template and Antithesis agent template with `{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` substitution placeholders plus the `<debater_synthesis>` and `<debater_decision>` reference-block wrappers.
 
@@ -31,35 +31,35 @@
 
    Each Cursor launch (use `run_in_background: true` and `timeout: 1860000`). Pass a short bootstrap prompt that references the per-decision prompt file by path; the tool reads the file via its own filesystem access. This mirrors the voting pattern below ("Read the ballot from $DESIGN_TMPDIR/ballot.txt") and avoids `$(cat ...)` in the launch shell — which would trigger Claude Code permission prompts that break autonomous execution:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor \
      --output "$DESIGN_TMPDIR/debate-<n>-cursor-<thesis|antithesis>.txt" \
      --timeout 1800 --capture-stdout -- \
      cursor agent -p --force --trust \
-       $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
+       $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) \
        --workspace "$PWD" \
        "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level.")"
    ```
 
    Each Codex launch (use `run_in_background: true` and `timeout: 1860000`). Same file-path-reference pattern:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex \
      --output "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
      --timeout 1800 -- \
      codex exec --full-auto -C "$PWD" \
-       $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+       $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
        --output-last-message "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
        "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
    ```
 
-   The trailing `Work at your maximum reasoning effort level.` is appended at the bash-launch level (NOT in the templated prompt body) because `${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh --with-effort` is documented as a no-op for Cursor (Cursor has no dedicated reasoning-effort flag — the convention is the prompt-level suffix). Codex receives the same suffix for symmetry.
+   The trailing `Work at your maximum reasoning effort level.` is appended at the bash-launch level (NOT in the templated prompt body) because `${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh --with-effort` is documented as a no-op for Cursor (Cursor has no dedicated reasoning-effort flag — the convention is the prompt-level suffix). Codex receives the same suffix for symmetry.
 
 8. **Collect** with health bookkeeping disabled (Option B enforcement):
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 \
      --write-health /dev/null \
      <each launched output path>
    ```
-   `--write-health /dev/null` ensures both the read path (collect-reviewer-results.sh checks `-f "$WRITE_HEALTH"`, which is false for character devices like `/dev/null`) and the write path (explicit `!= "/dev/null"` guard) skip — the dialectic phase NEVER updates the cross-skill `${SESSION_ENV_PATH}.health` file. Block on this call (do NOT use `run_in_background`).
+   `--write-health /dev/null` ensures both the read path (collect-agent-results.sh checks `-f "$WRITE_HEALTH"`, which is false for character devices like `/dev/null`) and the write path (explicit `!= "/dev/null"` guard) skip — the dialectic phase NEVER updates the cross-skill `${SESSION_ENV_PATH}.health` file. Block on this call (do NOT use `run_in_background`).
 
 9. **Per-bucket runtime failure handling**. For any reviewer with `STATUS != OK`, print `**⚠ <Tool> dialectic debate (decision <n>, <thesis|antithesis>) failed: <FAILURE_REASON>. Bucket truncated; synthesis decision stands.**` Do NOT flip any flag. The mandatory STATUS pre-check at the top of the "debate quorum rule" below catches the partial-launch case (thesis or antithesis non-OK → decision immediately fails quorum → synthesis decision stands).
 
@@ -117,20 +117,20 @@ Otherwise, build the ballot per `${CLAUDE_PLUGIN_ROOT}/skills/shared/dialectic-p
 
 Launch 3 judges **in parallel** (single message). Spawn order: Cursor first, then Codex, then the Claude subagent. Follow the protocol's Launching Judges section for exact command templates:
 
-- Cursor judge via `run-external-reviewer.sh --tool cursor --capture-stdout` (with `run_in_background: true`, `timeout: 1860000`). If `judge_cursor_available=false`, launch a Claude subagent replacement via the Agent tool inline.
-- Codex judge via `run-external-reviewer.sh --tool codex` (with `run_in_background: true`, `timeout: 1860000`). If `judge_codex_available=false`, launch a Claude subagent replacement inline.
+- Cursor judge via `run-external-agent.sh --tool cursor --capture-stdout` (with `run_in_background: true`, `timeout: 1860000`). If `judge_cursor_available=false`, launch a Claude subagent replacement via the Agent tool inline.
+- Codex judge via `run-external-agent.sh --tool codex` (with `run_in_background: true`, `timeout: 1860000`). If `judge_codex_available=false`, launch a Claude subagent replacement inline.
 - Claude Code Reviewer subagent judge: always via the Agent tool (subagent_type: `larch:code-reviewer`), inline.
 
 ## Collecting judge results (split pattern)
 
-External judge outputs are collected via `collect-reviewer-results.sh` using its sentinel polling. Inline Agent-tool judges produce no sentinel; their votes are returned directly by the Agent tool and parsed from its return text. Do NOT pass inline-judge output paths to `collect-reviewer-results.sh` — the sentinel check would time out and incorrectly drop the voter count.
+External judge outputs are collected via `collect-agent-results.sh` using its sentinel polling. Inline Agent-tool judges produce no sentinel; their votes are returned directly by the Agent tool and parsed from its return text. Do NOT pass inline-judge output paths to `collect-agent-results.sh` — the sentinel check would time out and incorrectly drop the voter count.
 
-**Zero-external-judges guard**: Only invoke `collect-reviewer-results.sh` if at least one external judge was actually launched (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). When both are false — all three panel slots are filled by Claude subagent inline replacements — skip the collector invocation entirely and proceed directly to inline-vote tally from Agent returns. `collect-reviewer-results.sh` exits 1 with "at least one output file is required" when called with zero positional arguments; without this guard, the all-fallback configuration would abort.
+**Zero-external-judges guard**: Only invoke `collect-agent-results.sh` if at least one external judge was actually launched (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). When both are false — all three panel slots are filled by Claude subagent inline replacements — skip the collector invocation entirely and proceed directly to inline-vote tally from Agent returns. `collect-agent-results.sh` exits 1 with "at least one output file is required" when called with zero positional arguments; without this guard, the all-fallback configuration would abort.
 
 When at least one external judge was launched, after all external judges return:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 \
   --write-health /dev/null \
   <each launched external-judge output path>
 ```

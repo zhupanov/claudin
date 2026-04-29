@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# run-external-reviewer.sh — Monitored wrapper for external code reviewers (Codex, Cursor).
-# Launches the reviewer in the background, polls every 60s with status messages,
-# kills after a configurable timeout (e.g., 30 minutes for reviews, 20 minutes for votes/sketches).
+# run-external-agent.sh — Monitored wrapper for external agents (Codex, Cursor).
+# Launches the agent in the background, polls every 60s with status messages,
+# kills after a configurable timeout (e.g., 30 minutes for reviews/implementation, 20 minutes for votes/sketches).
 #
 # Usage:
-#   run-external-reviewer.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD...
+#   run-external-agent.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD...
 #
 # Options:
 #   --tool            Tool name (e.g., "codex", "cursor") — used only for log messages
@@ -17,18 +17,18 @@
 #
 # Examples:
 #   # Codex review (uses --output-last-message flag to write output)
-#   run-external-reviewer.sh --tool codex --output /tmp/review-abc/codex-output.txt --timeout 1800 -- \
+#   run-external-agent.sh --tool codex --output /tmp/review-abc/codex-output.txt --timeout 1800 -- \
 #     codex exec --full-auto -C /path/to/repo --output-last-message /tmp/review-abc/codex-output.txt "Review prompt..."
 #
 #   # Cursor review (stdout captured to file via --capture-stdout)
 #   # Production invocations wrap the prompt via scripts/cursor-wrap-prompt.sh to
 #   # engage max-mode; the example below shows the bare shape for clarity.
-#   run-external-reviewer.sh --tool cursor --output /tmp/review-abc/cursor-output.txt --timeout 900 --capture-stdout -- \
+#   run-external-agent.sh --tool cursor --output /tmp/review-abc/cursor-output.txt --timeout 900 --capture-stdout -- \
 #     cursor agent -p --force --trust --workspace /path/to/repo "Review prompt..."
 
 set -euo pipefail
 
-usage() { echo "Usage: run-external-reviewer.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD..." >&2; }
+usage() { echo "Usage: run-external-agent.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD..." >&2; }
 
 CAPTURE_STDOUT=false
 TOOL_NAME=""
@@ -69,7 +69,7 @@ rm -f "$OUTPUT_FILE" "${OUTPUT_FILE}.done" "${OUTPUT_FILE}.meta" "${OUTPUT_FILE}
 EXIT_CODE=99  # default: wrapper crashed before capturing real exit code
 trap 'echo "$EXIT_CODE" > "${OUTPUT_FILE}.done" 2>/dev/null || true' EXIT
 
-# Write metadata for collect-reviewer-results.sh retry support.
+# Write metadata for collect-agent-results.sh retry support.
 # CMD is shell-quoted via printf '%q' to preserve argument boundaries.
 {
     echo "TOOL=$TOOL_NAME"
@@ -79,7 +79,7 @@ trap 'echo "$EXIT_CODE" > "${OUTPUT_FILE}.done" 2>/dev/null || true' EXIT
     printf 'CMD=%s\n' "$(printf '%q ' "$@")"
 } > "${OUTPUT_FILE}.meta"
 
-# Launch the reviewer in the background
+# Launch the agent in the background
 if [ "$CAPTURE_STDOUT" = true ]; then
     "$@" > "$OUTPUT_FILE" 2>&1 &
 else
@@ -93,7 +93,7 @@ SECONDS=0
 # Use 10s intervals for more responsive timeout detection.
 while kill -0 "$PID" 2>/dev/null; do
     if [ "$SECONDS" -ge "$TIMEOUT_SECONDS" ]; then
-        echo "⚠ ${TOOL_NAME} review: TIMED OUT after $(( TIMEOUT_SECONDS / 60 )) minutes, killing"
+        echo "⚠ ${TOOL_NAME} agent: TIMED OUT after $(( TIMEOUT_SECONDS / 60 )) minutes, killing"
         kill "$PID" 2>/dev/null
         sleep 5
         kill -9 "$PID" 2>/dev/null || true
@@ -103,7 +103,7 @@ while kill -0 "$PID" 2>/dev/null; do
         if [ -f "$OUTPUT_FILE" ]; then
             OUTPUT_SIZE=$(wc -c < "$OUTPUT_FILE" | tr -d ' ')
         fi
-        echo "❌ ${TOOL_NAME} review: TIMED OUT (exit code 124, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
+        echo "❌ ${TOOL_NAME} agent: TIMED OUT (exit code 124, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
         # Write diagnostic file for callers
         echo "Timed out after ${SECONDS}s (limit: ${TIMEOUT_SECONDS}s). Process was killed after exceeding the timeout. Output size: ${OUTPUT_SIZE} bytes." > "${OUTPUT_FILE}.diag"
         EXIT_CODE=124
@@ -112,7 +112,7 @@ while kill -0 "$PID" 2>/dev/null; do
     sleep 10
     # Print progress every 60s (every 6th iteration)
     if [ $(( SECONDS % 60 )) -lt 10 ]; then
-        echo "⏳ ${TOOL_NAME} review: still running ($(( SECONDS / 60 ))m elapsed)"
+        echo "⏳ ${TOOL_NAME} agent: still running ($(( SECONDS / 60 ))m elapsed)"
     fi
 done
 
@@ -126,7 +126,7 @@ if [ -f "$OUTPUT_FILE" ]; then
 fi
 
 if [ "$EXIT_CODE" -ne 0 ]; then
-    echo "❌ ${TOOL_NAME} review: FAILED (exit code ${EXIT_CODE}, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
+    echo "❌ ${TOOL_NAME} agent: FAILED (exit code ${EXIT_CODE}, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
     DIAG_DETAIL=""
     if [ "$OUTPUT_SIZE" -gt 0 ]; then
         echo "--- ${TOOL_NAME} output (last 5 lines) ---"
@@ -137,11 +137,11 @@ if [ "$EXIT_CODE" -ne 0 ]; then
     # Write diagnostic file for callers
     echo "Failed with exit code ${EXIT_CODE} after ${SECONDS}s. Output size: ${OUTPUT_SIZE} bytes.${DIAG_DETAIL}" > "${OUTPUT_FILE}.diag"
 elif [ "$OUTPUT_SIZE" -eq 0 ]; then
-    echo "⚠ ${TOOL_NAME} review: completed but OUTPUT IS EMPTY (exit code 0, ${SECONDS}s elapsed)"
-    echo "This typically means ${TOOL_NAME} exited without producing findings."
+    echo "⚠ ${TOOL_NAME} agent: completed but OUTPUT IS EMPTY (exit code 0, ${SECONDS}s elapsed)"
+    echo "This typically means ${TOOL_NAME} exited without producing output."
     # Write diagnostic file for callers
     echo "Process exited successfully (code 0) after ${SECONDS}s but produced no output. This typically means the tool started but did not generate a response." > "${OUTPUT_FILE}.diag"
 else
-    echo "✓ ${TOOL_NAME} review: completed (exit code 0, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
+    echo "✓ ${TOOL_NAME} agent: completed (exit code 0, ${SECONDS}s elapsed, output ${OUTPUT_SIZE} bytes)"
 fi
 exit "$EXIT_CODE"

@@ -25,7 +25,7 @@ Both flags are required. `--raw` is the captured Agent subagent output. `--outpu
   COUNT=<N>
   OUTPUT=<resolved path>
   ```
-  where `2 ≤ N ≤ 4`. The orchestrator parses these lines via prefix-strip (e.g., `${line#COUNT=}`), matching the existing `KEY=value` discipline used by `collect-reviewer-results.sh` and `render-lane-status.sh`.
+  where `2 ≤ N ≤ 4`. The orchestrator parses these lines via prefix-strip (e.g., `${line#COUNT=}`), matching the existing `KEY=value` discipline used by `collect-agent-results.sh` and `render-lane-status.sh`.
 - **On failure** (exit non-zero):
   ```
   REASON=<token>

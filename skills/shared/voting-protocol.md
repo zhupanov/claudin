@@ -52,13 +52,13 @@ When voting is skipped due to insufficient voters, print: `**⚠ Voting skipped 
 
 **For plan review** (`/design` Step 3):
 - **Voter 1**: Claude Code Reviewer subagent — launched as a fresh Agent tool invocation (subagent_type: `larch:code-reviewer`) with a focused voting prompt (separate from the reviewer subagents)
-- **Voter 2**: Codex — via `run-external-reviewer.sh`
-- **Voter 3**: Cursor — via `run-external-reviewer.sh`
+- **Voter 2**: Codex — via `run-external-agent.sh`
+- **Voter 3**: Cursor — via `run-external-agent.sh`
 
 **For code review** (`/review` Step 3):
 - **Voter 1**: Claude Code Reviewer subagent — launched as a fresh Agent tool invocation (subagent_type: `larch:code-reviewer`)
-- **Voter 2**: Codex — via `run-external-reviewer.sh`
-- **Voter 3**: Cursor — via `run-external-reviewer.sh`
+- **Voter 2**: Codex — via `run-external-agent.sh`
+- **Voter 3**: Cursor — via `run-external-agent.sh`
 
 All voters vote on **all** findings — no self-voting exclusion. Voters are instructed to evaluate each finding objectively regardless of who proposed it.
 
@@ -101,8 +101,8 @@ Launch all 3 voters **in parallel** (in a single message). When external tools a
 **Cursor voter** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "<tmpdir>/cursor-vote-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "<tmpdir>/cursor-vote-output.txt" --timeout 1200 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<voter prompt with ballot>. Work at your maximum reasoning effort level.")"
 ```
 
@@ -113,8 +113,8 @@ Use `run_in_background: true` and `timeout: 1260000`.
 **Codex voter** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "<tmpdir>/codex-vote-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "<tmpdir>/codex-vote-output.txt" --timeout 1200 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
     --output-last-message "<tmpdir>/codex-vote-output.txt" \
     "<voter prompt with ballot>. Work at your maximum reasoning effort level."
 ```
@@ -135,7 +135,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/wait-for-reviewers.sh --timeout 1260 \
 
 Use `timeout: 1260000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Note: voter output files use the `-vote-` infix to avoid collision with reviewer output files (`-plan-output` or `-output`).
 
-**Collecting voter results**: Use `collect-reviewer-results.sh` to validate external voter outputs (same as for reviewer outputs). Parse `STATUS` and `FAILURE_REASON` for each voter. If a voter fails (`STATUS != OK`), print: `**⚠ <Voter> voter failed — <FAILURE_REASON>. Proceeding with <N> voters (<remaining voter names>).**` Always include the `FAILURE_REASON` so the user can see why the voter failed (e.g., timeout, crash, empty output). Reduce the eligible voter count accordingly and apply the threshold rules above.
+**Collecting voter results**: Use `collect-agent-results.sh` to validate external voter outputs (same as for reviewer outputs). Parse `STATUS` and `FAILURE_REASON` for each voter. If a voter fails (`STATUS != OK`), print: `**⚠ <Voter> voter failed — <FAILURE_REASON>. Proceeding with <N> voters (<remaining voter names>).**` Always include the `FAILURE_REASON` so the user can see why the voter failed (e.g., timeout, crash, empty output). Reduce the eligible voter count accordingly and apply the threshold rules above.
 
 ## Competition Scoring
 

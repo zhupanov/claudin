@@ -141,8 +141,8 @@ Run Cursor **first** in the parallel message (it takes the longest). Cursor has 
 Invoke Cursor via the shared monitored wrapper script (with `--capture-stdout` since Cursor writes results to stdout):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
 ```
 
@@ -155,8 +155,8 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 Run Codex **second** in the parallel message (after Cursor). Codex has full repo access and will examine the changes itself.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
     --output-last-message "$REVIEW_TMPDIR/codex-output.txt" \
     "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
@@ -172,8 +172,8 @@ In slice mode, reviewer prompts are tailored to "review existing code in the can
 #### Cursor Reviewer — slice mode (if `cursor_available`)
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review existing code in the slice described as: '${SLICE_TEXT}'. The canonical file list for this slice is at $REVIEW_TMPDIR/slice-files.txt — read that file first to see exactly which files are in scope. Read each listed file in full. You may also explore via Glob/Grep/Read for additional context, but in-scope vs out-of-scope (OOS) classification MUST be anchored to the canonical file list — findings about files NOT in slice-files.txt are OOS, even if they look related. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in slice-files.txt as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in slice-files.txt, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in slice-files.txt. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
 ```
 
@@ -182,8 +182,8 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call. Same
 #### Codex Reviewer — slice mode (if `codex_available`)
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
     --output-last-message "$REVIEW_TMPDIR/codex-output.txt" \
     "Review existing code in the slice described as: '${SLICE_TEXT}'. The canonical file list for this slice is at $REVIEW_TMPDIR/slice-files.txt — read that file first to see exactly which files are in scope. Read each listed file in full. You may also explore via Glob/Grep/Read for additional context, but in-scope vs out-of-scope (OOS) classification MUST be anchored to the canonical file list — findings about files NOT in slice-files.txt are OOS, even if they look related. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in slice-files.txt as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in slice-files.txt, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in slice-files.txt. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
@@ -214,7 +214,7 @@ Append the following competition context to each reviewer's prompt (Claude subag
 
 ### Collecting External Reviewer Results
 
-External reviewer output collection, validation, and retry are handled by the shared collection script — see the **Collecting External Reviewer Results** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. The explicit `collect-reviewer-results.sh` invocation is in Step 3a below.
+External reviewer output collection, validation, and retry are handled by the shared collection script — see the **Collecting External Reviewer Results** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. The explicit `collect-agent-results.sh` invocation is in Step 3a below.
 
 ## Step 3 — Collect, Deduplicate, and Implement (Recursive Loop in diff mode; ONE round in slice mode)
 
@@ -231,12 +231,12 @@ External reviewer output collection, validation, and retry are handled by the sh
 1. Collect findings from the Claude Code Reviewer subagent right away. It produces **dual-list output** with section headers '### In-Scope Findings' and '### Out-of-Scope Observations'. Parse both lists.
 2. **Then** collect and validate external reviewer outputs using the shared collection script. Only include output paths for reviewers that were actually launched:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation --validation-mode [--write-health "${SESSION_ENV_PATH}.health"] "$REVIEW_TMPDIR/cursor-output.txt" "$REVIEW_TMPDIR/codex-output.txt"
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substantive-validation --validation-mode [--write-health "${SESSION_ENV_PATH}.health"] "$REVIEW_TMPDIR/cursor-output.txt" "$REVIEW_TMPDIR/codex-output.txt"
    ```
    Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. **In slice mode**, external reviewers (Codex, Cursor) produce **dual-list output** with '### In-Scope Findings' and '### Out-of-Scope Observations' section headers — parse both sections. Section-header fail-open rules: (1) if exactly one section header is present, the missing section is interpreted as empty (NOT a parse error); (2) if both section headers are absent AND the entire output is the literal 'NO_ISSUES_FOUND', the reviewer reported nothing — proceed; (3) if both section headers are absent AND the output is not 'NO_ISSUES_FOUND' (legacy unsectioned output), treat the entire body as in-scope (preserves backward compatibility with the diff-mode single-list contract). **In diff mode**, external reviewers produce **single-list output** — treat their entire output as in-scope findings.
 3. Merge external reviewer in-scope findings (and any Claude fallback findings when externals were unavailable) into the Claude in-scope findings. **In slice mode**, also merge external reviewer OOS observations into the Claude OOS observations pool — both lists flow through the same dedup pipeline. Deduplicate in-scope findings and OOS observations separately. If the same issue appears in both lists from different reviewers, merge under the in-scope finding.
 
-**Rounds 2+ (diff mode only, single reviewer):** If Cursor was launched, collect its output via `collect-reviewer-results.sh` with only `$REVIEW_TMPDIR/cursor-output.txt` (no Claude-first gate, no Codex path). If `STATUS` is not `OK`, follow Runtime Timeout Fallback (flip `cursor_available=false`) and retry the round with a Claude Code Reviewer subagent. If the Claude Code Reviewer fallback was launched, process its Agent tool output directly — skip external collection.
+**Rounds 2+ (diff mode only, single reviewer):** If Cursor was launched, collect its output via `collect-agent-results.sh` with only `$REVIEW_TMPDIR/cursor-output.txt` (no Claude-first gate, no Codex path). If `STATUS` is not `OK`, follow Runtime Timeout Fallback (flip `cursor_available=false`) and retry the round with a Claude Code Reviewer subagent. If the Claude Code Reviewer fallback was launched, process its Agent tool output directly — skip external collection.
 
 OOS observations are only collected in round 1 — rounds 2+ (diff mode only) use a single Cursor reviewer (Claude Code Reviewer fallback when `cursor_available` is false) without OOS collection.
 
@@ -282,7 +282,7 @@ After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run
 
 **In diff mode**, increment the round number. Go back to **Step 1** (gather the updated diff) and **Step 2** (launch reviewers again).
 
-**Round 2+ optimization**: Only launch **Cursor** (if `cursor_available`; else 1 Claude Code Reviewer subagent as fallback) — skip Codex and the round-1 three-reviewer panel. Use the same diff-mode Cursor Bash block from Step 2 (without the competition notice — there is no voting panel in rounds 2+). If Cursor is unavailable, launch 1 Claude Code Reviewer subagent using the same archetype and diff-mode context as round 1 (without the competition notice). In round 2+ Step 3a, collect from whichever single reviewer was launched: Cursor output via `collect-reviewer-results.sh` (with Runtime Timeout Fallback on failure — flip `cursor_available=false`, retry the round with Claude Code Reviewer subagent), or Claude subagent output directly.
+**Round 2+ optimization**: Only launch **Cursor** (if `cursor_available`; else 1 Claude Code Reviewer subagent as fallback) — skip Codex and the round-1 three-reviewer panel. Use the same diff-mode Cursor Bash block from Step 2 (without the competition notice — there is no voting panel in rounds 2+). If Cursor is unavailable, launch 1 Claude Code Reviewer subagent using the same archetype and diff-mode context as round 1 (without the competition notice). In round 2+ Step 3a, collect from whichever single reviewer was launched: Cursor output via `collect-agent-results.sh` (with Runtime Timeout Fallback on failure — flip `cursor_available=false`, retry the round with Claude Code Reviewer subagent), or Claude subagent output directly.
 
 ### 3g — Safety Limit
 
@@ -399,7 +399,7 @@ Substitute `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED` from Step 4b
 
 ### 5a — Update Health Status File
 
-Health status file updates are handled automatically by `collect-reviewer-results.sh --write-health` during reviewer collection (Step 3a). No additional cleanup-time write is needed unless a reviewer was marked unhealthy outside of a `collect-reviewer-results.sh` call. If `SESSION_ENV_PATH` is non-empty and any such untracked health change occurred, re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup.
+Health status file updates are handled automatically by `collect-agent-results.sh --write-health` during reviewer collection (Step 3a). No additional cleanup-time write is needed unless a reviewer was marked unhealthy outside of a `collect-agent-results.sh` call. If `SESSION_ENV_PATH` is non-empty and any such untracked health change occurred, re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup.
 
 ### 5b — Remove Temp Directory
 

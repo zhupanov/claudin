@@ -360,7 +360,7 @@ grep -Fq "cursor-validation-output.txt" "$VALIDATION_MD" \
 grep -Fq "codex-validation-output.txt" "$VALIDATION_MD" \
   || fail "references/validation-phase.md must contain the standard-mode 'codex-validation-output.txt' filename literal (#418 byte-drift guard)"
 
-# Check 16 (#416 + #446): Both phase references must invoke collect-reviewer-results.sh
+# Check 16 (#416 + #446): Both phase references must invoke collect-agent-results.sh
 # with --substantive-validation (Phase 3 of umbrella #413). Without these pins,
 # a future edit could silently drop the flag and revert /research to the
 # pre-Phase-3 "non-empty is enough" check, allowing thin/uncited lane outputs
@@ -382,26 +382,26 @@ grep -Fq "codex-validation-output.txt" "$VALIDATION_MD" \
 #
 # The grep pattern anchors on the literal bash-invocation prefix
 # `${CLAUDE_PLUGIN_ROOT}/scripts/` so prose paragraphs that happen to
-# mention both `collect-reviewer-results.sh` and `--substantive-validation`
+# mention both `collect-agent-results.sh` and `--substantive-validation`
 # on the same line do NOT satisfy the pin — only the actual command line
 # in the bash code fence can.
-INVOCATION_PIN='\$\{CLAUDE_PLUGIN_ROOT\}/scripts/collect-reviewer-results\.sh.*--substantive-validation'
+INVOCATION_PIN='\$\{CLAUDE_PLUGIN_ROOT\}/scripts/collect-agent-results\.sh.*--substantive-validation'
 SECTION_1_4=$(awk '/^## 1\.4 /{f=1; next} f && /^## /{f=0} f' "$RESEARCH_MD")
 [[ -n "$SECTION_1_4" ]] \
   || fail "references/research-phase.md must contain a '## 1.4 ' section (Wait and Validate Research Outputs) — Check 16 cannot anchor without it"
 echo "$SECTION_1_4" \
   | awk '/^### Standard \(RESEARCH_SCALE=standard,? ?(default)?\)/{f=1; next} f && /^###/{f=0} f' \
   | grep -Eq "$INVOCATION_PIN" \
-  || fail "references/research-phase.md Step 1.4 ### Standard collection block must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
+  || fail "references/research-phase.md Step 1.4 ### Standard collection block must invoke collect-agent-results.sh with --substantive-validation (#416 Phase 3)"
 echo "$SECTION_1_4" \
   | awk '/^### Deep \(RESEARCH_SCALE=deep\)/{f=1; next} f && /^###/{f=0} f' \
   | grep -Eq "$INVOCATION_PIN" \
-  || fail "references/research-phase.md Step 1.4 ### Deep collection block must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3 + #446)"
+  || fail "references/research-phase.md Step 1.4 ### Deep collection block must invoke collect-agent-results.sh with --substantive-validation (#416 Phase 3 + #446)"
 # validation-phase.md has a single (scale-agnostic) collection block, so the
 # whole-file pin remains correct here. Reuse the invocation-anchored pattern
 # for the same anti-prose hardening.
 grep -Eq "$INVOCATION_PIN" "$VALIDATION_MD" \
-  || fail "references/validation-phase.md must invoke collect-reviewer-results.sh with --substantive-validation (#416 Phase 3)"
+  || fail "references/validation-phase.md must invoke collect-agent-results.sh with --substantive-validation (#416 Phase 3)"
 
 # Check 17 (#416): Both phase references must map STATUS=NOT_SUBSTANTIVE in the
 # lane-status update bullet so the new collector status flows into the correct

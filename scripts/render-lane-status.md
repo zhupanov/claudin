@@ -45,7 +45,7 @@ All keys are optional. A missing or empty `*_STATUS` renders as `(unknown)`.
 
 ## Collector `STATUS=`→token mapping
 
-`scripts/collect-reviewer-results.sh` emits a per-reviewer `STATUS=` value drawn from the enum `OK | TIMED_OUT | FAILED | EMPTY_OUTPUT | SENTINEL_TIMEOUT | NOT_SUBSTANTIVE`. The orchestrator-side update logic in `skills/research/references/research-phase.md` (Step 1.3) and `skills/research/references/validation-phase.md` (Step 2.4) translates non-`OK` statuses to the lane-status tokens above before writing `lane-status.txt`. The mapping:
+`scripts/collect-agent-results.sh` emits a per-reviewer `STATUS=` value drawn from the enum `OK | TIMED_OUT | FAILED | EMPTY_OUTPUT | SENTINEL_TIMEOUT | NOT_SUBSTANTIVE`. The orchestrator-side update logic in `skills/research/references/research-phase.md` (Step 1.3) and `skills/research/references/validation-phase.md` (Step 2.4) translates non-`OK` statuses to the lane-status tokens above before writing `lane-status.txt`. The mapping:
 
 | Collector `STATUS` | lane-status token | Reason field |
 |-------|----------|----------|
@@ -112,8 +112,8 @@ Two distinct error paths share this surface:
 ## Consumers
 
 - `skills/research/SKILL.md` Step 3 `### Standard` branch — invokes the script and parses both header lines into the final report.
-- `skills/research/references/research-phase.md` Step 1.3 — surgically updates the `RESEARCH_*` slice of `lane-status.txt` after `collect-reviewer-results.sh` returns.
-- `skills/research/references/validation-phase.md` Step 2 entry + render-failure handlers (Cursor / Codex `On non-zero exit` paths) + Step 2.4 — surgically updates the `VALIDATION_*` slice (Step 2 entry propagates downgrades from research phase per #421 plan-review FINDING_6; the render-failure handlers downgrade a lane to `fallback_runtime_failed` when `render-reviewer-prompt.sh` exits non-zero before background launch — closes #435; Step 2.4 captures post-launch runtime failures from `collect-reviewer-results.sh`).
+- `skills/research/references/research-phase.md` Step 1.3 — surgically updates the `RESEARCH_*` slice of `lane-status.txt` after `collect-agent-results.sh` returns.
+- `skills/research/references/validation-phase.md` Step 2 entry + render-failure handlers (Cursor / Codex `On non-zero exit` paths) + Step 2.4 — surgically updates the `VALIDATION_*` slice (Step 2 entry propagates downgrades from research phase per #421 plan-review FINDING_6; the render-failure handlers downgrade a lane to `fallback_runtime_failed` when `render-reviewer-prompt.sh` exits non-zero before background launch — closes #435; Step 2.4 captures post-launch runtime failures from `collect-agent-results.sh`).
 
 ## Sibling renderer
 
