@@ -16,9 +16,9 @@ Launch **all configured lanes in parallel** in a single message (3 in standard, 
 
 ## Step 2 entry — Propagate research-phase fallbacks to VALIDATION_* keys
 
-Before any external launch in Step 2, copy each currently-unavailable external lane's research-phase status into the corresponding `VALIDATION_*` keys in `$RESEARCH_TMPDIR/lane-status.txt`. Without this propagation, a runtime fallback that flipped `cursor_available`/`codex_available` to `false` during research-phase Step 1.4 would leave the Step 0b-initialized `VALIDATION_<TOOL>_STATUS=ok` in place — `collect-reviewer-results.sh` is never called for a lane whose `*_available` flag is false at validation entry, so Step 2.4 below cannot downgrade it. The result would be a header showing `Cursor: ✅` for a validation lane that actually ran as a Claude fallback.
+Before any external launch in Step 2, copy each currently-unavailable external lane's research-phase status into the corresponding `VALIDATION_*` keys in `$RESEARCH_TMPDIR/lane-status.txt`. Without this propagation, a runtime fallback that flipped `cursor_available`/`codex_available` to `false` during research-phase Step 1.4 would leave the Step 0b-initialized `VALIDATION_<TOOL>_STATUS=ok` in place — `collect-agent-results.sh` is never called for a lane whose `*_available` flag is false at validation entry, so Step 2.4 below cannot downgrade it. The result would be a header showing `Cursor: ✅` for a validation lane that actually ran as a Claude fallback.
 
-For each external tool, if `cursor_available` (resp. `codex_available`) is currently `false`, copy `RESEARCH_<TOOL>_STATUS` and `RESEARCH_<TOOL>_REASON` into `VALIDATION_<TOOL>_STATUS` and `VALIDATION_<TOOL>_REASON`. Lanes whose `*_available` flag is currently `true` are left alone — Step 2.4 will update them after `collect-reviewer-results.sh` returns.
+For each external tool, if `cursor_available` (resp. `codex_available`) is currently `false`, copy `RESEARCH_<TOOL>_STATUS` and `RESEARCH_<TOOL>_REASON` into `VALIDATION_<TOOL>_STATUS` and `VALIDATION_<TOOL>_REASON`. Lanes whose `*_available` flag is currently `true` are left alone — Step 2.4 will update them after `collect-agent-results.sh` returns.
 
 If both `cursor_available` and `codex_available` are `true` at Step 2 entry, no update is needed.
 
@@ -98,8 +98,8 @@ Then follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}
 **On success**, launch in background:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-validation-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-validation-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "$(cat "$RESEARCH_TMPDIR/cursor-prompt.txt")")"
 ```
 
@@ -142,8 +142,8 @@ Then follow the same fallback escalation as Cursor — set `codex_available=fals
 **On success**, launch in background:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-validation-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$RESEARCH_TMPDIR/codex-validation-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-validation-output.txt" \
     "$(cat "$RESEARCH_TMPDIR/codex-prompt.txt")"
 ```
@@ -214,17 +214,17 @@ COLLECT_ARGS=()
 [[ "$codex_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/codex-validation-output.txt")
 ```
 
-**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-reviewer-results.sh` entirely** and **skip all external negotiation** below. The lane composition depends on `RESEARCH_SCALE`: standard mode has 3 Claude streams (the always-on Claude lane plus 2 Claude fallback lanes for the missing Cursor + Codex slots); deep mode has 5 Claude streams (the 3 always-on Claude lanes — `Code` + `Code-Sec` + `Code-Arch` — plus 2 Claude fallback lanes for the missing Cursor + Codex slots). Merge ALL Claude findings (preserving per-lane attribution: `Code` / `Code-Sec` / `Code-Arch` / `Cursor` / `Codex` for the slots that carry distinct attribution) and proceed to Finalize Validation.
+**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-agent-results.sh` entirely** and **skip all external negotiation** below. The lane composition depends on `RESEARCH_SCALE`: standard mode has 3 Claude streams (the always-on Claude lane plus 2 Claude fallback lanes for the missing Cursor + Codex slots); deep mode has 5 Claude streams (the 3 always-on Claude lanes — `Code` + `Code-Sec` + `Code-Arch` — plus 2 Claude fallback lanes for the missing Cursor + Codex slots). Merge ALL Claude findings (preserving per-lane attribution: `Code` / `Code-Sec` / `Code-Arch` / `Cursor` / `Codex` for the slots that carry distinct attribution) and proceed to Finalize Validation.
 
 Otherwise, after processing Claude findings, invoke the script with only the launched paths. Pass `--substantive-validation --validation-mode` so the collector rejects validation-lane outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416). The `--validation-mode` modifier forwards to `scripts/validate-research-output.sh` and applies a preset tuned for validation-phase outputs: the literal `NO_ISSUES_FOUND` token (the explicit no-findings signal emitted by `scripts/render-reviewer-prompt.sh`) is accepted as substantive without further checks, and the default minimum word count is lowered from 200 to 30 (a single concise finding comfortably exceeds this floor):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation --validation-mode "${COLLECT_ARGS[@]}"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substantive-validation --validation-mode "${COLLECT_ARGS[@]}"
 ```
 
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
-1. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Read valid output files. Under `--substantive-validation`, content validation is performed by `collect-reviewer-results.sh` (via `scripts/validate-research-output.sh`); a lane that returns thin-but-cited or long-but-uncited findings is rejected with `STATUS=NOT_SUBSTANTIVE` and a diagnostic in `FAILURE_REASON`.
+1. Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Read valid output files. Under `--substantive-validation`, content validation is performed by `collect-agent-results.sh` (via `scripts/validate-research-output.sh`); a lane that returns thin-but-cited or long-but-uncited findings is rejected with `STATUS=NOT_SUBSTANTIVE` and a diagnostic in `FAILURE_REASON`.
 2. **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK` (including `NOT_SUBSTANTIVE`), follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the availability flag (`cursor_available` or `codex_available`), then **immediately launch the matching single Claude Code Reviewer subagent fallback** and wait for it before negotiation. This preserves the configured lane count for the active `RESEARCH_SCALE` at negotiation time (3 lanes in standard mode, 5 lanes in deep mode).
 3. Merge external reviewer findings (and any runtime-fallback Claude findings) into the always-on Claude lane findings and any pre-launch Claude fallback findings.
 4. **Update lane-status.txt (VALIDATION_* slice only)**: After Runtime Timeout Fallback determinations are made, surgically update only the `VALIDATION_*` slice of `$RESEARCH_TMPDIR/lane-status.txt` — `RESEARCH_*` keys must be preserved verbatim. For each Cursor/Codex lane with `STATUS != OK`, derive the new token + reason:

@@ -498,21 +498,21 @@ exclude = [
   # scripts/test-validate-research-output.sh is the regression harness for
   # scripts/validate-research-output.sh (the substantive-content validator
   # added by #416 — Phase 3 of umbrella #413). The validator itself is
-  # invoked by scripts/collect-reviewer-results.sh via ${SCRIPT_DIR}/...,
+  # invoked by scripts/collect-agent-results.sh via ${SCRIPT_DIR}/...,
   # which is reachable through that file's structural references in
   # skills/research/references/{research,validation}-phase.md and
   # skills/shared/external-reviewers.md. The harness is referenced only
   # from Makefile (test-validate-research-output target) — same Makefile-
   # only shape as the other test-* harnesses above.
   "scripts/test-validate-research-output.sh",
-  # scripts/test-collect-reviewer-bash32.sh is the regression harness for
-  # the bash 3.2 portability hazard at scripts/collect-reviewer-results.sh:402
+  # scripts/test-collect-agent-bash32.sh is the regression harness for
+  # the bash 3.2 portability hazard at scripts/collect-agent-results.sh:402
   # (closes #511). Three cases: static idiom grep (Linux-CI backstop), plus
   # two dynamic exercises under /bin/bash 3.x (skip-with-loud-message on bash
   # 4+) covering the empty-VAL_ARGS path and --validation-mode flag forwarding.
-  # The harness is referenced only from Makefile (test-collect-reviewer-bash32
+  # The harness is referenced only from Makefile (test-collect-agent-bash32
   # target) — same Makefile-only shape as the other test-* harnesses above.
-  "scripts/test-collect-reviewer-bash32.sh",
+  "scripts/test-collect-agent-bash32.sh",
   # scripts/test-token-tally.sh is the offline regression harness for
   # scripts/token-tally.sh (per-run token-cost telemetry helper for
   # /research; closes #518). The token-tally helper is invoked from

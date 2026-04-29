@@ -114,7 +114,7 @@ Per decision, based on eligible voters:
 | 2 (1-1 split) | — | `Disposition: fallback-to-synthesis` with reason `1-1 tie with 2 voters`. |
 | <2 | — | `Disposition: fallback-to-synthesis` with reason `<N> judges eligible`. |
 
-"Eligible" means the judge produced a parseable vote line for that specific decision. A judge with `STATUS != OK` from `collect-reviewer-results.sh` is ineligible for **every** decision on the ballot (the whole output is considered unparseable).
+"Eligible" means the judge produced a parseable vote line for that specific decision. A judge with `STATUS != OK` from `collect-agent-results.sh` is ineligible for **every** decision on the ballot (the whole output is considered unparseable).
 
 ## Judge Panel Composition
 
@@ -122,8 +122,8 @@ Unlike the debater phase (which **skips** decisions whose assigned tool is unava
 
 | Slot | Primary | Replacement (when primary unavailable) |
 |---|---|---|
-| 1 | Cursor (via `run-external-reviewer.sh --tool cursor --capture-stdout`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `larch:code-reviewer`) |
-| 2 | Codex (via `run-external-reviewer.sh --tool codex`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `larch:code-reviewer`) |
+| 1 | Cursor (via `run-external-agent.sh --tool cursor --capture-stdout`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `larch:code-reviewer`) |
+| 2 | Codex (via `run-external-agent.sh --tool codex`) | Claude Code Reviewer subagent (Agent tool, subagent_type: `larch:code-reviewer`) |
 | 3 | Claude Code Reviewer subagent (Agent tool, always inline) | — |
 
 The user's "no Claude in dialectic" rule is **debater-specific**, not judge-specific. The rationale is that debaters produce adversarial arguments (where model-specific writing style might encode tool identity), whereas judges merely adjudicate between pre-authored defenses — a role Claude performs well without attribution leak risk.
@@ -173,11 +173,11 @@ Launch all 3 judges **in parallel** (single message). Spawn order: Cursor first 
 **Cursor judge** (if `judge_cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor \
   --output "$DIALECTIC_TMPDIR/cursor-judge-output.txt" \
   --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust \
-    $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
+    $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) \
     --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<judge prompt from template above>. Work at your maximum reasoning effort level.")"
 ```
@@ -189,11 +189,11 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 **Codex judge** (if `judge_codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex \
   --output "$DIALECTIC_TMPDIR/codex-judge-output.txt" \
   --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" \
-    $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+    $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
     --output-last-message "$DIALECTIC_TMPDIR/codex-judge-output.txt" \
     "<judge prompt from template above>. Work at your maximum reasoning effort level."
 ```
@@ -206,16 +206,16 @@ Use `run_in_background: true` and `timeout: 1860000`.
 
 ## Collecting Judge Results (split pattern)
 
-External judges and inline Claude judges use different collection paths. This split is **required** because `collect-reviewer-results.sh` polls `.done` sentinels produced by `run-external-reviewer.sh`; inline Agent-tool subagents produce no sentinel.
+External judges and inline Claude judges use different collection paths. This split is **required** because `collect-agent-results.sh` polls `.done` sentinels produced by `run-external-agent.sh`; inline Agent-tool subagents produce no sentinel.
 
-1. **Inline judges (Claude subagent + any Claude replacements)**: vote text is returned in the Agent tool's return value. Parse per-decision vote lines directly from the returned text. Inline judges are always eligible (local execution does not fail in the `collect-reviewer-results.sh` sense).
+1. **Inline judges (Claude subagent + any Claude replacements)**: vote text is returned in the Agent tool's return value. Parse per-decision vote lines directly from the returned text. Inline judges are always eligible (local execution does not fail in the `collect-agent-results.sh` sense).
 
-2. **External judges (Cursor, Codex)**: **Only perform this step if at least one external judge was actually launched** (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). If zero external judges were launched — all three slots were filled by Claude subagent inline replacements — skip this step entirely and proceed to step 3 below. This guard is required because `collect-reviewer-results.sh` exits with `"at least one output file is required"` when called with no positional arguments, which would abort the all-fallback configuration that the replacement-first rule is designed to support.
+2. **External judges (Cursor, Codex)**: **Only perform this step if at least one external judge was actually launched** (i.e., at least one of `judge_cursor_available` / `judge_codex_available` was true at launch time). If zero external judges were launched — all three slots were filled by Claude subagent inline replacements — skip this step entirely and proceed to step 3 below. This guard is required because `collect-agent-results.sh` exits with `"at least one output file is required"` when called with no positional arguments, which would abort the all-fallback configuration that the replacement-first rule is designed to support.
 
    When at least one external judge was launched, after all launches return, collect with health bookkeeping disabled:
 
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 \
      --write-health /dev/null \
      <each launched external-judge output path>
    ```

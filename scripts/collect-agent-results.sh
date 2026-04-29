@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# collect-reviewer-results.sh — Collect, validate, and optionally retry external reviewer outputs.
+# collect-agent-results.sh — Collect, validate, and optionally retry external reviewer outputs.
 #
 # Consolidates the post-launch validation+retry pattern used across all skills.
 # Wraps wait-for-reviewers.sh, validates each output, retries once on empty via
-# .meta files written by run-external-reviewer.sh, and emits structured results.
+# .meta files written by run-external-agent.sh, and emits structured results.
 #
 # Usage:
-#   collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] \
+#   collect-agent-results.sh --timeout <seconds> [--write-health <path>] \
 #     [--substantive-validation] <output-file> [<output-file> ...]
 #
 # Options:
@@ -45,7 +45,7 @@
 #                                  for the per-skill opt-in matrix.
 #
 # Arguments:
-#   One or more output file paths (from run-external-reviewer.sh invocations).
+#   One or more output file paths (from run-external-agent.sh invocations).
 #   Sentinel paths are derived by appending .done to each output file.
 #   Metadata paths are derived by appending .meta to each output file.
 #
@@ -83,22 +83,22 @@ while [[ $# -gt 0 ]]; do
         --validation-mode)
             VALIDATION_MODE="true"; shift ;;
         --help)
-            echo "Usage: collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] [--substantive-validation [--validation-mode]] <output-file>..." >&2
+            echo "Usage: collect-agent-results.sh --timeout <seconds> [--write-health <path>] [--substantive-validation [--validation-mode]] <output-file>..." >&2
             exit 0 ;;
         -*)
-            echo "collect-reviewer-results.sh: unknown option: $1" >&2; exit 1 ;;
+            echo "collect-agent-results.sh: unknown option: $1" >&2; exit 1 ;;
         *)
             OUTPUT_FILES+=("$1"); shift ;;
     esac
 done
 
 if [[ -z "$TIMEOUT" ]]; then
-    echo "collect-reviewer-results.sh: --timeout is required" >&2
+    echo "collect-agent-results.sh: --timeout is required" >&2
     exit 1
 fi
 
 if [[ ${#OUTPUT_FILES[@]} -eq 0 ]]; then
-    echo "collect-reviewer-results.sh: at least one output file is required" >&2
+    echo "collect-agent-results.sh: at least one output file is required" >&2
     exit 1
 fi
 
@@ -121,7 +121,7 @@ CODEX_TOOL_HEALTHY="true"
 CURSOR_TOOL_HEALTHY="true"
 
 # Read prior health state from existing --write-health file (if it exists).
-# This preserves monotonicity across separate collect-reviewer-results.sh calls.
+# This preserves monotonicity across separate collect-agent-results.sh calls.
 if [[ -n "$WRITE_HEALTH" && -f "$WRITE_HEALTH" ]]; then
     while IFS='=' read -r key value || [[ -n "$key" ]]; do
         case "$key" in
@@ -304,7 +304,7 @@ if [[ ${#RETRY_FILES[@]} -gt 0 ]]; then
             continue
         fi
 
-        # Build retry command: run-external-reviewer.sh with updated output path
+        # Build retry command: run-external-agent.sh with updated output path
         RETRY_ARGS=(--tool "$META_TOOL" --output "$RETRY_OUTPUT" --timeout "${META_TIMEOUT:-120}")
         if [[ "$META_CAPTURE" == "true" ]]; then
             RETRY_ARGS+=(--capture-stdout)
@@ -322,7 +322,7 @@ if [[ ${#RETRY_FILES[@]} -gt 0 ]]; then
         # Launch retry in background — eval is intentional: CMD was serialized via
         # printf '%q' and must be re-expanded to reconstruct original arg boundaries.
         # shellcheck disable=SC2294
-        eval "$(printf '%q ' "$SCRIPT_DIR/run-external-reviewer.sh" "${RETRY_ARGS[@]}") $RECONSTRUCTED_CMD" >/dev/null 2>&1 &
+        eval "$(printf '%q ' "$SCRIPT_DIR/run-external-agent.sh" "${RETRY_ARGS[@]}") $RECONSTRUCTED_CMD" >/dev/null 2>&1 &
         RETRY_SENTINELS+=("${RETRY_OUTPUT}.done")
     done
 

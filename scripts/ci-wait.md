@@ -30,15 +30,15 @@ When `--output-file <path>` is set, the trap behavior changes in three coordinat
 
 1. **Stale clear**: on script start (after argument validation, before the polling loop), `<path>`, `<path>.done`, and `<path>.tmp` are removed. Consumers polling for `.done` never see a stale sentinel from a prior crashed run.
 2. **Atomic publish of the KV payload**: `emit_output` writes the same 7 KV lines to `<path>.tmp`, then performs `mv -f "<path>.tmp" "<path>"` as a single same-filesystem atomic rename. The two operations are AND-chained; if either fails (disk full, permission denied), the `<path>` does NOT exist.
-3. **Numeric `.done` sentinel** (gated on publish success): the EXIT trap captures the script's exit status FIRST (before `emit_output` mutates `$?`), runs `emit_output`, and writes `printf '%s\n' "$EXIT_STATUS" > "${OUTPUT_FILE}.done" 2>/dev/null || true` **only if `emit_output` returned 0**. This shares the same consumer contract (numeric exit code in `.done`) as `scripts/run-external-reviewer.sh:70`; existing repo readers (`scripts/collect-reviewer-results.sh`, `scripts/wait-for-reviewers.sh`) parse `.done` as a numeric exit code. The `emit_output`-success gate is what enforces the fail-closed semantics described below — without it, a failed publish would still produce `.done`.
+3. **Numeric `.done` sentinel** (gated on publish success): the EXIT trap captures the script's exit status FIRST (before `emit_output` mutates `$?`), runs `emit_output`, and writes `printf '%s\n' "$EXIT_STATUS" > "${OUTPUT_FILE}.done" 2>/dev/null || true` **only if `emit_output` returned 0**. This shares the same consumer contract (numeric exit code in `.done`) as `scripts/run-external-agent.sh:70`; existing repo readers (`scripts/collect-agent-results.sh`, `scripts/wait-for-reviewers.sh`) parse `.done` as a numeric exit code. The `emit_output`-success gate is what enforces the fail-closed semantics described below — without it, a failed publish would still produce `.done`.
 
-**Consumer read order** (same discipline as `collect-reviewer-results.sh`): wait for `<path>.done` to exist; THEN parse `<path>`. Never read `<path>` directly without first observing `<path>.done` — a partial KV file (publish mid-write) cannot be observed by conforming consumers because `.done` is written only AFTER the atomic rename publishes `<path>`.
+**Consumer read order** (same discipline as `collect-agent-results.sh`): wait for `<path>.done` to exist; THEN parse `<path>`. Never read `<path>` directly without first observing `<path>.done` — a partial KV file (publish mid-write) cannot be observed by conforming consumers because `.done` is written only AFTER the atomic rename publishes `<path>`.
 
 **Failure semantics (fail-closed)**: if `<path>.tmp` write fails OR `mv -f` fails, no `<path>.done` is written either. Consumers waiting on `.done` never see it and eventually time out — strictly fail-closed. This is intentional: a false-ready sentinel pointing at a missing or stale payload would cascade into wrong CI / merge decisions.
 
 ## Trusted-path discipline
 
-`--output-file` is a filesystem write primitive. Callers MUST pass a trusted path under their session tmpdir (`$IMPLEMENT_TMPDIR` for `/implement` callers, or equivalent for other consumers). Avoid attacker-controlled paths and absolute paths outside the session tmpdir. Same discipline as `scripts/run-external-reviewer.sh`'s `--output` flag.
+`--output-file` is a filesystem write primitive. Callers MUST pass a trusted path under their session tmpdir (`$IMPLEMENT_TMPDIR` for `/implement` callers, or equivalent for other consumers). Avoid attacker-controlled paths and absolute paths outside the session tmpdir. Same discipline as `scripts/run-external-agent.sh`'s `--output` flag.
 
 The script does NOT validate that `<path>` is well-formed beyond what `mv` itself requires. A path containing `..` traversal, symlink chains pointing outside the session tmpdir, or shell-metacharacter content will be passed through to filesystem operations as written — the caller is responsible for providing a trusted path.
 
@@ -74,5 +74,5 @@ A "**site**" is either a fenced Bash invocation block OR a prose re-invocation d
 
 - Issue #842 — surfacing failure-mode trace.
 - PR #821 — the `/implement` run that surfaced #842 (during post-merge cleanup of #775).
-- `scripts/run-external-reviewer.sh:70` — positive precedent for the EXIT-trap-writes-`.done` numeric-content idiom adopted here.
-- `scripts/collect-reviewer-results.sh`, `scripts/wait-for-reviewers.sh` — the existing sentinel readers that consume `<path>.done`'s numeric content.
+- `scripts/run-external-agent.sh:70` — positive precedent for the EXIT-trap-writes-`.done` numeric-content idiom adopted here.
+- `scripts/collect-agent-results.sh`, `scripts/wait-for-reviewers.sh` — the existing sentinel readers that consume `<path>.done`'s numeric content.

@@ -80,8 +80,8 @@ Follow `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` for launch or
 
 **3e. Voting**: Run the voting protocol from `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` with code review voter composition:
 - **Voter 1**: Claude Code Reviewer subagent (fresh Agent invocation, subagent_type: `larch:code-reviewer`)
-- **Voter 2**: Codex (if available) — via `run-external-reviewer.sh`
-- **Voter 3**: Cursor (if available) — via `run-external-reviewer.sh`
+- **Voter 2**: Codex (if available) — via `run-external-agent.sh`
+- **Voter 3**: Cursor (if available) — via `run-external-agent.sh`
 
 If fewer than 2 voters are available: skip voting, accept all reviewer findings (per `voting-protocol.md` fallback), implement them, and continue to Phase 4.
 

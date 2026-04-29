@@ -93,12 +93,12 @@
 #      regress #654 silently against the unit-test harness alone — this
 #      assertion is the structural pin.
 # (15) Substantive-validation flag pin (closes #661): the Step 5 quick-mode
-#      collect-reviewer-results.sh invocation in SKILL.md must carry both
+#      collect-agent-results.sh invocation in SKILL.md must carry both
 #      --substantive-validation AND --validation-mode on the same line as
 #      --timeout 1860 so banner-only reviewer output (e.g., "Authentication
 #      required") is rejected as STATUS=NOT_SUBSTANTIVE rather than passing
 #      as STATUS=OK. SKILL.md only contains the Step 5 quick-mode
-#      collect-reviewer-results.sh invocation (the dialectic-execution and
+#      collect-agent-results.sh invocation (the dialectic-execution and
 #      adjudication invocations live in sibling skill references, not in
 #      this SKILL.md), so the assertion is unambiguous. A future edit that
 #      drops either flag, or splits the invocation across lines, fails
@@ -453,7 +453,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # (15) Substantive-validation flag pin (#661). The Step 5 quick-mode
-#      collect-reviewer-results.sh invocation in SKILL.md must carry both
+#      collect-agent-results.sh invocation in SKILL.md must carry both
 #      --substantive-validation AND --validation-mode on the SAME line as
 #      --timeout 1860 so banner-only reviewer output (e.g., "Authentication
 #      required") is rejected as STATUS=NOT_SUBSTANTIVE rather than passing as
@@ -462,15 +462,15 @@ fi
 #      literal while preserving line granularity. A future edit that drops
 #      either flag, or splits the invocation across multiple lines, fails
 #      closed under `set -o pipefail`. SKILL.md only contains one
-#      collect-reviewer-results.sh invocation (the Step 5 quick-mode reviewer
+#      collect-agent-results.sh invocation (the Step 5 quick-mode reviewer
 #      collector); dialectic-execution and adjudication invocations live in
 #      sibling skill references, not in this SKILL.md.
 # ---------------------------------------------------------------------------
-grep 'collect-reviewer-results.sh' "$SKILL_MD" \
+grep 'collect-agent-results.sh' "$SKILL_MD" \
   | grep -F -- '--timeout 1860' \
   | grep -F -- '--substantive-validation' \
   | grep -Fq -- '--validation-mode' \
-  || fail "(15) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
+  || fail "(15) no single SKILL.md line carries 'collect-agent-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
 
 # ---------------------------------------------------------------------------
 # (16) Cross-skill plan-heading drift-prevention pin (closes #749). /design's

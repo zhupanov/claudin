@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# run-external-reviewer.sh — Monitored wrapper for external code reviewers (Codex, Cursor).
-# Launches the reviewer in the background, polls every 60s with status messages,
-# kills after a configurable timeout (e.g., 30 minutes for reviews, 20 minutes for votes/sketches).
+# run-external-agent.sh — Monitored wrapper for external agents (Codex, Cursor).
+# Launches the agent in the background, polls every 60s with status messages,
+# kills after a configurable timeout (e.g., 30 minutes for reviews/implementation, 20 minutes for votes/sketches).
 #
 # Usage:
-#   run-external-reviewer.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD...
+#   run-external-agent.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD...
 #
 # Options:
 #   --tool            Tool name (e.g., "codex", "cursor") — used only for log messages
@@ -17,18 +17,18 @@
 #
 # Examples:
 #   # Codex review (uses --output-last-message flag to write output)
-#   run-external-reviewer.sh --tool codex --output /tmp/review-abc/codex-output.txt --timeout 1800 -- \
+#   run-external-agent.sh --tool codex --output /tmp/review-abc/codex-output.txt --timeout 1800 -- \
 #     codex exec --full-auto -C /path/to/repo --output-last-message /tmp/review-abc/codex-output.txt "Review prompt..."
 #
 #   # Cursor review (stdout captured to file via --capture-stdout)
 #   # Production invocations wrap the prompt via scripts/cursor-wrap-prompt.sh to
 #   # engage max-mode; the example below shows the bare shape for clarity.
-#   run-external-reviewer.sh --tool cursor --output /tmp/review-abc/cursor-output.txt --timeout 900 --capture-stdout -- \
+#   run-external-agent.sh --tool cursor --output /tmp/review-abc/cursor-output.txt --timeout 900 --capture-stdout -- \
 #     cursor agent -p --force --trust --workspace /path/to/repo "Review prompt..."
 
 set -euo pipefail
 
-usage() { echo "Usage: run-external-reviewer.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD..." >&2; }
+usage() { echo "Usage: run-external-agent.sh --tool NAME --output FILE --timeout SECS [--capture-stdout] -- CMD..." >&2; }
 
 CAPTURE_STDOUT=false
 TOOL_NAME=""
@@ -69,7 +69,7 @@ rm -f "$OUTPUT_FILE" "${OUTPUT_FILE}.done" "${OUTPUT_FILE}.meta" "${OUTPUT_FILE}
 EXIT_CODE=99  # default: wrapper crashed before capturing real exit code
 trap 'echo "$EXIT_CODE" > "${OUTPUT_FILE}.done" 2>/dev/null || true' EXIT
 
-# Write metadata for collect-reviewer-results.sh retry support.
+# Write metadata for collect-agent-results.sh retry support.
 # CMD is shell-quoted via printf '%q' to preserve argument boundaries.
 {
     echo "TOOL=$TOOL_NAME"

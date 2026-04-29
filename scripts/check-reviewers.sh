@@ -65,9 +65,9 @@ if [[ "$PROBE" == "true" ]]; then
         CODEX_HEALTHY="false"
     elif [[ "$CODEX_AVAILABLE" == "true" ]]; then
         # Build codex command with optional model from LARCH_CODEX_MODEL
-        CODEX_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool codex)
+        CODEX_MODEL_ARGS=$("$SCRIPT_DIR/agent-model-args.sh" --tool codex)
         # shellcheck disable=SC2086
-        "$SCRIPT_DIR/run-external-reviewer.sh" \
+        "$SCRIPT_DIR/run-external-agent.sh" \
             --tool codex \
             --output "$PROBE_DIR/codex-probe.txt" \
             --timeout 60 \
@@ -81,13 +81,13 @@ if [[ "$PROBE" == "true" ]]; then
         CURSOR_HEALTHY="false"
     elif [[ "$CURSOR_AVAILABLE" == "true" ]]; then
         # Build cursor command with optional model from LARCH_CURSOR_MODEL
-        CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool cursor)
+        CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/agent-model-args.sh" --tool cursor)
         # Health probe: "Respond with OK" is passed verbatim — NOT wrapped via
         # scripts/cursor-wrap-prompt.sh. Probes exist to verify reachability and
         # auth within a 60s budget; engaging max-mode here would add latency and
         # cost without diagnostic value.
         # shellcheck disable=SC2086
-        "$SCRIPT_DIR/run-external-reviewer.sh" \
+        "$SCRIPT_DIR/run-external-agent.sh" \
             --tool cursor \
             --output "$PROBE_DIR/cursor-probe.txt" \
             --timeout 60 \
@@ -191,9 +191,9 @@ if [[ "$PROBE" == "true" ]]; then
 
         if [[ "$RETRY_CODEX" == "true" ]]; then
             rm -f "$PROBE_DIR/codex-probe.txt" "$PROBE_DIR/codex-probe.txt.done" "$PROBE_DIR/codex-probe.txt.meta" "$PROBE_DIR/codex-probe.txt.diag"
-            CODEX_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool codex)
+            CODEX_MODEL_ARGS=$("$SCRIPT_DIR/agent-model-args.sh" --tool codex)
             # shellcheck disable=SC2086
-            "$SCRIPT_DIR/run-external-reviewer.sh" \
+            "$SCRIPT_DIR/run-external-agent.sh" \
                 --tool codex \
                 --output "$PROBE_DIR/codex-probe.txt" \
                 --timeout 60 \
@@ -206,10 +206,10 @@ if [[ "$PROBE" == "true" ]]; then
 
         if [[ "$RETRY_CURSOR" == "true" ]]; then
             rm -f "$PROBE_DIR/cursor-probe.txt" "$PROBE_DIR/cursor-probe.txt.done" "$PROBE_DIR/cursor-probe.txt.meta" "$PROBE_DIR/cursor-probe.txt.diag"
-            CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/reviewer-model-args.sh" --tool cursor)
+            CURSOR_MODEL_ARGS=$("$SCRIPT_DIR/agent-model-args.sh" --tool cursor)
             # Retry probe: same rationale as the initial probe above — no max-mode wrap.
             # shellcheck disable=SC2086
-            "$SCRIPT_DIR/run-external-reviewer.sh" \
+            "$SCRIPT_DIR/run-external-agent.sh" \
                 --tool cursor \
                 --output "$PROBE_DIR/cursor-probe.txt" \
                 --timeout 60 \

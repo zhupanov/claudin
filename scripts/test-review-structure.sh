@@ -259,7 +259,7 @@ grep -Fq '**⚠ Positional slice text cannot be combined with --slice or --slice
   || fail "(12) SKILL.md is missing the verbatim positional-vs-slice-flag mutual-exclusion abort message — the contract introduced by PR #638 has regressed"
 
 # ---------------------------------------------------------------------------
-# (13) Substantive-validation flag pin (#661). The Step 3a collect-reviewer-results.sh
+# (13) Substantive-validation flag pin (#661). The Step 3a collect-agent-results.sh
 #      invocation in SKILL.md must carry both --substantive-validation AND
 #      --validation-mode on the SAME line as --timeout 1860, so banner-only
 #      reviewer output (e.g., "Authentication required") is rejected as
@@ -268,11 +268,11 @@ grep -Fq '**⚠ Positional slice text cannot be combined with --slice or --slice
 #      line granularity. A future edit that drops either flag, or splits the
 #      invocation across multiple lines, fails closed under `set -o pipefail`.
 # ---------------------------------------------------------------------------
-grep 'collect-reviewer-results.sh' "$SKILL_MD" \
+grep 'collect-agent-results.sh' "$SKILL_MD" \
   | grep -F -- '--timeout 1860' \
   | grep -F -- '--substantive-validation' \
   | grep -Fq -- '--validation-mode' \
-  || fail "(13) no single SKILL.md line carries 'collect-reviewer-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
+  || fail "(13) no single SKILL.md line carries 'collect-agent-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
 
 # ---------------------------------------------------------------------------
 # (14) Cursor slice-mode prompt carries the dual-list contract (#659).

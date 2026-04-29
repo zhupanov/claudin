@@ -1,6 +1,6 @@
-# External Reviewers
+# External Agents
 
-Codex and Cursor participate alongside Claude subagents as both reviewers and voters in the Larch workflow. This document covers the shared integration procedures.
+Codex and Cursor participate alongside Claude subagents as reviewers, voters, and implementors in the Larch workflow. This document covers the shared integration procedures.
 
 ## Availability Checks
 
@@ -15,11 +15,11 @@ Skills gracefully degrade when external tools are unavailable. When Codex or Cur
 
 ## Trust boundary (filesystem access)
 
-External reviewers in `/research` launch directly against the working tree (`cursor agent ... --workspace "$PWD"`, `codex exec --full-auto -C "$PWD"`) and inherit the user's filesystem privileges. The reviewer prompt asks them not to modify files, but this is a behavioral constraint, not a sandbox. The `/research` skill carries a skill-scoped `PreToolUse` hook (`scripts/deny-edit-write.sh`) that mechanically guards Claude's own `Edit | Write | NotebookEdit` tool surface to canonical `/tmp` only; the hook does **not** cover Bash or subprocess-spawned external reviewers. See [`SECURITY.md` § External reviewer write surface in /research](../SECURITY.md#external-reviewer-write-surface-in-research) for the full trust-model framing and [`docs/review-agents.md` § External reviewer trust boundary](review-agents.md#external-reviewer-trust-boundary-skills-using-cursor--codex-against-pwd) for the skill-author-facing summary.
+External agents in `/research` and `/review` launch directly against the working tree (`cursor agent ... --workspace "$PWD"`, `codex exec --full-auto -C "$PWD"`) and inherit the user's filesystem privileges. For review and research tasks, the prompt asks them not to modify files — this is a behavioral constraint, not a sandbox. For `/implement` Step 2 coding delegation, Codex runs in **write-mode** (`codex exec --full-auto`) and is expected to modify the working tree; full-filesystem write trust is granted by design (see [`SECURITY.md` § External tool delegation](../SECURITY.md#trust-model) for the trust-model framing). The `/research` skill carries a skill-scoped `PreToolUse` hook (`scripts/deny-edit-write.sh`) that mechanically guards Claude's own `Edit | Write | NotebookEdit` tool surface to canonical `/tmp` only; the hook does **not** cover Bash or subprocess-spawned external agents. See [`SECURITY.md` § External reviewer write surface in /research](../SECURITY.md#external-reviewer-write-surface-in-research) for the full trust-model framing and [`docs/review-agents.md` § External reviewer trust boundary](review-agents.md#external-reviewer-trust-boundary-skills-using-cursor--codex-against-pwd) for the skill-author-facing summary.
 
 ## Launching External Reviewers
 
-External reviewers are launched via the `run-external-reviewer.sh` wrapper script, which provides:
+External reviewers are launched via the `run-external-agent.sh` wrapper script, which provides:
 
 - **Timeout enforcement** — Kills the process after a configurable timeout
 - **Sentinel file creation** — Writes a `.done` file containing the exit code when the process completes
@@ -54,7 +54,7 @@ Validation happens in two layers. The first layer (default collector behavior) a
 
 ### Default collector behavior (always on)
 
-After the sentinel file exists, `scripts/collect-reviewer-results.sh` performs:
+After the sentinel file exists, `scripts/collect-agent-results.sh` performs:
 
 1. Read the output file.
 2. Check that it is non-empty.
@@ -79,7 +79,7 @@ The optional `--validation-mode` modifier forwards `--validation-mode` to the va
 
 The dialectic-phase (`/design` Step 2a.5 debaters and judges) and adjudication-phase (`/research --adjudicate` judges) collectors deliberately do NOT pass these flags — their output contracts (debate prose with structured tags / vote line) differ from the reviewer-style numbered-findings shape.
 
-Authoritative flag documentation lives in the `--substantive-validation` / `--validation-mode` stanza of the `scripts/collect-reviewer-results.sh` header comment block; update both this section and that header in lockstep when adding a new caller.
+Authoritative flag documentation lives in the `--substantive-validation` / `--validation-mode` stanza of the `scripts/collect-agent-results.sh` header comment block; update both this section and that header in lockstep when adding a new caller.
 
 ## Timeout Handling
 
@@ -109,7 +109,7 @@ External reviewers participate in multiple phases:
 
 1. **Debaters never fall back to Claude** (carve-out): Cursor runs both sides of odd-indexed decisions; Codex runs both sides of even-indexed decisions; if the assigned tool is unavailable at launch time, the bucket is skipped and a `Disposition: bucket-skipped` resolution is written — the synthesis decision stands for that point. This is intentional divergence (see GitHub issue #98): debater outputs are adversarial prose whose style can leak tool identity; substituting a Claude subagent into the debate path would bias the downstream judge panel.
 2. **Dialectic-scoped shadow flags**: the dialectic phase uses `dialectic_codex_available` / `dialectic_cursor_available` flags snapshotted at entry. These flags are **never written back** to the orchestrator-wide `codex_available` / `cursor_available` flags. A Cursor or Codex timeout during a dialectic debate therefore does not lock that tool out of Step 3 plan review.
-3. **`--write-health /dev/null`**: every `collect-reviewer-results.sh` invocation in the dialectic phase (both debate collection and judge collection) passes `--write-health /dev/null` so the dialectic phase **never updates** `${SESSION_ENV_PATH}.health`. Debate-time failures stay scoped to this phase.
+3. **`--write-health /dev/null`**: every `collect-agent-results.sh` invocation in the dialectic phase (both debate collection and judge collection) passes `--write-health /dev/null` so the dialectic phase **never updates** `${SESSION_ENV_PATH}.health`. Debate-time failures stay scoped to this phase.
 4. **Judge panel uses replacement-first**: when Cursor or Codex is unhealthy at judge launch time, a Claude Code Reviewer subagent replaces that slot so the panel is always 3 judges. Judges adjudicate between pre-authored defenses and don't write adversarial prose, so the debater carve-out doesn't apply here.
 5. **Judge-phase health re-probe**: `scripts/check-reviewers.sh --probe` is run synchronously immediately before launching judges. Debate-time failures must not lock a tool out of the judge role — judgment happens minutes after debate, and tool state can recover.
 

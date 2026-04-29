@@ -54,11 +54,11 @@ Launch all 3 judges **in parallel** (single message). Spawn order: Cursor first 
 **Cursor judge** (if `judge_cursor_available=true`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor \
   --output "$RESEARCH_TMPDIR/cursor-judge-output.txt" \
   --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust \
-    $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) \
+    $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) \
     --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<judge prompt — see template below>")"
 ```
@@ -70,11 +70,11 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 **Codex judge** (if `judge_codex_available=true`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex \
   --output "$RESEARCH_TMPDIR/codex-judge-output.txt" \
   --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" \
-    $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+    $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
     --output-last-message "$RESEARCH_TMPDIR/codex-judge-output.txt" \
     "<judge prompt — see template below>"
 ```
@@ -107,12 +107,12 @@ You must vote on every DECISION_N on the ballot. Do NOT skip any. Do NOT modify 
 
 ## 2.5.3 — Collect external judges; parse all judge votes
 
-**Zero-external-judges guard**: if BOTH `judge_codex_available=false` AND `judge_cursor_available=false` (all 3 panel slots are Claude inline replacements + the always-present Claude judge), **skip `collect-reviewer-results.sh` entirely** — `collect-reviewer-results.sh` exits 1 with "at least one output file is required" when called with zero positional arguments. Inline Agent-tool judges produce no `.done` sentinel; their votes are returned directly by the Agent tool.
+**Zero-external-judges guard**: if BOTH `judge_codex_available=false` AND `judge_cursor_available=false` (all 3 panel slots are Claude inline replacements + the always-present Claude judge), **skip `collect-agent-results.sh` entirely** — `collect-agent-results.sh` exits 1 with "at least one output file is required" when called with zero positional arguments. Inline Agent-tool judges produce no `.done` sentinel; their votes are returned directly by the Agent tool.
 
 When at least one external judge was launched, after all external judges return, collect with health bookkeeping disabled:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 \
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 \
   --write-health /dev/null \
   <each launched external-judge output path>
 ```

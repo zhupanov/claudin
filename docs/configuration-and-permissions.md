@@ -198,7 +198,7 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 
 **When set:**
 - All Cursor invocations (reviews, sketches, voting, health probes, negotiations) use this model
-- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
+- The model flag is injected by `scripts/agent-model-args.sh`, which is called from both scripts and skill prompts
 
 **When not set:**
 - Defaults to `composer-2` — Cursor's `cursor agent` CLI does not honor the model configured in `~/.cursor/cli-config.json`, so an explicit default is required to avoid falling back to a potentially rate-limited model
@@ -210,18 +210,18 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 The model name to pass to Codex's `-m` flag (e.g., `o3`, `o4-mini`).
 
 **When set:**
-- All Codex invocations (reviews, sketches, voting, health probes, negotiations) use this model
-- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
+- All Codex invocations (reviews, implementation, sketches, voting, health probes, negotiations) use this model
+- The model flag is injected by `scripts/agent-model-args.sh`, which is called from both scripts and skill prompts
 
 **When not set:**
-- Codex runs without an explicit `-m` flag, using its own configured default
+- Codex defaults to `gpt-5.5` (hardcoded in `scripts/agent-model-args.sh`)
 
 ### `LARCH_CODEX_EFFORT`
 
 Codex reasoning effort for reviewer launches. Accepted values: `minimal`, `low`, `medium`, `high`. Default `high` (matches the plugin's `codex_effort` userConfig default).
 
-**When set at reviewer launch sites (design sketches, plan review, code review, conflict-resolution review, voting panel):**
-- `scripts/reviewer-model-args.sh --with-effort` emits `-c model_reasoning_effort="$LARCH_CODEX_EFFORT"`, raising Codex reasoning to the configured level.
+**When set at launch sites (design sketches, plan review, code review, implementation, conflict-resolution review, voting panel):**
+- `scripts/agent-model-args.sh --with-effort` emits `-c model_reasoning_effort="$LARCH_CODEX_EFFORT"`, raising Codex reasoning to the configured level.
 
 **When not set (or set to empty string):**
 - `--with-effort` falls back to the plugin userConfig value (`codex_effort`, default `high`).
