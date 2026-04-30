@@ -23,7 +23,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
 
 ## Features
 
-- **[Multi-agent design planning, reviews, and adjudication](docs/collaborative-sketches.md)** — 5 sketch agents diverge, a dialectic 3-judge binary panel resolves contested decisions, and a 3-reviewer panel validates the final plan.
+- **[Multi-agent design planning, reviews, and adjudication](docs/collaborative-sketches.md)** — 9 sketch agents in regular mode (3 in quick mode) diverge, a dialectic 3-judge binary panel resolves contested decisions, and a 3-reviewer panel validates the final plan.
 - **[Voting-based review resolution](docs/voting-process.md)** — A 3-agent YES/NO/EXONERATE panel adjudicates plan and code review findings.
 - **[Reviewer competition scoring](docs/point-competition.md)** — Reviewers earn points based on finding quality; a scoreboard tracks accepted, neutral, exonerated, and rejected findings.
 - **[End-to-end automation](docs/workflow-lifecycle.md)** — From feature design through PR creation and initial CI wait in one command; `--merge` adds the CI+rebase+merge loop, local cleanup, and main verification. Each run also posts a single Slack status message about its tracking issue near the end (✅ closed / 📝 PR opened / ❌ blocked / ❓ user input needed) when Slack is configured — opt out with `--no-slack`. `--draft` creates a draft PR and keeps the branch for further iteration.
@@ -57,9 +57,9 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#design"><code>/design</code></a></td>
-      <td><code>[--auto] [--debug] &lt;feature description&gt;</code></td>
+      <td><code>[--auto] [--quick] [--debug] &lt;feature description&gt;</code></td>
     </tr>
-    <tr><td colspan="2">Design an implementation plan with 5 sketch agents, dialectic adjudication, and a 3-reviewer validation panel.</td></tr>
+    <tr><td colspan="2">Design an implementation plan with 9 sketch agents (3 in quick mode), dialectic adjudication, and a 3-reviewer validation panel.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#fix-issue"><code>/fix-issue</code></a></td>

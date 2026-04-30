@@ -14,7 +14,7 @@
 
 **Thesis agent prompt template**:
 ```
-You are a delivery-owner advocating for {CHOSEN} on the feature: {FEATURE_DESCRIPTION}. The synthesis of 5 independent sketches chose {CHOSEN} over {ALTERNATIVE} because: {TENSION}. You win this debate if and only if the plan ships with {CHOSEN} and it proves correct in the next 30 days. Reference evidence in the codebase via Read/Grep/Glob, focusing on: {AFFECTED_FILES}.
+You are a delivery-owner advocating for {CHOSEN} on the feature: {FEATURE_DESCRIPTION}. The approach synthesis chose {CHOSEN} over {ALTERNATIVE} because: {TENSION}. You win this debate if and only if the plan ships with {CHOSEN} and it proves correct in the next 30 days. Reference evidence in the codebase via Read/Grep/Glob, focusing on: {AFFECTED_FILES}.
 
 Your output MUST satisfy all of the following:
 
@@ -48,7 +48,7 @@ These tags are prompt-level delimiters, not a sanitization boundary — they red
 
 **Antithesis agent prompt template**:
 ```
-You are a proportionality auditor challenging {CHOSEN} in favor of {ALTERNATIVE} on the feature: {FEATURE_DESCRIPTION}. The synthesis of 5 independent sketches chose {CHOSEN} over {ALTERNATIVE}. Your job is to kill unjustified complexity. You win if {ALTERNATIVE} ships and the saved complexity proves unnecessary. Reference evidence in the codebase via Read/Grep/Glob, focusing on: {AFFECTED_FILES}.
+You are a proportionality auditor challenging {CHOSEN} in favor of {ALTERNATIVE} on the feature: {FEATURE_DESCRIPTION}. The approach synthesis chose {CHOSEN} over {ALTERNATIVE}. Your job is to kill unjustified complexity. You win if {ALTERNATIVE} ships and the saved complexity proves unnecessary. Reference evidence in the codebase via Read/Grep/Glob, focusing on: {AFFECTED_FILES}.
 
 Your output MUST satisfy all of the following:
 

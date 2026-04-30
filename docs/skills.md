@@ -49,11 +49,11 @@ Scaffold a new larch-style skill from a name and description. Validates the name
 
 ## `/design`
 
-**Arguments**: `[--auto] [--debug] <feature description>`
+**Arguments**: `[--auto] [--quick] [--debug] <feature description>`
 
 **Source**: [`skills/design/SKILL.md`](../skills/design/SKILL.md) · [Diagram](../skills/design/diagram.svg)
 
-Design an implementation plan with collaborative multi-reviewer review. 5 sketch agents (1 Claude + 2 Cursor + 2 Codex) independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output).
+Design an implementation plan with collaborative multi-reviewer review. 9 sketch agents in regular mode (1 Claude + 4 Cursor + 4 Codex, one per personality per tool), or 3 in quick mode (1 Claude + 1 Cursor-Generic + 1 Codex-Generic), independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 3-reviewer panel (1 Claude Code Reviewer + 1 Codex + 1 Cursor) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--quick` runs the 3-agent sketch phase instead of 9. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output).
 
 ## `/fix-issue`
 

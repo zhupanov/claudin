@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.3.0] - 2026-04-30
+
+### Changed
+
+- `/design` sketch phase expanded from 5 agents (1 Claude + 2 Cursor + 2 Codex) to 9 in regular mode (1 Claude + 4 Cursor + 4 Codex, one per personality per tool) and 3 in quick mode (1 Claude + 1 Cursor-Generic + 1 Codex-Generic).
+- Added `--quick` flag to `/design` for a lightweight 3-agent sketch phase.
+
 ## [12.2.0] - 2026-04-30
 
 ### Changed
