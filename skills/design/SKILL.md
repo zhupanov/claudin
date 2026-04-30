@@ -202,9 +202,9 @@ Print `> **🔶 2a: sketches**` and proceed to 2a.2.
 
 **Quick mode**: 3 sketch agents run in parallel: Claude General (orchestrator inline) + 1 Cursor-Generic + 1 Codex-Generic, with per-slot Claude Agent-tool fallback so the 3-agent count is preserved.
 
-**MANDATORY — READ ENTIRE FILE (load FIRST)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/sketch-prompts.md` completely. It defines `ARCH_PROMPT`, `EDGE_PROMPT`, `INNOVATION_PROMPT`, `PRAGMATIC_PROMPT` — the four personality-prompt bodies substituted into the launch shell blocks via the `<ARCH_PROMPT>`, `<EDGE_PROMPT>`, `<INNOVATION_PROMPT>`, `<PRAGMATIC_PROMPT>` token names.
+**MANDATORY — READ ENTIRE FILE (load FIRST)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/sketch-prompts.md` completely. It defines `ARCH_PROMPT`, `EDGE_PROMPT`, `INNOVATION_PROMPT`, `PRAGMATIC_PROMPT`, and `GENERIC_PROMPT` — the four personality-prompt bodies and the quick-mode generic prompt, substituted into the launch shell blocks via the corresponding `<…>` token names.
 
-**MANDATORY — READ ENTIRE FILE (load SECOND, after sketch-prompts.md)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/sketch-launch.md` completely. It contains the byte-preserved launch shell blocks for the four external slots (consuming the tokens resolved above), the spawn-order rule, the per-slot `run_in_background: true` / `timeout: 1260000` requirements, the per-slot Claude fallback notes, and the Claude General sketch independence rule.
+**MANDATORY — READ ENTIRE FILE (load SECOND, after sketch-prompts.md)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/sketch-launch.md` completely. It contains the byte-preserved launch shell blocks for the 8 regular-mode external slots (4 Cursor + 4 Codex) and the 2 quick-mode slots (1 Cursor-Generic + 1 Codex-Generic), the spawn-order rule, the per-slot `run_in_background: true` / `timeout: 1260000` requirements, the per-slot Claude fallback notes, and the Claude General sketch independence rule.
 
 Execute the launches per `sketch-launch.md` — all external and fallback launches issued before the Claude General sketch, in a single message, Cursor slots first, then Codex slots, then any Claude fallbacks, then the General sketch last.
 
