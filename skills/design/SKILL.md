@@ -1,13 +1,13 @@
 ---
 name: design
-description: "Use when designing any non-trivial feature, refactor, or architectural change — design, architecture, scope, approach validation. Sketch agents (9 regular, 3 quick) propose approaches; 3-reviewer voting panel validates via dialectic."
+description: "Use when designing any non-trivial feature, refactor, or architectural change — design, architecture, scope, approach validation. Sketch agents (9 regular, 3 quick) propose approaches; 6-reviewer panel validates via 3-voter dialectic."
 argument-hint: "[--auto] [--quick] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
 
 # Design Skill
 
-Design an implementation plan for a feature and review it with a unified 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). The sketch phase (Step 2a) runs 9 agents in regular mode (1 Claude General sketch + 4 Cursor slots + 4 Codex slots, one per personality per tool) or 3 agents in quick mode (1 Claude General + 1 Cursor-Generic + 1 Codex-Generic).
+Design an implementation plan for a feature and review it with a 6-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex generic + 4 Cursor archetypes: Architecture/Standards, Edge-cases/Failure-modes, Innovation/Exploration, Pragmatism/Safety), adjudicated by a 3-voter panel (Claude + Codex + Cursor). The sketch phase (Step 2a) runs 9 agents in regular mode (1 Claude General sketch + 4 Cursor slots + 4 Codex slots, one per personality per tool) or 3 agents in quick mode (1 Claude General + 1 Cursor-Generic + 1 Codex-Generic).
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
@@ -63,9 +63,9 @@ Step Name Registry:
 
 📊 Sketches (quick): | General: ✅ 2m31s | Cursor-Generic: ⏳ | Codex-Generic: ✅ 3m5s |
 
-or for Step 3 plan review (3-reviewer panel):
+or for Step 3 plan review (6-reviewer panel):
 
-📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor: ✅ 4m12s |
+📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor-Arch: ✅ 4m12s | Cursor-Edge: ⏳ | Cursor-Innovation: ✅ 3m45s | Cursor-Pragmatic: ⏳ |
 ```
 
 Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout (with elapsed time since launch), ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time and step start formatting rules.
@@ -339,11 +339,11 @@ Print the plan to the user under a `## Implementation Plan` header so reviewers 
 
 ## Step 3 — Plan Review
 
-**IMPORTANT: Plan review MUST ALWAYS run with all 3 reviewers (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). Never skip or abbreviate this step regardless of how straightforward the plan appears — even when all sketch agents agreed, the plan is short, or the change seems trivial. Reviewers validate against the actual codebase state, catching issues that sketch-phase reasoning alone cannot detect.**
+**IMPORTANT: Plan review MUST ALWAYS run with all 6 reviewers (1 Claude Code Reviewer subagent + 1 Codex generic + 4 Cursor archetypes: Architecture/Standards, Edge-cases/Failure-modes, Innovation/Exploration, Pragmatism/Safety). Never skip or abbreviate this step regardless of how straightforward the plan appears — even when all sketch agents agreed, the plan is short, or the change seems trivial. Reviewers validate against the actual codebase state, catching issues that sketch-phase reasoning alone cannot detect. When Cursor is unavailable, each archetype slot falls back to Codex; when both are unavailable, each falls back to a Claude subagent.**
 
-**MANDATORY — READ ENTIRE FILE before launching reviewers**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` completely. The reference is the normative source for the reviewer-prompt content and post-launch procedures: the byte-preserved Competition notice blockquote (appended to EACH reviewer prompt), the Claude Code Reviewer subagent archetype (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` with XML-wrap literal-delimiter instruction / `{OUTPUT_INSTRUCTION}`), the voter-1 / voter-2 / voter-3 detailed quoted prompts, the ballot file handling paragraph, the Collecting External Reviewer Results 5-step procedure, the Voting Panel launch-order + threshold + Competition scoring rules, the Finalize Plan Review 4-step procedure plus OOS artifact write rule, the Track Rejected Plan Review Findings rule, and the accepted `FINDING_N` template, accepted `oos-accepted-design.md` format, and rejected-findings template. Step 3 control flow that remains inline in SKILL.md below (not in plan-review.md): the 3-reviewer "MUST ALWAYS run" IMPORTANT banner, the overall parallel-launch + spawn-order rule, `### External Reviewer Setup` (writing `$DESIGN_TMPDIR/plan.txt` + the focus-area enum summary line), and the two external reviewer launch Bash blocks (Cursor + Codex) which must stay inline because CI greps SKILL.md for the focus-area enum they carry. The Competition notice must be in context before any reviewer launch below — reading this file now guarantees that.
+**MANDATORY — READ ENTIRE FILE before launching reviewers**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/plan-review.md` completely. The reference is the normative source for the reviewer-prompt content and post-launch procedures: the byte-preserved Competition notice blockquote (appended to EACH reviewer prompt), the Claude Code Reviewer subagent archetype (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` with XML-wrap literal-delimiter instruction / `{OUTPUT_INSTRUCTION}`), the voter-1 / voter-2 / voter-3 detailed quoted prompts, the ballot file handling paragraph, the Collecting External Reviewer Results procedure (updated for 6 reviewers: 4 Cursor archetypes + 1 Codex generic + 1 Claude), the Voting Panel launch-order + threshold + Competition scoring rules, the Finalize Plan Review 4-step procedure plus OOS artifact write rule, the Track Rejected Plan Review Findings rule, and the accepted `FINDING_N` template, accepted `oos-accepted-design.md` format, and rejected-findings template. Step 3 control flow that remains inline in SKILL.md below (not in plan-review.md): the 6-reviewer "MUST ALWAYS run" IMPORTANT banner, the overall parallel-launch + spawn-order rule, `### External Reviewer Setup` (writing `$DESIGN_TMPDIR/plan.txt` + the focus-area enum summary line), and the external reviewer launch Bash blocks (4 Cursor archetypes + 1 Codex) which must stay inline because CI greps SKILL.md for the focus-area enum they carry. The Competition notice must be in context before any reviewer launch below — reading this file now guarantees that.
 
-Launch **all 3 reviewers in parallel** (in a single message). When an external tool is unavailable, launch a Claude subagent fallback so the total reviewer count always remains 3. **Spawn order matters for parallelism** — launch the slowest reviewer first: Cursor, then Codex, then the Claude subagent. Each reviewer receives the plan text and the feature description. Each must **only report findings** — never edit files.
+Launch **all 6 reviewers in parallel** (in a single message). When Cursor is unavailable, each Cursor archetype slot falls back to Codex; when both Cursor and Codex are unavailable, each archetype slot falls back to a Claude subagent. The Codex generic reviewer has its own independent fallback to Claude when Codex is unavailable. **Spawn order matters for parallelism** — launch the slowest reviewers first: 4 Cursor archetypes, then Codex generic, then the Claude subagent. Each reviewer receives the plan text and the feature description. Each must **only report findings** — never edit files.
 
 ### External Reviewer Setup (if `codex_available` or `cursor_available`)
 
@@ -351,21 +351,51 @@ Before launching external reviewers, write the implementation plan to `$DESIGN_T
 
 Each reviewer walks five focus areas: code-quality / risk-integration / correctness / architecture / security.
 
-### Cursor Reviewer (if `cursor_available`)
+### Cursor Archetype Reviewers (4 slots)
 
-Run Cursor **first** in the parallel message (it takes the longest). Cursor has full repo access and will examine the codebase itself.
+Launch all 4 Cursor archetype plan reviewers **first** in the parallel message (they take the longest). Each archetype reviews the plan from its specialized perspective. Each Cursor reviewer has full repo access. **Fallback chain per slot**: Cursor → Codex → Claude subagent (subagent_type: `larch:code-reviewer`, model: `"sonnet"` with the archetype personality prepended).
 
-Invoke Cursor via the shared monitored wrapper script (with `--capture-stdout` since Cursor writes results to stdout):
+**Cursor — Architecture/Standards** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-output.txt" --timeout 1800 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-arch-output.txt" --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "You are an Architecture/Standards reviewer. Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Your role is to emphasize maintainability, engineering standards, separation of concerns, and reuse of existing patterns. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor fallback** (if `cursor_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
+**Cursor — Edge-cases/Failure-modes** (if `cursor_available`):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-edge-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "You are an Edge-case/Failure-mode reviewer. Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Your role is to focus on what can go wrong: boundary conditions, error handling, failure recovery, race conditions, and silent data corruption. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
+```
+
+Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
+
+**Cursor — Innovation/Exploration** (if `cursor_available`):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-innovation-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "You are an Innovation/Exploration reviewer. Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Your role is to question assumptions, suggest creative alternatives, and flag when the plan takes the obvious path without considering unconventional but potentially superior solutions. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
+```
+
+Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
+
+**Cursor — Pragmatism/Safety** (if `cursor_available`):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-pragmatic-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "You are a Pragmatism/Safety reviewer. Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Your role is to minimize the scope of changes, avoid unnecessary complexity, and ensure existing features are not broken. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
+```
+
+Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
+
+**Cursor archetype fallback** (per slot, if `cursor_available` is false): For each archetype slot where Cursor is unavailable, try Codex first (if `codex_available`). Use the same archetype prompt but launch via the Codex pattern (no `--capture-stdout`; uses `--output-last-message`) with distinct per-archetype output paths: `$DESIGN_TMPDIR/codex-plan-arch-output.txt`, `$DESIGN_TMPDIR/codex-plan-edge-output.txt`, `$DESIGN_TMPDIR/codex-plan-innovation-output.txt`, `$DESIGN_TMPDIR/codex-plan-pragmatic-output.txt`. If both Cursor and Codex are unavailable for a slot, launch a Claude subagent fallback (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the archetype personality prepended to the plan-review context.
 
 ### Codex Reviewer (if `codex_available`)
 
@@ -380,7 +410,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESI
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
+**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the same plan-review context. This fallback ensures the Codex generic slot is always filled regardless of external tool availability.
 
 ### Claude Code Reviewer Subagent (1 reviewer)
 
