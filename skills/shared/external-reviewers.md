@@ -28,15 +28,15 @@ Set mental flags `codex_available` and `cursor_available` based on the output:
 
 When processing reviewer results (after `wait-for-reviewers.sh` returns), check each reviewer's sentinel file exit code and output validity. If any of the following are true for a reviewer, set the corresponding `*_available` mental flag to `false` for **all subsequent steps in this session**:
 
-- Sentinel exit code is `124` (timeout — the common case when `run-external-reviewer.sh` enforces its timeout)
+- Sentinel exit code is `124` (timeout — the common case when `run-external-agent.sh` enforces its timeout)
 - Sentinel exit code is non-zero (any other failure)
 - Output is empty/invalid after the retry-once procedure (per "Validating External Reviewer Output" below)
 - `wait-for-reviewers.sh` reports `TIMEOUT` for the reviewer (sentinel never appeared — wrapper killed externally)
-- `STATUS=NOT_SUBSTANTIVE` (output passed sentinel + non-empty + retry checks but failed substantive-content validation under `collect-reviewer-results.sh --substantive-validation` — same Claude-subagent-fallback behavior as a timeout, since the lane is unusable for synthesis; Phase 3 of umbrella #413, closes #416)
+- `STATUS=NOT_SUBSTANTIVE` (output passed sentinel + non-empty + retry checks but failed substantive-content validation under `collect-agent-results.sh --substantive-validation` — same Claude-subagent-fallback behavior as a timeout, since the lane is unusable for synthesis; Phase 3 of umbrella #413, closes #416)
 
 Print: `**⚠ <Reviewer> failed — <FAILURE_REASON>. Using Claude replacement for remainder of session.**`
 
-Where `<FAILURE_REASON>` is the `FAILURE_REASON` value from `collect-reviewer-results.sh` output (or from the `.diag` file if collecting results manually). Always include the reason so the user can diagnose the root cause (e.g., timeout duration, exit code, last error output).
+Where `<FAILURE_REASON>` is the `FAILURE_REASON` value from `collect-agent-results.sh` output (or from the `.diag` file if collecting results manually). Always include the reason so the user can diagnose the root cause (e.g., timeout duration, exit code, last error output).
 
 This is a mental flag flip within the current skill invocation. For cross-skill propagation within `/implement`, child skills write a structured health status file — see the `/implement` SKILL.md for details.
 
@@ -44,15 +44,15 @@ This is a mental flag flip within the current skill invocation. For cross-skill 
 
 ## Collecting External Reviewer Results
 
-After launching Codex and/or Cursor as background tasks (via `run-external-reviewer.sh` with `run_in_background: true`), continue working on other tasks (e.g., processing Claude subagent results) while external reviewers run.
+After launching Codex and/or Cursor as background tasks (via `run-external-agent.sh` with `run_in_background: true`), continue working on other tasks (e.g., processing Claude subagent results) while external reviewers run.
 
 After all other tasks are done, collect and validate external reviewer outputs using the shared collection script:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout <seconds> [--write-health <path>] <output-file> [<output-file> ...]
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout <seconds> [--write-health <path>] <output-file> [<output-file> ...]
 ```
 
-Only include output file paths for reviewers that were actually launched. For the Bash tool call, use `timeout: <seconds>000` (milliseconds) and **do NOT** set `run_in_background: true` — this call must block. The script internally calls `wait-for-reviewers.sh` to poll for `.done` sentinel files, validates each output, and retries once on empty output (using `.meta` files written by `run-external-reviewer.sh`).
+Only include output file paths for reviewers that were actually launched. For the Bash tool call, use `timeout: <seconds>000` (milliseconds) and **do NOT** set `run_in_background: true` — this call must block. The script internally calls `wait-for-reviewers.sh` to poll for `.done` sentinel files, validates each output, and retries once on empty output (using `.meta` files written by `run-external-agent.sh`).
 
 **Output**: The script emits structured `KEY=value` blocks on stdout (one block per reviewer, separated by blank lines):
 ```
@@ -68,9 +68,9 @@ Parse each reviewer's `STATUS`, `REVIEWER_FILE`, and `FAILURE_REASON`:
 - `STATUS=OK`: Read the output file — it is non-empty and validated. `FAILURE_REASON` is empty.
 - Any other status: The reviewer failed. `FAILURE_REASON` explains why (e.g., "Timed out after 1800s (limit: 1800s). Process was killed after exceeding the timeout." or "Failed with exit code 1 after 5s. Last output: error message here"). Follow the **Runtime Timeout Fallback** procedure above, including `FAILURE_REASON` in the message.
 
-**Important**: Do NOT read output files before calling `collect-reviewer-results.sh`. Cursor buffers all stdout until exit — its output file is empty until the process finishes. The collection script handles all sentinel polling and validation internally.
+**Important**: Do NOT read output files before calling `collect-agent-results.sh`. Cursor buffers all stdout until exit — its output file is empty until the process finishes. The collection script handles all sentinel polling and validation internally.
 
-**Substantive-content validation is opt-in.** The default collector behavior described above is sentinel + non-empty + retry. Substantive-content classification (`STATUS=NOT_SUBSTANTIVE`) only runs when callers pass `--substantive-validation` (and optionally `--validation-mode` for short reviewer-style outputs). See the `--substantive-validation` / `--validation-mode` stanza of the `scripts/collect-reviewer-results.sh` header for the authoritative flag documentation and `docs/external-reviewers.md` Output Validation for the per-skill opt-in matrix.
+**Substantive-content validation is opt-in.** The default collector behavior described above is sentinel + non-empty + retry. Substantive-content classification (`STATUS=NOT_SUBSTANTIVE`) only runs when callers pass `--substantive-validation` (and optionally `--validation-mode` for short reviewer-style outputs). See the `--substantive-validation` / `--validation-mode` stanza of the `scripts/collect-agent-results.sh` header for the authoritative flag documentation and `docs/external-reviewers.md` Output Validation for the per-skill opt-in matrix.
 
 ## Negotiation Protocol
 

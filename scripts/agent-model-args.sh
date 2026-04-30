@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# reviewer-model-args.sh — Output model (and optionally effort) arguments for an
-# external reviewer tool.
+# agent-model-args.sh — Output model (and optionally effort) arguments for an
+# external agent tool.
 #
 # Returns the appropriate --model / -m flag for the given tool based on
 # environment variables. Cursor defaults to composer-2 when no model is
-# configured. Codex outputs nothing when unconfigured (uses its own default).
+# configured. Codex defaults to gpt-5.5 when unconfigured.
 #
 # When --with-effort is passed, also emits tool-specific reasoning-effort flags.
 # The --with-effort flag is an opt-in gate: real reviewer launch call sites
@@ -35,7 +35,7 @@
 # is scripts/check-reviewers.sh's health probe.
 #
 # Usage:
-#   reviewer-model-args.sh --tool cursor|codex [--with-effort]
+#   agent-model-args.sh --tool cursor|codex [--with-effort] [--default-model MODEL]
 #
 # Output (stdout):
 #   Model flag tokens, optionally followed by effort flag tokens when
@@ -47,10 +47,10 @@
 #         (cursor default, --with-effort is a no-op for Cursor)
 #     -m o3 -c model_reasoning_effort="high"
 #         (codex with LARCH_CODEX_MODEL=o3 and --with-effort and default effort)
-#     -c model_reasoning_effort="high"
-#         (codex without a model pin but --with-effort)
-#     (empty)
-#         (codex with no model and no --with-effort)
+#     -m gpt-5.5 -c model_reasoning_effort="high"
+#         (codex with default model and --with-effort)
+#     -m gpt-5.5
+#         (codex with default model, no --with-effort)
 #
 # Exit codes:
 #   0 — success
@@ -60,16 +60,18 @@ set -euo pipefail
 
 TOOL=""
 WITH_EFFORT="false"
+DEFAULT_MODEL=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --tool) TOOL="${2:?--tool requires a value}"; shift 2 ;;
         --with-effort) WITH_EFFORT="true"; shift ;;
-        *) echo "reviewer-model-args.sh: unknown argument: $1" >&2; exit 1 ;;
+        --default-model) DEFAULT_MODEL="${2:?--default-model requires a value}"; shift 2 ;;
+        *) echo "agent-model-args.sh: unknown argument: $1" >&2; exit 1 ;;
     esac
 done
 
 if [[ -z "$TOOL" ]]; then
-    echo "reviewer-model-args.sh: --tool is required" >&2
+    echo "agent-model-args.sh: --tool is required" >&2
     exit 1
 fi
 
@@ -80,7 +82,7 @@ case "$TOOL" in
         # Cursor has no effort flag; --with-effort is intentionally a no-op here.
         ;;
     codex)
-        MODEL="${LARCH_CODEX_MODEL:-${CLAUDE_PLUGIN_OPTION_CODEX_MODEL:-}}"
+        MODEL="${LARCH_CODEX_MODEL:-${CLAUDE_PLUGIN_OPTION_CODEX_MODEL:-${DEFAULT_MODEL:-gpt-5.5}}}"
         OUT=""
         if [[ -n "$MODEL" ]]; then
             OUT="-m $MODEL"
@@ -90,7 +92,7 @@ case "$TOOL" in
             case "$EFFORT" in
                 minimal|low|medium|high) ;;
                 *)
-                    echo "reviewer-model-args.sh: WARN invalid codex effort '$EFFORT' (must be minimal|low|medium|high); falling back to 'high'" >&2
+                    echo "agent-model-args.sh: WARN invalid codex effort '$EFFORT' (must be minimal|low|medium|high); falling back to 'high'" >&2
                     EFFORT="high"
                     ;;
             esac
@@ -105,7 +107,7 @@ case "$TOOL" in
         fi
         ;;
     *)
-        echo "reviewer-model-args.sh: --tool must be 'cursor' or 'codex' (got: $TOOL)" >&2
+        echo "agent-model-args.sh: --tool must be 'cursor' or 'codex' (got: $TOOL)" >&2
         exit 1
         ;;
 esac

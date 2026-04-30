@@ -4,13 +4,13 @@
 # Usage:
 #   wait-for-reviewers.sh [--timeout <seconds>] <sentinel.done> [sentinel2.done ...]
 #
-# Sentinel files are the .done files created by run-external-reviewer.sh.
+# Sentinel files are the .done files created by run-external-agent.sh.
 # Progress (dots, status lines) goes to stderr.
 # Machine-parseable results (DONE/TIMEOUT lines) go to stdout.
 # Always exits 0 for normal operation (including timeouts) — callers inspect stdout
 # to determine which reviewers completed vs timed out. Exits 1 only for usage errors.
 #
-# The default timeout is 1860 seconds (31 minutes), matching the run-external-reviewer.sh
+# The default timeout is 1860 seconds (31 minutes), matching the run-external-agent.sh
 # review timeout of 30 minutes + 1 minute grace period. Override with --timeout if a different
 # wrapper timeout was used (e.g., 1260 for the 20-minute vote/sketch timeout).
 

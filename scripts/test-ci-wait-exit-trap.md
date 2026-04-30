@@ -11,7 +11,7 @@ Asserts the file-mode contract holds when ci-wait.sh is signal-killed mid-pollin
 1. `<path>` exists (KV file published via the atomic `<path>.tmp` + `mv -f` chain).
 2. `<path>` contains a parseable `ACTION=` line.
 3. `<path>.done` exists (sentinel written by the EXIT trap).
-4. `<path>.done` content is a parseable non-negative integer (numeric exit code, mirroring `scripts/run-external-reviewer.sh:70`).
+4. `<path>.done` content is a parseable non-negative integer (numeric exit code, mirroring `scripts/run-external-agent.sh:70`).
 5. `<path>.tmp` does NOT linger after the atomic publish.
 
 ### Sub-test B — default-mode (stdout) backward-compat
@@ -60,5 +60,5 @@ Update this harness in lockstep with:
 ## Cross-references
 
 - Issue #842 — surfacing failure-mode trace (the leaked-polling-loop scenario this harness regresses against).
-- `scripts/run-external-reviewer.sh:70` — positive precedent for the EXIT-trap-writes-`.done` idiom; the test mirrors its numeric-content sentinel format.
-- `scripts/test-check-bump-version.sh`, `scripts/test-collect-reviewer-bash32.sh` — peer test harnesses with similar Makefile-wired regression-test patterns.
+- `scripts/run-external-agent.sh:70` — positive precedent for the EXIT-trap-writes-`.done` idiom; the test mirrors its numeric-content sentinel format.
+- `scripts/test-check-bump-version.sh`, `scripts/test-collect-agent-bash32.sh` — peer test harnesses with similar Makefile-wired regression-test patterns.

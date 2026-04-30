@@ -26,7 +26,7 @@ The `--question` flag is required. The path must point at a regular, readable, n
   SCALE=<bucket>
   REASON=<token>
   ```
-  where `<bucket>` is one of `quick`, `standard`, `deep`, and `<token>` documents which rule fired (see token vocabulary below). The orchestrator parses both lines via prefix-strip (e.g., `${line#SCALE=}`), matching the existing `KEY=value` discipline used by `collect-reviewer-results.sh`, `render-lane-status.sh`, and `run-research-planner.sh`.
+  where `<bucket>` is one of `quick`, `standard`, `deep`, and `<token>` documents which rule fired (see token vocabulary below). The orchestrator parses both lines via prefix-strip (e.g., `${line#SCALE=}`), matching the existing `KEY=value` discipline used by `collect-agent-results.sh`, `render-lane-status.sh`, and `run-research-planner.sh`.
 
 - **On failure** (exit non-zero):
   ```

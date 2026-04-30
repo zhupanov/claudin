@@ -26,7 +26,7 @@
 #     canonical values backticked nearby.
 #
 # Out of scope:
-#   - Wrapping scripts/collect-reviewer-results.sh (STATUS / REVIEWER_FILE /
+#   - Wrapping scripts/collect-agent-results.sh (STATUS / REVIEWER_FILE /
 #     retry-file routing). Collector integration regression guards live
 #     elsewhere.
 #   - Fixtures with zero contested decisions (covered by the orchestrator's

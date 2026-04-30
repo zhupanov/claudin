@@ -40,7 +40,7 @@
 #
 # Sentinel (only when --output-file is set):
 #   <path>.done contains the numeric exit code on any trap-deliverable exit
-#   path (mirror of scripts/run-external-reviewer.sh:70). Consumers MUST
+#   path (mirror of scripts/run-external-agent.sh:70). Consumers MUST
 #   wait for <path>.done before parsing <path>. SIGKILL is uncatchable —
 #   no shell-side mechanism can write the sentinel under SIGKILL; the
 #   synchronous-only invocation contract above is the operational defense.
@@ -146,7 +146,7 @@ emit_output() {
 # `|| true` so a sentinel-write failure does not change the captured
 # exit code; the preceding emit_output success gate decides whether
 # .done is written at all. Same consumer contract (numeric exit code in
-# .done) as scripts/run-external-reviewer.sh:70.
+# .done) as scripts/run-external-agent.sh:70.
 trap 'EXIT_STATUS=$?; if emit_output && [[ -n "$OUTPUT_FILE" ]]; then printf "%s\n" "$EXIT_STATUS" > "${OUTPUT_FILE}.done" 2>/dev/null || true; fi' EXIT
 
 # --- Polling loop ---

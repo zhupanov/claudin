@@ -186,9 +186,9 @@ The Slack channel ID (e.g., `C0123456789`) where tracking-issue status messages 
 - All Slack operations in `/implement` are skipped. When running without `--no-slack` but env vars are missing, a warning is printed at session setup (e.g., `⚠ Slack is not fully configured (LARCH_SLACK_CHANNEL_ID not set).`). When `--no-slack` is set, no warning is printed.
 - All other workflow steps proceed normally
 
-### External Reviewer Model Configuration
+### External Agent Model Configuration
 
-These variables control which model Cursor and Codex use when running as external reviewers. When unset, Cursor defaults to `composer-2` (with the `/max-mode on.` slash-command prefix applied to every substantive prompt via `scripts/cursor-wrap-prompt.sh`) and Codex uses its own configured default. The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex). To restore the pre-`composer-2` behavior, set `LARCH_CURSOR_MODEL=composer-2-fast`.
+These variables control which model Cursor and Codex use when running as external agents (reviews, implementation, sketches, voting). When unset, Cursor defaults to `composer-2` (with the `/max-mode on.` slash-command prefix applied to every substantive prompt via `scripts/cursor-wrap-prompt.sh`) and Codex defaults to `gpt-5.5` (hardcoded in `scripts/agent-model-args.sh`). The model is passed via the `--model` flag (Cursor) or `-m` flag (Codex). To restore the pre-`composer-2` behavior, set `LARCH_CURSOR_MODEL=composer-2-fast`.
 
 Model configuration is also available via plugin `userConfig` — environment variables take precedence if both are set.
 
@@ -198,7 +198,7 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 
 **When set:**
 - All Cursor invocations (reviews, sketches, voting, health probes, negotiations) use this model
-- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
+- The model flag is injected by `scripts/agent-model-args.sh`, which is called from both scripts and skill prompts
 
 **When not set:**
 - Defaults to `composer-2` — Cursor's `cursor agent` CLI does not honor the model configured in `~/.cursor/cli-config.json`, so an explicit default is required to avoid falling back to a potentially rate-limited model
@@ -210,24 +210,26 @@ The model name to pass to Cursor's `--model` flag (e.g., `gpt-5.4-medium`, `clau
 The model name to pass to Codex's `-m` flag (e.g., `o3`, `o4-mini`).
 
 **When set:**
-- All Codex invocations (reviews, sketches, voting, health probes, negotiations) use this model
-- The model flag is injected by `scripts/reviewer-model-args.sh`, which is called from both scripts and skill prompts
+- All Codex invocations (reviews, implementation, sketches, voting, health probes, negotiations) use this model
+- The model flag is injected by `scripts/agent-model-args.sh`, which is called from both scripts and skill prompts
 
 **When not set:**
-- Codex runs without an explicit `-m` flag, using its own configured default
+- Codex defaults to `gpt-5.5` (hardcoded in `scripts/agent-model-args.sh`) for all work invocations (reviews, implementation, sketches, voting)
+- Health probes (`check-reviewers.sh`) bypass this default and test basic Codex availability without forcing a specific model
+- If your Codex installation does not support `gpt-5.5`, set this variable to a supported model (e.g., `o3`, `o4-mini`)
 
 ### `LARCH_CODEX_EFFORT`
 
-Codex reasoning effort for reviewer launches. Accepted values: `minimal`, `low`, `medium`, `high`. Default `high` (matches the plugin's `codex_effort` userConfig default).
+Codex reasoning effort for all Codex launches (reviews, implementation, sketches, voting). Accepted values: `minimal`, `low`, `medium`, `high`. Default `high` (matches the plugin's `codex_effort` userConfig default).
 
-**When set at reviewer launch sites (design sketches, plan review, code review, conflict-resolution review, voting panel):**
-- `scripts/reviewer-model-args.sh --with-effort` emits `-c model_reasoning_effort="$LARCH_CODEX_EFFORT"`, raising Codex reasoning to the configured level.
+**When set at launch sites (design sketches, plan review, code review, implementation, conflict-resolution review, voting panel):**
+- `scripts/agent-model-args.sh --with-effort` emits `-c model_reasoning_effort="$LARCH_CODEX_EFFORT"`, raising Codex reasoning to the configured level.
 
 **When not set (or set to empty string):**
 - `--with-effort` falls back to the plugin userConfig value (`codex_effort`, default `high`).
 - Setting `LARCH_CODEX_EFFORT=""` explicitly does NOT disable emission; to suppress effort flags entirely, the callers already omit the `--with-effort` flag (e.g., `check-reviewers.sh` health probes do not use max effort regardless of env var setting).
 
-**Scope**: Claude and Cursor reviewers run at their defaults. Only Codex is bumped to `high` by default. This is deliberate — Claude's sonnet default is already well-suited to review work, and Cursor has no dedicated reasoning-effort CLI flag today.
+**Scope**: Claude and Cursor agents run at their defaults. Only Codex is bumped to `high` by default. This is deliberate — Claude's sonnet default is already well-suited to review and implementation work, and Cursor has no dedicated reasoning-effort CLI flag today.
 
 ### `LARCH_TOKEN_RATE_PER_M`
 

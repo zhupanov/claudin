@@ -13,7 +13,7 @@
 
 Cursor supports `~/.cursor/cli-config.json` for model pinning and max-mode, but that config path is user-managed and cannot be enforced programmatically across contributor environments or CI. The prompt-level `/max-mode on.` slash command is the mechanism larch controls from its own invocations. This wrapper owns the literal so every Cursor invocation goes through one file.
 
-Cursor also has no way to configure a non-default model via config file that overrides the CLI's own fallback; larch passes `--model` on the command line via `scripts/reviewer-model-args.sh`. The two concerns are kept in separate single-source-of-truth files.
+Cursor also has no way to configure a non-default model via config file that overrides the CLI's own fallback; larch passes `--model` on the command line via `scripts/agent-model-args.sh`. The two concerns are kept in separate single-source-of-truth files.
 
 ## Callers (15 wrapped launch strings in 11 files)
 
@@ -32,9 +32,9 @@ Cursor also has no way to configure a non-default model via config file that ove
 ## Non-callers (intentional exclusions)
 
 - `scripts/check-reviewers.sh` — health probe. The probe's sole purpose is reachability and auth validation; max-mode adds latency and cost without diagnostic value. The two cursor-agent lines in that file (initial probe and retry probe) deliberately pass the probe prompt `"Respond with OK"` verbatim.
-- `scripts/run-external-reviewer.sh` header example — illustrative of the wrapper's own tool interface, not a real invocation.
+- `scripts/run-external-agent.sh` header example — illustrative of the wrapper's own tool interface, not a real invocation.
 
 ## Edit-in-sync rules
 
-- If the prefix literal changes, update `scripts/cursor-wrap-prompt.sh`, this file, and `scripts/reviewer-model-args.sh`'s `Cursor max-mode:` comment block in the same PR.
+- If the prefix literal changes, update `scripts/cursor-wrap-prompt.sh`, this file, and `scripts/agent-model-args.sh`'s `Cursor max-mode:` comment block in the same PR.
 - When adding a new Cursor call site, append the file to the callers list above and route through this wrapper.

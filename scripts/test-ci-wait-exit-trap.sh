@@ -138,7 +138,7 @@ if [ -n "${BG_PID:-}" ] && kill -0 "$BG_PID" 2>/dev/null; then
     fi
 
     # Assertion 4: .done sentinel content is a parseable integer
-    # (mirrors run-external-reviewer.sh's numeric exit-code idiom).
+    # (mirrors run-external-agent.sh's numeric exit-code idiom).
     if [ -f "${OUT_PATH}.done" ]; then
         DONE_CONTENT="$(tr -d '[:space:]' < "${OUT_PATH}.done")"
         if [[ "$DONE_CONTENT" =~ ^[0-9]+$ ]]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# test-collect-reviewer-bash32.sh — Regression test for the bash 3.2
-# portability hazard in scripts/collect-reviewer-results.sh:405 (issue #511).
+# test-collect-agent-bash32.sh — Regression test for the bash 3.2
+# portability hazard in scripts/collect-agent-results.sh:405 (issue #511).
 #
 # The collector runs `set -uo pipefail` (line 57). Before #511, the validator
 # call expanded `"${VAL_ARGS[@]}"` directly; on bash 3.2 (macOS default
@@ -16,13 +16,13 @@
 # This harness layers two checks:
 #
 #   Case 1 — Static idiom check (always runs): grep
-#     scripts/collect-reviewer-results.sh for the safe-expansion idiom near
+#     scripts/collect-agent-results.sh for the safe-expansion idiom near
 #     the validator call. Linux-CI regression backstop on every PR;
 #     bash 5.x does not naturally exhibit the bug at runtime.
 #
 #   Case 2 — Dynamic empty-VAL_ARGS path (only under /bin/bash 3.x):
 #     ≥200-word substantive fixture with .done sentinel containing 0;
-#     invoke /bin/bash $REPO_ROOT/scripts/collect-reviewer-results.sh
+#     invoke /bin/bash $REPO_ROOT/scripts/collect-agent-results.sh
 #     --timeout 30 --substantive-validation <abs-fixture>; assert
 #     STATUS=OK AND stderr does NOT contain `unbound variable`.
 #     Skip-with-loud-message on bash 4+.
@@ -34,13 +34,13 @@
 #     (negative control — confirms the flag actually changes behavior).
 #     Skip-with-loud-message on bash 4+.
 #
-# Wired into Makefile via the test-collect-reviewer-bash32 target and the
+# Wired into Makefile via the test-collect-agent-bash32 target and the
 # test-harnesses aggregator; runs on every `make lint`.
 
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COLLECTOR="$REPO_ROOT/scripts/collect-reviewer-results.sh"
+COLLECTOR="$REPO_ROOT/scripts/collect-agent-results.sh"
 
 PASS=0
 FAIL=0
@@ -95,7 +95,7 @@ if [[ "$DYNAMIC_VULNERABLE" != "true" ]]; then
     skipm "case 2: bash $BASH_VER_DISPLAY at $SYSTEM_BASH (need < 4.4 for dynamic empty-VAL_ARGS check; bash 4.4+ fixed the hazard)"
     skipm "case 3: bash $BASH_VER_DISPLAY at $SYSTEM_BASH (need < 4.4 for --validation-mode forwarding pin)"
 else
-    TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/test-collect-reviewer-bash32-XXXXXX")"
+    TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/test-collect-agent-bash32-XXXXXX")"
     trap 'rm -rf "$TMPROOT"' EXIT
 
     # --- Fixture for Case 2: ≥200 words substantive prose with file:line citation

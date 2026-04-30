@@ -351,8 +351,8 @@ Only the Codex lane switches angle prompts based on `external_evidence_mode`; Cu
 **Cursor research** (if `cursor_available`) — runs `RESEARCH_PROMPT_ARCH`:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<RESEARCH_PROMPT_ARCH>")"
 ```
 
@@ -363,8 +363,8 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 **Codex research** (if `codex_available`) — runs `RESEARCH_PROMPT_EDGE` by default, `RESEARCH_PROMPT_EXT` when `external_evidence_mode=true`. Substitute the chosen literal into `<CODEX_ANGLE_PROMPT>` below at launch time:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-research-output.txt" \
     "<CODEX_ANGLE_PROMPT>"
 ```
@@ -401,8 +401,8 @@ Launch 5 lanes — 4 external slots in parallel plus the Claude inline lane. Spa
 **Cursor slot 1 — Architecture** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-arch-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-arch-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<RESEARCH_PROMPT_ARCH>")"
 ```
 
@@ -413,8 +413,8 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 **Cursor slot 2 — Edge cases** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-edge-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$RESEARCH_TMPDIR/cursor-research-edge-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<RESEARCH_PROMPT_EDGE>")"
 ```
 
@@ -425,8 +425,8 @@ Use `run_in_background: true` and `timeout: 1860000`.
 **Codex slot 1 — External comparisons** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-ext-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-ext-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-research-ext-output.txt" \
     "<RESEARCH_PROMPT_EXT>"
 ```
@@ -438,8 +438,8 @@ Use `run_in_background: true` and `timeout: 1860000`.
 **Codex slot 2 — Security** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-sec-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$RESEARCH_TMPDIR/codex-research-sec-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex) \
     --output-last-message "$RESEARCH_TMPDIR/codex-research-sec-output.txt" \
     "<RESEARCH_PROMPT_SEC>"
 ```
@@ -466,17 +466,17 @@ COLLECT_ARGS=()
 [[ "$codex_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/codex-research-output.txt")
 ```
 
-**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-reviewer-results.sh` entirely** — the script exits non-zero when called with an empty path list. Proceed directly to Step 1.5 with the 3 Claude outputs (inline + 2 fallback subagents).
+**Zero-externals branch**: If BOTH Cursor and Codex are unavailable (`COLLECT_ARGS` is empty), **skip `collect-agent-results.sh` entirely** — the script exits non-zero when called with an empty path list. Proceed directly to Step 1.5 with the 3 Claude outputs (inline + 2 fallback subagents).
 
 Otherwise, invoke the script with only the launched paths. Pass `--substantive-validation` so the collector promotes the documented "caller's responsibility" content check (this very paragraph, historically) into a deterministic gate that emits `STATUS=NOT_SUBSTANTIVE` for outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
 ```
 
 Use `timeout: 1860000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block.
 
-Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Under `--substantive-validation`, content validation is performed by `collect-reviewer-results.sh` (via `scripts/validate-research-output.sh`); a lane that returns thin-but-cited or long-but-uncited prose is rejected with `STATUS=NOT_SUBSTANTIVE` and a diagnostic in `FAILURE_REASON`.
+Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Under `--substantive-validation`, content validation is performed by `collect-agent-results.sh` (via `scripts/validate-research-output.sh`); a lane that returns thin-but-cited or long-but-uncited prose is rejected with `STATUS=NOT_SUBSTANTIVE` and a diagnostic in `FAILURE_REASON`.
 
 **Runtime-timeout replacement**: For any reviewer with `STATUS` not `OK` (including `NOT_SUBSTANTIVE`), follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` to flip the corresponding availability flag, then **immediately launch a Claude subagent fallback via the Agent tool** (no `subagent_type`, carrying the same per-lane prompt the failed lane would have had — same as the pre-launch fallback in Step 1.3) and wait for it before synthesis. This preserves the 3-lane invariant at synthesis time; without it, a mid-run external timeout silently reduces the synthesis input from 3 perspectives to 2.
 
@@ -484,9 +484,9 @@ Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. Un
 
 ### Quick (RESEARCH_SCALE=quick)
 
-There are no external launches in quick mode — the Step 1.3 Quick subsection launched K=3 homogeneous Claude Agent-tool subagents (issue #520) which return synchronously by design. **Skip `collect-reviewer-results.sh` entirely** — its contract is built around `run-external-reviewer.sh` sentinel polling, `.meta` retry files, and tool inference from `*cursor*` / `*codex*` basenames; it is the wrong abstraction for homogeneous Claude Agent-tool returns and would exit non-zero on the empty external-path list anyway.
+There are no external launches in quick mode — the Step 1.3 Quick subsection launched K=3 homogeneous Claude Agent-tool subagents (issue #520) which return synchronously by design. **Skip `collect-agent-results.sh` entirely** — its contract is built around `run-external-agent.sh` sentinel polling, `.meta` retry files, and tool inference from `*cursor*` / `*codex*` basenames; it is the wrong abstraction for homogeneous Claude Agent-tool returns and would exit non-zero on the empty external-path list anyway.
 
-Instead, **classify each of the K=3 lane outputs locally** via a two-stage gate: (a) non-emptiness check, then (b) substantive-content validation. The substantive gate mirrors the standard/deep modes' `collect-reviewer-results.sh --substantive-validation` invocation (without `--validation-mode`) so the "what is substantive" semantics — 200-word floor + default citation requirement, defined by `${CLAUDE_PLUGIN_ROOT}/scripts/validate-research-output.sh` — stay byte-aligned across scales (issue #543; closes the gap left by issue #520, where thin/uncited Quick-lane outputs slipped through to vote-merge synthesis).
+Instead, **classify each of the K=3 lane outputs locally** via a two-stage gate: (a) non-emptiness check, then (b) substantive-content validation. The substantive gate mirrors the standard/deep modes' `collect-agent-results.sh --substantive-validation` invocation (without `--validation-mode`) so the "what is substantive" semantics — 200-word floor + default citation requirement, defined by `${CLAUDE_PLUGIN_ROOT}/scripts/validate-research-output.sh` — stay byte-aligned across scales (issue #543; closes the gap left by issue #520, where thin/uncited Quick-lane outputs slipped through to vote-merge synthesis).
 
 For each lane k ∈ {1,2,3}, with `LANE_FILE="$RESEARCH_TMPDIR/quick-lane-${k}-output.txt"`:
 
@@ -499,7 +499,7 @@ For each lane k ∈ {1,2,3}, with `LANE_FILE="$RESEARCH_TMPDIR/quick-lane-${k}-o
    ```bash
    : > "$LANE_FILE"
    ```
-   Truncation is the chosen exclusion mechanism because it makes the existing `SYNTHESIS_PROMPT_QUICK_VOTE` instruction ("if a path's content is empty or unreadable, omit that lane from the vote-merge") naturally exclude validator-failed lanes without modifying the synthesis subagent prompt or `quick-vote-state.sh`'s schema (which still persists only `LANES_SUCCEEDED ∈ {0,1,2,3}`). Emit a sanitized per-lane operator-visible breadcrumb for substantive-failure cases — mirror `collect-reviewer-results.sh`'s `FAILURE_REASON` sanitization (`tr '|\n' '/ '` + truncate to 80 chars) so the breadcrumb is parse-safe:
+   Truncation is the chosen exclusion mechanism because it makes the existing `SYNTHESIS_PROMPT_QUICK_VOTE` instruction ("if a path's content is empty or unreadable, omit that lane from the vote-merge") naturally exclude validator-failed lanes without modifying the synthesis subagent prompt or `quick-vote-state.sh`'s schema (which still persists only `LANES_SUCCEEDED ∈ {0,1,2,3}`). Emit a sanitized per-lane operator-visible breadcrumb for substantive-failure cases — mirror `collect-agent-results.sh`'s `FAILURE_REASON` sanitization (`tr '|\n' '/ '` + truncate to 80 chars) so the breadcrumb is parse-safe:
    ```
    lane $k: NOT_SUBSTANTIVE: <sanitized validator stdout, ≤80 chars>
    ```
@@ -524,15 +524,15 @@ COLLECT_ARGS=()
 [[ "$codex_available" == true ]] && COLLECT_ARGS+=("$RESEARCH_TMPDIR/codex-research-ext-output.txt" "$RESEARCH_TMPDIR/codex-research-sec-output.txt")
 ```
 
-Same zero-externals behavior as standard: if both `cursor_available` and `codex_available` are false (`COLLECT_ARGS` is empty), skip `collect-reviewer-results.sh` entirely and proceed to Step 1.5 with the 5 Claude outputs (inline + 4 fallback subagents).
+Same zero-externals behavior as standard: if both `cursor_available` and `codex_available` are false (`COLLECT_ARGS` is empty), skip `collect-agent-results.sh` entirely and proceed to Step 1.5 with the 5 Claude outputs (inline + 4 fallback subagents).
 
-Otherwise, invoke `collect-reviewer-results.sh` with the launched paths. As in Standard mode, pass `--substantive-validation` so the collector emits `STATUS=NOT_SUBSTANTIVE` for outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416). Without this flag, Deep mode's external lanes silently slip thin/uncited research outputs through to synthesis with `STATUS=OK`:
+Otherwise, invoke `collect-agent-results.sh` with the launched paths. As in Standard mode, pass `--substantive-validation` so the collector emits `STATUS=NOT_SUBSTANTIVE` for outputs that pass sentinel/non-empty/retry checks but fail substantive-content validation (Phase 3 of umbrella #413; closes #416). Without this flag, Deep mode's external lanes silently slip thin/uncited research outputs through to synthesis with `STATUS=OK`:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substantive-validation "${COLLECT_ARGS[@]}"
 ```
 
-`collect-reviewer-results.sh` derives the tool from each output filename's basename (`*cursor*` / `*codex*`); the chosen filenames satisfy that heuristic unambiguously. **Runtime-timeout replacement** is per-tool, not per-slot — if any one Cursor or Codex lane reports `STATUS != OK` (including `NOT_SUBSTANTIVE`), flip the corresponding session-wide flag (per `external-reviewers.md`) and launch matching Claude subagent fallback(s) for ALL of that tool's slots that did not already produce `OK` output. The 5-lane invariant holds at synthesis time.
+`collect-agent-results.sh` derives the tool from each output filename's basename (`*cursor*` / `*codex*`); the chosen filenames satisfy that heuristic unambiguously. **Runtime-timeout replacement** is per-tool, not per-slot — if any one Cursor or Codex lane reports `STATUS != OK` (including `NOT_SUBSTANTIVE`), flip the corresponding session-wide flag (per `external-reviewers.md`) and launch matching Claude subagent fallback(s) for ALL of that tool's slots that did not already produce `OK` output. The 5-lane invariant holds at synthesis time.
 
 #### Per-lane suffix rehydration (deep + RESEARCH_PLAN=true)
 
@@ -596,7 +596,7 @@ This step applies to Standard, Deep, AND the Quick `LANES_SUCCEEDED >= 2` vote p
 - **Claude inline lane** (always present in Standard and Deep): write the inline research output produced at Step 1.3 (visible in conversation context under the `### Claude Research (inline)` header) to `$RESEARCH_TMPDIR/claude-inline-output.txt` via the `Write` tool. (Quick mode has no inline lane — Quick uses K=3 Agent-tool subagents only.)
 - **Claude pre-launch fallback subagents** (when `cursor_available=false` or `codex_available=false` at Step 1.3): write each Agent-tool return value to the corresponding external slot file path that the synthesis prompt references — Standard: `cursor-research-output.txt` (Cursor fallback) / `codex-research-output.txt` (Codex fallback); Deep: `cursor-research-arch-output.txt` / `cursor-research-edge-output.txt` (Cursor fallbacks) / `codex-research-ext-output.txt` / `codex-research-sec-output.txt` (Codex fallbacks). Write via the `Write` tool.
 - **Claude runtime-timeout fallback subagents** (Step 1.4 mid-run timeout replacement): write each Agent-tool return value to the same external slot file path the failed external lane would have written. Write via the `Write` tool.
-- **External lanes that ran successfully**: their outputs are already on disk at the canonical slot file paths via `run-external-reviewer.sh` — no orchestrator action needed.
+- **External lanes that ran successfully**: their outputs are already on disk at the canonical slot file paths via `run-external-agent.sh` — no orchestrator action needed.
 - **Quick K=3 Agent-tool lanes** (issue #520): Step 1.3 Quick already wrote each lane's body to `$RESEARCH_TMPDIR/quick-lane-<k>-output.txt` for k ∈ {1,2,3} via the `Write` tool — no additional persistence action needed at this step.
 
 This persistence step preserves the synthesis subagent's "read every lane by file path" contract uniformly across the in-line / pre-launch-fallback / runtime-fallback / external paths. Without it, the synthesis subagent's Read tool would hit ENOENT on the Claude-produced lanes, triggering false structural-validator failures and routing every standard/deep run to the inline-synthesis fallback path (which re-introduces self-judge bias — the very pattern this refactor exists to eliminate).

@@ -95,7 +95,7 @@ Consolidated NEVER rules collected from the procedural steps below. Each rule st
 
 4. **NEVER pass `--caller-env` or `--write-health` to `session-setup.sh` when `SESSION_ENV_PATH` is empty.** **Why:** standalone `/design` invocations have no parent `/implement` to consume the session-env or health artifacts. **How to apply:** branch on `SESSION_ENV_PATH` non-empty in Step 0; omit both flags when standalone.
 
-5. **NEVER call `collect-reviewer-results.sh` with zero positional arguments.** **Why:** it exits 1 with "at least one output file is required". This is the zero-externals failure mode when every external slot has fallen back to a Claude subagent. **How to apply:** guard each collector call with an explicit check that at least one external slot was launched; the dialectic zero-externals guardrail (Step 2a.5 step 5) and the Step 3 collector both require this.
+5. **NEVER call `collect-agent-results.sh` with zero positional arguments.** **Why:** it exits 1 with "at least one output file is required". This is the zero-externals failure mode when every external slot has fallen back to a Claude subagent. **How to apply:** guard each collector call with an explicit check that at least one external slot was launched; the dialectic zero-externals guardrail (Step 2a.5 step 5) and the Step 3 collector both require this.
 
 6. **NEVER conflate the two timeout families.** **Why:** sketch-phase timeouts (sketches are shorter) differ from plan-review + dialectic timeouts (longer, deeper reasoning). **How to apply:** use `timeout: 1260000` (Bash tool) / `--timeout 1260` (collector) / `--timeout 1200` (reviewer script) for sketch-phase launches and sketch collection; use `timeout: 1860000` / `--timeout 1860` / `--timeout 1800` for plan-review launches, dialectic debaters, and dialectic judges.
 
@@ -119,7 +119,7 @@ Set mental flags `codex_available` and `cursor_available` based on the output:
 - Else: `codex_available=true`
 - Same logic for Cursor.
 
-The `--write-health` flag writes the health status file for cross-skill propagation. It will be updated by `collect-reviewer-results.sh --write-health` during runtime if any reviewer times out.
+The `--write-health` flag writes the health status file for cross-skill propagation. It will be updated by `collect-agent-results.sh --write-health` during runtime if any reviewer times out.
 
 ## Step 1 — Create Branch
 
@@ -196,7 +196,7 @@ Execute the launches per `sketch-launch.md` — all external and fallback launch
 Collect and validate external sketch outputs using the shared collection script. Pass the output paths for whichever external slots were actually launched (omit any slot where the tool was unavailable and a Claude subagent fallback is returning via Agent tool instead):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1260 \
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1260 \
   "$DESIGN_TMPDIR/cursor-sketch-arch-output.txt" \
   "$DESIGN_TMPDIR/cursor-sketch-edge-output.txt" \
   "$DESIGN_TMPDIR/codex-sketch-innovation-output.txt" \
@@ -205,7 +205,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/collect-reviewer-results.sh --timeout 1260 \
 
 Use `timeout: 1260000` on the Bash tool call. **Do NOT** set `run_in_background: true` — this call must block. Only include output paths for slots that were actually launched as external reviewers — omit any slot whose tool was unavailable (its fallback comes back via the Agent tool).
 
-Note: This is a separate `collect-reviewer-results.sh` call from the one in Step 3. Both are permitted because they operate on completely distinct output file sets (`*-sketch-*-output.txt` vs `*-plan-output.txt`).
+Note: This is a separate `collect-agent-results.sh` call from the one in Step 3. Both are permitted because they operate on completely distinct output file sets (`*-sketch-*-output.txt` vs `*-plan-output.txt`).
 
 Parse the structured output for each reviewer's `STATUS`, `REVIEWER_FILE`, and `HEALTHY`. For sketches, a valid output is non-empty and contains substantive architectural content (at least a paragraph). If a reviewer's `STATUS` is not `OK`, follow the **Runtime Timeout Fallback** procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` (set `*_available=false` for all subsequent steps).
 
@@ -263,7 +263,7 @@ Otherwise, read `$DESIGN_TMPDIR/approach-synthesis.txt` — this provides `{SYNT
    - If `false`: print `**⚠ <Tool> unavailable — dialectic skipped for bucket <N> decisions (indices: <comma-list>). Step 2a.4 synthesis decisions stand.**`, skip that decision, and continue. Do NOT fall back to a Claude Agent-tool subagent. Do NOT reassign the decision to the surviving tool. Do NOT abort this step.
    - If `true`: queue both the thesis and antithesis launch for that decision.
 
-5. **Zero-externals guardrail**. If after iterating all selected decisions, zero buckets are queued, print no further launches, do NOT call `collect-reviewer-results.sh` at all, skip the judge phase entirely. The `dialectic-resolutions.md` file IS still written — it contains only `Disposition: bucket-skipped` entries (one per selected decision) plus any `Disposition: over-cap` entries for decisions ranked outside the top-5 cap — so Step 2b and Step 3.5 parse a uniform schema regardless of dialectic outcome. On this path, follow the second `Do NOT load` variant below.
+5. **Zero-externals guardrail**. If after iterating all selected decisions, zero buckets are queued, print no further launches, do NOT call `collect-agent-results.sh` at all, skip the judge phase entirely. The `dialectic-resolutions.md` file IS still written — it contains only `Disposition: bucket-skipped` entries (one per selected decision) plus any `Disposition: over-cap` entries for decisions ranked outside the top-5 cap — so Step 2b and Step 3.5 parse a uniform schema regardless of dialectic outcome. On this path, follow the second `Do NOT load` variant below.
 
 **MANDATORY — READ ENTIRE FILE before rendering debate prompts (step 6)**: Read `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md` completely. It contains the byte-preserved execution choreography: per-decision prompt rendering, parallel debater launch, collection, the eligibility gate (Dispositions), the debate quorum gate, the dialectic-local judge-panel re-probe, ballot construction, judge launch, tally, and the `Write dialectic-resolutions.md` sub-step. The first directive inside that file is a nested MANDATORY pointing to `references/dialectic-debate.md` — the template-body file that holds the Thesis/Antithesis prompt substitution placeholders (`{FEATURE_DESCRIPTION}`, `{SYNTHESIS_TEXT}`, `{DECISION_BLOCK}`, `{CHOSEN}`, `{ALTERNATIVE}`, `{TENSION}`, `{AFFECTED_FILES}` plus the `<debater_synthesis>` / `<debater_decision>` reference-block wrappers).
 
@@ -321,8 +321,8 @@ Run Cursor **first** in the parallel message (it takes the longest). Cursor has 
 Invoke Cursor via the shared monitored wrapper script (with `--capture-stdout` since Cursor writes results to stdout):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-plan-output.txt" --timeout 1800 --capture-stdout -- \
+  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
 ```
 
@@ -335,8 +335,8 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 Run Codex **second** in the parallel message (after Cursor). Codex has full repo access and will examine the codebase itself.
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-reviewer.sh --tool codex --output "$DESIGN_TMPDIR/codex-plan-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-model-args.sh" --tool codex --with-effort) \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESIGN_TMPDIR/codex-plan-output.txt" --timeout 1800 -- \
+  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
     --output-last-message "$DESIGN_TMPDIR/codex-plan-output.txt" \
     "Review the implementation plan in $DESIGN_TMPDIR/plan.txt for this project. Read the plan file, then explore the codebase to validate the plan. Walk five focus areas: (1) Code Quality: logical flaws, code reuse, test coverage, backward compat, style consistency. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, concern, and suggested revision. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
@@ -351,7 +351,7 @@ Launch the Claude subagent **last** in the same message (it finishes fastest). U
 
 ### Collecting, Voting, Finalize, Track Rejected
 
-Follow `plan-review.md` (loaded via the MANDATORY at the top of Step 3) for: Collecting External Reviewer Results (process Claude findings immediately, then `collect-reviewer-results.sh` for externals, dedup in-scope and OOS separately, merge Claude attribution), Voting Panel launch-order + threshold + Competition scoring, Finalize Plan Review (accepted findings revise plan, write `$DESIGN_TMPDIR/accepted-plan-findings.md`, write accepted OOS to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-design.md` when `SESSION_ENV_PATH` is non-empty, print non-accepted OOS under `## Out-of-Scope Observations`), and Track Rejected Plan Review Findings (append to `$DESIGN_TMPDIR/rejected-findings.md`, in-scope only).
+Follow `plan-review.md` (loaded via the MANDATORY at the top of Step 3) for: Collecting External Reviewer Results (process Claude findings immediately, then `collect-agent-results.sh` for externals, dedup in-scope and OOS separately, merge Claude attribution), Voting Panel launch-order + threshold + Competition scoring, Finalize Plan Review (accepted findings revise plan, write `$DESIGN_TMPDIR/accepted-plan-findings.md`, write accepted OOS to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-design.md` when `SESSION_ENV_PATH` is non-empty, print non-accepted OOS under `## Out-of-Scope Observations`), and Track Rejected Plan Review Findings (append to `$DESIGN_TMPDIR/rejected-findings.md`, in-scope only).
 
 If **all reviewers** report no in-scope issues and no out-of-scope observations, skip voting and proceed to Step 3.5 if `auto_mode=false`, or Step 3b if `auto_mode=true`.
 
@@ -399,7 +399,7 @@ Print any rejected plan review findings:
 
 ### 5a — Update Health Status File
 
-Health status file updates are now handled automatically by `collect-reviewer-results.sh --write-health` during reviewer collection (Steps 2a.3 and 3). No additional cleanup-time write is needed unless a reviewer was marked unhealthy outside of a `collect-reviewer-results.sh` call (e.g., via a manual timeout detection). If `SESSION_ENV_PATH` is non-empty and any reviewer was marked unhealthy during this session that was NOT already written by `collect-reviewer-results.sh`, re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup.
+Health status file updates are now handled automatically by `collect-agent-results.sh --write-health` during reviewer collection (Steps 2a.3 and 3). No additional cleanup-time write is needed unless a reviewer was marked unhealthy outside of a `collect-agent-results.sh` call (e.g., via a manual timeout detection). If `SESSION_ENV_PATH` is non-empty and any reviewer was marked unhealthy during this session that was NOT already written by `collect-agent-results.sh`, re-write the health status file at `${SESSION_ENV_PATH}.health` with the final health state before cleanup.
 
 ### 5b — Remove Temp Directory
 
