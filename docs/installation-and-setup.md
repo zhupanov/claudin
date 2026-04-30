@@ -46,7 +46,7 @@ claude plugin install larch@larch-local
   "env": {
     "CLAUDE_CODE_EFFORT_LEVEL": "high"
   },
-  "model": "claude-opus-4-6",
+  "model": "claude-opus-4-6[1m]",
 ```
 - Install claude code: `curl -fsSL https://claude.ai/install.sh | bash`
 - Run `claude` and verify the above settings
