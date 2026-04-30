@@ -462,10 +462,10 @@ fi
 #      literal while preserving line granularity. A future edit that drops
 #      either flag, or splits the invocation across multiple lines, fails
 #      closed under `set -o pipefail`. SKILL.md contains multiple
-#      collect-agent-results.sh invocations (Step 2 Codex implementation
-#      collector without --substantive-validation, and the Step 5 quick-mode
-#      reviewer collector with it); this assertion pins the Step 5 invocation
-#      specifically because the pipeline requires all four tokens on one line.
+#      collect-agent-results.sh invocations (Step 5 quick-mode reviewer
+#      collector with --substantive-validation); this assertion pins the
+#      Step 5 invocation specifically because the pipeline requires all
+#      four tokens on one line.
 #      Dialectic-execution and adjudication invocations live in sibling skill
 #      references, not in this SKILL.md.
 # ---------------------------------------------------------------------------
