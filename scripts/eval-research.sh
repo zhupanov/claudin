@@ -323,7 +323,7 @@ build_research_prompt() {
   # bypassed and the harness deterministically tests the labeled scale. Without
   # this forwarding, baseline runs labeled $SCALE could silently execute at a
   # different scale via auto-classification, breaking baseline comparability.
-  printf '/larch:research --scale=%s %s\n' "$SCALE" "$question"
+  printf '/larch:research --no-issue --scale=%s %s\n' "$SCALE" "$question"
 }
 
 run_one_research() {

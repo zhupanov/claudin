@@ -1,7 +1,7 @@
 ---
 name: research
-description: "Use for read-only research; auto-classify to quick|standard|deep lanes (3+0/3+3/5+5); --scale= overrides; --plan adds planner; --interactive pauses; --adjudicate adds dialectic; --keep-sidecar keeps batch; --token-budget caps tokens."
-argument-hint: "[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] <research question or topic>"
+description: "Use for read-only research; auto-classify to quick|standard|deep lanes (3+0/3+3/5+5); --scale= overrides; --plan adds planner; --interactive pauses; --adjudicate adds dialectic; --keep-sidecar keeps batch; --no-issue skips auto-issue."
+argument-hint: "[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] [--no-issue] <research question or topic>"
 allowed-tools: Bash, Read, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill, Write, Edit, NotebookEdit
 hooks:
   PreToolUse:
@@ -23,7 +23,7 @@ Collaborative best-effort read-only-repo research task with a scale-aware lane s
 - **Boolean flags**: default to `false`. Only set to `true` when the `--flag` token is explicitly present in the arguments.
 - **Value flags** (separate class — boolean defaults rule does NOT apply): each value flag has its own non-`false` default documented per flag below; only an explicit `--flag=value` token overrides it; malformed forms (unknown value, missing `=`, missing value) abort with an explicit error.
 
-Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, `--token-budget`, and `--interactive` are independent and may appear in any order at the start of `$ARGUMENTS`.
+Flags are independent — the presence of one flag must not influence the default value of any other flag. `--debug`, `--scale`, `--adjudicate`, `--keep-sidecar`, `--token-budget`, `--interactive`, and `--no-issue` are independent and may appear in any order at the start of `$ARGUMENTS`.
 
 - `--debug` (boolean): Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--plan` (boolean): Set a mental flag `RESEARCH_PLAN=true`. Enables an optional planner pre-pass before the lane fan-out: a single Claude Agent subagent decomposes `RESEARCH_QUESTION` into 2–4 focused subquestions, each lane researches its assigned subquestion(s), and synthesis is organized by subquestion. Default: `RESEARCH_PLAN=false` (byte-equivalent to pre-#420 behavior). See "Planner pre-pass — scale interaction" below for the `--scale` cross-effect; the planner is bounded (2–4 subquestions, no recursion) and falls back cleanly to single-question mode on any planner failure.
@@ -32,6 +32,7 @@ Flags are independent — the presence of one flag must not influence the defaul
 - `--adjudicate` (boolean): Set a mental flag `RESEARCH_ADJUDICATE=true`. When set, runs a 3-judge dialectic adjudication after Step 2's Finalize Validation over every reviewer finding the orchestrator rejected during validation merge/dedup — see Step 2.5 below. THESIS = "rejection stands"; ANTI_THESIS = "reinstate the reviewer's finding"; majority binds. Default: `RESEARCH_ADJUDICATE=false` (Step 2.5 short-circuits with `⏩` and behavior is unchanged from prior versions). The `(finding, rejection_rationale)` capture in Step 2 runs unconditionally (regardless of this flag), but writes only to tmpdir scratch — when the flag is off, no extra LLM work, no external-tool launches, and no additional user-visible output is produced. Composes cleanly with `--scale=quick` (which skips Step 2 entirely): when both are set, Step 2.5 short-circuits with `⏩ no rejections to adjudicate (--scale=quick skipped Step 2)` since `rejected-findings.md` is never written.
 - `--keep-sidecar` AND `--keep-sidecar=<PATH>` (boolean + value form, NO positional value): Set a mental flag `KEEP_SIDECAR=true`. Set a second mental flag `KEEP_SIDECAR_PATH` per the form variant: bare `--keep-sidecar` → `KEEP_SIDECAR_PATH=` (empty); `--keep-sidecar=<PATH>` → `KEEP_SIDECAR_PATH=<PATH>` (the literal path text after `=`). Step 4 reads `KEEP_SIDECAR_PATH` and falls back to `./research-findings-batch.md` only when it is empty (#510 review FINDING_6 — without an explicit `KEEP_SIDECAR_PATH` binding, the explicit-path form would silently fall back to the default). Step 4 cleanup preserves a `/issue`-batch markdown sidecar of the findings (one `### <title>` block per finding, parseable by `skills/issue/scripts/parse-input.sh`) past the tmpdir cleanup. Default: `KEEP_SIDECAR=false`; the sidecar is generated under `$RESEARCH_TMPDIR` at Step 3 and wiped at Step 4. **Form variants**: bare `--keep-sidecar` preserves to `./research-findings-batch.md`; `--keep-sidecar=<PATH>` preserves to `<PATH>` (must be writable; must NOT resolve under `$RESEARCH_TMPDIR`). Reject malformed forms with explicit error and abort: `--keep-sidecar=` (empty value) → print `**⚠ /research: --keep-sidecar=<path> requires a non-empty value. Aborting.**` and exit; `--keep-sidecar <some-path>` (positional value, NO `=`) → the parser stops at the first non-flag token per the existing flag-grammar contract, so `<some-path>` becomes the start of `RESEARCH_QUESTION` — operators wanting an explicit path MUST use `--keep-sidecar=<PATH>`. **Read-only-repo contract**: this is an opt-in workspace write via Bash `cp` (the prompt-only constrained tier — see "Read-only-repo contract" below); the operator opts in by using the flag. Operators should review the sidecar (and apply redaction if needed) before filing — the sidecar may include security-relevant findings from `/research --scale=deep`'s `Codex-Sec` lane. See `${CLAUDE_PLUGIN_ROOT}/SECURITY.md` § [External reviewer write surface in /research](../../SECURITY.md#external-reviewer-write-surface-in-research) and `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/render-findings-batch.md` for the helper contract and known limitations.
 - `--token-budget=<positive integer>` (value): Set a mental flag `RESEARCH_TOKEN_BUDGET` to the explicit numeric value. Default: `RESEARCH_TOKEN_BUDGET=` (empty — no budget enforcement). When set, between-phase budget gates run after Step 1, Step 2.5, and Step 2.8 — see "Token telemetry and budget enforcement" below. The budget governs **measurable Claude subagent tokens only** (lanes whose `Agent`-tool return carries `<usage>total_tokens: N</usage>`); Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from the cap. Reject malformed forms with explicit error and abort: `--token-budget=foo` (non-integer) → print `**⚠ /research: --token-budget must be a positive integer (got: foo). Aborting.**` and exit; `--token-budget=` (empty value) → print `**⚠ /research: --token-budget=<N> requires a value. Aborting.**` and exit; `--token-budget=0` or negative → print `**⚠ /research: --token-budget must be > 0 (got: <val>). Aborting.**` and exit. See GitHub issue #518 for the umbrella feature.
+- `--no-issue` (boolean): Set a mental flag `RESEARCH_NO_ISSUE=true`. When set, Step 3.5 (auto-issue) is skipped — no GitHub issue is created for the research results. Default: `RESEARCH_NO_ISSUE=false`. When `RESEARCH_NO_ISSUE=false` (default), Step 3.5 creates a GitHub issue containing the research question, full report, and token spend metadata via `/issue` single mode. Composes cleanly with all other flags: `--keep-sidecar` preserves the per-finding batch sidecar independently; `--token-budget` budget-abort skips both Step 3 (no report) and Step 3.5 (no issue); all scale modes produce a `research-report-final.md` consumed by Step 3.5.
 
 ## Empty-question preflight
 
@@ -175,6 +176,7 @@ Step Name Registry:
 | 2.7 | citation-validation |
 | 2.8 | critique loop |
 | 3 | report |
+| 3.5 | auto-issue |
 | 4 | cleanup |
 
 (Step 0.5 runs unconditionally on every `/research` invocation — it skips the classifier with a one-line `⏩ manual override` breadcrumb when `--scale=` is set, and otherwise invokes the deterministic shell classifier to resolve `RESEARCH_SCALE`. Step 1.1 and 1.2 are sub-steps of Step 1 that execute only when `RESEARCH_SCALE != quick` AND `RESEARCH_PLAN=true`. Step 1.1.c additionally requires `RESEARCH_PLAN_INTERACTIVE=true`. They are skipped on every other path — quick mode has no per-angle differentiation to assign subquestions to.)
@@ -579,6 +581,86 @@ fi
 ```
 
 Print: `✅ 3: report — complete (<elapsed>)`
+
+## Step 3.5 — Auto-file Research Issue
+
+Print: `> **🔶 3.5: auto-issue**`
+
+Automatically create a GitHub issue containing the research question, full report, and token spend metadata. This is a convenience/archival feature — the research report (already visible in the terminal) is the core deliverable; the issue is a persistent copy.
+
+**Skip conditions** (any true → print skip breadcrumb, proceed to Step 4):
+
+- `RESEARCH_NO_ISSUE=true` (user passed `--no-issue`): print `⏩ 3.5: auto-issue — skipped (--no-issue) (<elapsed>)`.
+- `BUDGET_ABORTED=true` (no complete report exists): print `⏩ 3.5: auto-issue — skipped (budget aborted, no report) (<elapsed>)`.
+- `$RESEARCH_TMPDIR/research-report-final.md` is missing or empty: print `⏩ 3.5: auto-issue — skipped (no report file) (<elapsed>)`.
+
+### Compose issue body
+
+Capture token spend by running `token-tally.sh report` with the same arguments as Step 4 (intentional double-invocation — both reads are from the same `$RESEARCH_TMPDIR` sidecars and produce identical output; Step 4's invocation renders for user-visible terminal output):
+
+```bash
+TOKEN_SPEND=$(${CLAUDE_PLUGIN_ROOT}/scripts/token-tally.sh report \
+  --dir "$RESEARCH_TMPDIR" \
+  --scale "$RESEARCH_SCALE" \
+  --adjudicate "$RESEARCH_ADJUDICATE" \
+  --planner "$RESEARCH_PLAN" \
+  --budget-aborted "$BUDGET_ABORTED" 2>/dev/null || echo "_(token telemetry unavailable)_")
+```
+
+Write to `$RESEARCH_TMPDIR/research-issue-body.md` via Bash (under `$RESEARCH_TMPDIR`, so the PreToolUse hook does not block):
+
+```bash
+{
+  echo "**Research question**: $RESEARCH_QUESTION"
+  echo "**Branch**: $CURRENT_BRANCH"
+  echo "**Commit**: $HEAD_SHA"
+  echo "**Scale**: $RESEARCH_SCALE (source: $SCALE_SOURCE)"
+  echo ""
+  cat "$RESEARCH_TMPDIR/research-report-final.md"
+  echo ""
+  echo "$TOKEN_SPEND"
+} > "$RESEARCH_TMPDIR/research-issue-body.md"
+```
+
+On write failure, print `**⚠ 3.5: auto-issue — failed to compose issue body. Continuing.**` and proceed to Step 4.
+
+### Compose title
+
+Derive from `RESEARCH_QUESTION`: `[Research] <RESEARCH_QUESTION>`, truncated so the full title fits within `/issue`'s 80-character title limit. No timestamp, no SHA — rely on `/issue`'s built-in semantic dedup for repeated research on the same topic (each run produces genuinely different body content: different findings, token costs).
+
+### Invoke /issue
+
+> **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
+
+1. Clear stale sentinel:
+
+   ```bash
+   rm -f "$RESEARCH_TMPDIR/research-issue.sentinel"
+   ```
+
+2. Invoke `/issue` via the Skill tool in single mode:
+
+   ```
+   --sentinel-file $RESEARCH_TMPDIR/research-issue.sentinel --body-file $RESEARCH_TMPDIR/research-issue-body.md --label research [Research] <truncated question>
+   ```
+
+   No `--go` — this is archival/tracking output, not an approved work queue item.
+
+3. Parse `/issue` stdout for `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, and per-issue `ISSUE_<i>_NUMBER` / `ISSUE_<i>_URL`.
+
+4. Sentinel verification (defense in depth):
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/verify-skill-called.sh --sentinel-file "$RESEARCH_TMPDIR/research-issue.sentinel"
+   ```
+
+   Parse `VERIFIED` and `REASON`.
+
+5. **On success** (`VERIFIED=true` AND `ISSUES_CREATED >= 1`): print `✅ 3.5: auto-issue — archived as #<ISSUE_NUMBER> (<elapsed>)`.
+
+6. **On dedup** (`VERIFIED=true` AND `ISSUES_CREATED == 0` AND `ISSUES_DEDUPLICATED >= 1`): print `✅ 3.5: auto-issue — deduplicated (<elapsed>)`.
+
+7. **On failure** (`VERIFIED=false`, or `/issue` error, or `ISSUES_FAILED >= 1`): print `**⚠ 3.5: auto-issue — /issue failed (REASON=<token>). Research results were not archived to GitHub. Continuing.**` and proceed to Step 4. This is a documented carve-out from the existing "Filing findings as issues" fail-closed contract (lines 117-155): that procedure's fail-closed intent applies to research-brief-driven filing where the filed issues ARE the deliverable; auto-archive is a convenience feature where the report (already visible in the terminal) is the deliverable.
 
 ## Step 4 — Cleanup and Final Warnings
 

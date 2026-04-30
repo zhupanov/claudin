@@ -93,7 +93,7 @@ Run pre-commit linters (shellcheck, markdownlint, jsonlint, actionlint, gitleaks
 
 ## `/research`
 
-**Arguments**: `[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] <research question or topic>`
+**Arguments**: `[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] [--no-issue] <research question or topic>`
 
 **Source**: [`skills/research/SKILL.md`](../skills/research/SKILL.md) · [Diagram](../skills/research/diagram.svg)
 
