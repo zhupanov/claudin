@@ -35,7 +35,7 @@ Each rule states WHY; per-site reminders reference by anchor name.
 
 3. **NEVER use the `ours`/`theirs` git labels when describing conflict sides during rebase.** **Why**: during rebase their semantics are inverted vs. merge (`--ours` = base being rebased onto = upstream main); labels cause silent resolution errors. **How to apply**: always use "upstream (main)" and "feature branch commit" in Phase 1 commentary and user prompts.
 
-4. **NEVER skip the `/review` step regardless of the nature of changes.** **Why**: all changes — code, skills, documentation, data files, configuration — require full reviewer-panel vetting. **How to apply**: Step 5 normal mode always invokes `/review`; quick mode runs a single-reviewer loop but still mandates review.
+4. **NEVER skip the `/review` step regardless of the nature of changes.** **Why**: all changes — code, skills, documentation, data files, configuration — require full reviewer-panel vetting. **How to apply**: Step 5 normal mode always invokes `/review`; quick mode runs a multi-round review loop (round 1: 5 specialists; rounds 2+: single generic reviewer) but still mandates review.
 
 5. **NEVER let the Step 9a.1 sentinel short-circuit silently skip the anchor-comment Accepted-OOS update.** **Why**: idempotency recovery MUST update the anchor comment's `oos-issues` section from recovered URLs; silent skip breaks the anchor contract as the Phase 3+ single source of truth for Accepted OOS content. **How to apply**: the idempotent-rerun branch in Step 9a.1 issues the same `tracking-issue-write.sh upsert-anchor` call for the anchor's `oos-issues` and `run-statistics` sections (using URLs recovered from `oos-issues-created.md`) as the normal create-script branch steps 7 and 7b.
 
@@ -49,7 +49,7 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. After stripping, save the remainder as `FEATURE_DESCRIPTION` (use this — not raw `$ARGUMENTS` — everywhere the human description is needed). **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present. Flags are independent — presence of one must not alter the default of another.**
 
-- `--quick`: `quick_mode=true`. Step 1 skips `/design` (inline plan instead); Step 5 skips `/review` (single-reviewer loop, up to 7 rounds, Cursor → Codex → Claude fallback, no voting panel); Step 7a skips the Code Flow Diagram. All other steps run normally. Independent of `--merge`.
+- `--quick`: `quick_mode=true`. Step 1 skips `/design` (inline plan instead); Step 5 skips `/review` (review loop: round 1 launches 5 Cursor specialists in parallel, rounds 2-7 use single generic Cursor → Codex → Claude fallback, no voting panel); Step 7a skips the Code Flow Diagram. All other steps run normally. Independent of `--merge`.
 - `--auto`: `auto_mode=true`. (a) forward `--auto` to `/design` in Step 1, suppressing its interactive checkpoints; (b) suppress this skill's Step 2 opportunistic questions; (c) in Step 12 merge-conflict resolution, suppress `AskUserQuestion` and use best-effort (bail if confidence too low). When `--quick` also set and `/design` skipped, `--auto` still suppresses Step 2 questions.
 - `--merge`: `merge=true`. Steps 12–15 run (CI+rebase+merge loop, local cleanup, main verification). Otherwise those steps are skipped — PR is created and workflow stops after initial CI wait, rejected findings, final report, Slack issue announce, temp cleanup. **Mutually exclusive with `--draft`.**
 - `--draft`: `draft=true`. Step 9b creates the PR in draft state (`create-pr.sh --draft`); Step 14 is skipped so the local branch stays. `draft=true` implies `merge=false`. **Mutually exclusive with `--merge`.** If both are present, print `**⚠ --draft and --merge are mutually exclusive. Aborting.**` and exit without Step 0.
@@ -625,7 +625,7 @@ Launch all 5 Cursor specialists in parallel using `${CLAUDE_PLUGIN_ROOT}/scripts
 For each specialist, when **Cursor** is available:
 ```bash
 SPECIALIST_PROMPT=$("${CLAUDE_PLUGIN_ROOT}/scripts/render-specialist-prompt.sh" --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode diff)
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$IMPLEMENT_TMPDIR/quick-review-specialist-<name>.txt" --timeout 1800 --capture-stdout -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$IMPLEMENT_TMPDIR/cursor-quick-review-specialist-<name>.txt" --timeout 1800 --capture-stdout -- \
   cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
     "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "$SPECIALIST_PROMPT")"
 ```
@@ -633,20 +633,20 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$IMP
 When **Cursor unavailable, Codex available** (per slot):
 ```bash
 SPECIALIST_PROMPT=$("${CLAUDE_PLUGIN_ROOT}/scripts/render-specialist-prompt.sh" --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode diff)
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$IMPLEMENT_TMPDIR/quick-review-specialist-<name>.txt" --timeout 1800 -- \
+${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$IMPLEMENT_TMPDIR/codex-quick-review-specialist-<name>.txt" --timeout 1800 -- \
   codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$IMPLEMENT_TMPDIR/quick-review-specialist-<name>.txt" \
+    --output-last-message "$IMPLEMENT_TMPDIR/codex-quick-review-specialist-<name>.txt" \
     "$SPECIALIST_PROMPT"
 ```
 
-When **both unavailable** for ALL 5 slots: fall back to a single Claude Code Reviewer subagent (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) using the unified archetype in `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, preserving the "at least one reviewer" guarantee. Print `**⚠ 5: code review — round 1 both external tools unavailable, using Claude generic fallback**`.
+When **both unavailable** for ALL 5 slots: fall back to a single Claude Code Reviewer subagent (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) using the unified archetype in `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, preserving the "at least one reviewer" guarantee. Print `**⚠ 5: code review — round 1 both external tools unavailable, using Claude generic fallback**`. **Skip `collect-agent-results.sh` entirely** on this path — parse only the Agent-tool subagent output. Proceed to 5.4.
 
-Collect all launched external specialist outputs via a single `collect-agent-results.sh` call:
+When **at least one external specialist launched**: collect all launched external specialist outputs via a single `collect-agent-results.sh` call (only include paths for slots that actually used `run-external-agent.sh`):
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substantive-validation --validation-mode [--write-health "${SESSION_ENV_PATH}.health"] "$IMPLEMENT_TMPDIR/quick-review-specialist-structure.txt" "$IMPLEMENT_TMPDIR/quick-review-specialist-correctness.txt" "$IMPLEMENT_TMPDIR/quick-review-specialist-testing.txt" "$IMPLEMENT_TMPDIR/quick-review-specialist-security.txt" "$IMPLEMENT_TMPDIR/quick-review-specialist-edge-cases.txt"
+${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substantive-validation --validation-mode [--write-health "${SESSION_ENV_PATH}.health"] "$IMPLEMENT_TMPDIR/<tool>-quick-review-specialist-structure.txt" "$IMPLEMENT_TMPDIR/<tool>-quick-review-specialist-correctness.txt" "$IMPLEMENT_TMPDIR/<tool>-quick-review-specialist-testing.txt" "$IMPLEMENT_TMPDIR/<tool>-quick-review-specialist-security.txt" "$IMPLEMENT_TMPDIR/<tool>-quick-review-specialist-edge-cases.txt"
 ```
 
-Include `--write-health` only if `SESSION_ENV_PATH` is non-empty. Only include output paths for slots actually launched as external tools. For any specialist with `STATUS` not `OK`, follow Runtime Timeout Fallback per slot — flip the tool unavailable, but **do NOT retry the round**; proceed with valid outputs from the other specialists. Deduplicate findings across all 5 specialists before evaluation. Proceed to 5.4.
+Where `<tool>` is `cursor` or `codex` depending on which tool was used for each slot. Include `--write-health` only if `SESSION_ENV_PATH` is non-empty. For any specialist with `STATUS` not `OK`, follow Runtime Timeout Fallback per slot — flip the tool unavailable, but **do NOT retry the round**; proceed with valid outputs from the other specialists. **All-fail guard**: if zero specialist outputs yield `STATUS=OK` with substantive content (every launched specialist failed validation or timed out), fall back to the single generic reviewer path for round 1 — launch a single Claude Code Reviewer subagent (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) as in the both-unavailable path. Print `**⚠ 5: code review — round 1 all specialists failed, falling back to Claude generic**`. Deduplicate findings across all specialists (and any Claude fallback) before evaluation. Proceed to 5.4.
 
 **5.3-generic — Launch single reviewer** (rounds 2+ only):
 
@@ -705,7 +705,7 @@ After `/review` returns, follow the Cross-Skill Health Propagation procedure fro
 
 ### Anchor-section fragment — `code-review-tally`
 
-After `/review` returns (normal mode) or the quick-mode loop completes, compose the `code-review-tally` fragment from the visible per-finding vote breakdown and Reviewer Competition Scoreboard (normal mode), or from the round-by-round summary (quick mode — fallback text `"Quick mode — no voting panel. Main agent reviewed findings across up to 7 single-reviewer rounds (Cursor → Codex → Claude fallback chain)."`). Write to `$IMPLEMENT_TMPDIR/anchor-sections/code-review-tally.md`. If `ISSUE_NUMBER` is set, assemble the anchor body and upsert (see Step 0.5 "Anchor-section accumulation").
+After `/review` returns (normal mode) or the quick-mode loop completes, compose the `code-review-tally` fragment from the visible per-finding vote breakdown and Reviewer Competition Scoreboard (normal mode), or from the round-by-round summary (quick mode — fallback text `"Quick mode — no voting panel. Round 1: 5 Cursor specialists in parallel; rounds 2+: single generic Cursor → Codex → Claude fallback. Main agent reviewed findings across up to 7 rounds."`). Write to `$IMPLEMENT_TMPDIR/anchor-sections/code-review-tally.md`. If `ISSUE_NUMBER` is set, assemble the anchor body and upsert (see Step 0.5 "Anchor-section accumulation").
 
 ### Track Rejected Code Review Findings
 
@@ -1155,7 +1155,7 @@ On success: print `✅ 16a: slack issue post — posted (<elapsed>)`.
 
 ## Step 17 — Final Report
 
-If `quick_mode=true`: print `✅ 17: final report — quick mode, /design skipped, single-reviewer loop (<elapsed>)`.
+If `quick_mode=true`: print `✅ 17: final report — quick mode, /design skipped, specialist round 1 + generic rounds 2+ (<elapsed>)`.
 
 If `quick_mode=false`: print a summary noting plan review findings were reported by `/design` (visible above) and code review findings by `/review` (visible above). If both phases reported all suggestions implemented, print `✅ 17: final report — all suggestions implemented, plan + code review (<elapsed>)`.
 

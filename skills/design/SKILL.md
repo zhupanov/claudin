@@ -1,13 +1,13 @@
 ---
 name: design
-description: "Use when designing any non-trivial feature, refactor, or architectural change — design, architecture, scope, approach validation. Sketch agents (9 regular, 3 quick) propose approaches; 3-reviewer voting panel validates via dialectic."
+description: "Use when designing any non-trivial feature, refactor, or architectural change — design, architecture, scope, approach validation. Sketch agents (9 regular, 3 quick) propose approaches; 6-reviewer panel validates via 3-voter dialectic."
 argument-hint: "[--auto] [--quick] [--debug] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
 
 # Design Skill
 
-Design an implementation plan for a feature and review it with a unified 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). The sketch phase (Step 2a) runs 9 agents in regular mode (1 Claude General sketch + 4 Cursor slots + 4 Codex slots, one per personality per tool) or 3 agents in quick mode (1 Claude General + 1 Cursor-Generic + 1 Codex-Generic).
+Design an implementation plan for a feature and review it with a 6-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex generic + 4 Cursor archetypes: Architecture/Standards, Edge-cases/Failure-modes, Innovation/Exploration, Pragmatism/Safety), adjudicated by a 3-voter panel (Claude + Codex + Cursor). The sketch phase (Step 2a) runs 9 agents in regular mode (1 Claude General sketch + 4 Cursor slots + 4 Codex slots, one per personality per tool) or 3 agents in quick mode (1 Claude General + 1 Cursor-Generic + 1 Codex-Generic).
 
 **Flags**: Parse flags from the start of `$ARGUMENTS` before treating the remainder as the feature description. Flags may appear in any order; stop at the first non-flag token. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
@@ -395,7 +395,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DES
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Cursor archetype fallback** (per slot, if `cursor_available` is false): For each archetype slot where Cursor is unavailable, try Codex first (if `codex_available`). Use the same archetype prompt but launch via the Codex pattern (no `--capture-stdout`; uses `--output-last-message`). If both Cursor and Codex are unavailable for a slot, launch a Claude subagent fallback (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the archetype personality prepended to the plan-review context.
+**Cursor archetype fallback** (per slot, if `cursor_available` is false): For each archetype slot where Cursor is unavailable, try Codex first (if `codex_available`). Use the same archetype prompt but launch via the Codex pattern (no `--capture-stdout`; uses `--output-last-message`) with distinct per-archetype output paths: `$DESIGN_TMPDIR/codex-plan-arch-output.txt`, `$DESIGN_TMPDIR/codex-plan-edge-output.txt`, `$DESIGN_TMPDIR/codex-plan-innovation-output.txt`, `$DESIGN_TMPDIR/codex-plan-pragmatic-output.txt`. If both Cursor and Codex are unavailable for a slot, launch a Claude subagent fallback (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the archetype personality prepended to the plan-review context.
 
 ### Codex Reviewer (if `codex_available`)
 
@@ -410,7 +410,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESI
 
 Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
-**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the same plan-review context. This fallback ensures the total reviewer count remains 3 regardless of external tool availability.
+**Codex fallback** (if `codex_available` is false): Launch a Claude Code Reviewer subagent via the Agent tool (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) with the same plan-review context. This fallback ensures the Codex generic slot is always filled regardless of external tool availability.
 
 ### Claude Code Reviewer Subagent (1 reviewer)
 
