@@ -38,7 +38,7 @@ A lightweight path using generic (non-personality-specialized) prompts:
 
 ### Important Distinction
 
-The sketch agents are **completely separate** from the 3 plan-review agents that evaluate the plan later in `/design` Step 3. The sketch agents explore the design space; the plan reviewers validate the resulting plan (3-reviewer panel: 1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor). They have different roles, different prompts, and serve different purposes.
+The sketch agents are **completely separate** from the 6 plan-review agents that evaluate the plan later in `/design` Step 3. The sketch agents explore the design space; the plan reviewers validate the resulting plan (6-reviewer panel: 1 Claude Code Reviewer subagent + 1 Codex generic + 4 Cursor archetypes). They have different roles, different prompts, and serve different purposes.
 
 ## Per-Slot Fallback
 
@@ -134,7 +134,7 @@ flowchart TD
 
 4. **Dialectic debate and adjudication** (`/design` only) — If the synthesis identifies contested decisions (points where sketches genuinely diverged), up to 5 (in priority order) are submitted to structured thesis/antithesis debates run on Cursor and Codex via deterministic per-decision bucketing. For each contested decision, a thesis agent defends the synthesis choice and an antithesis agent argues for the strongest alternative. Both run in parallel with codebase access. Successful debates are then forwarded to a **3-judge binary panel** (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unavailable) that casts `THESIS` / `ANTI_THESIS` votes on each decision. The orchestrator writes resolutions as directed by the panel, recording `Disposition: voted | fallback-to-synthesis | bucket-skipped | over-cap` per decision. This step is skipped when all sketches agree. See [Dialectic Debate](#dialectic-debate-design-only) below for details; the adjudication protocol is defined in `skills/shared/dialectic-protocol.md`.
 
-5. **Full plan** — The synthesis and any dialectic resolutions inform the complete implementation plan, which is then submitted to the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor) for validation.
+5. **Full plan** — The synthesis and any dialectic resolutions inform the complete implementation plan, which is then submitted to the 6-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex generic + 4 Cursor archetypes) for validation.
 
 ## Dialectic Debate (/design only)
 
