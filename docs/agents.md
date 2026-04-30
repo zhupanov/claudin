@@ -32,8 +32,8 @@ flowchart TD
 This pattern is used for:
 
 - **[Collaborative sketches](collaborative-sketches.md)** — 9 agents in regular mode (1 Claude + 4 Cursor + 4 Codex), 3 in quick mode (1 Claude + 1 Cursor + 1 Codex)
-- **Plan review** — 3 reviewers examine the implementation plan simultaneously (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor)
-- **Code review** — 3 reviewers examine the diff simultaneously (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor)
+- **Plan review** — 6 reviewers examine the implementation plan simultaneously in `/design` (1 Claude Code Reviewer subagent + 1 Codex generic + 4 Cursor archetypes); 3 reviewers in `/implement` Phase 3 conflict review and `/research` standard validation
+- **Code review** — 6 reviewers examine the diff simultaneously in `/review` (5 Cursor specialists + 1 Codex generic; Claude is a voter only)
 - **[Voting](voting-process.md)** — 3 voters evaluate findings in parallel
 
 ### Sequential Composition

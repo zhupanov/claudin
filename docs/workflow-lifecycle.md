@@ -81,7 +81,7 @@ flowchart TD
         SKETCHES --> SYNTHESIS[Approach synthesis]
         SYNTHESIS --> DIALECTIC[Dialectic: debate + 3-judge adjudication on contested decisions]
         DIALECTIC --> PLAN[Write implementation plan]
-        PLAN --> PLAN_REVIEW[Plan review: 3 reviewers]
+        PLAN --> PLAN_REVIEW[Plan review: 6 reviewers]
         PLAN_REVIEW --> VOTE1[Voting panel adjudicates findings]
         VOTE1 --> REVISE[Revise plan if needed]
         REVISE --> DISCUSS2[Design discussion round 2]
@@ -92,7 +92,7 @@ flowchart TD
     subgraph IMPL_PHASE["Implementation Phase"]
         CODE[Implement feature] --> VALIDATE1[Validation checks]
         VALIDATE1 --> COMMIT1[First commit]
-        COMMIT1 --> CODE_REVIEW[Code review: 3 reviewers]
+        COMMIT1 --> CODE_REVIEW[Code review: 6 reviewers]
         CODE_REVIEW --> VOTE2[Voting panel adjudicates findings]
         VOTE2 --> FIX[Implement accepted fixes]
         FIX --> VALIDATE2[Validation checks]
@@ -162,7 +162,7 @@ Certain steps in the workflow depend on configuration prerequisites and are skip
 - **Slack announcements** — On by default when Slack configuration (`LARCH_SLACK_BOT_TOKEN` + `LARCH_SLACK_CHANNEL_ID`) is present. `/implement` Step 16a posts a single tracking-issue status message near the end of each run. Pass `--no-slack` to opt out. With missing env vars (and `--no-slack` not set), the step is skipped with a warning at session setup. The workflow continues in both cases.
 - **CI monitoring** — Requires repository identification. When unavailable, CI monitoring is skipped.
 - **Version bump** — Requires a `/bump-version` skill defined in the repo. When absent, the version bump step is skipped with a warning.
-- **External reviewers (Cursor, Codex)** — When unavailable, Claude Code Reviewer subagent fallbacks replace them so the per-skill lane/voter counts remain constant in most phases (3 for plan/code review and `/research --scale=standard`; 1 for `/research --scale=quick`; 5 for `/research --scale=deep`; 9 for the `/design` sketch phase in regular mode, 3 in quick mode; 3 for voting panels; 3 for the `/design` dialectic judge panel). The review still lands because the unified Code Reviewer archetype is what each fallback reviewer runs; losing the external tool means losing harness diversity but not coverage.
+- **External reviewers (Cursor, Codex)** — When unavailable, Claude Code Reviewer subagent fallbacks replace them so the per-skill lane/voter counts remain constant in most phases (6 for `/design` plan review; 3 for `/implement` Phase 3 conflict review and `/research --scale=standard`; 1 for `/research --scale=quick`; 5 for `/research --scale=deep`; 9 for the `/design` sketch phase in regular mode, 3 in quick mode; 3 for voting panels; 3 for the `/design` dialectic judge panel). In `/review`, the fallback chain differs: Cursor down → Codex fills specialist slots; both down → 1 Claude generic (see [review-agents.md](review-agents.md)). The review still lands because the unified Code Reviewer archetype is what each fallback reviewer runs; losing the external tool means losing harness diversity but not coverage.
 - **Dialectic debate buckets (`/design` Step 2a.5)** — Unlike the phases above, the dialectic **debate** phase does NOT replace an unavailable tool with a Claude subagent. When the assigned external tool (Cursor for odd-indexed decisions, Codex for even) is unavailable, the bucket is **skipped entirely** and a `Disposition: bucket-skipped` resolution is written (the synthesis decision stands for that point). This carve-out applies to debate execution only — the post-debate **judge panel** uses replacement-first normally. See [External Reviewers](external-reviewers.md#dialectic-specific-behavior) and `skills/shared/dialectic-protocol.md` for details.
 
 ## Resolution Protocols

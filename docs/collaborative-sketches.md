@@ -51,8 +51,8 @@ The handling of unavailable external tools differs across workflow phases:
 | Phase | Unavailable Tool Handling |
 |---|---|
 | **Sketch phase** (`/design`) | Per-slot Claude fallbacks with matching prompt — 9 agents in regular mode, 3 in quick mode |
-| **Plan review** (`/design`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
-| **Code review** (`/review`) | Claude Code Reviewer subagent fallbacks — always 3 reviewers |
+| **Plan review** (`/design`) | Per-archetype Cursor → Codex → Claude fallback chain; Codex generic → Claude — always 6 reviewers |
+| **Code review** (`/review`) | Cursor down → Codex fills specialist slots; Codex down → Claude generic replaces Codex slot; both down → 1 Claude generic (voting skipped per threshold rules) |
 | **Voting** | Claude replacement voters used — always 3 voters. 3 voters: 2+ YES to accept; 2 voters: unanimous YES; <2 voters: voting skipped, all findings accepted |
 | **Dialectic debate** (`/design`) | **No Claude substitution for debaters** — when the assigned external tool (Cursor for odd-indexed decisions, Codex for even-indexed) is unavailable, that decision's debater bucket is skipped entirely and a `Disposition: bucket-skipped` resolution is written (synthesis decision stands). Intentional divergence from the rules above for debate execution only; see Step 2a.5 in `skills/design/SKILL.md` |
 | **Dialectic judge panel** (`/design`) | **Claude replacements keep the panel at 3** — the post-debate 3-judge panel (Claude Code Reviewer subagent + Codex + Cursor) follows the repo-wide replacement-first pattern. When an external judge tool is unhealthy, a Claude Code Reviewer subagent replaces that slot. Judges merely adjudicate between pre-authored defenses — the no-Claude rule applies to adversarial debate execution only, not to adjudication. See `skills/shared/dialectic-protocol.md` |
