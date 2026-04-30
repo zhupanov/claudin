@@ -98,10 +98,16 @@ PREAMBLE
   # Specialist personality body.
   printf '%s\n\n' "$BODY"
 
-  # Focus-area tagging instruction.
-  cat <<'TAGGING'
+  # Focus-area tagging instruction (mode-specific).
+  if [[ "$MODE" == "diff" ]]; then
+    cat <<'TAGGING_DIFF'
 Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.
-TAGGING
+TAGGING_DIFF
+  else
+    cat <<'TAGGING_SLICE'
+Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in the canonical file list as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in the canonical list, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in the canonical list. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.
+TAGGING_SLICE
+  fi
 
   # Competition notice (optional).
   if [[ "$COMPETITION_NOTICE" == "true" ]]; then
