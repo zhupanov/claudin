@@ -33,13 +33,13 @@ Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
   ```
 - **`{OUTPUT_INSTRUCTION}`** = `"What the concern is"` + `"Suggested revision to the plan"`
 
-Invoke via Agent tool with subagent_type: `larch:code-reviewer` and model: `"sonnet"`. The agent file's checklist matches the shared template; any fallback Claude launches (when Codex or Cursor are unavailable) use the same subagent type and model override. Append the Competition notice blockquote above to the prompt of every reviewer (Claude subagent + external reviewers).
+Invoke via Agent tool with subagent_type: `larch:code-reviewer`, model: `"opus"`. The agent file's checklist matches the shared template; any fallback Claude launches (when Codex or Cursor are unavailable) use subagent_type: `larch:code-reviewer` with model: `"sonnet"` (fallbacks stay on sonnet). Append the Competition notice blockquote above to the prompt of every reviewer (Claude subagent + external reviewers).
 
 ---
 
 ## Voter prompts
 
-- **Voter 1**: **Claude Code Reviewer subagent** — fresh Agent tool invocation (subagent_type: `larch:code-reviewer`) with the voting prompt. Instruct: `"You are a senior code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
+- **Voter 1**: **Claude Code Reviewer subagent** — fresh Agent tool invocation (subagent_type: `larch:code-reviewer`, model: `"opus"`) with the voting prompt. Instruct: `"You are a senior code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed modifications to an implementation plan. Be scrupulous — only vote YES for findings that are correct, important, and worth revising the plan for. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants. Work at your maximum reasoning effort level."`
 - **Voter 2**: Codex — via `run-external-agent.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `codex_available` is false, launch a Claude subagent voter instead per the Voting Protocol.
 - **Voter 3**: Cursor — via `run-external-agent.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `cursor_available` is false, launch a Claude subagent voter instead per the Voting Protocol.
 
