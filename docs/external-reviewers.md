@@ -1,6 +1,6 @@
 # External Agents
 
-Codex and Cursor participate alongside Claude subagents as reviewers, voters, and implementors in the Larch workflow. This document covers the shared integration procedures.
+Codex and Cursor participate alongside Claude subagents as reviewers, voters, and sketch authors in the Larch workflow. This document covers the shared integration procedures.
 
 ## Availability Checks
 
@@ -15,7 +15,7 @@ Skills gracefully degrade when external tools are unavailable. When Codex or Cur
 
 ## Trust boundary (filesystem access)
 
-External agents in `/research` and `/review` launch directly against the working tree (`cursor agent ... --workspace "$PWD"`, `codex exec --full-auto -C "$PWD"`) and inherit the user's filesystem privileges. For review and research tasks, the prompt asks them not to modify files — this is a behavioral constraint, not a sandbox. For `/implement` Step 2 coding delegation, Codex runs in **write-mode** (`codex exec --full-auto`) and is expected to modify the working tree; full-filesystem write trust is granted by design (see [`SECURITY.md` § External tool delegation](../SECURITY.md#trust-model) for the trust-model framing). The `/research` skill carries a skill-scoped `PreToolUse` hook (`scripts/deny-edit-write.sh`) that mechanically guards Claude's own `Edit | Write | NotebookEdit` tool surface to canonical `/tmp` only; the hook does **not** cover Bash or subprocess-spawned external agents. See [`SECURITY.md` § External reviewer write surface in /research](../SECURITY.md#external-reviewer-write-surface-in-research) for the full trust-model framing and [`docs/review-agents.md` § External reviewer trust boundary](review-agents.md#external-reviewer-trust-boundary-skills-using-cursor--codex-against-pwd) for the skill-author-facing summary.
+External agents in `/research` and `/review` launch directly against the working tree (`cursor agent ... --workspace "$PWD"`, `codex exec --full-auto -C "$PWD"`) and inherit the user's filesystem privileges. For review and research tasks, the prompt asks them not to modify files — this is a behavioral constraint, not a sandbox. `/implement` Step 2 implementation is performed by the main Claude agent; Codex and Cursor participate only as reviewers (Step 5), sketch authors (`/design`), and voters — they do not modify the working tree during `/implement`. The `/research` skill carries a skill-scoped `PreToolUse` hook (`scripts/deny-edit-write.sh`) that mechanically guards Claude's own `Edit | Write | NotebookEdit` tool surface to canonical `/tmp` only; the hook does **not** cover Bash or subprocess-spawned external agents. See [`SECURITY.md` § External reviewer write surface in /research](../SECURITY.md#external-reviewer-write-surface-in-research) for the full trust-model framing and [`docs/review-agents.md` § External reviewer trust boundary](review-agents.md#external-reviewer-trust-boundary-skills-using-cursor--codex-against-pwd) for the skill-author-facing summary.
 
 ## Launching External Reviewers
 

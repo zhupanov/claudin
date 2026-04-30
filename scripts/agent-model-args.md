@@ -1,6 +1,6 @@
 # scripts/agent-model-args.sh — contract
 
-`scripts/agent-model-args.sh` outputs model (and optionally effort) CLI arguments for external agent tools (Codex, Cursor). Called by every external-agent launch site — reviews, sketches, voting, dialectic, implementation.
+`scripts/agent-model-args.sh` outputs model (and optionally effort) CLI arguments for external agent tools (Codex, Cursor). Called by every external-agent launch site — reviews, sketches, voting, dialectic.
 
 ## Fallback chain (Codex)
 
