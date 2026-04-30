@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/design` sketch phase expanded from 5 agents (1 Claude + 2 Cursor + 2 Codex) to 9 in regular mode (1 Claude + 4 Cursor + 4 Codex, one per personality per tool) and 3 in quick mode (1 Claude + 1 Cursor-Generic + 1 Codex-Generic).
 - Added `--quick` flag to `/design` for a lightweight 3-agent sketch phase.
 
+### Added
+
+- `/research` Step 3.5 auto-archives the full research report (question, results, token spend) as a GitHub issue after each successful run via `/issue` single mode. `--no-issue` flag (default off) skips this step.
+- Transitive callers (`scripts/eval-research.sh`, `/skill-evolver`) pass `--no-issue` to suppress auto-issue when `/research` is invoked as an intermediate step.
+- `SECURITY.md` documents the auto-issue publication surface, `redact-secrets.sh` backstop, residual risk, and `--no-issue` escape hatch.
+
 ## [12.2.0] - 2026-04-30
 
 ### Changed
