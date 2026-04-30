@@ -43,13 +43,16 @@ Voters decide whether each OOS item deserves a GitHub issue:
 
 ## Scoreboard
 
-After voting completes, a scoreboard is printed showing each reviewer's performance:
+After voting completes, a scoreboard is printed showing each reviewer's performance. Attribution labels are skill-specific — `/review` uses 6 independent players (`Structure`, `Correctness`, `Testing`, `Security`, `Edge-cases`, `Codex`); `/design` uses 3 players (`Code`, `Codex`, `Cursor`). One row per independent reviewer:
 
 | Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Accepted | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
-| Code | 3 | 2 | 1 | 0 | 0 | 1 | 0 | +2 |
-| Codex | 2 | 1 | 0 | 1 | 0 | 0 | 0 | +1 |
-| Cursor | 2 | 1 | 1 | 0 | 0 | 1 | 1 | +2 |
+| Structure | 2 | 1 | 1 | 0 | 0 | 0 | 0 | +1 |
+| Correctness | 1 | 1 | 0 | 0 | 0 | 0 | 0 | +1 |
+| Testing | 2 | 1 | 0 | 1 | 0 | 1 | 1 | +2 |
+| Security | 1 | 1 | 0 | 0 | 0 | 0 | 0 | +1 |
+| Edge-cases | 1 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| Codex | 2 | 1 | 0 | 0 | 1 | 0 | 0 | 0 |
 
 ## Future Plans
 

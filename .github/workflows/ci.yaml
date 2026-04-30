@@ -141,6 +141,11 @@ jobs:
           BACKTICKED_FILES=(
             skills/shared/reviewer-templates.md
             agents/code-reviewer.md
+            agents/reviewer-structure.md
+            agents/reviewer-correctness.md
+            agents/reviewer-testing.md
+            agents/reviewer-security.md
+            agents/reviewer-edge-cases.md
             docs/review-agents.md
           )
           # Files where the enum appears unquoted (slash-separated) inside
