@@ -31,7 +31,7 @@ flowchart TD
 
 This pattern is used for:
 
-- **[Collaborative sketches](collaborative-sketches.md)** — 5 agents propose architectural approaches in parallel (1 Claude + 2 Cursor + 2 Codex)
+- **[Collaborative sketches](collaborative-sketches.md)** — 9 agents in regular mode (1 Claude + 4 Cursor + 4 Codex), 3 in quick mode (1 Claude + 1 Cursor + 1 Codex)
 - **Plan review** — 3 reviewers examine the implementation plan simultaneously (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor)
 - **Code review** — 3 reviewers examine the diff simultaneously (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor)
 - **[Voting](voting-process.md)** — 3 voters evaluate findings in parallel
@@ -50,7 +50,7 @@ The 1 persistent [Code Reviewer archetype](review-agents.md) — a unified revie
 
 ### Sketch Agents
 
-The 5 agents in the [collaborative sketch phase](collaborative-sketches.md): 1 Claude (General, orchestrator inline) + 2 Cursor slots (Architecture/Standards + Edge-cases/Failure-modes) + 2 Codex slots (Innovation/Exploration + Pragmatism/Safety). When an external tool is unavailable, the affected slot falls back to a Claude subagent with the matching personality prompt. These are ephemeral — launched with inline prompts, not persistent agent definitions.
+The agents in the [collaborative sketch phase](collaborative-sketches.md): 9 in regular mode (1 Claude General + 4 Cursor + 4 Codex, one per personality per tool), 3 in quick mode (1 Claude General + 1 Cursor-Generic + 1 Codex-Generic). When an external tool is unavailable, the affected slot falls back to a Claude subagent with the matching prompt. These are ephemeral — launched with inline prompts, not persistent agent definitions.
 
 ### Dialectic Debaters
 
