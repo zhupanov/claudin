@@ -1242,5 +1242,9 @@ PRE_EMPTY="${SKILL_271_PARA%%"$SKILL_271_EMPTY_BC"*}"
 [[ "${#PRE_BUDGET}" -lt "${#PRE_EMPTY}" ]] \
   || fail "SKILL.md Step 2.7 'Skip preconditions' paragraph: budget-abort breadcrumb (offset ${#PRE_BUDGET}) must precede empty-synthesis breadcrumb (offset ${#PRE_EMPTY}) — emitted-FIRST/empty-second ordering (#671 Check 54b / supersedes #666)"
 
-echo "PASS: test-research-structure.sh — all 54 structural invariants hold"
+# Check 55 (#926): SKILL.md Step Name Registry must list '3.5 | auto-issue' row.
+grep -Fq "| 3.5 | auto-issue |" "$SKILL_MD" \
+  || fail "SKILL.md Step Name Registry must list '3.5 | auto-issue' row (#926 Check 55)"
+
+echo "PASS: test-research-structure.sh — all 55 structural invariants hold"
 exit 0

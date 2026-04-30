@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.4.0] - 2026-04-30
+
+### Added
+
+- `/research` Step 3.5 auto-archives the full research report (question, results, token spend) as a GitHub issue after each successful run via `/issue` single mode. `--no-issue` flag (default off) skips this step.
+- Transitive callers (`scripts/eval-research.sh`, `/skill-evolver`) pass `--no-issue` to suppress auto-issue when `/research` is invoked as an intermediate step.
+- `SECURITY.md` documents the auto-issue publication surface, `redact-secrets.sh` backstop, residual risk, and `--no-issue` escape hatch.
+
 ## [12.3.0] - 2026-04-30
 
 ### Changed

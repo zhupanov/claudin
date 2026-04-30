@@ -87,7 +87,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#research"><code>/research</code></a></td>
-      <td><code>[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] &lt;research question or topic&gt;</code></td>
+      <td><code>[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] [--no-issue] &lt;research question or topic&gt;</code></td>
     </tr>
     <tr><td colspan="2">Collaborative best-effort read-only research with adaptive scaling (<code>quick</code> / <code>standard</code> / <code>deep</code>) chosen by a deterministic classifier or via <code>--scale=...</code>. Every run includes unconditional citation validation (HEAD-fetches cited URLs under SSRF guards, validates DOIs, spot-checks file:line refs) emitted as a fail-soft PASS / FAIL / UNKNOWN ledger spliced into the final report.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
