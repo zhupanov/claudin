@@ -384,7 +384,7 @@ Use `run_in_background: true` and `timeout: 1860000` on the Bash tool call.
 
 ### Claude Code Reviewer Subagent (1 reviewer)
 
-Launch the Claude subagent **last** in the same message (it finishes fastest). Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filled per the archetype block in `plan-review.md` (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`), with the Competition notice from `plan-review.md` appended. Invoke via Agent tool with `subagent_type: larch:code-reviewer` and model: `"sonnet"`.
+Launch the Claude subagent **last** in the same message (it finishes fastest). Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filled per the archetype block in `plan-review.md` (`{REVIEW_TARGET}` / `{CONTEXT_BLOCK}` / `{OUTPUT_INSTRUCTION}`), with the Competition notice from `plan-review.md` appended. Invoke via Agent tool with `subagent_type: larch:code-reviewer` and model: `"opus"`.
 
 ### Collecting, Voting, Finalize, Track Rejected
 
