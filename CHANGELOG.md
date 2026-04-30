@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.4.3] - 2026-04-30
+
+### Fixed
+
+- Update stale "3-reviewer" references for `/design` plan-review panel to reflect the current 6-reviewer composition (1 Claude + 1 Codex generic + 4 Cursor archetypes) across README.md, docs/review-agents.md, docs/agents.md, docs/collaborative-sketches.md, docs/workflow-lifecycle.md, and docs/skills.md.
+
 ## [12.4.1] - 2026-04-30
 
 ### Changed
