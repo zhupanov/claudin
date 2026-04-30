@@ -1,16 +1,16 @@
-# Voting Panel (round 1 only)
+# Voting Panel (rounds 1-3)
 
-**Consumer**: `/review` Step 3c.1, round-1 branch.
+**Consumer**: `/review` Step 3c.1, rounds 1-3 branch.
 
-**Contract**: owns the round-1 voting-panel body — three-voter setup with proportionality guidance, ballot file handling, parallel launch ordering, threshold + competition scoring rules, the zero-accepted-findings short-circuit, the OOS artifact write rule, the save-not-accepted-IDs rule, and the rounds-2+ skip-voting rule. The `### 3c.1` heading and the round-1 / rounds-2+ branch selector remain inline in SKILL.md; this file owns the round-1 body content only.
+**Contract**: owns the rounds 1-3 voting-panel body — three-voter setup with proportionality guidance, ballot file handling, parallel launch ordering, threshold + competition scoring rules, the zero-accepted-findings short-circuit, the OOS artifact write rule, the save-not-accepted-IDs rule, and the rounds-4+ skip-voting rule. The `### 3c.1` heading and the rounds 1-3 / rounds 4+ branch selector remain inline in SKILL.md; this file owns the voted-rounds body content only.
 
-**When to load**: on Step 3c.1's round-1 branch only. Do NOT load on rounds 2+ (Step 3c.1's rounds-2+ branch explicitly skips voting) or on the zero-findings short-circuit (Step 3b's skip-to-Step-4 path).
+**When to load**: on Step 3c.1's rounds 1-3 branch only. Do NOT load on rounds 4+ (Step 3c.1's rounds-4+ branch explicitly skips voting) or on the zero-findings short-circuit (Step 3b's skip-to-Step-4 path).
 
-**Binding convention**: single normative source for the round-1 voting panel mechanics — three-voter setup with proportionality guidance, ballot file handling rule, parallel launch ordering, threshold + competition scoring rules, the zero-accepted-findings short-circuit, the OOS artifact write rule, the save-not-accepted-IDs rule, and the rounds 2+ skip-voting rule. The `### 3c.1` heading and the "round 1" / "rounds 2+" branch selector remain inline in `SKILL.md`; this file owns the body content the round-1 branch executes. Do NOT load on rounds 2+ (Step 3c.1 explicitly skips voting in those rounds) or on the zero-findings short-circuit (Step 3b skip-to-Step-4 path).
+**Binding convention**: single normative source for the rounds 1-3 voting panel mechanics — three-voter setup with proportionality guidance, ballot file handling rule, parallel launch ordering, threshold + competition scoring rules, the zero-accepted-findings short-circuit, the OOS artifact write rule, the save-not-accepted-IDs rule, and the rounds 4+ skip-voting rule. The `### 3c.1` heading and the "rounds 1-3" / "rounds 4+" branch selector remain inline in `SKILL.md`; this file owns the body content the rounds 1-3 branch executes. Do NOT load on rounds 4+ (Step 3c.1 explicitly skips voting in those rounds) or on the zero-findings short-circuit (Step 3b skip-to-Step-4 path).
 
 ---
 
-**In round 1**: Submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section. For code review:
+**In rounds 1-3**: Submit both in-scope findings and out-of-scope observations to a 3-agent voting panel per the **Voting Protocol** in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`. Include OOS items on the ballot with `[OUT_OF_SCOPE]` prefix per the protocol's OOS section. For code review:
 
 - **Voter 1**: **Claude Code Reviewer subagent** — fresh Agent tool invocation (subagent_type: `larch:code-reviewer`) with the voting prompt. Instruct: `"You are a very scrupulous senior code reviewer on a voting panel. You will vote YES, NO, or EXONERATE on proposed code changes. Be extremely rigorous — only vote YES for findings that identify genuine bugs, logic errors, security issues, or clearly important improvements. Vote EXONERATE if the concern is legitimate but not worth implementing in this PR. Vote NO for trivial style nits, subjective preferences, or speculative concerns. When voting, also consider proportionality: vote EXONERATE (not YES) if the finding's concern is legitimate but the proposed change would introduce more complexity than the issue warrants."`
 - **Voter 2**: Codex — via `run-external-agent.sh` with the ballot (use `--with-effort` and append "Work at maximum reasoning effort level." to the voter prompt). If `codex_available` is false, launch a Claude subagent voter instead per the Voting Protocol. Instruct similarly as a "very scrupulous senior code reviewer," including the proportionality guidance.
@@ -22,7 +22,7 @@ Launch all available voters **in parallel** (Cursor first, then Codex, then Clau
 
 **Tally votes**: Apply the threshold rules from the Voting Protocol based on eligible voters per finding (2+ YES with 3 voters, unanimous 2/2 with 2 voters, skip if <2 eligible). Print vote breakdown per finding.
 
-**Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol. Note in the scoreboard that scores apply to round 1 only — round 2+ findings are auto-accepted and do not contribute to scores.
+**Competition scoring**: Compute and print the **Reviewer Competition Scoreboard** per the Voting Protocol with 6 independent players (`Structure`, `Correctness`, `Testing`, `Security`, `Edge-cases`, `Codex`; or `Claude` for the both-down fallback). Scores are cumulative across all voted rounds (1-3) — round 4+ findings are auto-accepted and do not contribute to scores.
 
 **Zero accepted in-scope findings**: If voting rejects all in-scope findings, print `**ℹ Voting panel rejected all in-scope findings. No changes to implement.**` (In diff mode driven by `/implement`, OOS items accepted for issue filing are processed by `/implement` Step 9a.1; in slice mode with `--create-issues`, `/review` Step 4b files them via `/umbrella` (which delegates batch creation to `/issue` and adds an umbrella tracking issue when ≥2 distinct issues are filed) — see the **Diff mode** / **Slice mode** bullets below.) and skip to **Step 4**.
 
@@ -41,4 +41,4 @@ In both modes, accepted OOS items use this format:
 - **Phase**: review
 ```
 
-**Save not-accepted finding IDs**: Record the IDs of findings not accepted by vote in round 1 (whether rejected or exonerated). In rounds 2+, if the single round-2+ reviewer (Cursor or Claude Code Reviewer fallback) re-raises a finding that was not accepted by the round-1 voting panel (same file, same issue), suppress it — do not re-accept a finding the panel already voted down or exonerated. The rounds-2+ skip-voting rule itself lives in `SKILL.md` at the Step 3c.1 branch selector (the file you are reading is loaded only on the round-1 branch, so duplicating that rule here would be dead content and a split-source maintenance risk).
+**Save not-accepted finding IDs**: Record the IDs of findings not accepted by vote in rounds 1-3 (whether rejected or exonerated). In rounds 4+, if the single generic reviewer re-raises a finding that was not accepted by voting in any of rounds 1-3 (same file, same issue), suppress it — do not re-accept a finding the panel already voted down or exonerated. The rounds-4+ skip-voting rule itself lives in `SKILL.md` at the Step 3c.1 branch selector (the file you are reading is loaded only on the rounds-1-3 branch, so duplicating that rule here would be dead content and a split-source maintenance risk).

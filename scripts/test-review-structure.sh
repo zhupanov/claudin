@@ -9,10 +9,10 @@
 #  - Line-scoped callsite pins (#318, parallel to test-research-structure.sh's
 #    reciprocal Do-NOT-load pins): domain-rules.md is pinned to the Step 3 entry
 #    callsite (a single SKILL.md line carries MANDATORY, 'Step 3', and
-#    'references/domain-rules.md' together); voting.md is pinned to the round-1
-#    branch callsite (a single line carries MANDATORY, 'round 1' (case-insensitive,
-#    matching 'In round 1' too), and 'references/voting.md' together); and the
-#    reciprocal rounds-2+ guard (a line carries 'Do NOT load' and
+#    'references/domain-rules.md' together); voting.md is pinned to the rounds 1-3
+#    branch callsite (a single line carries MANDATORY, 'rounds 1-3' (case-insensitive),
+#    and 'references/voting.md' together); and the
+#    reciprocal rounds-4+ guard (a line carries 'Do NOT load' and
 #    'references/voting.md' together). Pattern parallel to test-research-structure.sh
 #    so a future edit cannot move voting.md's MANDATORY to Step 3 entry or drop the
 #    Do-NOT-load guard without the harness catching the drift.
@@ -138,13 +138,11 @@ done
 #          word-char boundary so 'Step 3a'/'Step 30'/'Step 3f' do NOT
 #          false-pass), and 'references/domain-rules.md' together.
 #
-#     (5b) voting.md pinned to the round-1 branch: one SKILL.md line contains
-#          'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive — matches
-#          both 'round 1' and 'In round 1'; same word-char boundary so
-#          'round 10'/'round 11' do NOT false-pass), and 'references/voting.md'
-#          together.
+#     (5b) voting.md pinned to the rounds 1-3 branch: one SKILL.md line contains
+#          'MANDATORY — READ ENTIRE FILE', 'rounds 1-3' (case-insensitive),
+#          and 'references/voting.md' together.
 #
-#     (5c) Reciprocal rounds-2+ guard: one SKILL.md line contains 'Do NOT load'
+#     (5c) Reciprocal rounds-4+ guard: one SKILL.md line contains 'Do NOT load'
 #          and 'references/voting.md' together.
 # ---------------------------------------------------------------------------
 grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
@@ -153,13 +151,13 @@ grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
   || fail "(5a) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'Step 3' (boundary-anchored), and 'references/domain-rules.md' together — Step 3 entry callsite pin for domain-rules.md is broken"
 
 grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" \
-  | grep -iE 'round 1([^0-9A-Za-z]|$)' \
+  | grep -iE 'rounds 1-3' \
   | grep -Eq 'references/voting\.md([^A-Za-z0-9._-]|$)' \
-  || fail "(5b) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'round 1' (case-insensitive, boundary-anchored), and 'references/voting.md' together — round-1 branch callsite pin for voting.md is broken"
+  || fail "(5b) no single SKILL.md line carries 'MANDATORY — READ ENTIRE FILE', 'rounds 1-3' (case-insensitive), and 'references/voting.md' together — rounds-1-3 branch callsite pin for voting.md is broken"
 
 grep 'Do NOT load' "$SKILL_MD" \
   | grep -Eq 'references/voting\.md([^A-Za-z0-9._-]|$)' \
-  || fail "(5c) no single SKILL.md line carries 'Do NOT load' and 'references/voting.md' together — reciprocal rounds-2+ guard for voting.md is missing"
+  || fail "(5c) no single SKILL.md line carries 'Do NOT load' and 'references/voting.md' together — reciprocal rounds-4+ guard for voting.md is missing"
 
 # ---------------------------------------------------------------------------
 # (6) CI-parity focus-area enum check. Mirrors the agent-sync UNQUOTED_FILES
@@ -277,52 +275,37 @@ grep 'collect-agent-results.sh' "$SKILL_MD" \
 # ---------------------------------------------------------------------------
 # (14) Cursor slice-mode prompt carries the dual-list contract (#659).
 #      Pipeline-threaded grep: a single SKILL.md line must contain
-#      'cursor-wrap-prompt.sh' (anchors to the Cursor slice-mode prompt line —
-#      line 178 carries `cursor agent` as a Bash backslash-continuation, but the
-#      prompt body itself sits on the next line which is uniquely anchored by
-#      the `cursor-wrap-prompt.sh` invocation), 'slice-files.txt' (anchors to
-#      slice mode), the OOS-marking sentence, AND the two canonical section
-#      headers '### In-Scope Findings' and '### Out-of-Scope Observations'
-#      together. Pattern parallel to (5a)/(5b)/(5c)/(10): pipeline-threaded so a
-#      future edit that splits the directive across lines fails closed; under
-#      `set -o pipefail` a zero-match in any stage fails the pipeline and the
-#      `||` short-circuit triggers fail() — naturally avoids the vacuous-pass
-#      risk of a `while read` loop without a non-empty guard.
+#      Slice-mode prompts are now rendered by scripts/render-specialist-prompt.sh,
+#      not inline in SKILL.md. Assertion (14) checks that SKILL.md references
+#      the render script and that the script handles slice mode.
 # ---------------------------------------------------------------------------
-grep 'cursor-wrap-prompt.sh' "$SKILL_MD" \
-  | grep -F 'slice-files.txt' \
-  | grep -F 'Mark any finding about a file NOT in slice-files.txt as OOS' \
-  | grep -F '### In-Scope Findings' \
-  | grep -Fq '### Out-of-Scope Observations' \
-  || fail "(14) no single SKILL.md line carries 'cursor-wrap-prompt.sh', 'slice-files.txt', the OOS-marking sentence, '### In-Scope Findings', AND '### Out-of-Scope Observations' together — Cursor slice-mode dual-list contract is broken"
+grep -Fq 'render-specialist-prompt.sh' "$SKILL_MD" \
+  || fail "(14) SKILL.md does not reference 'render-specialist-prompt.sh' — specialist prompt rendering is not wired"
+grep -Fq -- '--mode' "$REPO_ROOT/scripts/render-specialist-prompt.sh" \
+  || fail "(14) scripts/render-specialist-prompt.sh does not accept '--mode' — diff/slice mode handling is missing"
 
 # ---------------------------------------------------------------------------
-# (15) ALL slice-mode external-reviewer prompts carry the dual-list contract (#659).
-#      Both the Cursor slice-mode prompt (with the `cursor-wrap-prompt.sh`
-#      wrapper) and the Codex slice-mode prompt (a bare double-quoted positional
-#      argument to `codex exec` that has no tool-specific literal on its own
-#      line) carry the OOS-marking sentence as their unique signature in
-#      `SKILL.md`. Verify that EVERY line carrying the OOS-marking sentence also
-#      carries both section header literals — catches the Codex slice prompt
-#      that assertion (14) cannot anchor by tool name. Non-emptiness guard plus
-#      per-line check matches assertion (6)'s pattern; the count check
-#      additionally pins exactly two such lines (Cursor + Codex), failing if a
-#      future edit removes one prompt or accidentally adds a third.
+# (15) Slice-mode OOS marking is handled by scripts/render-specialist-prompt.sh
+#      (for specialist reviewers) and by the agent file output format section
+#      (for all reviewers). OOS anchor language lives in the render script's
+#      slice preamble, not inline in SKILL.md. The dual-list contract (In-Scope
+#      Findings + Out-of-Scope Observations) is enforced by the specialist agent
+#      files' Output format section and by test-render-specialist-prompt.sh.
+#      This assertion verifies that scripts/render-specialist-prompt.sh exists
+#      and the 5 specialist agent files exist with the dual-list output headers.
 # ---------------------------------------------------------------------------
-oos_mark_lines=$(grep -F 'Mark any finding about a file NOT in slice-files.txt as OOS' "$SKILL_MD" || true)
-[[ -n "$oos_mark_lines" ]] \
-  || fail "(15) SKILL.md contains zero lines with the OOS-marking sentence 'Mark any finding about a file NOT in slice-files.txt as OOS' — Cursor and Codex slice-mode prompts have both regressed"
-
-oos_mark_count=$(printf '%s\n' "$oos_mark_lines" | grep -c .)
-[[ "$oos_mark_count" -eq 2 ]] \
-  || fail "(15) SKILL.md has $oos_mark_count lines with the OOS-marking sentence — expected exactly 2 (one Cursor slice prompt + one Codex slice prompt). A line was removed, duplicated, or added."
-
-while IFS= read -r line; do
-  [[ -z "$line" ]] && continue
-  if ! printf '%s\n' "$line" | grep -F '### In-Scope Findings' | grep -Fq '### Out-of-Scope Observations'; then
-    fail "(15) a slice-mode prompt line carries the OOS-marking sentence but is missing '### In-Scope Findings' and/or '### Out-of-Scope Observations' — slice-mode dual-list contract is broken on this line: $line"
-  fi
-done <<< "$oos_mark_lines"
+RENDERER="$REPO_ROOT/scripts/render-specialist-prompt.sh"
+[[ -f "$RENDERER" ]] \
+  || fail "(15) scripts/render-specialist-prompt.sh does not exist — specialist prompt rendering is broken"
+for specialist in reviewer-structure reviewer-correctness reviewer-testing reviewer-security reviewer-edge-cases; do
+  agent_file="$REPO_ROOT/agents/${specialist}.md"
+  [[ -f "$agent_file" ]] \
+    || fail "(15) agents/${specialist}.md does not exist — specialist agent definition is missing"
+  grep -Fq '### In-Scope Findings' "$agent_file" \
+    || fail "(15) agents/${specialist}.md is missing '### In-Scope Findings' section header — dual-list output contract is broken"
+  grep -Fq '### Out-of-Scope Observations' "$agent_file" \
+    || fail "(15) agents/${specialist}.md is missing '### Out-of-Scope Observations' section header — dual-list output contract is broken"
+done
 
 # ---------------------------------------------------------------------------
 # (16) Step 3a slice-mode external-reviewer parsing carries dual-list contract (#659).

@@ -95,7 +95,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><a href="docs/skills.md#review"><code>/review</code></a></td>
       <td><code>[--debug]</code></td>
     </tr>
-    <tr><td colspan="2">Code review current branch changes with a 3-reviewer panel, implementing accepted suggestions in a recursive loop.</td></tr>
+    <tr><td colspan="2">Code review current branch changes with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic), implementing accepted suggestions in a recursive loop.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#simplify-skill"><code>/simplify-skill</code></a></td>

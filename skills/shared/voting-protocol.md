@@ -20,7 +20,7 @@ FINDING_2: <reviewer attribution> — <finding description>
 ...
 ```
 
-Include the reviewer attribution (`Code`, `Codex`, or `Cursor`) so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it. The same three-attribution shape applies across all reviewer panels: `/design` and `/review` (Voting Protocol), as well as `/research` (Negotiation Protocol). `/research` does not participate in voting — it uses the Negotiation Protocol instead.
+Include the reviewer attribution so voters have context, but instruct voters to evaluate each finding on its merits regardless of who proposed it. Attribution labels are skill-specific: `/design` uses `Code` / `Codex` / `Cursor` (3-reviewer panel); `/review` uses specialist labels (`Structure`, `Correctness`, `Testing`, `Security`, `Edge-cases`, `Codex`) for its 6-reviewer panel. `/research` does not participate in voting — it uses the Negotiation Protocol instead.
 
 ## Voter Output Format
 
@@ -159,12 +159,11 @@ After voting, print a scoreboard to the session:
 
 | Reviewer | Findings | Accepted | Neutral (1 YES) | Exonerated (0 YES, 1+ EXON.) | Rejected (0 YES, 0 EXON.) | OOS Proposed | OOS Accepted | Score |
 |----------|----------|----------|-----------------|-------------------------------|---------------------------|--------------|--------------|-------|
-| Code   | 3        | 2        | 1               | 0                             | 0                         | 1            | 0            | +2    |
-| Codex  | 2        | 1        | 0               | 1                             | 0                         | 0            | 0            | +1    |
-| Cursor | 2        | 1        | 1               | 0                             | 0                         | 0            | 0            | +1    |
+| _label1_ | 3        | 2        | 1               | 0                             | 0                         | 1            | 0            | +2    |
+| _label2_ | 2        | 1        | 0               | 1                             | 0                         | 0            | 0            | +1    |
+| _label3_ | 2        | 1        | 1               | 0                             | 0                         | 0            | 0            | +1    |
 
-Note: In future iterations, token allocation will be weighted proportionally
-to reviewer scores — higher-scoring reviewers will receive more tokens.
+Attribution labels are skill-specific (e.g., `/design` uses `Code`/`Codex`/`Cursor`; `/review` uses `Structure`/`Correctness`/`Testing`/`Security`/`Edge-cases`/`Codex`). One row per independent reviewer. In future iterations, token allocation will be weighted proportionally to reviewer scores.
 ```
 
 ## Out-of-Scope Observations
