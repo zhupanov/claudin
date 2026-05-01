@@ -31,17 +31,17 @@ fi
 
 TAG="v${VERSION}"
 
-if ! gh release view "$TAG" >/dev/null 2>&1; then
+if ! gh release view "$TAG" >/dev/null; then
     echo "ERROR: release $TAG not found." >&2
     exit 1
 fi
 
-IS_LATEST=$(gh release view "$TAG" --json isLatest --jq '.isLatest')
+CURRENT_LATEST=$(gh release list --json tagName,isLatest --jq '.[] | select(.isLatest) | .tagName') || exit 1
 
-if [[ "$IS_LATEST" == "true" ]]; then
+if [[ "$CURRENT_LATEST" == "$TAG" ]]; then
     echo "$TAG is already the latest release."
     exit 0
 fi
 
-gh release edit "$TAG" --latest
+gh release edit "$TAG" --latest || exit 1
 echo "Promoted $TAG to latest release."

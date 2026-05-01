@@ -18,8 +18,9 @@ The argument is a bare semver (`X.Y.Z`) — no `v` prefix. The script prepends `
 
 1. Validates the argument matches `^[0-9]+\.[0-9]+\.[0-9]+$`.
 2. Checks that `v<VERSION>` exists as a GitHub Release via `gh release view`.
-3. If the release is already "Latest", prints a message and exits 0.
-4. Otherwise, runs `gh release edit v<VERSION> --latest` to promote it.
+3. Queries `gh release list --json tagName,isLatest` to find the current "Latest" release.
+4. If `v<VERSION>` is already "Latest", prints a message and exits 0.
+5. Otherwise, runs `gh release edit v<VERSION> --latest` to promote it.
 
 ## Exit codes
 
