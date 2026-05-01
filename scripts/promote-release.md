@@ -37,5 +37,5 @@ The argument is a bare semver (`X.Y.Z`) — no `v` prefix. The script prepends `
 ## Edit-in-sync
 
 - `scripts/promote-release.sh` — the script itself
-- `.github/workflows/release-tag.yaml` — creates releases with `--latest=false`; this script is the manual promotion counterpart
+- `.github/workflows/release-tag.yaml` — creates releases with `--latest=false --prerelease`; this script is the manual promotion counterpart (sets latest, clears pre-release)
 - `docs/installation-and-setup.md` — documents the "Latest" release concept and version pinning
