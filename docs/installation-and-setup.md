@@ -6,6 +6,8 @@ Slack integration is optional and **on by default** when `LARCH_SLACK_BOT_TOKEN`
 
 ## Install from GitHub
 
+### Latest stable release (recommended)
+
 ```bash
 claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
@@ -14,6 +16,17 @@ claude plugin install larch@larch-local
 The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, all larch skills (e.g., /implement) become available in every Claude Code session.
 
 To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
+
+### Install a specific version
+
+Each version bump on main is tagged and published as a GitHub Release (`v12.4.4`, `v12.5.0`, etc.). The "Latest" release on the [Releases page](https://github.com/zhupanov/larch/releases) is the current stable version — other releases are available but not promoted. To pin a specific version:
+
+```bash
+claude plugin marketplace add zhupanov/larch@v12.4.4
+claude plugin install larch@larch-local
+```
+
+Replace `v12.4.4` with the desired release tag. Available tags are listed on the [Releases page](https://github.com/zhupanov/larch/releases).
 
 ## Install for local development (contributors)
 

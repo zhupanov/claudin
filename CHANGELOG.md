@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.4.5] - 2026-04-30
+
+### Changed
+
+- `.github/workflows/release-tag.yaml` — auto-creates GitHub Releases (not just tags) with `--latest=false` and CHANGELOG body extraction. Includes idempotent recovery for tag-exists-but-no-release state.
+- `docs/installation-and-setup.md` — updated install instructions to reference the latest stable release; added section for pinning a specific version via `@vX.Y.Z` syntax.
+
 ## [12.4.4] - 2026-04-30
 
 ### Added
