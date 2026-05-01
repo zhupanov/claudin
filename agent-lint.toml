@@ -577,4 +577,10 @@ exclude = [
   # test-find-lock-issue.md entries above.
   "scripts/test-alias-target-resolution.md",
   "scripts/test-alias-structure.md",
+  # scripts/promote-release.sh is a standalone operator utility for promoting
+  # a GitHub Release to "Latest". It is not invoked by any SKILL.md — operators
+  # call it directly from the terminal. Its sibling contract
+  # scripts/promote-release.md is excluded for the same reason.
+  "scripts/promote-release.sh",
+  "scripts/promote-release.md",
 ]
