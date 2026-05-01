@@ -19,10 +19,10 @@ To scope the install to a single project instead of the user scope, append `--sc
 
 ### Install a specific version
 
-Every merge to main is tagged and published as a GitHub Release (`v12.4.4`, `v12.5.0`, etc.). The "Latest" release on the [Releases page](https://github.com/zhupanov/larch/releases) is the current stable version — other releases are available but not promoted. To pin a specific version:
+Each version bump on main is tagged and published as a GitHub Release (`v12.4.4`, `v12.5.0`, etc.). The "Latest" release on the [Releases page](https://github.com/zhupanov/larch/releases) is the current stable version — other releases are available but not promoted. To pin a specific version:
 
 ```bash
-claude plugin marketplace add zhupanov/larch --ref v12.4.4
+claude plugin marketplace add zhupanov/larch@v12.4.4
 claude plugin install larch@larch-local
 ```
 
