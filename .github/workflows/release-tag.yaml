@@ -1,0 +1,38 @@
+name: Release Tag
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Read version from plugin.json
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+            echo "::error::No version field found in .claude-plugin/plugin.json"
+            exit 1
+          fi
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release tag
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists on remote — skipping."
+            exit 0
+          fi
+          git tag "$TAG"
+          git push origin "$TAG"
