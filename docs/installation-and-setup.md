@@ -8,14 +8,24 @@ Slack integration is optional and **on by default** when `LARCH_SLACK_BOT_TOKEN`
 
 ### Latest stable release (recommended)
 
+#### Install
 ```bash
 claude plugin marketplace add zhupanov/larch
 claude plugin install larch@larch-local
 ```
+The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, all larch skills (e.g., /implement) become available in every Claude Code session.  Note that both commands make changes to your `~/.claude/settings.json`.
 
-The first command registers larch's marketplace manifest (`.claude-plugin/marketplace.json`). The second command installs the `larch` plugin into your Claude Code user scope. Once installed, all larch skills (e.g., /implement) become available in every Claude Code session.
+#### Configure
+Edit your `~/.claude/settings.json` and ensure that it has `permissions`/`allow` section (add it if not yet), and that it has the following 2 entries.  NOTE: make sure to replace `<your-user-name>`!
 
-To scope the install to a single project instead of the user scope, append `--scope project` to the `install` command.
+```JSON
+  "permissions": {
+      "allow": [
+        "Bash(/Users/<your-user-name>/.claude/plugins/cache/larch-local/larch/*/scripts/*)",
+        "Skill(larch:*)"
+      ]
+  }
+```
 
 ### Install a specific version
 
