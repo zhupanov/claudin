@@ -187,7 +187,5 @@
       "/var/folders"
     ]
   },
-  "enabledPlugins": {
-    "skill-judge@agent-toolkit": true
-  }
+  "enabledPlugins": {}
 }
