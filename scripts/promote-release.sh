@@ -43,5 +43,5 @@ if [[ "$CURRENT_LATEST" == "$TAG" ]]; then
     exit 0
 fi
 
-gh release edit "$TAG" --latest || exit 1
+gh release edit "$TAG" --latest --prerelease=false || exit 1
 echo "Promoted $TAG to latest release."

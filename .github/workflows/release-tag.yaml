@@ -93,4 +93,5 @@ jobs:
           gh release create "$TAG" \
             --title "$TAG" \
             --notes-file "${{ steps.changelog.outputs.body_file }}" \
-            --latest=false
+            --latest=false \
+            --prerelease
