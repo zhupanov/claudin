@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.4.6] - 2026-04-30
+
+### Added
+
+- `scripts/promote-release.sh` — operator utility to promote a GitHub Release to "Latest" by semver version. Takes mandatory `X.Y.Z` argument, validates format, checks release existence, and promotes via `gh release edit --latest`. Idempotent (exits 0 if already latest).
+
 ## [12.4.5] - 2026-04-30
 
 ### Changed

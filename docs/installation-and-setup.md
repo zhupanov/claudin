@@ -28,6 +28,8 @@ claude plugin install larch@larch-local
 
 Replace `v12.4.4` with the desired release tag. Available tags are listed on the [Releases page](https://github.com/zhupanov/larch/releases).
 
+**For maintainers:** to promote a release to "Latest", run `scripts/promote-release.sh X.Y.Z` (see `scripts/promote-release.md` for details).
+
 ## Install for local development (contributors)
 
 If you are hacking on larch itself and want Claude Code to load the plugin directly from your working checkout (so `${CLAUDE_PLUGIN_ROOT}` resolves to the repo you are editing), launch Claude Code with `--plugin-dir`:
