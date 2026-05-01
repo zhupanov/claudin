@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.4.8] - 2026-05-01
+
+### Changed
+
+- `skills/implement/SKILL.md` Step 8 (Version Bump) — added a post-return anti-halt continuation reminder right after sub-step 3b, mirroring the existing post-`/design` and post-`/review` reminder patterns. Reduces the probability of a non-deterministic halt after `/bump-version` returns successfully (closes #946).
+
 ## [12.4.7] - 2026-04-30
 
 ### Changed
