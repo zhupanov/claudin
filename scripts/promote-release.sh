@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# promote-release.sh — Promote a GitHub Release to "Latest".
+# promote-release.sh — Promote a GitHub Release to "Latest" and clear pre-release.
 #
 # Takes a semver version (X.Y.Z, no "v" prefix) and marks the
-# corresponding GitHub Release as "Latest" via gh release edit.
+# corresponding GitHub Release as "Latest" and clears the pre-release
+# flag via gh release edit.
 #
 # Usage:
 #   promote-release.sh X.Y.Z
@@ -39,9 +40,15 @@ fi
 CURRENT_LATEST=$(gh release list --json tagName,isLatest --jq '.[] | select(.isLatest) | .tagName') || exit 1
 
 if [[ "$CURRENT_LATEST" == "$TAG" ]]; then
-    echo "$TAG is already the latest release."
+    IS_PRERELEASE=$(gh release view "$TAG" --json isPrerelease --jq '.isPrerelease')
+    if [[ "$IS_PRERELEASE" == "true" ]]; then
+        gh release edit "$TAG" --prerelease=false || exit 1
+        echo "$TAG is already the latest release; cleared pre-release flag."
+    else
+        echo "$TAG is already the latest release."
+    fi
     exit 0
 fi
 
-gh release edit "$TAG" --latest || exit 1
+gh release edit "$TAG" --latest --prerelease=false || exit 1
 echo "Promoted $TAG to latest release."
