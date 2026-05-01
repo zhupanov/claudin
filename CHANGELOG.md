@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [12.4.4] - 2026-04-30
+
+### Added
+
+- `.github/workflows/release-tag.yaml` — new GitHub Actions workflow that auto-creates a `v<semver>` git tag on every push to main, derived from `.claude-plugin/plugin.json` version. Includes strict semver validation, exact ref matching, and TOCTOU race handling for concurrent runs.
+
 ## [12.4.3] - 2026-04-30
 
 ### Fixed
