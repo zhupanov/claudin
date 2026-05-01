@@ -24,15 +24,25 @@ jobs:
             echo "::error::No version field found in .claude-plugin/plugin.json"
             exit 1
           fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid semver in .claude-plugin/plugin.json: $VERSION"
+            exit 1
+          fi
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create release tag
         run: |
           set -euo pipefail
           TAG="${{ steps.version.outputs.tag }}"
-          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+          if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
             echo "Tag $TAG already exists on remote — skipping."
             exit 0
           fi
           git tag "$TAG"
-          git push origin "$TAG"
+          git push origin "$TAG" 2>&1 || {
+            if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
+              echo "Tag $TAG was created by a concurrent run — skipping."
+              exit 0
+            fi
+            exit 1
+          }
