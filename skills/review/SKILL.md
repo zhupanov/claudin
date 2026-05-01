@@ -163,30 +163,18 @@ Launch **all reviewers in a single message**. Spawn order: specialist slots firs
 
 **5 specialist slots** — for each specialist (`structure`, `correctness`, `testing`, `security`, `edge-cases`), determine which tool to use per the fallback matrix, render the prompt, and launch:
 
-```bash
-SPECIALIST_PROMPT=$("${CLAUDE_PLUGIN_ROOT}/scripts/render-specialist-prompt.sh" \
-  --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" \
-  --mode <diff|slice> [--slice-text "${SLICE_TEXT}" --slice-files "$REVIEW_TMPDIR/slice-files.txt"] \
-  --competition-notice)
-```
-
-Then launch via the appropriate tool:
+Then launch via the appropriate tool. The wrapper scripts handle prompt rendering (`render-specialist-prompt.sh`), model args (`agent-model-args.sh`), and prompt wrapping (`cursor-wrap-prompt.sh` for Cursor) internally:
 
 **Cursor specialist** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$REVIEW_TMPDIR/cursor-specialist-<name>-output.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "$SPECIALIST_PROMPT")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$REVIEW_TMPDIR/cursor-specialist-<name>-output.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode <diff|slice> [--slice-text "${SLICE_TEXT}" --slice-files "$REVIEW_TMPDIR/slice-files.txt"] --competition-notice
 ```
 
 **Codex specialist** (fallback when `cursor_available` is false, `codex_available` is true):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$REVIEW_TMPDIR/codex-specialist-<name>-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$REVIEW_TMPDIR/codex-specialist-<name>-output.txt" \
-    "$SPECIALIST_PROMPT"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-specialist-<name>-output.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode <diff|slice> [--slice-text "${SLICE_TEXT}" --slice-files "$REVIEW_TMPDIR/slice-files.txt"] --competition-notice
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on each specialist Bash tool call.
@@ -196,19 +184,13 @@ Use `run_in_background: true` and `timeout: 1860000` on each specialist Bash too
 **Diff mode**:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$REVIEW_TMPDIR/codex-output.txt" \
-    "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 --prompt "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
 
 **Slice mode**:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$REVIEW_TMPDIR/codex-output.txt" \
-    "Review existing code in the slice described as: '${SLICE_TEXT}'. The canonical file list for this slice is at $REVIEW_TMPDIR/slice-files.txt — read that file first to see exactly which files are in scope. Read each listed file in full. You may also explore via Glob/Grep/Read for additional context, but in-scope vs out-of-scope (OOS) classification MUST be anchored to the canonical file list — findings about files NOT in slice-files.txt are OOS, even if they look related. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in slice-files.txt as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in slice-files.txt, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in slice-files.txt. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 --prompt "Review existing code in the slice described as: '${SLICE_TEXT}'. The canonical file list for this slice is at $REVIEW_TMPDIR/slice-files.txt — read that file first to see exactly which files are in scope. Read each listed file in full. You may also explore via Glob/Grep/Read for additional context, but in-scope vs out-of-scope (OOS) classification MUST be anchored to the canonical file list — findings about files NOT in slice-files.txt are OOS, even if they look related. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in slice-files.txt as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in slice-files.txt, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in slice-files.txt. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
 
 Use `run_in_background: true` and `timeout: 1860000`.

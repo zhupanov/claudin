@@ -55,9 +55,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Env-var fallback: when --token or --channel-id are empty, resolve from environment.
+# Order: LARCH_SLACK_BOT_TOKEN > CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN (same for channel).
+if [[ -z "$TOKEN" ]]; then
+    TOKEN="${LARCH_SLACK_BOT_TOKEN:-${CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN:-}}"
+fi
+if [[ -z "$CHANNEL_ID" ]]; then
+    CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-${CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID:-}}"
+fi
+
 if [[ -z "$ISSUE_NUMBER" ]] || [[ -z "$STATUS" ]] || [[ -z "$REPO" ]] || [[ -z "$TOKEN" ]] || [[ -z "$CHANNEL_ID" ]]; then
     echo "SLACK_TS="
-    echo "SLACK_ERROR=--issue-number, --status, --repo, --token, --channel-id are required"
+    echo "SLACK_ERROR=--issue-number, --status, --repo, --token, --channel-id are required (token and channel-id also checked in env: LARCH_SLACK_BOT_TOKEN, CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN, LARCH_SLACK_CHANNEL_ID, CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID)"
     exit 1
 fi
 

@@ -15,19 +15,22 @@ Cursor supports `~/.cursor/cli-config.json` for model pinning and max-mode, but 
 
 Cursor also has no way to configure a non-default model via config file that overrides the CLI's own fallback; larch passes `--model` on the command line via `scripts/agent-model-args.sh`. The two concerns are kept in separate single-source-of-truth files.
 
-## Callers (18 wrapped launch strings in 11 files)
+## Callers (6 wrapped launch strings in 6 files)
 
+- `scripts/launch-cursor-review.sh` (1 — canonical Cursor launch wrapper; all SKILL.md Cursor reviewer/sketch/debater launches now route through this script)
 - `skills/research/references/research-phase.md` (3 — standard-mode Cursor lane and deep-mode Cursor slots 1 and 2)
 - `skills/research/references/validation-phase.md` (1)
 - `skills/research/references/adjudication-phase.md` (1 — Cursor judge launch)
-- `skills/design/SKILL.md` (1 — plan-review Cursor reviewer)
-- `skills/design/references/sketch-launch.md` (5 — regular-mode Architecture/Standards, Edge-cases/Failure-modes, Innovation/Exploration, Pragmatism/Safety sketch slots + quick-mode Generic slot)
-- `skills/design/references/dialectic-execution.md` (1 — Cursor debater launch template)
 - `skills/shared/voting-protocol.md` (1 — Cursor voter template)
 - `skills/shared/dialectic-protocol.md` (1 — Cursor judge template)
-- `skills/review/SKILL.md` (2 — diff-mode and slice-mode Cursor reviewer blocks)
-- `skills/implement/SKILL.md` (1 — quick-mode Cursor reviewer; block stays inline in SKILL.md per NEVER #6 in that skill)
 - `scripts/run-negotiation-round.sh` (1 — Cursor negotiation-round branch)
+
+**Migrated to `launch-cursor-review.sh`** (no longer direct callers):
+- `skills/design/SKILL.md` (was 1 — plan-review Cursor reviewer)
+- `skills/design/references/sketch-launch.md` (was 5 — sketch slots)
+- `skills/design/references/dialectic-execution.md` (was 1 — debater launch)
+- `skills/review/SKILL.md` (was 2 — diff/slice Cursor reviewer blocks)
+- `skills/implement/SKILL.md` (was 1 — quick-mode Cursor reviewer)
 
 ## Non-callers (intentional exclusions)
 

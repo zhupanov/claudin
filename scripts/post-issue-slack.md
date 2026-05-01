@@ -27,8 +27,8 @@ Posts as the human git user via `git config user.name` → `--username` on `post
 | `--issue-number` | Yes      | GitHub issue number (integer). Alias: `--issue`. |
 | `--status`       | Yes      | One of `closed`, `pr-opened`, `blocked`, `user-input`. Unknown values cause exit 1. |
 | `--repo`         | Yes      | `OWNER/REPO` used for link-composition fallback when `gh issue view` fails. |
-| `--token`        | Yes      | Slack bot token (whitespace-stripped before use). |
-| `--channel-id`   | Yes      | Slack channel ID. |
+| `--token`        | No       | Slack bot token (whitespace-stripped before use). When omitted or empty, auto-resolved from env: `LARCH_SLACK_BOT_TOKEN` then `CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN`. |
+| `--channel-id`   | No       | Slack channel ID. When omitted or empty, auto-resolved from env: `LARCH_SLACK_CHANNEL_ID` then `CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID`. |
 | `--pr-url`       | No       | PR URL for `pr-opened` status tail. |
 | `--detail`       | No       | Free-form tail text. Appended after the base status summary. |
 

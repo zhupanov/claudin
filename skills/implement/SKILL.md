@@ -9,7 +9,7 @@ allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task
 
 End-to-end: design, plan review, code, validate, commit, code review, validate, commit, code flow diagram, version bump, PR, CI monitor, cleanup, Slack announce of tracking issue. By default, posts a single Slack message about the tracking issue near the end of the run (gated on Slack env vars — `LARCH_SLACK_BOT_TOKEN` + `LARCH_SLACK_CHANNEL_ID`). `--no-slack` opts out. With `--merge`: also CI+rebase+merge loop, local branch delete, main verification.
 
-**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns AND after every `Bash` tool call that completes a numbered step or sub-step, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, on a Bash result, or on a status message, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. This applies to ALL step boundaries from Step 0 through Step 18. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. **Critical boundary: after Step 9b (PR creation) completes, IMMEDIATELY proceed to Step 10 (CI monitor) — PR creation is NOT the end of the run.** See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
 **Skill-name fallback reminder.** When invoking a child skill via the Skill tool from this file, ALWAYS try the bare name first (`"relevant-checks"`, `"bump-version"`, `"design"`, `"review"`, `"issue"`, `"implement"`). Only fall back to the fully-qualified `larch:` form (`"larch:design"`, etc.) when the bare-name lookup returns `Unknown skill` — and conversely, in a consumer repo that installs the plugin under a non-`larch` namespace the bare name may miss and the fully-qualified form (with that repo's actual namespace) becomes the working fallback. **`/relevant-checks` and `/bump-version` are intentionally project-local under `.claude/skills/` and are NOT shipped with the plugin** — `larch:relevant-checks` and `larch:bump-version` do not resolve, so a `larch:`-first attempt fails outright. Do NOT mirror this skill's own namespaced invocation (`larch:implement`) onto child Skill calls. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Bare-name-then-fully-qualified fallback for the canonical rule.
 
@@ -585,17 +585,13 @@ Apply the Rebase Checkpoint Macro with `<step-prefix>=4.r` and `<short-name>=com
 
 Capture a sorted list of currently-untracked paths to `$IMPLEMENT_TMPDIR/pre-review-untracked.txt` BEFORE either the quick-mode reviewer loop or the normal-mode `/review` invocation runs. Step 6's `check-review-changes.sh --baseline` reads this file to compute the untracked delta (review-introduced new files = current untracked − baseline) and avoid the false-positive where any pre-existing operator file flips `FILES_CHANGED=true` (issue #651).
 
-The snapshot block runs in a subshell with `set -o pipefail` so a real `git ls-files` failure propagates and triggers the cleanup branch — `|| true` alone would let a failing pipe silently produce a valid-empty snapshot file. On any failure, both the temp file AND any prior `pre-review-untracked.txt` are removed so the script's `=missing` graceful-degradation path activates rather than diffing against stale data on resume:
+The snapshot is captured via a dedicated script that handles `pipefail`, atomic write, and failure cleanup internally (see `scripts/snapshot-untracked.md` for the full contract):
 
 ```bash
-( set -o pipefail; \
-  git ls-files --others --exclude-standard 2>/dev/null \
-    | LC_ALL=C sort > "$IMPLEMENT_TMPDIR/pre-review-untracked.txt.tmp" \
-  && mv -f "$IMPLEMENT_TMPDIR/pre-review-untracked.txt.tmp" "$IMPLEMENT_TMPDIR/pre-review-untracked.txt" \
-) || rm -f "$IMPLEMENT_TMPDIR/pre-review-untracked.txt" "$IMPLEMENT_TMPDIR/pre-review-untracked.txt.tmp"
+${CLAUDE_PLUGIN_ROOT}/scripts/snapshot-untracked.sh --output "$IMPLEMENT_TMPDIR/pre-review-untracked.txt"
 ```
 
-Best-effort: never abort Step 5 on snapshot failure — the missing-baseline path at Step 6 covers the degraded run and logs to `Warnings`.
+Best-effort: the script always exits 0; on any failure it removes both temp and baseline files so `check-review-changes.sh` sees `UNTRACKED_BASELINE=missing` and degrades gracefully (issue #651).
 
 ### Quick mode (`quick_mode=true`)
 
@@ -624,19 +620,12 @@ Launch all 5 Cursor specialists in parallel using `${CLAUDE_PLUGIN_ROOT}/scripts
 
 For each specialist, when **Cursor** is available:
 ```bash
-SPECIALIST_PROMPT=$("${CLAUDE_PLUGIN_ROOT}/scripts/render-specialist-prompt.sh" --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode diff)
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$IMPLEMENT_TMPDIR/cursor-quick-review-specialist-<name>.txt" --timeout 1800 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "$SPECIALIST_PROMPT")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$IMPLEMENT_TMPDIR/cursor-quick-review-specialist-<name>.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode diff
 ```
 
 When **Cursor unavailable, Codex available** (per slot):
 ```bash
-SPECIALIST_PROMPT=$("${CLAUDE_PLUGIN_ROOT}/scripts/render-specialist-prompt.sh" --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode diff)
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$IMPLEMENT_TMPDIR/codex-quick-review-specialist-<name>.txt" --timeout 1800 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$IMPLEMENT_TMPDIR/codex-quick-review-specialist-<name>.txt" \
-    "$SPECIALIST_PROMPT"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$IMPLEMENT_TMPDIR/codex-quick-review-specialist-<name>.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode diff
 ```
 
 When **both unavailable** for ALL 5 slots: fall back to a single Claude Code Reviewer subagent (subagent_type: `larch:code-reviewer`, model: `"sonnet"`) using the unified archetype in `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, preserving the "at least one reviewer" guarantee. Print `**⚠ 5: code review — round 1 both external tools unavailable, using Claude generic fallback**`. **Skip `collect-agent-results.sh` entirely** on this path — parse only the Agent-tool subagent output. Proceed to 5.4.
@@ -652,9 +641,7 @@ Where `<tool>` is `cursor` or `codex` depending on which tool was used for each 
 
 - **Cursor** (full repo access — no need to inline the diff):
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt" --timeout 1800 --capture-stdout -- \
-    cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-      "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level.")"
+  ${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt" --timeout 1800 --prompt "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
   ```
   Use `run_in_background: true` and `timeout: 1860000`. Collect via:
   ```bash
@@ -662,12 +649,9 @@ Where `<tool>` is `cursor` or `codex` depending on which tool was used for each 
   ```
   Include `--write-health` only if `SESSION_ENV_PATH` is non-empty.
 
-- **Codex** (same pattern; no `--capture-stdout` — Codex uses its own output flag):
+- **Codex** (same pattern):
   ```bash
-  ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt" --timeout 1800 -- \
-    codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-      --output-last-message "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt" \
-      "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
+  ${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$IMPLEMENT_TMPDIR/quick-review-round${round_num}.txt" --timeout 1800 --prompt "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
   ```
   Collect via the same `collect-agent-results.sh`.
 
@@ -930,6 +914,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/gh-pr-body-update.sh --pr <PR_NUMBER> --body-file 
 
 Print the PR URL. Save `PR_NUMBER`, `PR_URL`, `PR_TITLE` for Steps 10–15.
 
+> **Continue to Step 10.** PR creation is NOT the end of the run — IMMEDIATELY proceed to Step 10 (CI monitor). Do NOT end the turn, summarize, or write a handoff message after printing the PR URL.
+
 **MANDATORY — READ ENTIRE FILE** before invoking the sub-procedure from Step 8b, Step 10, or Step 12: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/rebase-rebump-subprocedure.md`. Contains the `Inputs` schema (`rebase_already_done`, `caller_kind`), Happy-path steps 1–7 (drop bump → rebase → fast-forward local main → re-bump → push with recovery → anchor `version-bump-reasoning` refresh → return to caller), Phase 4 caller path (`rebase_already_done=true, caller_kind=step12_phase4`), caller-family failure semantics (step12 = hard-bail to 12d; step10 = break to Step 11; step8b = STALL_TRACKING=true + skip to Step 18), and the anti-halt continuation reminder for `/bump-version`. **Do NOT load** when Step 12 early-exits on `merge=false` / `repo_unavailable=true`, when Step 10 returns `ACTION=merge` / `already_merged` / `evaluate_failure` / `bail`, or when Step 8b's `rebase-push.sh --no-push` returns exit 0 / 3 / other (only Step 8b exit 1 enters the sub-procedure; exit 3 / other still bail directly).
 
 ## Step 10 — CI Monitor (initial wait for green)
@@ -964,6 +950,8 @@ Use `timeout: 1860000` on the Bash call. Parse `ACTION`, `CI_STATUS`, `BEHIND_CO
 
 Log CI failures, transient retries, bail events to `CI Issues`. After any non-terminal / non-rebase action, re-invoke `ci-wait.sh` with updated counters. The `rebase` and `rebase_then_evaluate` paths handle their own post-return inside the sub-procedure's step 7 — do NOT re-invoke from here. Caller sleep: 60s after a transient retry rerun.
 
+> **Continue to Step 11.** Do NOT end the turn after CI monitoring completes.
+
 ## Step 11 — Post-execution Anchor `execution-issues` Refresh
 
 Runs unconditionally. The Slack announcement of the tracking issue has moved to Step 16a (near end-of-run, once the final outcome is known) — Step 11 is now only the anchor refresh.
@@ -987,6 +975,8 @@ Runs unconditionally. The Slack announcement of the tracking issue has moved to 
       On `FAILED=true`, print `**⚠ 11: execution-issues — anchor refresh failed: $ERROR. Continuing.**` and log to `Tool Failures`.
 
 Print: `✅ 11: execution-issues — anchor refreshed (<elapsed>)` on success.
+
+> **Continue to Step 12.** Do NOT end the turn after anchor refresh.
 
 ## Step 12 — CI + Rebase + Merge Loop
 
@@ -1097,6 +1087,8 @@ If Step 12 bailed (PR not merged): do NOT switch branches or delete the local br
 
 `$BRANCH_NAME` is captured at the end of Step 1.
 
+> **Continue to Step 15.** Do NOT end the turn after local cleanup.
+
 ## Step 15 — Verify Main
 
 If `merge=false`: skip. Only if PR was merged (skip if bailed). Confirm the last commit on main is the squash-merged commit:
@@ -1107,9 +1099,13 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/verify-main.sh --expected-title "<PR_TITLE> (#<PR_
 
 Parse `VERIFIED`, `COMMIT_HASH`, `COMMIT_MESSAGE`. If `VERIFIED=true`: print `✅ 15: verify main — at <COMMIT_HASH> "<COMMIT_MESSAGE>" (<elapsed>)`. Else: print `**⚠ 15: verify main — unexpected HEAD: <COMMIT_HASH> "<COMMIT_MESSAGE>". Expected: "<PR_TITLE> (#<PR_NUMBER>)" (<elapsed>)**`
 
+> **Continue to Step 16.** Do NOT end the turn after verifying main.
+
 ## Step 16 — Rejected Code Review Findings Report
 
 Report unimplemented code review suggestions. Check `$IMPLEMENT_TMPDIR/rejected-findings.md`. If non-empty, print under a `## Unimplemented Code Review Suggestions` header with reviewer name, suggestion, and reason for each. Otherwise print `✅ 16: rejected findings — all suggestions implemented (<elapsed>)`.
+
+> **Continue to Step 16a.** Do NOT end the turn after printing rejected findings.
 
 ## Step 16a — Post Slack Issue Announcement
 
@@ -1144,10 +1140,10 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/post-issue-slack.sh \
   --issue-number "$ISSUE_NUMBER" \
   --status "$RUN_OUTCOME" \
   --repo "$REPO" \
-  --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
-  --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
   [--pr-url "$PR_URL"] [--detail "$detail_text"]
 ```
+
+The script auto-resolves `--token` from `LARCH_SLACK_BOT_TOKEN` then `CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN`, and `--channel-id` from `LARCH_SLACK_CHANNEL_ID` then `CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID`, when those flags are omitted.
 
 Include `--pr-url "$PR_URL"` when `$PR_URL` is non-empty (populates the `pr-opened` status tail). Include `--detail` per the rule above.
 
@@ -1155,11 +1151,15 @@ Parse `SLACK_TS=<value>` from stdout. On non-zero exit OR empty `SLACK_TS`: prin
 
 On success: print `✅ 16a: slack issue post — posted (<elapsed>)`.
 
+> **Continue to Step 17.** Do NOT end the turn after Slack post.
+
 ## Step 17 — Final Report
 
 If `quick_mode=true`: print `✅ 17: final report — quick mode, /design skipped, specialist round 1 + generic rounds 2+ (<elapsed>)`.
 
 If `quick_mode=false`: print a summary noting plan review findings were reported by `/design` (visible above) and code review findings by `/review` (visible above). If both phases reported all suggestions implemented, print `✅ 17: final report — all suggestions implemented, plan + code review (<elapsed>)`.
+
+> **Continue to Step 18.** Do NOT end the turn after the final report.
 
 ## Step 18 — Cleanup and Final Warnings
 
@@ -1177,10 +1177,10 @@ The title-prefix lifecycle applies uniformly to fresh-created (Branch 4) and ado
 **Branch A — STALLED (failure path)**: if `$STALL_TRACKING=true`, check that the issue is still OPEN before renaming (renaming a closed issue to `[STALLED]` is semantically wrong — closed means merged means done):
 
 ```bash
-ISSUE_STATE=$(gh issue view "$ISSUE_NUMBER" --json state --jq '.state' 2>/dev/null || echo "")
+${CLAUDE_PLUGIN_ROOT}/scripts/get-issue-info.sh --issue "$ISSUE_NUMBER" --field state
 ```
 
-If `ISSUE_STATE == "OPEN"`, call `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state stalled`. Best-effort: on `FAILED=true` or non-zero exit, log to `Tool Failures` and continue. Do not print a completion line; the Step 18 `✅` is sufficient.
+Parse `VALUE=` from stdout. If `VALUE` equals `OPEN`, call `${CLAUDE_PLUGIN_ROOT}/scripts/tracking-issue-write.sh rename --issue $ISSUE_NUMBER --state stalled`. Best-effort: on `FAILED=true` or non-zero exit, log to `Tool Failures` and continue. Do not print a completion line; the Step 18 `✅` is sufficient.
 
 **Branch B — DONE (clean non-merge / draft completion)**: if `$STALL_TRACKING=false` AND `$DONE_RENAME_APPLIED` is NOT `true` (merge-path rename didn't already fire) AND `$PR_NUMBER` is set (a PR was created this run), call `rename --state done`. This handles the `--merge=false` and `--draft` paths where `/implement` completes successfully without attempting auto-merge — the run is logically done and the title should reflect that.
 
@@ -1199,10 +1199,10 @@ If `draft=true`, remind: `**Note: --draft was set. Draft PR created; local branc
 **Tracking-issue URL**: if the in-memory session variable `$ISSUE_NUMBER` (captured at Step 0.5 — do NOT re-read from the sentinel file, which `cleanup-tmpdir.sh` may have already removed) is non-empty AND `repo_unavailable=false`, derive the URL from `gh` (GH-Enterprise-safe — do NOT hardcode `https://github.com/`):
 
 ```bash
-ISSUE_URL=$(gh issue view "$ISSUE_NUMBER" --json url --jq .url 2>/dev/null)
+${CLAUDE_PLUGIN_ROOT}/scripts/get-issue-info.sh --issue "$ISSUE_NUMBER" --field url
 ```
 
-If `ISSUE_URL` is non-empty, print:
+Parse `VALUE=` from stdout. If `VALUE` is non-empty, set `ISSUE_URL` to the value and print:
 
 ```
 📎 Tracking issue: $ISSUE_URL

@@ -2,7 +2,7 @@
 
 **Consumer**: `/design` Step 2a.2 — external sketch launches (Cursor/Codex) and per-slot Claude fallbacks.
 
-**Contract**: byte-preserved launch shell blocks for the external slots — 8 in regular mode (4 Cursor + 4 Codex, one per personality per tool) or 2 in quick mode (1 Cursor-Generic + 1 Codex-Generic) — the spawn-order rule (externals before Claude General), the `run_in_background: true` + `timeout: 1260000` requirements, the per-slot Claude fallback rules, and the Claude General sketch independence rule. Token bodies (`<ARCH_PROMPT>` etc.) are resolved from the companion `references/sketch-prompts.md`, not here. Sketch-phase collection (`collect-agent-results.sh` for Step 2a.3) is NOT defined here — that invocation stays single-source in SKILL.md.
+**Contract**: wrapper-based launch invocations for the external slots — 8 in regular mode (4 Cursor + 4 Codex, one per personality per tool) or 2 in quick mode (1 Cursor-Generic + 1 Codex-Generic) — the spawn-order rule (externals before Claude General), the `run_in_background: true` + `timeout: 1260000` requirements, the per-slot Claude fallback rules, and the Claude General sketch independence rule. Token bodies (`<ARCH_PROMPT>` etc.) are resolved from the companion `references/sketch-prompts.md`, not here. Sketch-phase collection (`collect-agent-results.sh` for Step 2a.3) is NOT defined here — that invocation stays single-source in SKILL.md. Launch wrappers (`launch-cursor-review.sh`, `launch-codex-review.sh`) absorb the `$(...)` command substitution chain internally so SKILL.md Bash blocks are simple invocations.
 
 **When to load**: at Step 2a.2 entry, AFTER `references/sketch-prompts.md` has been loaded (so the placeholder tokens are resolvable). Do NOT load during Steps 0, 1, 2a.3, 2a.4, 2a.5, 2b, 3, 3.5, 3b, 4, or 5.
 
@@ -21,9 +21,7 @@
 **Cursor — Architecture/Standards** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-arch-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<ARCH_PROMPT>")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$DESIGN_TMPDIR/cursor-sketch-arch-output.txt" --timeout 1200 --prompt "<ARCH_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -33,9 +31,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Cursor — Edge-cases/Failure-modes** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-edge-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<EDGE_PROMPT>")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$DESIGN_TMPDIR/cursor-sketch-edge-output.txt" --timeout 1200 --prompt "<EDGE_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -45,9 +41,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Cursor — Innovation/Exploration** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-innovation-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<INNOVATION_PROMPT>")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$DESIGN_TMPDIR/cursor-sketch-innovation-output.txt" --timeout 1200 --prompt "<INNOVATION_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -57,9 +51,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Cursor — Pragmatism/Safety** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-pragmatic-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<PRAGMATIC_PROMPT>")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$DESIGN_TMPDIR/cursor-sketch-pragmatic-output.txt" --timeout 1200 --prompt "<PRAGMATIC_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -69,10 +61,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Codex — Architecture/Standards** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-arch-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$DESIGN_TMPDIR/codex-sketch-arch-output.txt" \
-    "<ARCH_PROMPT>"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$DESIGN_TMPDIR/codex-sketch-arch-output.txt" --timeout 1200 --prompt "<ARCH_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -82,10 +71,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Codex — Edge-cases/Failure-modes** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-edge-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$DESIGN_TMPDIR/codex-sketch-edge-output.txt" \
-    "<EDGE_PROMPT>"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$DESIGN_TMPDIR/codex-sketch-edge-output.txt" --timeout 1200 --prompt "<EDGE_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -95,10 +81,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Codex — Innovation/Exploration** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-innovation-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$DESIGN_TMPDIR/codex-sketch-innovation-output.txt" \
-    "<INNOVATION_PROMPT>"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$DESIGN_TMPDIR/codex-sketch-innovation-output.txt" --timeout 1200 --prompt "<INNOVATION_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -108,10 +91,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Codex — Pragmatism/Safety** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-pragmatic-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$DESIGN_TMPDIR/codex-sketch-pragmatic-output.txt" \
-    "<PRAGMATIC_PROMPT>"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$DESIGN_TMPDIR/codex-sketch-pragmatic-output.txt" --timeout 1200 --prompt "<PRAGMATIC_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -125,9 +105,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Cursor — Generic** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor --output "$DESIGN_TMPDIR/cursor-sketch-generic-output.txt" --timeout 1200 --capture-stdout -- \
-  cursor agent -p --force --trust $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) --workspace "$PWD" \
-    "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "<GENERIC_PROMPT>")"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$DESIGN_TMPDIR/cursor-sketch-generic-output.txt" --timeout 1200 --prompt "<GENERIC_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
@@ -137,10 +115,7 @@ Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.
 **Codex — Generic** (if `codex_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex --output "$DESIGN_TMPDIR/codex-sketch-generic-output.txt" --timeout 1200 -- \
-  codex exec --full-auto -C "$PWD" $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-    --output-last-message "$DESIGN_TMPDIR/codex-sketch-generic-output.txt" \
-    "<GENERIC_PROMPT>"
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$DESIGN_TMPDIR/codex-sketch-generic-output.txt" --timeout 1200 --prompt "<GENERIC_PROMPT>"
 ```
 
 Use `run_in_background: true` and `timeout: 1260000` on the Bash tool call.

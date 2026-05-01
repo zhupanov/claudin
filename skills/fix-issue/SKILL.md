@@ -169,10 +169,9 @@ Decide whether the issue is still material against the codebase (see the referen
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/post-issue-slack.sh \
      --issue-number "$ISSUE_NUMBER" --status closed --repo "$REPO" \
-     --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
-     --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
      --detail "<one-sentence reason>"
    ```
+   The script auto-resolves `--token` and `--channel-id` from environment variables (`LARCH_SLACK_BOT_TOKEN` then `CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN`, `LARCH_SLACK_CHANNEL_ID` then `CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID`) when those flags are omitted.
    On non-zero exit, log to `Tool Failures` and continue. Do not abort.
 5. Print `✅ 3: triage — issue #$ISSUE_NUMBER closed, not material (<elapsed>)`. Skip to Step 8.
 
@@ -307,12 +306,10 @@ Post a Slack message summarizing the non-PR work via the shared script. Compose 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/post-issue-slack.sh \
   --issue-number "$ISSUE_NUMBER" --status closed --repo "$REPO" \
-  --token "${LARCH_SLACK_BOT_TOKEN:-$CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN}" \
-  --channel-id "${LARCH_SLACK_CHANNEL_ID:-$CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID}" \
   --detail "<one-sentence summary from WORK_SUMMARY>"
 ```
 
-If the script exits non-zero, print `**⚠ 7: slack announce — failed. Continuing.**` and log to `Tool Failures`.
+The script auto-resolves `--token` and `--channel-id` from environment variables when those flags are omitted. If the script exits non-zero, print `**⚠ 7: slack announce — failed. Continuing.**` and log to `Tool Failures`.
 
 Print `✅ 7: slack announce — posted (<elapsed>)`
 

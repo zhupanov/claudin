@@ -31,27 +31,21 @@
 
    Each Cursor launch (use `run_in_background: true` and `timeout: 1860000`). Pass a short bootstrap prompt that references the per-decision prompt file by path; the tool reads the file via its own filesystem access. This mirrors the voting pattern below ("Read the ballot from $DESIGN_TMPDIR/ballot.txt") and avoids `$(cat ...)` in the launch shell — which would trigger Claude Code permission prompts that break autonomous execution:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool cursor \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh \
      --output "$DESIGN_TMPDIR/debate-<n>-cursor-<thesis|antithesis>.txt" \
-     --timeout 1800 --capture-stdout -- \
-     cursor agent -p --force --trust \
-       $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool cursor --with-effort) \
-       --workspace "$PWD" \
-       "$("${CLAUDE_PLUGIN_ROOT}/scripts/cursor-wrap-prompt.sh" "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level.")"
+     --timeout 1800 \
+     --prompt "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
    ```
 
    Each Codex launch (use `run_in_background: true` and `timeout: 1860000`). Same file-path-reference pattern:
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/run-external-agent.sh --tool codex \
+   ${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh \
      --output "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
-     --timeout 1800 -- \
-     codex exec --full-auto -C "$PWD" \
-       $("${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh" --tool codex --with-effort) \
-       --output-last-message "$DESIGN_TMPDIR/debate-<n>-codex-<thesis|antithesis>.txt" \
-       "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
+     --timeout 1800 \
+     --prompt "Read the dialectic-debate task description from $DESIGN_TMPDIR/debate-<n>-<thesis|antithesis>-prompt.txt and follow it exactly to produce the structured tagged output it requests. Work at your maximum reasoning effort level."
    ```
 
-   The trailing `Work at your maximum reasoning effort level.` is appended at the bash-launch level (NOT in the templated prompt body) because `${CLAUDE_PLUGIN_ROOT}/scripts/agent-model-args.sh --with-effort` is documented as a no-op for Cursor (Cursor has no dedicated reasoning-effort flag — the convention is the prompt-level suffix). Codex receives the same suffix for symmetry.
+   The trailing `Work at your maximum reasoning effort level.` is part of the prompt text (the wrapper scripts handle model-args and prompt-wrapping internally).
 
 8. **Collect** with health bookkeeping disabled (Option B enforcement):
    ```bash
