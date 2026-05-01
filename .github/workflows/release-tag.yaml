@@ -31,18 +31,53 @@ jobs:
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Create release tag
+        id: tag
         run: |
           set -euo pipefail
           TAG="${{ steps.version.outputs.tag }}"
           if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
             echo "Tag $TAG already exists on remote — skipping."
+            echo "created=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git tag "$TAG"
           git push origin "$TAG" 2>&1 || {
             if [[ -n "$(git ls-remote --tags origin "refs/tags/${TAG}")" ]]; then
               echo "Tag $TAG was created by a concurrent run — skipping."
+              echo "created=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             exit 1
           }
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog entry
+        if: steps.tag.outputs.created == 'true'
+        id: changelog
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.tag }}"
+          VERSION="${VERSION#v}"
+          BODY_FILE=$(mktemp)
+          # Extract the section between ## [VERSION] and the next ## [
+          awk -v ver="$VERSION" '
+            /^## \[/ { if (found) exit; if (index($0, "[" ver "]")) found=1; next }
+            found { print }
+          ' CHANGELOG.md > "$BODY_FILE"
+          if [[ ! -s "$BODY_FILE" ]]; then
+            echo "No changelog entry found for $VERSION — using default." >&2
+            echo "Release v${VERSION}" > "$BODY_FILE"
+          fi
+          echo "body_file=$BODY_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.tag.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "${{ steps.changelog.outputs.body_file }}" \
+            --latest=false
