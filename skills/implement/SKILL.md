@@ -616,7 +616,7 @@ Parse `DIFF_FILE`, `FILE_LIST_FILE`, `COMMIT_LOG_FILE`.
 
 **5.3-round1 — Launch 5 specialists** (round 1 only):
 
-Launch all 5 Cursor specialists in parallel using `${CLAUDE_PLUGIN_ROOT}/scripts/render-specialist-prompt.sh --mode diff --agent-file <agent-file>` for each specialist (`structure`, `correctness`, `testing`, `security`, `edge-cases`). **Fallback chain per slot**: Cursor → Codex → Claude subagent. Use `run_in_background: true` and `timeout: 1860000` on each Bash tool call. **No competition notice** (no voting panel).
+Launch all 5 specialists in parallel using the launch wrapper scripts (which call `render-specialist-prompt.sh` internally) for each specialist (`structure`, `correctness`, `testing`, `security`, `edge-cases`). **Fallback chain per slot**: Cursor → Codex → Claude subagent. Use `run_in_background: true` and `timeout: 1860000` on each Bash tool call. **No competition notice** (no voting panel).
 
 For each specialist, when **Cursor** is available:
 ```bash
@@ -1208,6 +1208,6 @@ Parse `VALUE=` from stdout. If `VALUE` is non-empty, set `ISSUE_URL` to the valu
 📎 Tracking issue: $ISSUE_URL
 ```
 
-If `$ISSUE_NUMBER` is empty OR `gh issue view` fails OR `repo_unavailable=true`: silently skip the URL print — the absence itself is a signal for the degraded path.
+If `$ISSUE_NUMBER` is empty OR `VALUE` is empty OR `repo_unavailable=true`: silently skip the URL print — the absence itself is a signal for the degraded path.
 
 Print: `✅ 18: cleanup — implement complete! (<elapsed>)`

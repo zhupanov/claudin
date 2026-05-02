@@ -161,9 +161,7 @@ The generic reviewer uses attribution label `Codex`.
 
 Launch **all reviewers in a single message**. Spawn order: specialist slots first (slowest), then generic slot.
 
-**5 specialist slots** — for each specialist (`structure`, `correctness`, `testing`, `security`, `edge-cases`), determine which tool to use per the fallback matrix, render the prompt, and launch:
-
-Then launch via the appropriate tool. The wrapper scripts handle prompt rendering (`render-specialist-prompt.sh`), model args (`agent-model-args.sh`), and prompt wrapping (`cursor-wrap-prompt.sh` for Cursor) internally:
+**5 specialist slots** — for each specialist (`structure`, `correctness`, `testing`, `security`, `edge-cases`), determine which tool to use per the fallback matrix and invoke the appropriate launch wrapper. The wrappers handle prompt rendering (`render-specialist-prompt.sh`), model args (`agent-model-args.sh`), and prompt wrapping (`cursor-wrap-prompt.sh` for Cursor) internally:
 
 **Cursor specialist** (if `cursor_available`):
 

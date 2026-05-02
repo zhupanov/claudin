@@ -18,7 +18,7 @@ OUTPUT=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --output) OUTPUT="${2:?--output requires a value}"; shift 2 ;;
-        *) echo "snapshot-untracked.sh: unknown flag: $1" >&2; exit 0 ;;
+        *) echo "snapshot-untracked.sh: unknown flag: $1" >&2; rm -f "$OUTPUT" "${OUTPUT}.tmp" 2>/dev/null; exit 0 ;;
     esac
 done
 

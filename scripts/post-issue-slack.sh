@@ -8,14 +8,16 @@
 #
 # Usage:
 #   post-issue-slack.sh --issue-number N --status STATUS --repo OWNER/REPO \
-#       --token TOKEN --channel-id CHANNEL [--pr-url URL] [--detail TEXT]
+#       [--token TOKEN] [--channel-id CHANNEL] [--pr-url URL] [--detail TEXT]
 #
 # Arguments:
 #   --issue-number  GitHub issue number (integer)
 #   --status        One of: closed | pr-opened | blocked | user-input
 #   --repo          OWNER/REPO (for link composition fallback if gh fails)
-#   --token         Slack bot token
-#   --channel-id    Slack channel ID
+#   --token         Slack bot token. Omit to auto-resolve from env:
+#                   LARCH_SLACK_BOT_TOKEN then CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN
+#   --channel-id    Slack channel ID. Omit to auto-resolve from env:
+#                   LARCH_SLACK_CHANNEL_ID then CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID
 #   --pr-url        Optional PR URL (populates pr-opened status tail)
 #   --detail        Optional free-form tail text appended after the base status
 #

@@ -15,7 +15,7 @@ Cursor supports `~/.cursor/cli-config.json` for model pinning and max-mode, but 
 
 Cursor also has no way to configure a non-default model via config file that overrides the CLI's own fallback; larch passes `--model` on the command line via `scripts/agent-model-args.sh`. The two concerns are kept in separate single-source-of-truth files.
 
-## Callers (6 wrapped launch strings in 6 files)
+## Callers (10 wrapped launch strings in 7 files)
 
 - `scripts/launch-cursor-review.sh` (1 — canonical Cursor launch wrapper; all SKILL.md Cursor reviewer/sketch/debater launches now route through this script)
 - `skills/research/references/research-phase.md` (3 — standard-mode Cursor lane and deep-mode Cursor slots 1 and 2)
