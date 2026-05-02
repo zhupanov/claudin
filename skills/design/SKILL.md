@@ -24,6 +24,8 @@ Design an implementation plan for a feature and review it with an 8-reviewer pan
 
 The feature to design is described by the remainder of `$ARGUMENTS` after flags are stripped.
 
+**Anti-halt continuation reminder.** After every `Bash` tool call that completes a numbered step or sub-step, and after every visible output (plans, diagrams, voting tallies, skip breadcrumbs), IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on a Bash result, a status message, or a deliverable-looking output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. This applies to ALL step boundaries from Step 0 through Step 5, and to ALL sub-step transitions (1c→1d→2a→2a.5→2b→3→3.5→3b→4→5). **Critical: the implementation plan (Step 2b) and architecture diagram (Step 3b) are intermediate deliverables, NOT the end of the design — plan review (Step 3) and cleanup (Step 5) must still execute.** The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `proceed to Step N`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception.
+
 ## Progress Reporting
 
 **Every step MUST print clearly visible breadcrumb status lines** so the user can instantly see where execution is and which parent steps they are inside. Follow the formatting rules in `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md`.
@@ -274,7 +276,7 @@ Print the synthesis under an `## Approach Synthesis` header. Write the synthesis
 
 Print: `> **🔶 2a.5: dialectic**`
 
-Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions (<elapsed>)` and proceed to Step 2b.
+Read `$DESIGN_TMPDIR/contested-decisions.md`. If the file contains only `NO_CONTESTED_DECISIONS` (ignoring leading/trailing whitespace and newlines), print `⏩ 2a.5: dialectic — no contested decisions (<elapsed>)` and IMMEDIATELY proceed to Step 2b — do NOT halt after the skip breadcrumb.
 
 **Intentional divergence from the repo-wide replacement-first fallback architecture (debate phase only)**. The **debate** phase (steps 1-9 below) deliberately diverges from the "Voter Composition" rule in `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md` and from the Cursor/Codex fallback rules in the "Step 3 — Plan Review" section below: when an assigned debater tool is unavailable, the bucket is **skipped entirely** — Claude subagents are NEVER substituted into the dialectic **debate** path. Likewise, the "Runtime Timeout Fallback" procedure in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md` flips orchestrator-wide `*_available` for all subsequent session steps; in this phase, runtime failures affect ONLY this phase's bookkeeping and never mutate the orchestrator-wide flags. Do NOT "fix" this carve-out back to global-flip + Claude-replacement behavior for debaters — see GitHub issue #98 for the rationale.
 
@@ -333,7 +335,7 @@ Produce a plan that includes:
 - **Failure modes** (for non-trivial changes): The 3 most likely architectural/systemic failure paths, earliest warning signals, and simplest mitigations. May be omitted for purely cosmetic or documentation-only changes.
 - **Testing strategy**: What tests will be added or modified.
 
-Print the plan to the user under a `## Implementation Plan` header so reviewers can see it.
+Print the plan to the user under a `## Implementation Plan` header so reviewers can see it. The plan is an intermediate deliverable — IMMEDIATELY continue to Step 3 (Plan Review) after printing. Do NOT halt, summarize, or treat the plan as the end of the design.
 
 ## Step 3 — Plan Review
 
@@ -459,9 +461,9 @@ Print the diagram under a `## Architecture Diagram` header with a mermaid code f
 ```
 ```
 
-**If diagram generation succeeds**, print: `✅ 3b: arch diagram — generated (<elapsed>)`
+**If diagram generation succeeds**, print: `✅ 3b: arch diagram — generated (<elapsed>)` — then IMMEDIATELY continue to Step 4.
 
-**If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ 3b: arch diagram — generation failed, proceeding without diagram (<elapsed>)**`
+**If diagram generation fails** (e.g., the feature is too abstract to diagram meaningfully), print: `**⚠ 3b: arch diagram — generation failed, proceeding without diagram (<elapsed>)**` — then IMMEDIATELY continue to Step 4.
 
 ## Step 4 — Rejected Plan Review Findings Report
 
@@ -470,6 +472,8 @@ Print any rejected plan review findings:
 1. Check if `$DESIGN_TMPDIR/rejected-findings.md` exists and is non-empty.
 2. If it has content, print it under a `## Unimplemented Plan Review Suggestions` header, formatted clearly with the reviewer name, the suggestion, and the reason for each.
 3. If the file doesn't exist or is empty, print: `✅ 4: rejected findings — all suggestions implemented (<elapsed>)`
+
+After printing rejected findings (or the "all implemented" message), IMMEDIATELY continue to Step 5 — do NOT halt or treat this as the end of the design.
 
 ## Step 5 — Cleanup and Final Warnings
 

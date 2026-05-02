@@ -9,7 +9,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 
 Review code changes using a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic). Two modes: **diff mode** (`--diff`) reviews the current branch diff vs `main` and implements accepted suggestions; **description mode** (positional `<description>`) reviews existing code matching the description and files accepted findings as GitHub issues by default (`--no-issues` to suppress). Claude is not a reviewer but participates as a voter in the 3-voter adjudication panel.
 
-**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
+**Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns AND after every `Bash` tool call that completes a numbered step or sub-step, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, on a Bash result, or on a status message, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. This applies to ALL step boundaries from Step 0 through Step 5, and to ALL sub-step transitions within Step 3's review loop (3a→3b→3c→3d→3e→3f→loop back to Step 1). **Critical: in diff mode, the review loop (Steps 1→2→3) repeats until convergence (0 findings) or the 7-round safety limit — completing one round's fixes does NOT mean the review is done.** The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
 **Flags**: Parse flags from `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, the remainder (joined as a single string) is the **positional description** — it activates description mode. **All flags MUST appear before the positional description.** Because the parser stops at the first non-flag token, any flag-looking token appearing AFTER the positional description is silently absorbed into the description text rather than parsed as a flag — there is no warning. Example correct order: `/review --no-issues my description`. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
@@ -249,7 +249,7 @@ OOS observations are only collected in rounds 1-3 — rounds 4-7 use a single ge
 
 ### 3b — Check for Zero Findings
 
-If **all reviewers** report no issues (e.g., "No issues found.", "No in-scope issues found.", "NO_ISSUES_FOUND"), the loop is done — skip to **Step 4**.
+If **all reviewers** report no issues (e.g., "No issues found.", "No in-scope issues found.", "NO_ISSUES_FOUND"), the loop is done — IMMEDIATELY skip to **Step 4** without writing a summary or status message. If reviewers DID find issues, IMMEDIATELY continue to Step 3c (Deduplicate) — do NOT print a summary or stop.
 
 ### 3c — Deduplicate
 
@@ -269,6 +269,8 @@ Print to the user:
 - If rounds 1-3: vote counts per finding, accepted OOS items, and any findings not accepted by vote
 - Total count of accepted findings for this round
 
+After printing the round summary, IMMEDIATELY continue: if 0 findings were accepted this round, skip to Step 4; if >0 findings were accepted, proceed to Step 3e (Implement Fixes). Do NOT treat the summary as a stopping point.
+
 ### 3e — Implement Fixes
 
 **SKIPPED in description mode.** Description mode is read-only — proceed directly to Step 4 after Step 3d.
@@ -281,13 +283,15 @@ Print to the user:
 
 > **Continue after child returns.** When the child Skill returns, execute the NEXT step of this skill (Step 3f or Step 4) — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
-After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run validation checks. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` to confirm.
+After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run validation checks. If checks fail, diagnose and fix the issue, then re-invoke `/relevant-checks` to confirm. When `/relevant-checks` returns successfully, IMMEDIATELY continue to Step 3f — do NOT end the turn, write a summary, or treat successful checks as a stopping point.
 
 ### 3f — Re-review
 
+> **CRITICAL: Fixing findings does NOT mean the review has converged.** Convergence requires the reviewers to report no new issues in a fresh round — not just the orchestrator believing its fixes are clean. After implementing fixes, you MUST re-launch reviewers to verify. Do NOT skip this step.
+
 **SKIPPED in description mode.** Proceed to Step 4.
 
-**In diff mode**, increment the round number. Go back to **Step 1** (gather the updated diff) and **Step 2** (launch reviewers again).
+**In diff mode**, increment the round number. IMMEDIATELY re-execute **Step 1** (gather the updated diff) then **Step 2** (launch reviewers again) then **Step 3** (collect, deduplicate, vote/evaluate, implement) as a fresh iteration of the review loop — do NOT halt, summarize, or wait for user input between rounds. The loop continues until reviewers report 0 findings (convergence) or the safety limit is reached (Step 3g).
 
 **Rounds 2-3 (full panel)**: Re-launch the full 6-reviewer panel per Step 2's launch procedure. Voting runs per Step 3c.1. The competition notice is included. This ensures multi-round specialist coverage with proper adjudication. If voting accepts 0 findings in any of rounds 1-3, the review loop terminates early.
 
@@ -295,7 +299,7 @@ After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run
 
 ### 3g — Safety Limit
 
-**Diff mode only.** If the loop has run **7 rounds** without converging (3 full-panel rounds + 4 single-reviewer rounds), stop and print a warning, then proceed to Step 4.
+**Diff mode only.** If the loop has run **7 rounds** without converging (3 full-panel rounds + 4 single-reviewer rounds), stop and print a warning, then IMMEDIATELY proceed to Step 4 — do NOT halt or wait for user input.
 
 ## Step 4 — Final Summary (and description-mode /umbrella filing)
 
@@ -373,7 +377,7 @@ Format each entry:
 - **Suggested fix**: <full text>
 ```
 
-Set `SECURITY_FINDINGS_HELD` = number of entries written.
+Set `SECURITY_FINDINGS_HELD` = number of entries written. After writing, IMMEDIATELY continue to the terminal print and then Step 4d — do NOT halt after writing the file.
 
 Print the file's contents verbatim to terminal under a clearly-labeled block:
 
@@ -385,7 +389,7 @@ Print the file's contents verbatim to terminal under a clearly-labeled block:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Then print: `**⚠ Handle these findings per SECURITY.md's vulnerability-disclosure procedure. They are NOT filed as public GitHub issues.**`
+Then print: `**⚠ Handle these findings per SECURITY.md's vulnerability-disclosure procedure. They are NOT filed as public GitHub issues.**` IMMEDIATELY continue to Step 4d — do NOT halt after the security warning.
 
 ### 4d — Description-mode KV footer (description mode only)
 
@@ -400,7 +404,7 @@ SECURITY_FINDINGS_HELD=<n>
 PARSE_STATUS=ok
 ```
 
-Substitute `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED` from Step 4b (or zero each if Step 4b was skipped — i.e., `no_issues=true` or the findings batch was empty). Substitute `SECURITY_FINDINGS_HELD` from Step 4c independently (zero only if Step 4c found no security findings — Step 4c always runs in description mode regardless of whether Step 4b ran). `PARSE_STATUS=ok` always (any error path emits a different `PARSE_STATUS` value or aborts before reaching here).
+Substitute `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED` from Step 4b (or zero each if Step 4b was skipped — i.e., `no_issues=true` or the findings batch was empty). Substitute `SECURITY_FINDINGS_HELD` from Step 4c independently (zero only if Step 4c found no security findings — Step 4c always runs in description mode regardless of whether Step 4b ran). `PARSE_STATUS=ok` always (any error path emits a different `PARSE_STATUS` value or aborts before reaching here). After printing the KV footer, IMMEDIATELY continue to Step 5 (Cleanup) — do NOT halt after the footer.
 
 ## Step 5 — Cleanup
 
