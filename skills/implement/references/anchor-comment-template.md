@@ -38,11 +38,15 @@ This line is suppressed as soon as any fragment contains a non-whitespace byte â
 <!-- section:plan-goals-test -->
 ## Goal
 
-<goal paragraph synthesized from /design's `## Implementation Plan` (or `## Revised Implementation Plan` when present in conversation context)>
+<one-sentence objective>
+
+## Implementation Plan
+
+<full implementation plan body from /design's `## Implementation Plan` (or `## Revised Implementation Plan` when present in conversation context) â€” approach, files to modify, edge cases, testing strategy>
 
 ## Test plan
 
-<test plan synthesized from /design's Testing strategy content under `## Implementation Plan` (or `## Revised Implementation Plan` when present in conversation context)>
+<testing strategy extracted from the implementation plan>
 
 <!-- section-end:plan-goals-test -->
 
@@ -51,12 +55,20 @@ This line is suppressed as soon as any fragment contains a non-whitespace byte â
 
 <per-finding YES/NO/EXONERATE counts and reviewer scoreboard from /design Step 3>
 
+## Rejected Plan Review Findings
+
+<entries from rejected-findings.md with [Plan Review] headers, or empty if none>
+
 <!-- section-end:plan-review-tally -->
 
 <!-- section:code-review-tally -->
 ## Code Review Voting Tally (Round 1)
 
 <per-finding YES/NO/EXONERATE counts and reviewer scoreboard from /review>
+
+## Rejected Code Review Findings
+
+<entries from rejected-findings.md with [Code Review] headers, or empty if none>
 
 <!-- section-end:code-review-tally -->
 
