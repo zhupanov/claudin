@@ -604,10 +604,10 @@ Parse the sentinel file (`$IMPLEMENT_TMPDIR/codex-implement-output.txt.done`). I
 **Post-Codex git state checks**:
 - Verify branch unchanged: `git rev-parse --abbrev-ref HEAD` must equal `$PRE_CODEX_BRANCH`. If not, print `**⚠ 2: implementation — Codex switched branches. Failing to Claude fallback.**` and proceed to 2.4.
 - Verify no unexpected commits: `git rev-parse HEAD` must equal `$PRE_CODEX_HEAD`. If not, print `**⚠ 2: implementation — Codex created commits. Failing to Claude fallback.**` and proceed to 2.4.
-- Verify non-empty diff: `git diff --stat` (staged + unstaged). If empty and the plan includes code changes (not doc-only), print `**⚠ 2: implementation — Codex produced no changes. Failing to Claude fallback.**` and proceed to 2.4.
+- Verify non-empty changes: `git status --porcelain` (staged + unstaged + untracked). If empty and the plan includes code changes, print `**⚠ 2: implementation — Codex produced no changes. Failing to Claude fallback.**` and proceed to 2.4.
 - Verify submodules clean: `git submodule status`. If any submodule shows modified state, print `**⚠ 2: implementation — Codex modified submodules (bypasses hook guard). Failing to Claude fallback.**` and proceed to 2.4.
 
-Print `git diff --stat` for scope visibility. If validation passes, proceed to Step 3 (`/relevant-checks`).
+Print `git diff HEAD --stat` (includes both staged and unstaged vs HEAD) for scope visibility. If validation passes, proceed to Step 3 (`/relevant-checks`).
 
 ### 2.4 — Codex failure fallback
 

@@ -1,6 +1,6 @@
 # Plan Review Reference
 
-**Consumer**: `/design` Step 3 — Claude Code Reviewer subagent archetype, Collecting External Reviewer Results, Voting Panel launch + Finalize Plan Review + Track Rejected Plan Review Findings. The external reviewer launch Bash blocks (4 Cursor archetypes + 1 Codex) remain inline in SKILL.md because `.github/workflows/ci.yaml` greps SKILL.md for the focus-area enum they carry.
+**Consumer**: `/design` Step 3 — Claude Code Reviewer subagent archetype (fallback + Voter 1), Collecting External Reviewer Results, Voting Panel launch + Finalize Plan Review + Track Rejected Plan Review Findings. The external reviewer launch Bash blocks (4 Cursor archetypes + 4 Codex archetypes) remain inline in SKILL.md because `.github/workflows/ci.yaml` greps SKILL.md for the focus-area enum they carry.
 
 **Contract**: 8-reviewer panel (4 Codex specialists + 4 Cursor specialists: Architecture/Standards, Edge-cases/Failure-modes, Innovation/Exploration, Pragmatism/Safety; Cursor fallback: Cursor → Codex → Claude subagent; Codex fallback: Codex → Cursor → Claude subagent), single-list output from all externals (with `[OUT_OF_SCOPE]` tag-based OOS extraction), then a 3-voter panel using YES/NO/EXONERATE with 2+ YES threshold and the proportionality rule. Claude subagent voter replacement when external tool unavailable so the panel always remains at 3.
 
@@ -14,7 +14,9 @@
 
 ---
 
-## Claude Code Reviewer Subagent archetype
+## Claude Code Reviewer Subagent archetype (fallback reviewers + Voter 1)
+
+Claude is NOT a primary plan reviewer — the 8-reviewer panel is all-external (4 Cursor + 4 Codex specialists). Claude participates as: (a) **per-slot fallback** when both external tools are unavailable for a reviewer slot (subagent_type: `larch:code-reviewer`, model: `"sonnet"`), and (b) **Voter 1** in the 3-voter adjudication panel (subagent_type: `larch:code-reviewer`, model: `"opus"`).
 
 Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/reviewer-templates.md`, filling in the variables for **plan review**:
 
@@ -33,7 +35,7 @@ Use the Code Reviewer archetype from `${CLAUDE_PLUGIN_ROOT}/skills/shared/review
   ```
 - **`{OUTPUT_INSTRUCTION}`** = `"What the concern is"` + `"Suggested revision to the plan"`
 
-Invoke via Agent tool with subagent_type: `larch:code-reviewer`, model: `"opus"`. The agent file's checklist matches the shared template; any fallback Claude launches (when Codex or Cursor are unavailable) use subagent_type: `larch:code-reviewer` with model: `"sonnet"` (fallbacks stay on sonnet). Append the Competition notice blockquote above to the prompt of every reviewer (Claude subagent + external reviewers).
+For fallback reviewer slots: invoke via Agent tool with subagent_type: `larch:code-reviewer`, model: `"sonnet"`. For Voter 1: invoke via Agent tool with subagent_type: `larch:code-reviewer`, model: `"opus"`. Append the Competition notice blockquote above to the prompt of every reviewer (fallback Claude subagents + external reviewers).
 
 ---
 

@@ -14,7 +14,7 @@ Design an implementation plan for a feature and review it with an 8-reviewer pan
 | Flag | Default | Purpose | Load-bearing detail |
 |------|---------|---------|---------------------|
 | `--auto` | `false` | Skip interactive question checkpoints (1c, 1d, 3.5) | No-op when `/implement --quick` skips `/design` entirely |
-| `--quick` | `false` | Quick sketch mode: 3 agents instead of 9 | Independent of `--auto`; see `flags.md` for `/implement --quick` vs `/design --quick` distinction |
+| `--quick` | `false` | Quick sketch mode: 2 agents instead of 8 | Independent of `--auto`; see `flags.md` for `/implement --quick` vs `/design --quick` distinction |
 | `--debug` | `false` | Verbose output (see Verbosity Control) | — |
 | `--session-env <path>` | empty | Forward discovered session values to `session-setup.sh` | Empty = standalone invocation, full discovery |
 | `--step-prefix <prefix>` | empty | Nested-numbering prefix from `/implement` | `::` delimiter splits numeric prefix from breadcrumb path; `"1."` (bare numeric) is backward-compat |
@@ -59,13 +59,13 @@ Step Name Registry:
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
 ```
-📊 Sketches (regular): | General: ✅ 2m31s | Cursor-Arch: ⏳ | Cursor-Edge: ✅ 3m5s | Cursor-Innovation: ⏳ | Cursor-Pragmatic: ⏳ | Codex-Arch: ⏳ | Codex-Edge: ⏳ | Codex-Innovation: ❌ 8m3s | Codex-Pragmatic: ✅ 4m2s |
+📊 Sketches (regular): | Cursor-Arch: ⏳ | Cursor-Edge: ✅ 3m5s | Cursor-Innovation: ⏳ | Cursor-Pragmatic: ⏳ | Codex-Arch: ⏳ | Codex-Edge: ⏳ | Codex-Innovation: ❌ 8m3s | Codex-Pragmatic: ✅ 4m2s |
 
-📊 Sketches (quick): | General: ✅ 2m31s | Cursor-Generic: ⏳ | Codex-Generic: ✅ 3m5s |
+📊 Sketches (quick): | Cursor-Generic: ⏳ | Codex-Generic: ✅ 3m5s |
 
-or for Step 3 plan review (6-reviewer panel):
+or for Step 3 plan review (8-reviewer panel):
 
-📊 Reviewers: | Code: ✅ 2m31s | Codex: ⏳ | Cursor-Arch: ✅ 4m12s | Cursor-Edge: ⏳ | Cursor-Innovation: ✅ 3m45s | Cursor-Pragmatic: ⏳ |
+📊 Reviewers: | Cursor-Arch: ✅ 4m12s | Cursor-Edge: ⏳ | Cursor-Innovation: ✅ 3m45s | Cursor-Pragmatic: ⏳ | Codex-Arch: ⏳ | Codex-Edge: ✅ 2m31s | Codex-Innovation: ⏳ | Codex-Pragmatic: ⏳ |
 ```
 
 Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout (with elapsed time since launch), ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time and step start formatting rules.
@@ -90,7 +90,7 @@ Before invoking `/design`, the orchestrator should internalize these questions. 
 
 Consolidated NEVER rules collected from the procedural steps below. Each rule states the WHY so edits can respect the original constraint. Inline step-local mentions remain where they carry load-bearing context.
 
-1. **NEVER skip Step 2a** (the sketch phase). **Why:** anchoring bias locks architectural direction before alternatives are considered. **How to apply:** always run all 9 sketch slots in regular mode or all 3 in quick mode, even when the feature seems trivial; Claude fallbacks preserve the configured lane count when externals are unavailable.
+1. **NEVER skip Step 2a** (the sketch phase). **Why:** anchoring bias locks architectural direction before alternatives are considered. **How to apply:** always run all 8 sketch slots in regular mode or all 2 in quick mode, even when the feature seems trivial; Claude fallbacks preserve the configured lane count when externals are unavailable.
 
 2. **NEVER substitute a Claude subagent into a dialectic debate bucket.** **Why:** the debate path is externals-only (Cursor/Codex) because model-specific writing style could encode tool identity into adversarial arguments; the judge path uses the repo-wide replacement-first pattern because judges merely adjudicate pre-authored defenses. See GitHub issue #98. **How to apply:** Step 2a.5 skips debate buckets whose assigned tool is unavailable — do NOT reassign to Claude. Judge-panel slots (after debate) DO use Claude replacements per `dialectic-protocol.md`.
 
