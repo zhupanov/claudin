@@ -27,16 +27,11 @@
 #  - Each references/*.md opens with '**Consumer**:' and '**Binding convention**:'
 #    header lines in the first 20 lines. /review deliberately uses this 2-line header
 #    schema, NOT the /implement Consumer/Contract/When-to-load triplet.
-#  - Three-way slice-mode activation contract pins (#637, parallel to assertions 5a/5b/5c):
-#    a single SKILL.md line carries 'Slice mode', '--slice', '--slice-file', AND
-#    'positional' (case-insensitive on 'positional') together — pinning the activation
-#    sentence that defines slice mode as enabled by --slice OR --slice-file OR positional
-#    text after --create-issues; SKILL.md contains the verbatim empty-positional abort
-#    message ('--create-issues requires a slice description (--slice <text>, --slice-file
-#    <path>, or trailing positional text)'); SKILL.md contains the verbatim
-#    positional-vs-slice-flag mutual-exclusion abort message ('Positional slice text
-#    cannot be combined with --slice or --slice-file'). Together these three pins anchor
-#    the contracts introduced by PR #638 so a future edit cannot regress them silently.
+#  - Two-mode activation contract pins: a single SKILL.md line carries '--diff' and
+#    'positional description' together — pinning the two-mode grammar; SKILL.md
+#    contains the verbatim --diff+description mutual-exclusion abort message; SKILL.md
+#    contains the verbatim no-args error abort message. Together these pins anchor
+#    the mode activation contract so a future edit cannot regress it silently.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 set -euo pipefail
@@ -220,41 +215,32 @@ for ref_path in "${ref_files[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# (10) Three-way slice-mode activation pin (#637). A SINGLE line in SKILL.md must
-#      carry 'Slice mode', '--slice', '--slice-file', AND 'positional' together
-#      (case-insensitive on 'positional' since prose/heading variants like
-#      'Positional' may appear). Anchors the activation sentence that defines
-#      slice mode as enabled by --slice OR --slice-file OR positional text after
-#      --create-issues. Pattern parallel to (5a)/(5b)/(5c): pipeline threads each
-#      token through its own filter stage while preserving line granularity, so a
-#      future edit that splits the activation directive across lines fails closed.
-#      Under `set -o pipefail` a zero-match in any stage fails the pipeline and the
-#      `||` short-circuit triggers fail().
+# (10) Mode activation pin. A single SKILL.md line carries '--diff' AND
+#      'positional description' (case-insensitive) together. Anchors the
+#      two-mode grammar: --diff vs positional description text. Pattern
+#      parallel to (5a)/(5b)/(5c): pipeline threads each token through its
+#      own filter stage while preserving line granularity, so a future edit
+#      that splits the activation directive across lines fails closed.
 # ---------------------------------------------------------------------------
-grep 'Slice mode' "$SKILL_MD" \
-  | grep -F -- '--slice' \
-  | grep -F -- '--slice-file' \
-  | grep -iq 'positional' \
-  || fail "(10) no single SKILL.md line carries 'Slice mode', '--slice', '--slice-file', and 'positional' together — three-way slice-mode activation contract pin is broken"
+grep -F -- '--diff' "$SKILL_MD" \
+  | grep -iq 'positional description' \
+  || fail "(10) no single SKILL.md line carries '--diff' and 'positional description' together — mode activation contract pin is broken"
 
 # ---------------------------------------------------------------------------
-# (11) Empty-positional abort message verbatim pin (#637). SKILL.md must contain
-#      the exact literal string of the abort message printed when --create-issues
-#      is set without --slice, --slice-file, or trailing positional text. Verbatim
-#      grep -F so any wording drift fails closed — the abort message is a
-#      user-facing contract that downstream tooling may depend on.
+# (11) Diff+description mutual-exclusion abort message verbatim pin.
+#      SKILL.md must contain the exact literal string of the abort message
+#      printed when --diff is combined with positional description text.
 # ---------------------------------------------------------------------------
-grep -Fq '**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**' "$SKILL_MD" \
-  || fail "(11) SKILL.md is missing the verbatim empty-positional abort message — the contract introduced by PR #638 has regressed"
+grep -Fq '**⚠ --diff cannot be combined with a description. Use --diff alone for branch diff review, or provide a description without --diff. Aborting.**' "$SKILL_MD" \
+  || fail "(11) SKILL.md is missing the verbatim --diff+description mutual-exclusion abort message"
 
 # ---------------------------------------------------------------------------
-# (12) Positional-vs-slice-flag mutual-exclusion abort message verbatim pin (#637).
-#      SKILL.md must contain the exact literal string of the abort message printed
-#      when positional slice text is combined with --slice or --slice-file.
-#      Verbatim grep -F same rationale as (11).
+# (12) No-args error abort message verbatim pin. SKILL.md must contain
+#      the exact literal string of the abort message printed when neither
+#      --diff nor positional description is provided.
 # ---------------------------------------------------------------------------
-grep -Fq '**⚠ Positional slice text cannot be combined with --slice or --slice-file. Aborting.**' "$SKILL_MD" \
-  || fail "(12) SKILL.md is missing the verbatim positional-vs-slice-flag mutual-exclusion abort message — the contract introduced by PR #638 has regressed"
+grep -Fq '**⚠ /review requires either --diff (branch diff review) or a description of what to review.' "$SKILL_MD" \
+  || fail "(12) SKILL.md is missing the verbatim no-args error abort message"
 
 # ---------------------------------------------------------------------------
 # (13) Substantive-validation flag pin (#661). The Step 3a collect-agent-results.sh
@@ -273,22 +259,20 @@ grep 'collect-agent-results.sh' "$SKILL_MD" \
   || fail "(13) no single SKILL.md line carries 'collect-agent-results.sh', '--timeout 1860', '--substantive-validation', and '--validation-mode' together — issue #661 substantive-validation contract pin is broken"
 
 # ---------------------------------------------------------------------------
-# (14) Cursor slice-mode prompt carries the dual-list contract (#659).
-#      Pipeline-threaded grep: a single SKILL.md line must contain
-#      Slice-mode prompts are now rendered by scripts/render-specialist-prompt.sh,
-#      not inline in SKILL.md. Assertion (14) checks that SKILL.md references
-#      the render script and that the script handles slice mode.
+# (14) Specialist prompt rendering is wired (#659).
+#      Assertion (14) checks that SKILL.md references render-specialist-prompt.sh
+#      and that the script accepts --mode for diff/description mode handling.
 # ---------------------------------------------------------------------------
 grep -Fq 'render-specialist-prompt.sh' "$SKILL_MD" \
   || fail "(14) SKILL.md does not reference 'render-specialist-prompt.sh' — specialist prompt rendering is not wired"
 grep -Fq -- '--mode' "$REPO_ROOT/scripts/render-specialist-prompt.sh" \
-  || fail "(14) scripts/render-specialist-prompt.sh does not accept '--mode' — diff/slice mode handling is missing"
+  || fail "(14) scripts/render-specialist-prompt.sh does not accept '--mode' — diff/description mode handling is missing"
 
 # ---------------------------------------------------------------------------
 # (15) Slice-mode OOS marking is handled by scripts/render-specialist-prompt.sh
 #      (for specialist reviewers) and by the agent file output format section
 #      (for all reviewers). OOS anchor language lives in the render script's
-#      slice preamble, not inline in SKILL.md. The dual-list contract (In-Scope
+#      description preamble, not inline in SKILL.md. The dual-list contract (In-Scope
 #      Findings + Out-of-Scope Observations) is enforced by the specialist agent
 #      files' Output format section and by test-render-specialist-prompt.sh.
 #      This assertion verifies that scripts/render-specialist-prompt.sh exists
@@ -308,22 +292,22 @@ for specialist in reviewer-structure reviewer-correctness reviewer-testing revie
 done
 
 # ---------------------------------------------------------------------------
-# (16) Step 3a slice-mode external-reviewer parsing carries dual-list contract (#659).
-#      A single SKILL.md line carries 'In slice mode', 'dual-list output',
+# (16) Step 3a description-mode external-reviewer parsing carries dual-list contract (#659).
+#      A single SKILL.md line carries 'In description mode', 'dual-list output',
 #      '### In-Scope Findings', AND '### Out-of-Scope Observations' together —
 #      pinning the parser-side mode-conditional wording in Step 3a item 2.
 # ---------------------------------------------------------------------------
-grep 'In slice mode' "$SKILL_MD" \
+grep 'In description mode' "$SKILL_MD" \
   | grep -F 'dual-list output' \
   | grep -F '### In-Scope Findings' \
   | grep -Fq '### Out-of-Scope Observations' \
-  || fail "(16) no single SKILL.md line carries 'In slice mode', 'dual-list output', '### In-Scope Findings', AND '### Out-of-Scope Observations' together — Step 3a slice-mode dual-list parsing contract is broken"
+  || fail "(16) no single SKILL.md line carries 'In description mode', 'dual-list output', '### In-Scope Findings', AND '### Out-of-Scope Observations' together — Step 3a description-mode dual-list parsing contract is broken"
 
 # ---------------------------------------------------------------------------
 # (17) Step 3a diff-mode external-reviewer single-list preservation (#659).
 #      A single SKILL.md line carries 'In diff mode', 'single-list output', AND
 #      'entire output' together — pinning Step 3a item 2's diff-mode preservation
-#      so a future blanket rewrite cannot flatten the slice/diff modes.
+#      so a future blanket rewrite cannot flatten the description/diff modes.
 # ---------------------------------------------------------------------------
 grep 'In diff mode' "$SKILL_MD" \
   | grep -F 'single-list output' \

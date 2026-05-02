@@ -8,13 +8,13 @@
 #
 # Two modes:
 #   Generic:    --prompt "review text..."
-#   Specialist: --agent-file agents/reviewer-X.md --mode diff|slice
-#               [--slice-text TEXT] [--slice-files PATH] [--competition-notice]
+#   Specialist: --agent-file agents/reviewer-X.md --mode diff|description
+#               [--description-text TEXT] [--scope-files PATH] [--competition-notice]
 #
 # Usage:
 #   launch-cursor-review.sh --output FILE --timeout SECS --prompt "PROMPT"
 #   launch-cursor-review.sh --output FILE --timeout SECS \
-#       --agent-file FILE --mode diff|slice [--slice-text T] [--slice-files F] [--competition-notice]
+#       --agent-file FILE --mode diff|description [--description-text T] [--scope-files F] [--competition-notice]
 #
 # Output: same stdout as run-external-agent.sh (no additional output).
 #
@@ -29,8 +29,8 @@ TIMEOUT=""
 PROMPT=""
 AGENT_FILE=""
 MODE=""
-SLICE_TEXT=""
-SLICE_FILES=""
+DESCRIPTION_TEXT=""
+SCOPE_FILES=""
 COMPETITION_NOTICE=false
 
 while [[ $# -gt 0 ]]; do
@@ -40,8 +40,8 @@ while [[ $# -gt 0 ]]; do
         --prompt) PROMPT="${2:?--prompt requires a value}"; shift 2 ;;
         --agent-file) AGENT_FILE="${2:?--agent-file requires a value}"; shift 2 ;;
         --mode) MODE="${2:?--mode requires a value}"; shift 2 ;;
-        --slice-text) SLICE_TEXT="${2:?--slice-text requires a value}"; shift 2 ;;
-        --slice-files) SLICE_FILES="${2:?--slice-files requires a value}"; shift 2 ;;
+        --description-text) DESCRIPTION_TEXT="${2:?--description-text requires a value}"; shift 2 ;;
+        --scope-files) SCOPE_FILES="${2:?--scope-files requires a value}"; shift 2 ;;
         --competition-notice) COMPETITION_NOTICE=true; shift ;;
         *) echo "launch-cursor-review.sh: unknown flag: $1" >&2; exit 2 ;;
     esac
@@ -56,8 +56,8 @@ fi
 
 if [[ -n "$AGENT_FILE" ]]; then
     RENDER_ARGS=(--agent-file "$AGENT_FILE" --mode "$MODE")
-    [[ -n "$SLICE_TEXT" ]] && RENDER_ARGS+=(--slice-text "$SLICE_TEXT")
-    [[ -n "$SLICE_FILES" ]] && RENDER_ARGS+=(--slice-files "$SLICE_FILES")
+    [[ -n "$DESCRIPTION_TEXT" ]] && RENDER_ARGS+=(--description-text "$DESCRIPTION_TEXT")
+    [[ -n "$SCOPE_FILES" ]] && RENDER_ARGS+=(--scope-files "$SCOPE_FILES")
     [[ "$COMPETITION_NOTICE" == "true" ]] && RENDER_ARGS+=(--competition-notice)
     PROMPT=$("$SCRIPT_DIR/render-specialist-prompt.sh" "${RENDER_ARGS[@]}")
 elif [[ -z "$PROMPT" ]]; then

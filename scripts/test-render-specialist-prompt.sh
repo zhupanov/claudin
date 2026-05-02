@@ -87,16 +87,16 @@ for name in "${SPECIALISTS[@]}"; do
   assert_contains "${name} diff: has do-not-modify" "Do NOT modify files" "$output"
 done
 
-# 4. Render in slice mode produces expected content.
+# 4. Render in description mode produces expected content.
 TMPDIR_TEST=$(mktemp -d)
-echo "test-file.md" > "$TMPDIR_TEST/slice-files.txt"
+echo "test-file.md" > "$TMPDIR_TEST/scope-files.txt"
 for name in "${SPECIALISTS[@]}"; do
   file="$REPO_ROOT/agents/${name}.md"
   [[ -f "$file" ]] || continue
-  output=$(bash "$RENDERER" --agent-file "$file" --mode slice --slice-text "test slice" --slice-files "$TMPDIR_TEST/slice-files.txt" 2>/dev/null)
-  assert_contains "${name} slice: has slice preamble" "test slice" "$output"
-  assert_contains "${name} slice: has canonical file list" "$TMPDIR_TEST/slice-files.txt" "$output"
-  assert_contains "${name} slice: has OOS anchor" "anchored to the canonical file list" "$output"
+  output=$(bash "$RENDERER" --agent-file "$file" --mode description --description-text "test description" --scope-files "$TMPDIR_TEST/scope-files.txt" 2>/dev/null)
+  assert_contains "${name} description: has description preamble" "test description" "$output"
+  assert_contains "${name} description: has canonical file list" "$TMPDIR_TEST/scope-files.txt" "$output"
+  assert_contains "${name} description: has OOS anchor" "anchored to the canonical file list" "$output"
 done
 rm -rf "$TMPDIR_TEST"
 
@@ -116,8 +116,8 @@ assert_exit_code "missing --agent-file" "2" bash "$RENDERER" --mode diff
 assert_exit_code "missing --mode" "2" bash "$RENDERER" --agent-file "$REPO_ROOT/agents/reviewer-structure.md"
 assert_exit_code "invalid mode" "2" bash "$RENDERER" --agent-file "$REPO_ROOT/agents/reviewer-structure.md" --mode invalid
 assert_exit_code "nonexistent agent file" "2" bash "$RENDERER" --agent-file "/nonexistent/file.md" --mode diff
-assert_exit_code "slice mode without --slice-text" "2" bash "$RENDERER" --agent-file "$REPO_ROOT/agents/reviewer-structure.md" --mode slice --slice-files /tmp/f.txt
-assert_exit_code "slice mode without --slice-files" "2" bash "$RENDERER" --agent-file "$REPO_ROOT/agents/reviewer-structure.md" --mode slice --slice-text "test"
+assert_exit_code "description mode without --description-text" "2" bash "$RENDERER" --agent-file "$REPO_ROOT/agents/reviewer-structure.md" --mode description --scope-files /tmp/f.txt
+assert_exit_code "description mode without --scope-files" "2" bash "$RENDERER" --agent-file "$REPO_ROOT/agents/reviewer-structure.md" --mode description --description-text "test"
 
 # 7. Each specialist output contains the security focus area.
 for name in "${SPECIALISTS[@]}"; do

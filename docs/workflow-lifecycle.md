@@ -171,7 +171,7 @@ Different skills use different protocols for resolving review findings:
 
 | Protocol | Used by | Mechanism |
 |---|---|---|
-| [Voting](voting-process.md) | `/design`, `/review` (both diff and slice modes) | 3-agent panel votes YES/NO/EXONERATE. 2+ YES required to accept. |
+| [Voting](voting-process.md) | `/design`, `/review` (both diff and description modes) | 3-agent panel votes YES/NO/EXONERATE. 2+ YES required to accept. |
 | Negotiation | `/research` | Up to N rounds of back-and-forth with external reviewers. Claude makes the final call. |
 
 See [Voting Process](voting-process.md) for full details on the voting protocol.

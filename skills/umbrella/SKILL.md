@@ -72,7 +72,7 @@ Skip LLM classification entirely. Instead, classification is **deterministic pos
   - Else (failed item — `ISSUE_<i>_FAILED=true`): exclude from the count.
 - The distinct count is `len(set_of_numbers) + count_of_dry_run_items`.
 
-This rule is authoritative for any caller of `/umbrella --input-file` — it applies uniformly regardless of whether `/issue --input-file --dry-run` is invoked through `/review --create-issues`, a future CI driver exercising `/umbrella --input-file --dry-run`, or any other caller. The three load-bearing literals (`Distinct-resolved-child-count rule** (dry-run-safe)`, the `ISSUE_<i>_DRY_RUN=true` count-as-1 sentence, and the `len(set_of_numbers) + count_of_dry_run_items` formula) plus this caller-agnostic note are pinned by `scripts/test-umbrella-emit-output-contract.sh` to guard against silent drift.
+This rule is authoritative for any caller of `/umbrella --input-file` — it applies uniformly regardless of whether `/issue --input-file --dry-run` is invoked through `/review` (description-mode finding filing), a future CI driver exercising `/umbrella --input-file --dry-run`, or any other caller. The three load-bearing literals (`Distinct-resolved-child-count rule** (dry-run-safe)`, the `ISSUE_<i>_DRY_RUN=true` count-as-1 sentence, and the `len(set_of_numbers) + count_of_dry_run_items` formula) plus this caller-agnostic note are pinned by `scripts/test-umbrella-emit-output-contract.sh` to guard against silent drift.
 
 If distinct count is **<2** → emit a 3-line bundle (parallel to 3B.1's existing `decomposition-lt-2` downgrade convention; preserves the "NEVER skip the user-visible classification verdict" anti-pattern):
 ```

@@ -1,33 +1,36 @@
 ---
 name: review
-description: "Use when reviewing code changes (current branch diff, or a verbal slice of the repo) with a 6-reviewer panel (5 Cursor specialists + 1 Codex generic). Slice mode supports file-batch review and inline /umbrella filing."
-argument-hint: "[--debug] [--session-env <path>] [--slice <text> | --slice-file <path>] [--create-issues [<slice-text>]] [--label <label>] [--security-output <path>]"
+description: "Use when reviewing code changes (--diff for branch diff, or positional text for existing code review). Description mode files findings as issues by default (--no-issues suppresses)."
+argument-hint: "[--diff] [--no-issues] [--debug] [--session-env <path>] [--step-prefix <prefix>] [<description>]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 ---
 
 # Code Review Skill
 
-Review code changes (default: current branch diff vs `main`; slice mode: a verbal description of a code slice) using a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic), then implement all accepted suggestions (diff mode) OR file accepted findings as GitHub issues (slice mode + `--create-issues`). Claude is not a reviewer but participates as a voter in the 3-voter adjudication panel.
+Review code changes using a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic). Two modes: **diff mode** (`--diff`) reviews the current branch diff vs `main` and implements accepted suggestions; **description mode** (positional `<description>`) reviews existing code matching the description and files accepted findings as GitHub issues by default (`--no-issues` to suppress). Claude is not a reviewer but participates as a voter in the 3-voter adjudication panel.
 
 **Anti-halt continuation reminder.** After every child `Skill` tool call (e.g., `/design`, `/review`, `/relevant-checks`, `/bump-version`, `/issue`, `/implement`) returns, IMMEDIATELY continue with this skill's NEXT numbered step — do NOT end the turn on the child's cleanup output, and do NOT write a summary, handoff, status recap, or "returning to parent" message — those are halts in disguise. The rule is strictly subordinate to any explicit non-sequential control-flow directive in THIS file (e.g., `skip to Step N`, `bail to cleanup`, `jump back`, `loop back`, `fall through`, `break out`). A normal sequential `proceed to Step N+1` instruction is the default continuation this rule reinforces, NOT an exception. Every `/relevant-checks` invocation anywhere in this file is covered by this rule. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder for the canonical rule.
 
-**Flags**: Parse flags from `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, the remainder (if any) is unused, EXCEPT when `--create-issues` is set and neither `--slice` nor `--slice-file` is present — in that case the remainder (joined as a single string) is treated as the slice description (equivalent to `--slice <remainder>`), activating slice mode. See `--create-issues` below. **When using the positional slice form, all named flags (e.g. `--label`, `--security-output`, `--debug`) MUST appear before the positional description.** Because the parser stops at the first non-flag token, any flag-looking token (e.g. `--label foo`) appearing AFTER the positional description is silently absorbed into the slice text rather than parsed as a flag — there is no warning. Example correct order: `/review --create-issues --label foo my slice description`. Example wrong order (silent label loss): `/review --create-issues my slice description --label foo`. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
+**Flags**: Parse flags from `$ARGUMENTS`. Flags may appear in any order; stop at the first non-flag token. After stripping all flags, the remainder (joined as a single string) is the **positional description** — it activates description mode. **All flags MUST appear before the positional description.** Because the parser stops at the first non-flag token, any flag-looking token appearing AFTER the positional description is silently absorbed into the description text rather than parsed as a flag — there is no warning. Example correct order: `/review --no-issues my description`. **All boolean flags default to `false`. Only set a flag to `true` when its `--flag` token is explicitly present in the arguments. Flags are independent — the presence of one flag must not influence the default value of any other flag.**
 
+- `--diff`: Set a mental flag `diff_mode=true`. Activates **diff mode** (branch diff vs `main`). Mutually exclusive with positional description text. Default: `diff_mode=false`.
+- `--no-issues`: Set a mental flag `no_issues=true`. Suppresses issue filing in description mode. In diff mode, silently ignored (diff mode never files issues). Default: `no_issues=false`.
 - `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) including reviewer health state (`CODEX_HEALTHY`, `CURSOR_HEALTHY`). If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full health probe at Step 0).
 - `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"5.::code review"` (numeric `5.`, path `code review`), `"5."` (numeric only, backward compat). Default: empty (standalone numbering). Internal orchestration flag.
-- `--slice <text>`: Set `SLICE_TEXT` to the given verbal description (e.g., `--slice "implementation of /research skill"`). Mutually exclusive with `--slice-file`. Activates **slice mode** (see "Slice Mode" section below). Used for human-invoked slice reviews where the description is short.
-- `--slice-file <path>`: Set `SLICE_FILE` to the given path; the verbal description is read from that file (single-line file). Mutually exclusive with `--slice`. Activates **slice mode**. Used for driver-invoked slice reviews where file-based handoff bypasses argv shell-quoting hazards on verbal descriptions containing quotes, parens, ampersands, etc.
-- `--create-issues`: Set `CREATE_ISSUES=true`. After voting completes, file every accepted finding (in-scope-accepted AND OOS-accepted, 2+ YES) as GitHub issues by delegating to `/umbrella` (which wraps `/issue` for batch creation and produces an umbrella tracking issue when ≥2 distinct issues are filed; ≤1 distinct → no umbrella). See Step 4b for the full mapping. **Requires slice mode.** Slice mode may be activated three ways: (a) `--slice <text>`, (b) `--slice-file <path>`, or (c) by passing the slice description as trailing positional text after `--create-issues` (equivalent to `--slice <text>`). If none of these are provided (no slice flag AND no positional remainder), print `**⚠ --create-issues requires a slice description (--slice <text>, --slice-file <path>, or trailing positional text). Aborting.**` and exit. Security-tagged findings are written to `--security-output` and never auto-filed (per SECURITY.md).
-- `--label <label>`: Set `ISSUE_LABEL` to the given label. Forwarded to `/issue` when `--create-issues` is set. Default: empty (no label).
-- `--security-output <path>`: Set `SECURITY_OUTPUT_PATH` to the given path. In slice mode, accepted security-tagged findings are written verbatim to this file before `/review` exits. Default: `$REVIEW_TMPDIR/security-findings.md` (printed to terminal verbatim before tmpdir cleanup if `--security-output` is unset).
 
-## Mutual exclusion + slice-mode activation
+## Mode activation
 
-- `--slice <text>` and `--slice-file <path>` are mutually exclusive. If both are set, print `**⚠ --slice and --slice-file are mutually exclusive. Aborting.**` and exit.
-- If positional slice text is present (trailing remainder after `--create-issues`, per `--create-issues` above) AND either `--slice` or `--slice-file` is also set, print `**⚠ Positional slice text cannot be combined with --slice or --slice-file. Aborting.**` and exit.
-- **Slice mode** is active when `--slice` is set, `--slice-file` is set, OR positional slice text is present (the third form is gated on `--create-issues`, per the Flags section above). In slice mode, Step 1 replaces `gather-branch-context.sh` with a slice-resolve step (see Step 1 below), Step 2 reviewer prompts use slice-mode bodies, Step 3 skips the implement-fixes path, and Step 4 emits a `### slice-result` KV footer.
-- **Diff mode** is active when slice mode is NOT active per this section (i.e., none of `--slice`, `--slice-file`, or trailing positional text after `--create-issues` is present). Diff mode is the default; behavior in diff mode is unchanged from the pre-slice-mode `/review`.
+Mode is determined by the parser state machine (fail-closed, evaluated in order):
+
+1. If `--diff` present AND positional description text present → **ERROR**: print `**⚠ --diff cannot be combined with a description. Use --diff alone for branch diff review, or provide a description without --diff. Aborting.**` and exit.
+2. If `--diff` present (no positional text) → **diff mode**. Reviews current branch diff vs `main`, implements accepted suggestions. No issue filing.
+3. If positional description text present (no `--diff`) → **description mode**. Resolves description to a canonical file list, reviews existing code, files accepted findings as GitHub issues by default (`--no-issues` suppresses). Security-tagged findings are never filed publicly (held locally per SECURITY.md).
+4. If neither `--diff` nor positional description text → **ERROR**: print `**⚠ /review requires either --diff (branch diff review) or a description of what to review. Examples: /review --diff, /review implementation of auth module, /review --no-issues error handling in scripts/. Aborting.**` and exit.
+
+**Description mode** replaces the former "slice mode": Step 1 replaces `gather-branch-context.sh` with a description-resolve step, Step 2 reviewer prompts use description-mode bodies, Step 3 skips the implement-fixes path, and Step 4 emits a `### review-result` KV footer. Issue filing via `/umbrella` is the default unless `--no-issues` is set.
+
+**Diff mode** reviews the current branch diff vs `main`, implements accepted fixes in a recursive loop, and does not file issues.
 
 ## Progress Reporting
 
@@ -73,15 +76,15 @@ This replaces individual per-reviewer completion messages in non-debug mode. Do 
 
 **Limitation**: Verbosity suppression is prompt-enforced and best-effort.
 
-## Slice Mode
+## Description Mode
 
-When `--slice <text>` is set, `--slice-file <path>` is set, or trailing positional text follows `--create-issues` (see Mutual exclusion section above), `/review` operates in **slice mode** instead of the default diff-vs-main mode:
+When positional description text is present (no `--diff`), `/review` operates in **description mode** instead of diff mode:
 
-- Step 1 (Gather Context): replaced by a **slice-resolve** step that maps the verbal description to a canonical file list at `$REVIEW_TMPDIR/slice-files.txt` via Glob/Grep/Read. The canonical list anchors OOS classification.
+- Step 1 (Gather Context): replaced by a **description-resolve** step that maps the verbal description to a canonical file list at `$REVIEW_TMPDIR/scope-files.txt` via Glob/Grep/Read. The canonical list anchors OOS classification.
 - Step 2 (Launch Reviewers): reviewer prompts instruct the panel to review the canonical file list (existing code, not a diff). Reviewers may explore further via Glob/Grep/Read for context but OOS classification is anchored to the canonical list.
-- Step 3 (Review Cycle): runs ONE round only (no recursive re-review loop). After voting, either compose a findings batch and invoke `/umbrella` via the Skill tool (if `--create-issues`) or just print the findings.
-- Step 3e (Implement Fixes): SKIPPED in slice mode — slice mode is read-only review for issue filing, not implement-fixes.
-- Step 4 (Final Summary): writes accepted security findings to `--security-output` path; emits a `### slice-result` KV footer for driver consumption.
+- Step 3 (Review Cycle): runs ONE round only (no recursive re-review loop). After voting, compose a findings batch and invoke `/umbrella` via the Skill tool (default), or just print the findings (if `--no-issues`).
+- Step 3e (Implement Fixes): SKIPPED in description mode — description mode is read-only review for issue filing, not implement-fixes.
+- Step 4 (Final Summary): writes accepted security findings to `$REVIEW_TMPDIR/security-findings.md` (printed to terminal before cleanup; never filed publicly per SECURITY.md); emits a `### review-result` KV footer.
 
 ## Step 0 — Session Setup
 
@@ -105,7 +108,7 @@ Set mental flags `codex_available` and `cursor_available` based on the output:
 
 ## Step 1 — Gather Context
 
-### Diff mode (when slice mode is NOT active)
+### Diff mode (`--diff`)
 
 Run the gather script to collect the diff and context:
 
@@ -115,16 +118,16 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/gather-branch-context.sh --output-dir "$REVIEW_TMP
 
 Parse the output for `DIFF_FILE`, `FILE_LIST_FILE`, and `COMMIT_LOG_FILE`. Read these files to get the full diff, file list, and commit log — you will pass these to each subagent.
 
-### Slice mode (--slice, --slice-file, or trailing positional text after --create-issues)
+### Description mode (positional description text)
 
-Skip `gather-branch-context.sh`. Resolve the verbal slice description to a canonical file list:
+Skip `gather-branch-context.sh`. Resolve the verbal description to a canonical file list:
 
-1. **Load the verbal description**: if `--slice` was set, use `SLICE_TEXT` directly. If `--slice-file` was set, read the first non-empty line from the file at `SLICE_FILE` and use it as `SLICE_TEXT` (driver invocations write a one-line file). If neither `--slice` nor `--slice-file` was set (positional slice mode active per the Mutual exclusion section), use the trailing positional remainder of `$ARGUMENTS` captured per the Flags section (joined as a single string) as `SLICE_TEXT`.
+1. **Load the verbal description**: use `DESCRIPTION_TEXT` (the positional remainder captured by the flag parser, joined as a single string).
 2. **Resolve to canonical file list**: use `Glob`, `Grep`, and `Read` tools to identify the files that match the verbal description. The orchestrating agent applies semantic judgment — for "implementation of /research skill", that means `skills/research/SKILL.md` and `skills/research/references/*.md` and any sibling scripts; for "all hook scripts under hooks/", that means `hooks/*.sh` and `hooks/hooks.json`; for "complete contents of foo library", that means every file under `foo/`.
-3. **Write to `$REVIEW_TMPDIR/slice-files.txt`**: one file path (repo-relative) per line. This file is the **canonical anchor for OOS classification** — reviewers MUST treat this as the authoritative scope for the slice (per dialectic resolution DECISION_1, voted 3-0).
-4. If the resolved file list is empty, print `**⚠ Slice resolved to zero files. Nothing to review. Exiting.**`, emit a `### slice-result` footer with `PARSE_STATUS=ok ISSUES_CREATED=0 ISSUES_DEDUPLICATED=0 ISSUES_FAILED=0 SECURITY_FINDINGS_HELD=0`, and proceed to Step 5 (cleanup).
+3. **Write to `$REVIEW_TMPDIR/scope-files.txt`**: one file path (repo-relative) per line. This file is the **canonical anchor for OOS classification** — reviewers MUST treat this as the authoritative scope for the description.
+4. If the resolved file list is empty, print `**⚠ Description resolved to zero files. Nothing to review. Exiting.**`, emit a `### review-result` footer with `PARSE_STATUS=ok ISSUES_CREATED=0 ISSUES_DEDUPLICATED=0 ISSUES_FAILED=0 SECURITY_FINDINGS_HELD=0`, and proceed to Step 5 (cleanup).
 
-Set `DIFF_FILE` to empty (no diff in slice mode). Set `FILE_LIST_FILE` to `$REVIEW_TMPDIR/slice-files.txt`. Set `COMMIT_LOG_FILE` to empty.
+Set `DIFF_FILE` to empty (no diff in description mode). Set `FILE_LIST_FILE` to `$REVIEW_TMPDIR/scope-files.txt`. Set `COMMIT_LOG_FILE` to empty.
 
 ## Step 2 — Launch Reviewer Panel in Parallel
 
@@ -144,7 +147,7 @@ The 5 specialists and their attribution labels:
 
 The generic reviewer uses attribution label `Codex`.
 
-**Slice mode is unchanged**: single round, no implement loop, not affected by the round-state machine below. Slice mode always launches the full 6-reviewer panel for its single round.
+**Description mode is unchanged**: single round, no implement loop, not affected by the round-state machine below. Description mode always launches the full 6-reviewer panel for its single round.
 
 ### Fallback matrix
 
@@ -166,13 +169,13 @@ Launch **all reviewers in a single message**. Spawn order: specialist slots firs
 **Cursor specialist** (if `cursor_available`):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$REVIEW_TMPDIR/cursor-specialist-<name>-output.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode <diff|slice> [--slice-text "${SLICE_TEXT}" --slice-files "$REVIEW_TMPDIR/slice-files.txt"] --competition-notice
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-cursor-review.sh --output "$REVIEW_TMPDIR/cursor-specialist-<name>-output.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode <diff|description> [--description-text "${DESCRIPTION_TEXT}" --scope-files "$REVIEW_TMPDIR/scope-files.txt"] --competition-notice
 ```
 
 **Codex specialist** (fallback when `cursor_available` is false, `codex_available` is true):
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-specialist-<name>-output.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode <diff|slice> [--slice-text "${SLICE_TEXT}" --slice-files "$REVIEW_TMPDIR/slice-files.txt"] --competition-notice
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-specialist-<name>-output.txt" --timeout 1800 --agent-file "${CLAUDE_PLUGIN_ROOT}/agents/reviewer-<name>.md" --mode <diff|description> [--description-text "${DESCRIPTION_TEXT}" --scope-files "$REVIEW_TMPDIR/scope-files.txt"] --competition-notice
 ```
 
 Use `run_in_background: true` and `timeout: 1860000` on each specialist Bash tool call.
@@ -185,10 +188,10 @@ Use `run_in_background: true` and `timeout: 1860000` on each specialist Bash too
 ${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 --prompt "Review all code changes on the current branch vs main. Run git diff main...HEAD to see changes and git log main...HEAD --oneline for commits. For each changed file, read the full file for context. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Return numbered findings with focus-area tag, file:line, issue, and suggested fix. If NO issues, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
 
-**Slice mode**:
+**Description mode**:
 
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 --prompt "Review existing code in the slice described as: '${SLICE_TEXT}'. The canonical file list for this slice is at $REVIEW_TMPDIR/slice-files.txt — read that file first to see exactly which files are in scope. Read each listed file in full. You may also explore via Glob/Grep/Read for additional context, but in-scope vs out-of-scope (OOS) classification MUST be anchored to the canonical file list — findings about files NOT in slice-files.txt are OOS, even if they look related. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in slice-files.txt as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in slice-files.txt, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in slice-files.txt. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
+${CLAUDE_PLUGIN_ROOT}/scripts/launch-codex-review.sh --output "$REVIEW_TMPDIR/codex-output.txt" --timeout 1800 --prompt "Review existing code described as: '${DESCRIPTION_TEXT}'. The canonical file list is at $REVIEW_TMPDIR/scope-files.txt — read that file first to see exactly which files are in scope. Read each listed file in full. You may also explore via Glob/Grep/Read for additional context, but in-scope vs out-of-scope (OOS) classification MUST be anchored to the canonical file list — findings about files NOT in scope-files.txt are OOS, even if they look related. Walk five focus areas: (1) Code Quality: bugs, logic, reuse, tests, backward compat, style. (2) Risk/Integration: breaking changes, side effects, thread safety, deployment risks, regressions, CI. (3) Correctness: logic errors, off-by-one, nil handling, type mismatches, races, error paths. (4) Architecture: separation of concerns, contract boundaries, invariants, semantic boundaries. (5) Security: injection, authn/authz, secret handling, crypto, deserialization, SSRF, path traversal, dependency CVEs. Tag each finding with its focus area (one of code-quality / risk-integration / correctness / architecture / security). Mark any finding about a file NOT in scope-files.txt as OOS. Return findings in two clearly delimited sections: a section starting with the line '### In-Scope Findings' for findings about files in scope-files.txt, and a section starting with the line '### Out-of-Scope Observations' for findings about files NOT in scope-files.txt. Each finding: focus-area tag, file:line, issue, and suggested fix. If you have neither in-scope findings nor out-of-scope observations, output exactly NO_ISSUES_FOUND. Do NOT modify files. Work at your maximum reasoning effort level."
 ```
 
 Use `run_in_background: true` and `timeout: 1860000`.
@@ -205,9 +208,9 @@ Append the following competition context to each reviewer's prompt (specialist a
 
 External reviewer output collection, validation, and retry are handled by the shared collection script — see the **Collecting External Reviewer Results** section in `${CLAUDE_PLUGIN_ROOT}/skills/shared/external-reviewers.md`. The explicit `collect-agent-results.sh` invocation is in Step 3a below.
 
-## Step 3 — Collect, Deduplicate, and Implement (Recursive Loop in diff mode; ONE round in slice mode)
+## Step 3 — Collect, Deduplicate, and Implement (Recursive Loop in diff mode; ONE round in description mode)
 
-**MANDATORY — READ ENTIRE FILE** before executing any sub-step of Step 3: `${CLAUDE_PLUGIN_ROOT}/skills/review/references/domain-rules.md`. It contains the Settings.json permissions ordering rule and the skill/script genericity rule that the orchestrating agent applies when evaluating findings and reviewing the diff/slice across Step 3 (collect, dedup, voting, fix application). Loaded unconditionally on every Step 3 entry.
+**MANDATORY — READ ENTIRE FILE** before executing any sub-step of Step 3: `${CLAUDE_PLUGIN_ROOT}/skills/review/references/domain-rules.md`. It contains the Settings.json permissions ordering rule and the skill/script genericity rule that the orchestrating agent applies when evaluating findings and reviewing the diff/description across Step 3 (collect, dedup, voting, fix application). Loaded unconditionally on every Step 3 entry.
 
 ### Round-state machine (diff mode)
 
@@ -218,7 +221,7 @@ External reviewer output collection, validation, and retry are handled by the sh
 | 1-3 | Full 6-reviewer panel (5 specialists + 1 generic) | 3-voter panel (Claude + Codex + Cursor) each round | Yes | 0 findings accepted by vote, OR round 3 reached |
 | 4-7 | Single Cursor generic (Codex → Claude fallback) | No voting (auto-accept) | No | 0 findings, OR round 7 reached |
 
-**Slice mode is unchanged**: single round, no implement loop. After Step 3d's round summary, jump directly to Step 4 (skip Step 3e implement-fixes and Step 3f re-review).
+**Description mode is unchanged**: single round, no implement loop. After Step 3d's round summary, jump directly to Step 4 (skip Step 3e implement-fixes and Step 3f re-review).
 
 ### 3a — Collect
 
@@ -236,7 +239,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/collect-agent-results.sh --timeout 1860 --substant
 
 Only include `--write-health` if `SESSION_ENV_PATH` is non-empty. Only include output paths for reviewers that were actually launched as external tools (adjust paths per the fallback matrix — e.g., `codex-specialist-*` when Cursor is down). If the generic slot is a Claude fallback (both-down or Codex-down path), process its Agent tool output directly — do not include it in `collect-agent-results.sh`.
 
-Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. **In slice mode**, reviewers produce **dual-list output** with '### In-Scope Findings' and '### Out-of-Scope Observations' section headers — parse both sections. Section-header fail-open rules: (1) if exactly one section header is present, the missing section is interpreted as empty (NOT a parse error); (2) if both section headers are absent AND the entire output is the literal 'NO_ISSUES_FOUND', the reviewer reported nothing — proceed; (3) if both section headers are absent AND the output is not 'NO_ISSUES_FOUND' (legacy unsectioned output), treat the entire body as in-scope. **In diff mode**, external reviewers produce **single-list output** — treat their entire output as in-scope findings.
+Parse the structured output for each reviewer's `STATUS` and `REVIEWER_FILE`. For any reviewer with `STATUS` not `OK`, follow the **Runtime Timeout Fallback** procedure. Read valid output files. **In description mode**, reviewers produce **dual-list output** with '### In-Scope Findings' and '### Out-of-Scope Observations' section headers — parse both sections. Section-header fail-open rules: (1) if exactly one section header is present, the missing section is interpreted as empty (NOT a parse error); (2) if both section headers are absent AND the entire output is the literal 'NO_ISSUES_FOUND', the reviewer reported nothing — proceed; (3) if both section headers are absent AND the output is not 'NO_ISSUES_FOUND' (legacy unsectioned output), treat the entire body as in-scope. **In diff mode**, external reviewers produce **single-list output** — treat their entire output as in-scope findings.
 
 Merge findings from all 6 reviewers, attributing each finding to its specialist label (`Structure`, `Correctness`, `Testing`, `Security`, `Edge-cases`, or `Codex`). When deduplicating, credit all proposing reviewers. If the same issue appears in both in-scope and OOS from different reviewers, merge under in-scope.
 
@@ -254,7 +257,7 @@ Merge findings from all reviewers into a single deduplicated list, grouped by fi
 
 ### 3c.1 — Voting Panel (rounds 1-3)
 
-**In rounds 1-3**: **MANDATORY — READ ENTIRE FILE** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` and execute its body — three-voter setup with proportionality guidance, ballot file handling rule (Write tool, not `cat`-heredoc), parallel launch order (Cursor → Codex → Claude subagent), threshold rules + competition scoring per `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`, the zero-accepted-findings short-circuit to **Step 4**, the OOS-accepted-by-vote artifact write to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` (only when `SESSION_ENV_PATH` is non-empty AND slice mode is OFF — slice mode bypasses this artifact and files directly via /umbrella at Step 4), and the save-not-accepted-IDs rule used to suppress re-raised findings in rounds 4+ (diff mode only).
+**In rounds 1-3**: **MANDATORY — READ ENTIRE FILE** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` and execute its body — three-voter setup with proportionality guidance, ballot file handling rule (Write tool, not `cat`-heredoc), parallel launch order (Cursor → Codex → Claude subagent), threshold rules + competition scoring per `${CLAUDE_PLUGIN_ROOT}/skills/shared/voting-protocol.md`, the zero-accepted-findings short-circuit to **Step 4**, the OOS-accepted-by-vote artifact write to `$(dirname "$SESSION_ENV_PATH")/oos-accepted-review.md` (only when `SESSION_ENV_PATH` is non-empty AND description mode is OFF — description mode bypasses this artifact and files directly via /umbrella at Step 4), and the save-not-accepted-IDs rule used to suppress re-raised findings in rounds 4+ (diff mode only).
 
 **In rounds 4-7 (diff mode only)**: Skip voting — accept all single-reviewer findings directly, **except** findings that match findings rejected or exonerated by voting in rounds 1-3. **Do NOT load** `${CLAUDE_PLUGIN_ROOT}/skills/review/references/voting.md` in rounds 4+ — the body is for rounds 1-3 and would waste tokens. Same `Do NOT load` guidance applies on the Step 3b zero-findings short-circuit.
 
@@ -268,7 +271,7 @@ Print to the user:
 
 ### 3e — Implement Fixes
 
-**SKIPPED in slice mode.** Slice mode is read-only — proceed directly to Step 4 after Step 3d.
+**SKIPPED in description mode.** Description mode is read-only — proceed directly to Step 4 after Step 3d.
 
 **In diff mode**, for each **accepted in-scope** finding (`FINDING_*` items only — exclude `OOS_*` items, which are processed separately for issue filing by `/implement`):
 
@@ -282,7 +285,7 @@ After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run
 
 ### 3f — Re-review
 
-**SKIPPED in slice mode.** Proceed to Step 4.
+**SKIPPED in description mode.** Proceed to Step 4.
 
 **In diff mode**, increment the round number. Go back to **Step 1** (gather the updated diff) and **Step 2** (launch reviewers again).
 
@@ -294,12 +297,12 @@ After all fixes are applied, invoke `/relevant-checks` via the Skill tool to run
 
 **Diff mode only.** If the loop has run **7 rounds** without converging (3 full-panel rounds + 4 single-reviewer rounds), stop and print a warning, then proceed to Step 4.
 
-## Step 4 — Final Summary (and slice-mode /umbrella filing)
+## Step 4 — Final Summary (and description-mode /umbrella filing)
 
 ### 4a — Print summary (both modes)
 
 Print a final summary:
-- Total number of review rounds (always 1 in slice mode)
+- Total number of review rounds (always 1 in description mode)
 - Findings per round (with per-reviewer breakdown: `Structure` / `Correctness` / `Testing` / `Security` / `Edge-cases` / `Codex`, or `Claude` for fallback)
 - Voting summary (rounds 1-3): total findings voted on, accepted (2+ YES), neutral (1 YES), exonerated (0 YES + 1+ EXONERATE), rejected (0 YES + 0 EXONERATE)
 - Reviewer Competition Scoreboard (cumulative across all voted rounds, with 6 independent players)
@@ -307,12 +310,12 @@ Print a final summary:
 - Build/test status (pass/fail)
 - **External reviewer warnings** (repeat any preflight or runtime warnings from Codex/Cursor here so they are visible at the end)
 
-### 4b — Slice-mode /umbrella filing (only when slice mode AND --create-issues)
+### 4b — Description-mode /umbrella filing (default in description mode; skipped when --no-issues)
 
-If slice mode is OFF or `--create-issues` is unset, skip this sub-step.
+If description mode is OFF or `no_issues=true`, skip this sub-step.
 
 Compose a findings batch markdown at `$REVIEW_TMPDIR/findings-batch.md`. Include:
-- For each in-scope-accepted finding (2+ YES): a generic `### <terse title>` block with `**Slice**`, `**File**`, `**Reviewer**`, `**Focus area**`, `**Problem**`, `**Suggested fix**` body.
+- For each in-scope-accepted finding (2+ YES): a generic `### <terse title>` block with `**Description**`, `**File**`, `**Reviewer**`, `**Focus area**`, `**Problem**`, `**Suggested fix**` body.
 - For each OOS-accepted finding (2+ YES, NOT focus-area=security): an OOS schema block per `/issue`'s OOS-format parser:
   ```markdown
   ### OOS_N: <short title>
@@ -325,7 +328,7 @@ Compose a findings batch markdown at `$REVIEW_TMPDIR/findings-batch.md`. Include
 
 If the batch is empty (zero accepted findings, or all accepted findings were security-tagged), skip the `/umbrella` invocation. Set `ISSUES_CREATED=0`, `ISSUES_DEDUPLICATED=0`, `ISSUES_FAILED=0` for the KV footer.
 
-Otherwise, compose a 1-2 sentence umbrella summary paragraph at `$REVIEW_TMPDIR/umbrella-summary.txt` derived from the slice context (slice description + accepted-finding count + reviewer attribution summary). The summary becomes the lead paragraph of the umbrella issue body if `/umbrella` produces one (≥2 distinct resolved children). **Apply compose-time sanitization** before writing — the umbrella body becomes a public GitHub issue:
+Otherwise, compose a 1-2 sentence umbrella summary paragraph at `$REVIEW_TMPDIR/umbrella-summary.txt` derived from the review context (description text + accepted-finding count + reviewer attribution summary). The summary becomes the lead paragraph of the umbrella issue body if `/umbrella` produces one (≥2 distinct resolved children). **Apply compose-time sanitization** before writing — the umbrella body becomes a public GitHub issue:
 
 - Strip ASCII control characters (except whitespace `\t`, `\n` is already disallowed by the line grammar).
 - Replace newlines and tabs with single spaces; collapse internal whitespace runs to one space.
@@ -346,7 +349,7 @@ Skill invocation:
 
 Only forward `--label $ISSUE_LABEL` if `ISSUE_LABEL` is non-empty. Do NOT forward `--debug`, `--auto`, `--merge`, or other flags `/umbrella` does not accept.
 
-Parse `/umbrella`'s stdout. Map to the slice-result counters (per dialectic DECISION_2 — uniform "any GitHub issue created counts" semantic — see Step 4d below for the footer schema):
+Parse `/umbrella`'s stdout. Map to the review-result counters (per dialectic DECISION_2 — uniform "any GitHub issue created counts" semantic — see Step 4d below for the footer schema):
 
 - `ISSUES_CREATED` = `CHILDREN_CREATED` + (1 if `UMBRELLA_NUMBER` is non-empty else 0)
 - `ISSUES_DEDUPLICATED` = `CHILDREN_DEDUPLICATED`
@@ -356,11 +359,9 @@ The umbrella-failure structural signal is `UMBRELLA_VERDICT=multi-piece` AND `UM
 
 Print an informational line summarizing the outcome (above the KV footer): `filed N children + umbrella #M (<url>)` (when umbrella created), `filed N child issue(s)` (one-shot path), `all findings deduped to existing issues` (downgrade), or omit (empty batch).
 
-### 4c — Write security findings (slice mode only)
+### 4c — Write security findings (description mode only)
 
-If slice mode is ON, collect any accepted security-tagged findings (focus-area=security; both in-scope-accepted and OOS-accepted with 2+ YES). Write them verbatim to:
-- `--security-output` path if set.
-- `$REVIEW_TMPDIR/security-findings.md` otherwise (default; printed verbatim to terminal at end of run before tmpdir cleanup).
+If description mode is ON, collect any accepted security-tagged findings (focus-area=security; both in-scope-accepted and OOS-accepted with 2+ YES). Write them verbatim to `$REVIEW_TMPDIR/security-findings.md` (printed verbatim to terminal before tmpdir cleanup). Security-tagged findings are NEVER filed publicly via `/umbrella` or `/issue` (per SECURITY.md).
 
 Format each entry:
 ```markdown
@@ -374,7 +375,7 @@ Format each entry:
 
 Set `SECURITY_FINDINGS_HELD` = number of entries written.
 
-If `--security-output` is unset (standalone /review run, not from driver), print the file's contents verbatim to terminal under a clearly-labeled block:
+Print the file's contents verbatim to terminal under a clearly-labeled block:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -386,12 +387,12 @@ If `--security-output` is unset (standalone /review run, not from driver), print
 
 Then print: `**⚠ Handle these findings per SECURITY.md's vulnerability-disclosure procedure. They are NOT filed as public GitHub issues.**`
 
-### 4d — Slice-mode KV footer (slice mode only)
+### 4d — Description-mode KV footer (description mode only)
 
-Print the `### slice-result` KV footer immediately before exiting Step 4.
+Print the `### review-result` KV footer immediately before exiting Step 4.
 
 ```
-### slice-result
+### review-result
 ISSUES_CREATED=<n>
 ISSUES_DEDUPLICATED=<n>
 ISSUES_FAILED=<n>
@@ -399,7 +400,7 @@ SECURITY_FINDINGS_HELD=<n>
 PARSE_STATUS=ok
 ```
 
-Substitute `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED` from Step 4b (or zero each if Step 4b was skipped — i.e., the findings batch was empty). Substitute `SECURITY_FINDINGS_HELD` from Step 4c independently (zero only if Step 4c found no security findings — Step 4c always runs in slice mode regardless of whether Step 4b ran). `PARSE_STATUS=ok` always (any error path emits a different `PARSE_STATUS` value or aborts before reaching here).
+Substitute `ISSUES_CREATED`, `ISSUES_DEDUPLICATED`, `ISSUES_FAILED` from Step 4b (or zero each if Step 4b was skipped — i.e., `no_issues=true` or the findings batch was empty). Substitute `SECURITY_FINDINGS_HELD` from Step 4c independently (zero only if Step 4c found no security findings — Step 4c always runs in description mode regardless of whether Step 4b ran). `PARSE_STATUS=ok` always (any error path emits a different `PARSE_STATUS` value or aborts before reaching here).
 
 ## Step 5 — Cleanup
 
@@ -414,5 +415,3 @@ Remove the session temp directory and all files within it:
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/cleanup-tmpdir.sh --dir "$REVIEW_TMPDIR"
 ```
-
-In slice mode with `--security-output` set, the security findings file lives at the driver-provided path under `$LOOP_TMPDIR` (NOT `$REVIEW_TMPDIR`), so cleanup of `$REVIEW_TMPDIR` does not destroy it. The driver retains `$LOOP_TMPDIR` per its EXIT trap rules.
