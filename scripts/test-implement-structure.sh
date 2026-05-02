@@ -634,9 +634,8 @@ grep -Fq -- "$SYNC_GUIDANCE_LITERAL" "$REBASE_REBUMP_MD" \
     || fail "(17b) skills/implement/references/rebase-rebump-subprocedure.md missing the synchronous-only guardrail literal '$SYNC_GUIDANCE_LITERAL' near step 7's ci-wait.sh re-invocation directives — closes #842 regression"
 
 # (18) Protocol Execution Directive pin: the literal must appear exactly once
-# in SKILL.md, between the # Implement Skill heading and the Anti-halt
-# continuation reminder. Guards against accidental deletion of the preamble
-# that prevents orchestrator freelancing.
+# in SKILL.md (global count check). Guards against accidental deletion of the
+# preamble that prevents orchestrator freelancing.
 DIRECTIVE_LITERAL='Protocol Execution Directive'
 DIRECTIVE_COUNT=$(grep -cF -- "$DIRECTIVE_LITERAL" "$SKILL_MD")
 if [[ "$DIRECTIVE_COUNT" -ne 1 ]]; then
