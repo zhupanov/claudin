@@ -8,14 +8,16 @@
 #
 # Usage:
 #   post-issue-slack.sh --issue-number N --status STATUS --repo OWNER/REPO \
-#       --token TOKEN --channel-id CHANNEL [--pr-url URL] [--detail TEXT]
+#       [--token TOKEN] [--channel-id CHANNEL] [--pr-url URL] [--detail TEXT]
 #
 # Arguments:
 #   --issue-number  GitHub issue number (integer)
 #   --status        One of: closed | pr-opened | blocked | user-input
 #   --repo          OWNER/REPO (for link composition fallback if gh fails)
-#   --token         Slack bot token
-#   --channel-id    Slack channel ID
+#   --token         Slack bot token. Omit to auto-resolve from env:
+#                   LARCH_SLACK_BOT_TOKEN then CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN
+#   --channel-id    Slack channel ID. Omit to auto-resolve from env:
+#                   LARCH_SLACK_CHANNEL_ID then CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID
 #   --pr-url        Optional PR URL (populates pr-opened status tail)
 #   --detail        Optional free-form tail text appended after the base status
 #
@@ -55,9 +57,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Env-var fallback: when --token or --channel-id are empty, resolve from environment.
+# Order: LARCH_SLACK_BOT_TOKEN > CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN (same for channel).
+if [[ -z "$TOKEN" ]]; then
+    TOKEN="${LARCH_SLACK_BOT_TOKEN:-${CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN:-}}"
+fi
+if [[ -z "$CHANNEL_ID" ]]; then
+    CHANNEL_ID="${LARCH_SLACK_CHANNEL_ID:-${CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID:-}}"
+fi
+
 if [[ -z "$ISSUE_NUMBER" ]] || [[ -z "$STATUS" ]] || [[ -z "$REPO" ]] || [[ -z "$TOKEN" ]] || [[ -z "$CHANNEL_ID" ]]; then
     echo "SLACK_TS="
-    echo "SLACK_ERROR=--issue-number, --status, --repo, --token, --channel-id are required"
+    echo "SLACK_ERROR=--issue-number, --status, --repo, --token, --channel-id are required (token and channel-id also checked in env: LARCH_SLACK_BOT_TOKEN, CLAUDE_PLUGIN_OPTION_SLACK_BOT_TOKEN, LARCH_SLACK_CHANNEL_ID, CLAUDE_PLUGIN_OPTION_SLACK_CHANNEL_ID)"
     exit 1
 fi
 
