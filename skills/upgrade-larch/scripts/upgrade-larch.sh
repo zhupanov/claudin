@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Upgrade the larch plugin to the latest version by removing and re-adding
-# the marketplace, then reinstalling the plugin.
+recover() {
+    echo "" >&2
+    echo "Recovery: run these commands manually to reinstall:" >&2
+    echo "  claude plugin marketplace add zhupanov/larch" >&2
+    echo "  claude plugin install larch@larch-local" >&2
+}
+trap recover ERR
 
 echo "Uninstalling larch plugin..."
 claude plugin uninstall larch@larch-local 2>&1 || true
