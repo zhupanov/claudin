@@ -6,7 +6,7 @@ Slack integration is optional and **on by default** when `LARCH_SLACK_BOT_TOKEN`
 
 ## Install from GitHub
 
-### Latest stable release (recommended)
+### Latest stable release
 
 #### Install
 ```bash
@@ -27,18 +27,15 @@ Edit your `~/.claude/settings.json` and ensure that it has `permissions`/`allow`
   }
 ```
 
-### Install a specific version
+#### Upgrade
 
-Each version bump on main is tagged and published as a GitHub Release (`v12.4.4`, `v12.5.0`, etc.). The "Latest" release on the [Releases page](https://github.com/zhupanov/larch/releases) is the current stable version — other releases are available but not promoted. To pin a specific version:
+To upgrade larch to the latest version, run the `/upgrade-larch` skill in any Claude Code session, then restart Claude Code:
 
-```bash
-claude plugin marketplace add zhupanov/larch@v12.4.4
-claude plugin install larch@larch-local
+```
+/upgrade-larch
 ```
 
-Replace `v12.4.4` with the desired release tag. Available tags are listed on the [Releases page](https://github.com/zhupanov/larch/releases).
-
-**For maintainers:** to promote a release to "Latest", run `scripts/promote-release.sh X.Y.Z` (see `scripts/promote-release.md` for details).
+After the skill completes, restart Claude Code to apply the new version.
 
 ## Install for local development (contributors)
 
@@ -108,7 +105,7 @@ claude plugin install larch@larch-local
 
 | Component | Description |
 |---|---|
-| Skills | `/design`, `/implement`, `/review`, `/research`, `/fix-issue`, `/issue`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
+| Skills | `/design`, `/implement`, `/review`, `/research`, `/fix-issue`, `/issue`, `/upgrade-larch`, `/alias`, `/create-skill`, `/simplify-skill`, `/compress-skill`, `/im`, `/imaq` |
 | Agents | `code-reviewer` (unified archetype covering code quality, risk/integration, correctness, architecture, security) |
 | PreToolUse hook | `block-submodule-edit.sh` — blocks `Edit`/`Write` on files inside any checked-out git submodule of the consuming project |
 | SessionStart hook | `sessionstart-health.sh` — at session start/resume/clear/compact, probes `jq` and `git` on `PATH`; if either is missing, injects an advisory into session context so the issue is visible before the first `Edit`/`Write`. Non-blocking (always exits 0); silent when both tools are present |
