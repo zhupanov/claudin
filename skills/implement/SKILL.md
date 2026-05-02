@@ -661,15 +661,15 @@ Where `<tool>` is `cursor` or `codex` depending on which tool was used for each 
 
 **5.3.a — Runtime failure handling** (rounds 2+ only, Cursor / Codex): if `collect-agent-results.sh` reports `STATUS` not `OK`, follow the Runtime Timeout Fallback in `external-reviewers.md`: flip the corresponding `cursor_available` / `codex_available` to `false` for the session; log under `External Reviewer Issues`; **retry this round** (jump back to 5.2 to re-select). Do NOT increment `round_num`.
 
-**5.4 — No findings**: if the reviewer(s) report none (`NO_ISSUES_FOUND`, "No issues found.", or a Claude dual-list with zero in-scope), loop done — proceed to Step 6. Step 9a.1 still runs for main-agent OOS items.
+**5.4 — No findings**: if the reviewer(s) report none (`NO_ISSUES_FOUND`, "No issues found.", or a Claude dual-list with zero in-scope), loop done — IMMEDIATELY proceed to Step 6 without writing a summary or completion message. Step 9a.1 still runs for main-agent OOS items.
 
 **5.5 — Evaluate findings**: unilaterally accept or reject each — accept genuine bugs, logic errors, security issues, clearly important improvements; reject trivial style nits, subjective preferences, speculative concerns, and fixes whose complexity exceeds the issue (disproportionate). Append rejected to `$IMPLEMENT_TMPDIR/rejected-findings.md` using the format in "Track Rejected Code Review Findings" below, with round + reviewer in the reviewer name field (e.g., `[Code Review] Cursor (round 2)` or `[Code Review] Cursor-Structure (round 1)`). **OOS evaluation**: when the main agent determines a finding is valid but out of scope for this PR, write it to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` using the existing OOS_N schema with `Vote tally: N/A — accepted by main agent in quick mode` and `Reviewer: Main agent (surfaced by <reviewer-name>)`. Apply the same sanitization and SECURITY.md routing rules as the main-agent dual-write for `Pre-existing Code Issues`.
 
-**5.6 — No accepted**: if zero accepted this round, no fixes applied — loop done. Proceed to Step 6.
+**5.6 — No accepted**: if zero accepted this round, no fixes applied — loop done. IMMEDIATELY proceed to Step 6 — do NOT write a summary.
 
 **5.7 — Implement accepted fixes**: edit files, then invoke `/relevant-checks` via the Skill tool. On failure, diagnose + fix, re-invoke until clean.
 
-**5.8 — Re-review gate**: observable signal is whether 5.7 actually edited files (the main agent knows from its own Edit/Write tool usage this round). If no edits (accepted findings turned out to be no-ops), loop done — proceed to Step 6. Otherwise increment `round_num`; if `<= 7`, loop to 5.1. If `> 7`, print:
+**5.8 — Re-review gate**: observable signal is whether 5.7 actually edited files (the main agent knows from its own Edit/Write tool usage this round). If no edits (accepted findings turned out to be no-ops), loop done — IMMEDIATELY proceed to Step 6. Otherwise increment `round_num`; if `<= 7`, IMMEDIATELY loop back to 5.1 — do NOT write a round summary, status recap, or "review progress" message before starting the next round. Fixing findings does NOT mean the review has converged — convergence requires reviewers to report no new issues in a fresh round. If `> 7`, print:
 
 ```
 **⚠ 5: code review — quick mode hit 7-round cap without converging. Remaining findings from the last round are listed above. Proceeding.**
@@ -713,7 +713,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/check-review-changes.sh --baselin
 
 Parse both stdout keys with key-based extraction (e.g., `awk -F= '$1=="FILES_CHANGED"{print $2}'`) — both keys are always emitted on every invocation in stable order: `FILES_CHANGED` first, `UNTRACKED_BASELINE` second. Do NOT `eval`/`source` the script's stdout. If `UNTRACKED_BASELINE=missing` (snapshot was never written or got cleaned up after a Step 5 failure), log to `Warnings` (`Step 6 — pre-/review untracked baseline missing; untracked delta not computed for this run`) and continue — `FILES_CHANGED` is still authoritative for staged + unstaged.
 
-If `FILES_CHANGED=false`: print `⏩ 6: checks (2) — skipped, no review changes (<elapsed>)` and skip Steps 6 and 7 (NOT Step 7a — Code Flow Diagram runs unconditionally). If files changed, invoke `/relevant-checks` via the Skill tool; on failure, diagnose + fix, re-invoke.
+If `FILES_CHANGED=false`: print `⏩ 6: checks (2) — skipped, no review changes (<elapsed>)` and IMMEDIATELY skip to Step 7a (Code Flow Diagram runs unconditionally) — do NOT halt after the skip breadcrumb. If files changed, invoke `/relevant-checks` via the Skill tool; on failure, diagnose + fix, re-invoke.
 
 ## Step 7 — Second Commit (review fixes)
 
@@ -964,7 +964,7 @@ Runs unconditionally. The Slack announcement of the tracking issue has moved to 
 **Branch on state**:
 
 1. If `repo_unavailable=true`: print `⏭️ 11: execution-issues — skipped (repo unavailable) (<elapsed>)` and proceed to Step 12. No anchor exists; `$IMPLEMENT_TMPDIR/execution-issues.md` is the only audit trail (removed at Step 18; preserve tmpdir manually if audit needed).
-2. If `$IMPLEMENT_TMPDIR/execution-issues.md` does not exist or is empty: skip cleanly (no content to refresh).
+2. If `$IMPLEMENT_TMPDIR/execution-issues.md` does not exist or is empty: print `⏩ 11: execution-issues — skipped (no execution issues logged) (<elapsed>)` and IMMEDIATELY proceed to Step 12.
 3. If `$ISSUE_NUMBER` is absent at Step 11 entry AND `deferred=true` (Step 0.5 Branch 4 create-issue/anchor/sentinel failure): print `⏭️ 11: execution-issues — skipped (tracking issue creation failed at Step 0.5) (<elapsed>)` and proceed to Step 12. This is a legitimate degraded-clean path, NOT a bug — the Step 0.5 Branch 4 failure already logged the specific `ERROR` to `Tool Failures` and set `deferred=true`; no second warning is needed here.
 3b. If `$ISSUE_NUMBER` is absent at Step 11 entry AND `deferred=false` AND `repo_unavailable=false`: this IS a bug path — Step 0.5 Branch 4 should have set either success (`$ISSUE_NUMBER` populated, `deferred=false`) or failure (`$ISSUE_NUMBER` unset, `deferred=true`). Log to `Warnings`: `Step 11 — execution-issues refresh skipped: $ISSUE_NUMBER unset but deferred=false. Bug in Step 0.5 Branch 4 state machine.` and proceed to Step 12.
 4. Otherwise (`$ISSUE_NUMBER` set, `execution-issues.md` non-empty, `repo_unavailable=false`):

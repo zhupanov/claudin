@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [13.0.1] - 2026-05-02
+
+### Fixed
+
+- Strengthen anti-halt continuation reminders across `/implement`, `/review`, and `/design` to prevent orchestrator from stopping mid-run at step boundaries, skip breadcrumbs, and visible outputs
+- Fix `/review` round-skipping bug: Step 3f now explicitly mandates re-launching reviewers after fixes (convergence requires 0 new findings, not just "all fixes applied")
+- Fix `/review` Step 3d mode-gating: continuation after round summary now correctly distinguishes diff mode (→ Step 3e) from description mode (→ Step 4)
+- Add `/design` to anti-halt test harness (`BANNER_ONLY_ORCHESTRATORS`)
+- Update canonical anti-halt rule in `skills/shared/subskill-invocation.md` to cover Bash completions and visible outputs (not just child Skill returns)
+
 ## [12.5.0] - 2026-05-01
 
 ### Added
