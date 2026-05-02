@@ -81,6 +81,16 @@ ${USAGE_LINE}
 Invoke the Skill tool:
 - Try skill: "${TARGET}" first (bare name). If no skill matches, try skill: "larch:${TARGET}" (fully-qualified plugin name).
 - args: ${BEHAVIOR_ARGS}
+HEREDOC_BODY
+
+if [[ "$TARGET" == "implement" ]]; then
+  cat <<'HEREDOC_IMPLEMENT'
+
+After the Skill tool loads /implement, the child skill MUST begin execution at its Step 0 (session setup). Do not investigate the codebase, plan, or implement anything before Step 0 completes.
+HEREDOC_IMPLEMENT
+fi
+
+cat <<HEREDOC_FOOTER
 
 ${VERSION_LINE}
-HEREDOC_BODY
+HEREDOC_FOOTER

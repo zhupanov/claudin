@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 16 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 18 load-bearing invariants across skills/implement/SKILL.md and the five
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -16,7 +16,7 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Seventeen assertions (assertion 17 added per #842):
+# Eighteen assertions (assertion 18 added for Protocol Execution Directive pin):
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
@@ -633,5 +633,14 @@ grep -Fq -- "$SYNC_GUIDANCE_LITERAL" "$SKILL_MD" \
 grep -Fq -- "$SYNC_GUIDANCE_LITERAL" "$REBASE_REBUMP_MD" \
     || fail "(17b) skills/implement/references/rebase-rebump-subprocedure.md missing the synchronous-only guardrail literal '$SYNC_GUIDANCE_LITERAL' near step 7's ci-wait.sh re-invocation directives — closes #842 regression"
 
-echo "PASS: test-implement-structure.sh — all 17 structural invariants hold"
+# (18) Protocol Execution Directive pin: the literal must appear exactly once
+# in SKILL.md (global count check). Guards against accidental deletion of the
+# preamble that prevents orchestrator freelancing.
+DIRECTIVE_LITERAL='Protocol Execution Directive'
+DIRECTIVE_COUNT=$(grep -cF -- "$DIRECTIVE_LITERAL" "$SKILL_MD")
+if [[ "$DIRECTIVE_COUNT" -ne 1 ]]; then
+    fail "(18) Expected exactly 1 '$DIRECTIVE_LITERAL' in skills/implement/SKILL.md, found $DIRECTIVE_COUNT"
+fi
+
+echo "PASS: test-implement-structure.sh — all 18 structural invariants hold"
 exit 0

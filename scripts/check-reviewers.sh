@@ -3,9 +3,10 @@
 #
 # Checks if codex and cursor binaries are installed. With --probe, also sends a
 # trivial prompt ("Respond with OK") to each available tool with a 60-second
-# timeout and validates that the trimmed response is exactly "OK" (all whitespace
-# stripped). Catches auth failures, network issues, outages, and banner-style
-# responses that produce non-empty but non-OK output.
+# timeout and validates that the normalized response is "ok" (all whitespace
+# stripped, then lowercased — case-insensitive exact match). Catches auth
+# failures, network issues, outages, and banner-style responses that produce
+# non-empty but non-OK output.
 # Failed probes are retried once to tolerate transient timeouts.
 #
 # Usage:
@@ -14,8 +15,8 @@
 # Outputs (key=value to stdout):
 #   CODEX_AVAILABLE=true|false    — binary exists on PATH
 #   CURSOR_AVAILABLE=true|false   — binary exists on PATH
-#   CODEX_HEALTHY=true|false      — (only with --probe) exit 0 and trimmed output == "OK"
-#   CURSOR_HEALTHY=true|false     — (only with --probe) exit 0 and trimmed output == "OK"
+#   CODEX_HEALTHY=true|false      — (only with --probe) exit 0 and normalized output == "ok"
+#   CURSOR_HEALTHY=true|false     — (only with --probe) exit 0 and normalized output == "ok"
 #
 # Exit codes:
 #   0 — always (availability/health are informational, not errors)
@@ -123,8 +124,8 @@ if [[ "$PROBE" == "true" ]]; then
             CODEX_EXIT=$(cat "$PROBE_DIR/codex-probe.txt.done")
             if [[ "$CODEX_EXIT" == "0" ]]; then
                 if [[ -s "$PROBE_DIR/codex-probe.txt" ]]; then
-                    CODEX_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/codex-probe.txt")
-                    if [[ "$CODEX_PROBE_REPLY" == "OK" ]]; then
+                    CODEX_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/codex-probe.txt" | tr '[:upper:]' '[:lower:]')
+                    if [[ "$CODEX_PROBE_REPLY" == "ok" ]]; then
                         CODEX_HEALTHY="true"
                     else
                         CODEX_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/codex-probe.txt" | tr '\n\r' '  ')"
@@ -152,8 +153,8 @@ if [[ "$PROBE" == "true" ]]; then
             CURSOR_EXIT=$(cat "$PROBE_DIR/cursor-probe.txt.done")
             if [[ "$CURSOR_EXIT" == "0" ]]; then
                 if [[ -s "$PROBE_DIR/cursor-probe.txt" ]]; then
-                    CURSOR_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/cursor-probe.txt")
-                    if [[ "$CURSOR_PROBE_REPLY" == "OK" ]]; then
+                    CURSOR_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/cursor-probe.txt" | tr '[:upper:]' '[:lower:]')
+                    if [[ "$CURSOR_PROBE_REPLY" == "ok" ]]; then
                         CURSOR_HEALTHY="true"
                     else
                         CURSOR_PROBE_ERROR="Probe returned non-OK response: $(head -c 200 "$PROBE_DIR/cursor-probe.txt" | tr '\n\r' '  ')"
@@ -232,8 +233,8 @@ if [[ "$PROBE" == "true" ]]; then
             if [[ -f "$PROBE_DIR/codex-probe.txt.done" ]]; then
                 CODEX_EXIT=$(cat "$PROBE_DIR/codex-probe.txt.done")
                 if [[ "$CODEX_EXIT" == "0" && -s "$PROBE_DIR/codex-probe.txt" ]]; then
-                    CODEX_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/codex-probe.txt")
-                    if [[ "$CODEX_PROBE_REPLY" == "OK" ]]; then
+                    CODEX_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/codex-probe.txt" | tr '[:upper:]' '[:lower:]')
+                    if [[ "$CODEX_PROBE_REPLY" == "ok" ]]; then
                         CODEX_HEALTHY="true"
                         CODEX_PROBE_ERROR=""
                     else
@@ -258,8 +259,8 @@ if [[ "$PROBE" == "true" ]]; then
             if [[ -f "$PROBE_DIR/cursor-probe.txt.done" ]]; then
                 CURSOR_EXIT=$(cat "$PROBE_DIR/cursor-probe.txt.done")
                 if [[ "$CURSOR_EXIT" == "0" && -s "$PROBE_DIR/cursor-probe.txt" ]]; then
-                    CURSOR_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/cursor-probe.txt")
-                    if [[ "$CURSOR_PROBE_REPLY" == "OK" ]]; then
+                    CURSOR_PROBE_REPLY=$(tr -d '[:space:]' < "$PROBE_DIR/cursor-probe.txt" | tr '[:upper:]' '[:lower:]')
+                    if [[ "$CURSOR_PROBE_REPLY" == "ok" ]]; then
                         CURSOR_HEALTHY="true"
                         CURSOR_PROBE_ERROR=""
                     else

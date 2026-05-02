@@ -21,6 +21,7 @@ Stdout: the complete `SKILL.md` content for the alias skill, ready to redirect i
 
 - YAML frontmatter (`name`, `description`, `argument-hint`, `allowed-tools: Skill`).
 - Auto-generated body explaining how the alias forwards (Skill-tool invocation with bare-name fallback).
+- When `--target implement`: a Step 0 delegation directive ("child skill MUST begin at Step 0") between the Behavior section and the version footer.
 - Version footer.
 
 The output is path-style-agnostic — it does NOT contain `${CLAUDE_PLUGIN_ROOT}/...` or `$PWD/...` references, because the body only invokes the Skill tool with the target skill name (bare name first, then `larch:<target>` fallback). This means the same generator output is correct for both plugin-skill (`skills/<n>/SKILL.md`) and dev-only (`.claude/skills/<n>/SKILL.md`) targets — the routing decision is owned by the parent `/alias` skill via `resolve-target.sh`, not by this generator.

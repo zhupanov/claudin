@@ -331,6 +331,11 @@ exclude = [
   "scripts/lib-count-commits.sh",
   "scripts/test-verify-skill-called.sh",
   "scripts/test-check-bump-version.sh",
+  # scripts/test-check-reviewers.sh is the regression harness for
+  # scripts/check-reviewers.sh probe acceptance logic. Referenced only from
+  # Makefile (test-check-reviewers target) and scripts/test-check-reviewers.md
+  # (sibling contract).
+  "scripts/test-check-reviewers.sh",
   # scripts/test-drop-bump-commit.sh is the regression harness for
   # scripts/drop-bump-commit.sh (#856). It is referenced only from Makefile
   # (test-drop-bump-commit target) and scripts/drop-bump-commit.md
@@ -569,6 +574,11 @@ exclude = [
   "skills/create-skill/scripts/test-render-skill-md.md",
   "skills/implement/scripts/check-review-changes.md",
   "skills/implement/scripts/test-check-review-changes.md",
+  # scripts/check-reviewers.md is the sibling contract for the health-probe
+  # script. scripts/test-check-reviewers.md is the sibling contract for the
+  # probe acceptance regression harness. Both follow the harness-sibling pattern.
+  "scripts/check-reviewers.md",
+  "scripts/test-check-reviewers.md",
   "skills/simplify-skill/scripts/build-feature-description.md",
   # scripts/test-alias-target-resolution.md and scripts/test-alias-structure.md
   # are the sibling contracts for the two alias-rework regression harnesses
