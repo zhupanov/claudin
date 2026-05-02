@@ -93,9 +93,9 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#review"><code>/review</code></a></td>
-      <td><code>[--debug]</code></td>
+      <td><code>[--diff] [--no-issues] [--debug] [&lt;description&gt;]</code></td>
     </tr>
-    <tr><td colspan="2">Code review current branch changes with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic), implementing accepted suggestions in a recursive loop.</td></tr>
+    <tr><td colspan="2">Code review with a 6-reviewer specialist panel. <code>--diff</code>: review branch changes and implement fixes. <code>&lt;description&gt;</code>: review existing code and file accepted findings as GitHub issues (default; <code>--no-issues</code> to suppress).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#simplify-skill"><code>/simplify-skill</code></a></td>
@@ -113,7 +113,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
       <td><a href="docs/skills.md#umbrella"><code>/umbrella</code></a></td>
       <td><code>[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] &lt;task description or empty to deduce from context&gt;</code></td>
     </tr>
-    <tr><td colspan="2">Plan-to-issues orchestrator: classifies a task description as one-shot or multi-piece, delegates GitHub issue creation to <code>/issue</code> (batch mode plus an umbrella tracking issue when multi-piece), and wires native blocked-by edges plus child→umbrella back-links. Typically invoked transitively by <code>/review --create-issues</code> and <code>/skill-evolver</code>.</td></tr>
+    <tr><td colspan="2">Plan-to-issues orchestrator: classifies a task description as one-shot or multi-piece, delegates GitHub issue creation to <code>/issue</code> (batch mode plus an umbrella tracking issue when multi-piece), and wires native blocked-by edges plus child→umbrella back-links. Typically invoked transitively by <code>/review</code> (description-mode finding filing) and <code>/skill-evolver</code>.</td></tr>
   </tbody>
 </table>
 

@@ -683,7 +683,7 @@ Log to `Warnings`: `Step 5 — quick-mode review loop did not converge after 7 r
 
 **IMPORTANT: Code review must ALWAYS be invoked via `/review`. Never skip regardless of the nature of changes — code, skills, documentation, data files, configuration — all changes require full review.**
 
-Invoke `/review` via the Skill tool. Canonical order: `[--debug] --step-prefix "5.::code review" --session-env $IMPLEMENT_TMPDIR/session-env.sh`. Prepend `--debug` only if `debug_mode=true`. Launches the 3-reviewer panel (1 Claude Code Reviewer subagent + 1 Codex + 1 Cursor, Claude fallbacks when externals unavailable); implements accepted suggestions recursively until clean.
+Invoke `/review` via the Skill tool. Canonical order: `[--debug] --diff --step-prefix "5.::code review" --session-env $IMPLEMENT_TMPDIR/session-env.sh`. Prepend `--debug` only if `debug_mode=true`. The `--diff` flag is required — `/review` without `--diff` or a positional description is an error. Launches the 6-reviewer panel (5 Cursor specialists + 1 Codex generic, Claude fallbacks when externals unavailable); implements accepted suggestions recursively until clean.
 
 After `/review` returns, follow the Cross-Skill Health Propagation procedure from Step 0.
 

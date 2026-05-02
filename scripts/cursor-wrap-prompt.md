@@ -29,7 +29,7 @@ Cursor also has no way to configure a non-default model via config file that ove
 - `skills/design/SKILL.md` (was 1 — plan-review Cursor reviewer)
 - `skills/design/references/sketch-launch.md` (was 5 — sketch slots)
 - `skills/design/references/dialectic-execution.md` (was 1 — debater launch)
-- `skills/review/SKILL.md` (was 2 — diff/slice Cursor reviewer blocks)
+- `skills/review/SKILL.md` (was 2 — diff/description Cursor reviewer blocks)
 - `skills/implement/SKILL.md` (was 1 — quick-mode Cursor reviewer)
 
 ## Non-callers (intentional exclusions)

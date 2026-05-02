@@ -15,9 +15,9 @@
 - `--timeout SECS` — (required) timeout in seconds
 - `--prompt TEXT` — generic mode prompt text (mutually exclusive with `--agent-file`)
 - `--agent-file FILE` — specialist mode agent definition file
-- `--mode diff|slice` — specialist review mode (requires `--agent-file`)
-- `--slice-text TEXT` — slice description (required when `--mode=slice`)
-- `--slice-files PATH` — slice files list (required when `--mode=slice`)
+- `--mode diff|description` — specialist review mode (requires `--agent-file`)
+- `--description-text TEXT` — review target description (required when `--mode=description`)
+- `--scope-files PATH` — canonical scope files list (required when `--mode=description`)
 - `--competition-notice` — append competition notice to specialist prompt
 
 **Call sites**:

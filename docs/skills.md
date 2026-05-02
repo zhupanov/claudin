@@ -120,11 +120,11 @@ All scales produce a structured report with findings, risk assessment, difficult
 
 ## `/review`
 
-**Arguments**: `[--debug]`
+**Arguments**: `[--diff] [--no-issues] [--debug] [<description>]`
 
 **Source**: [`skills/review/SKILL.md`](../skills/review/SKILL.md) · [Diagram](../skills/review/diagram.svg)
 
-Code review current branch changes with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic), implementing accepted suggestions in a recursive loop (up to 7 rounds: 3 full-panel rounds with voting, then up to 4 single-reviewer rounds). Reviews the diff between main and HEAD.
+Code review with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic). Two modes: `--diff` reviews branch changes vs main and implements accepted suggestions in a recursive loop; positional `<description>` reviews existing code and files accepted findings as GitHub issues by default (`--no-issues` to suppress).
 
 ## `/simplify-skill`
 
@@ -148,4 +148,4 @@ Evolve an existing larch skill by researching concrete improvements and filing t
 
 **Source**: [`skills/umbrella/SKILL.md`](../skills/umbrella/SKILL.md)
 
-Plan-to-issues orchestrator. Takes a task description (or deduces it from session context), classifies it as one-shot or multi-piece, and delegates GitHub issue creation to `/issue` — adding native blocked-by dependencies to form an execution DAG and back-linking children to the umbrella when multi-piece. Typically invoked transitively by `/review --create-issues` (slice-mode finding filing) and `/skill-evolver` (research-finding filing) rather than called directly by humans, though direct invocation is supported. The one-shot path emits a single child issue and skips umbrella creation; the multi-piece path emits an umbrella tracking issue plus one child per piece (very small items may be bundled into a single composed piece per Step 3B.1's bundling rule), with `Closes #<umbrella>` blocked-by edges wired between children and the umbrella. `--dry-run` previews the proposed batch without GitHub mutations; `--go` posts a `GO` sentinel comment on each successfully-created child to make them eligible for `/fix-issue` automation. Example: `/umbrella refactor the auth subsystem in three phases: schema, middleware, tests`.
+Plan-to-issues orchestrator. Takes a task description (or deduces it from session context), classifies it as one-shot or multi-piece, and delegates GitHub issue creation to `/issue` — adding native blocked-by dependencies to form an execution DAG and back-linking children to the umbrella when multi-piece. Typically invoked transitively by `/review` (description-mode finding filing) and `/skill-evolver` (research-finding filing) rather than called directly by humans, though direct invocation is supported. The one-shot path emits a single child issue and skips umbrella creation; the multi-piece path emits an umbrella tracking issue plus one child per piece (very small items may be bundled into a single composed piece per Step 3B.1's bundling rule), with `Closes #<umbrella>` blocked-by edges wired between children and the umbrella. `--dry-run` previews the proposed batch without GitHub mutations; `--go` posts a `GO` sentinel comment on each successfully-created child to make them eligible for `/fix-issue` automation. Example: `/umbrella refactor the auth subsystem in three phases: schema, middleware, tests`.
