@@ -269,7 +269,7 @@ grep -Fq -- '--mode' "$REPO_ROOT/scripts/render-specialist-prompt.sh" \
   || fail "(14) scripts/render-specialist-prompt.sh does not accept '--mode' — diff/description mode handling is missing"
 
 # ---------------------------------------------------------------------------
-# (15) Slice-mode OOS marking is handled by scripts/render-specialist-prompt.sh
+# (15) Description-mode OOS marking is handled by scripts/render-specialist-prompt.sh
 #      (for specialist reviewers) and by the agent file output format section
 #      (for all reviewers). OOS anchor language lives in the render script's
 #      description preamble, not inline in SKILL.md. The dual-list contract (In-Scope

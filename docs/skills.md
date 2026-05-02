@@ -120,11 +120,11 @@ All scales produce a structured report with findings, risk assessment, difficult
 
 ## `/review`
 
-**Arguments**: `[--debug]`
+**Arguments**: `[--diff] [--no-issues] [--debug] [<description>]`
 
 **Source**: [`skills/review/SKILL.md`](../skills/review/SKILL.md) · [Diagram](../skills/review/diagram.svg)
 
-Code review current branch changes with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic), implementing accepted suggestions in a recursive loop (up to 7 rounds: 3 full-panel rounds with voting, then up to 4 single-reviewer rounds). Reviews the diff between main and HEAD.
+Code review with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic). Two modes: `--diff` reviews branch changes vs main and implements accepted suggestions in a recursive loop; positional `<description>` reviews existing code and files accepted findings as GitHub issues by default (`--no-issues` to suppress).
 
 ## `/simplify-skill`
 

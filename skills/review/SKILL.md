@@ -345,9 +345,9 @@ Then invoke `/umbrella` via the Skill tool:
 
 Skill invocation:
 - Try skill `"umbrella"` first (bare name). If no skill matches, try `"larch:umbrella"`.
-- args: `--input-file $REVIEW_TMPDIR/findings-batch.md --umbrella-summary-file $REVIEW_TMPDIR/umbrella-summary.txt --pieces-json $REVIEW_TMPDIR/pieces.json [--label $ISSUE_LABEL]`
+- args: `--input-file $REVIEW_TMPDIR/findings-batch.md --umbrella-summary-file $REVIEW_TMPDIR/umbrella-summary.txt --pieces-json $REVIEW_TMPDIR/pieces.json`
 
-Only forward `--label $ISSUE_LABEL` if `ISSUE_LABEL` is non-empty. Do NOT forward `--debug`, `--auto`, `--merge`, or other flags `/umbrella` does not accept.
+Do NOT forward `--debug`, `--auto`, `--merge`, or other flags `/umbrella` does not accept.
 
 Parse `/umbrella`'s stdout. Map to the review-result counters (per dialectic DECISION_2 — uniform "any GitHub issue created counts" semantic — see Step 4d below for the footer schema):
 
