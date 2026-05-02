@@ -37,6 +37,12 @@ ORCHESTRATORS=(
   "skills/research/SKILL.md"  # may invoke /issue via the Skill tool and continue to report/cleanup
 )
 
+# Orchestrators that have the banner but no child Skill calls (use external
+# agents via Bash, not the Skill tool), so micro-reminder check is skipped.
+BANNER_ONLY_ORCHESTRATORS=(
+  "skills/design/SKILL.md"  # launches Cursor/Codex agents via Bash; no child Skill invocations
+)
+
 DELEGATORS=(
   "skills/im/SKILL.md"
   "skills/imaq/SKILL.md"
@@ -100,6 +106,9 @@ check_micro_present() {
 
 echo "--- Orchestrator banner presence ---"
 for rel in "${ORCHESTRATORS[@]}"; do
+  check_banner_present "$rel"
+done
+for rel in "${BANNER_ONLY_ORCHESTRATORS[@]}"; do
   check_banner_present "$rel"
 done
 

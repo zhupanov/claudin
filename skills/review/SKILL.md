@@ -269,7 +269,7 @@ Print to the user:
 - If rounds 1-3: vote counts per finding, accepted OOS items, and any findings not accepted by vote
 - Total count of accepted findings for this round
 
-After printing the round summary, IMMEDIATELY continue: if 0 findings were accepted this round, skip to Step 4; if >0 findings were accepted, proceed to Step 3e (Implement Fixes). Do NOT treat the summary as a stopping point.
+After printing the round summary, IMMEDIATELY continue. **In diff mode**: if 0 findings were accepted this round, skip to Step 4; if >0 findings were accepted, proceed to Step 3e (Implement Fixes). **In description mode**: always skip to Step 4 after 3d (Step 3e is read-only skipped). Do NOT treat the summary as a stopping point.
 
 ### 3e — Implement Fixes
 
