@@ -1,6 +1,6 @@
 #!/bin/bash
 # Structural regression test for /implement SKILL.md + references/ topology (closes #234).
-# Asserts 18 load-bearing invariants across skills/implement/SKILL.md and the five
+# Asserts 19 load-bearing invariants across skills/implement/SKILL.md and the six
 # reference docs extracted from it. Complements scripts/test-implement-rebase-macro.sh,
 # which owns the Rebase Checkpoint Macro mechanics; this harness owns top-level section
 # headings, the MANDATORY ↔ reference-file binding, the focus-area CI-parity check,
@@ -16,12 +16,13 @@
 # peer-harness assertions (A) and (D) respectively — accepted duplication per design-
 # phase sketch consensus.
 #
-# Eighteen assertions (assertion 18 added for Protocol Execution Directive pin):
+# Nineteen assertions (assertion 18 added for Protocol Execution Directive pin;
+# assertion 19 added for the Step 2 Codex dispatcher pin):
 #  (1) Exactly 1 `^## Load-Bearing Invariants$` heading in skills/implement/SKILL.md.
 #  (2) Exactly 1 `^## NEVER List$` heading.
 #  (3) Exactly 1 `^## Rebase Checkpoint Macro$` heading.
-#  (4) At least 5 `MANDATORY — READ ENTIRE FILE` occurrences (floor, not ceiling),
-#      AND each of the five expected reference filenames appears on a `MANDATORY —
+#  (4) At least 6 `MANDATORY — READ ENTIRE FILE` occurrences (floor, not ceiling),
+#      AND each of the six expected reference filenames appears on a `MANDATORY —
 #      READ ENTIRE FILE` line in SKILL.md (step-to-reference binding from design FINDING_7).
 #  (5) Three byte-pinned verbosity-suppressed literal strings present in SKILL.md.
 #  (6) CI-parity focus-area enum: at least one line in SKILL.md contains the literal
@@ -142,6 +143,7 @@ REFS_DIR="$REPO_ROOT/skills/implement/references"
 expected_refs=(
   "anchor-comment-template.md"
   "bump-verification.md"
+  "codex-manifest-schema.md"
   "conflict-resolution.md"
   "pr-body-template.md"
   "rebase-rebump-subprocedure.md"
@@ -183,8 +185,8 @@ count=$(grep -c '^## Rebase Checkpoint Macro$' "$SKILL_MD" || true)
 # Use `|| true` to keep set -e + pipefail from aborting before the fail() diagnostic
 # when there are zero matches (grep -o exits 1 on no match, which propagates via pipefail).
 occurrences=$(grep -o 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" 2>/dev/null | wc -l | tr -d ' ' || true)
-if ! [[ "$occurrences" =~ ^[0-9]+$ ]] || (( occurrences < 5 )); then
-  fail "(4) expected at least 5 'MANDATORY — READ ENTIRE FILE' occurrences in SKILL.md, found ${occurrences:-0}"
+if ! [[ "$occurrences" =~ ^[0-9]+$ ]] || (( occurrences < 6 )); then
+  fail "(4) expected at least 6 'MANDATORY — READ ENTIRE FILE' occurrences in SKILL.md, found ${occurrences:-0}"
 fi
 
 # Step-to-reference binding: each expected reference filename must appear on a
@@ -234,7 +236,7 @@ while IFS= read -r hit; do
 done <<< "$enum_hits"
 
 # ---------------------------------------------------------------------------
-# (7) Five expected references/*.md files exist.
+# (7) Six expected references/*.md files exist.
 # ---------------------------------------------------------------------------
 for ref in "${expected_refs[@]}"; do
   [[ -f "$REFS_DIR/$ref" ]] \
@@ -642,5 +644,22 @@ if [[ "$DIRECTIVE_COUNT" -ne 1 ]]; then
     fail "(18) Expected exactly 1 '$DIRECTIVE_LITERAL' in skills/implement/SKILL.md, found $DIRECTIVE_COUNT"
 fi
 
-echo "PASS: test-implement-structure.sh — all 18 structural invariants hold"
+# (19) Step 2 Codex dispatcher pin: SKILL.md must reference the dispatcher
+# script path at least once (the dispatcher invocation block) AND the dispatcher
+# script + its sibling contract MUST exist and be executable. Guards against an
+# edit that quietly removes the mandatory-Codex-spawn dispatcher path.
+DISPATCHER_LITERAL='skills/implement/scripts/step2-implement.sh'
+grep -Fq -- "$DISPATCHER_LITERAL" "$SKILL_MD" \
+    || fail "(19) skills/implement/SKILL.md missing dispatcher invocation literal '$DISPATCHER_LITERAL' — Step 2 Codex spawn would be orphaned"
+DISPATCHER_PATH="$REPO_ROOT/$DISPATCHER_LITERAL"
+[[ -x "$DISPATCHER_PATH" ]] \
+    || fail "(19) dispatcher script missing or not executable: $DISPATCHER_PATH"
+[[ -f "$REPO_ROOT/skills/implement/scripts/step2-implement.md" ]] \
+    || fail "(19) dispatcher sibling contract missing: skills/implement/scripts/step2-implement.md"
+[[ -x "$REPO_ROOT/scripts/launch-codex-implement.sh" ]] \
+    || fail "(19) Codex implementer launcher missing or not executable: scripts/launch-codex-implement.sh"
+[[ -f "$REPO_ROOT/agents/codex-implementer.md" ]] \
+    || fail "(19) Codex implementer system prompt missing: agents/codex-implementer.md"
+
+echo "PASS: test-implement-structure.sh — all 19 structural invariants hold"
 exit 0

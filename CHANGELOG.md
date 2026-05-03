@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.1.0] - 2026-05-02
+
+### Added
+
+- Re-introduce code-writing-by-spawned-Codex at `/implement` Step 2 with mandatory spawn when Codex is healthy. Adds a single dispatcher (`skills/implement/scripts/step2-implement.sh`) that branches on `codex_available`, spawns Codex via `scripts/launch-codex-implement.sh`, validates a JSON manifest mechanically (path normalization, baseline-rooted `git diff` set-equality, branch / `.claude-plugin/plugin.json` / submodule unchanged checks, HEAD-subject-equals-manifest check, working-tree-clean check on `status=complete`), and emits a deterministic KV envelope. Codex's full transcript stays on disk; Claude reads only the validated, sanitized manifest — Steps 4 / 8a / 9a / 9a.1 are manifest-driven on the Codex path. On `status=needs_qa`, the dispatcher surfaces `qa-pending.json` to the orchestrator, which collects answers via `AskUserQuestion` and re-invokes the dispatcher with `--answers`; Codex resumes from prior partial work on the branch (resume cycles capped at 5)
+- New `agents/codex-implementer.md` system prompt loaded as Codex's `--agent-prompt` body, with hard guards (no `git reset --hard`, no edits to `.claude-plugin/plugin.json`, no submodule edits, no branch switches, atomic manifest writes, question-text sanitization guidance)
+- New canonical manifest schema reference at `skills/implement/references/codex-manifest-schema.md` documenting the JSON shape, per-status required keys, validation rules, atomic-write rule, and bail-reason token enumeration (including dispatcher-emitted `commit-subject-mismatch`, `qa-pending-missing`, `redactor-not-executable`, `manifest-missing`, `no-commit-since-baseline` tokens)
+- New offline regression harness `skills/implement/scripts/test-step2-dispatch.sh` (8 assertions covering claude-fallback branch, argument validation, resume-counter cap, corrupt-counter bail) wired into `make test-step2-dispatch`
+- `scripts/test-implement-structure.sh` extended with a 19th assertion pinning the Step 2 dispatcher path, launcher executability, and Codex-implementer agent-prompt presence; MANDATORY-occurrences floor raised from 5 to 6 (added `codex-manifest-schema.md` to the expected-references set)
+
 ## [14.0.0] - 2026-05-02
 
 ### Removed (breaking)
