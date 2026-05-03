@@ -549,7 +549,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/step2-implement.sh \
 
 - `STATUS=complete` → set `$MANIFEST_PATH=$MANIFEST` and proceed to Step 3. Steps 4 / 8a / 9a / 9a.1 read this manifest; the orchestrator does not run `git diff` to figure out what changed.
 - `STATUS=needs_qa` → run the Q/A loop in 2.3.
-- `STATUS=bailed` → log `Step 2 — Codex bailed: $REASON` to the `Warnings` section of `$IMPLEMENT_TMPDIR/execution-issues.md`. If `$REASON` ∈ {`resume-incompatible`, `branch-changed`, `dirty-tree-after-codex`, `protected-path-modified`, `submodule-dirty`, `manifest-diff-mismatch`}: bail to Step 12d (the branch may contain partial Codex work the operator must inspect). Otherwise (`codex-runtime-failure`, `dirty-state-after-timeout`, `manifest-schema-invalid`, `manifest-missing`, `qa-loop-exceeded`, free-form Codex token): print `**⚠ Codex bailed: $REASON. Logs at $TRANSCRIPT and $SIDECAR_LOG.**`, then bail to Step 12d.
+- `STATUS=bailed` → log `Step 2 — Codex bailed: $REASON` to the `Warnings` section of `$IMPLEMENT_TMPDIR/execution-issues.md`. If `$REASON` ∈ {`resume-incompatible`, `branch-changed`, `dirty-tree-after-codex`, `protected-path-modified`, `submodule-dirty`, `manifest-diff-mismatch`, `commit-subject-mismatch`}: bail to Step 12d (the branch may contain partial Codex work the operator must inspect). Otherwise (`codex-runtime-failure`, `dirty-state-after-timeout`, `manifest-schema-invalid`, `manifest-missing`, `qa-pending-missing`, `qa-loop-exceeded`, `redactor-not-executable`, free-form Codex token): print `**⚠ Codex bailed: $REASON. Logs at $TRANSCRIPT and $SIDECAR_LOG.**`, then bail to Step 12d.
 - `STATUS=claude_fallback` → run the Claude-fallback branch in 2.4.
 
 **2.3 — Q/A loop** (when `STATUS=needs_qa`):

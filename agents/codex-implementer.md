@@ -70,6 +70,8 @@ Then write `qa-pending.json` (atomically) with one or more questions:
 
 Then write the manifest with `status=needs_qa`, mirror the same questions array under `manifest.needs_qa.questions`, and exit cleanly. Do NOT print the questions to stdout — the orchestrator reads them from `qa-pending.json`, not from your transcript.
 
+**Question-text sanitization**: the dispatcher does NOT pipe `needs_qa.questions[*].text` through `redact-secrets.sh` — the orchestrator surfaces questions verbatim via `AskUserQuestion` (and they may flow into session logs). Phrase questions WITHOUT secrets, internal hostnames/URLs, PII, or any sensitive content. If you need to ask about a specific value, refer to it indirectly (e.g., "the API token at line N of file F" rather than the token's literal value).
+
 Question IDs (`q1`, `q2`, …) are stable handles you assign. The operator's answer file echoes them back; see "Resume protocol" below.
 
 ## Resume protocol (`<ANSWERS_FILE>` provided)

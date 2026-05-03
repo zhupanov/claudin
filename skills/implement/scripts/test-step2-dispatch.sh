@@ -113,6 +113,27 @@ EXIT=0
 if [[ "$EXIT" == "2" ]]; then pass; else fail 6 "missing --answers file should exit 2, got $EXIT"; fi
 
 # ---------------------------------------------------------------------------
+# Test 7: corrupt resume counter (non-numeric) → STATUS=bailed
+# REASON=manifest-schema-invalid (defense-in-depth against tmpdir tampering).
+# ---------------------------------------------------------------------------
+TMP7="$SCRATCH/test7"; mkdir -p "$TMP7"
+git -C "$REPO_ROOT" rev-parse HEAD > "$TMP7/step2-baseline.txt"
+git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD > "$TMP7/step2-spawn-branch.txt"
+if [[ -f "$REPO_ROOT/.claude-plugin/plugin.json" ]]; then
+    git -C "$REPO_ROOT" hash-object "$REPO_ROOT/.claude-plugin/plugin.json" > "$TMP7/step2-plugin-json-baseline.txt"
+else
+    printf '\n' > "$TMP7/step2-plugin-json-baseline.txt"
+fi
+echo "garbage" > "$TMP7/codex-resume-count.txt"
+OUT=$("$DISPATCHER" --tmpdir "$TMP7" --plan-file "$PLAN" --feature-file "$FEATURE" \
+    --auto-mode false --codex-available true --answers "$ANSWERS" 2>&1)
+if [[ "$OUT" == *"STATUS=bailed"* ]] && [[ "$OUT" == *"REASON=manifest-schema-invalid"* ]]; then
+    pass
+else
+    fail 7 "corrupt resume counter should bail with manifest-schema-invalid, got: $OUT"
+fi
+
+# ---------------------------------------------------------------------------
 # Summary.
 # ---------------------------------------------------------------------------
 TOTAL=$((PASS_COUNT + FAIL_COUNT))

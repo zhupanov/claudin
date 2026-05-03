@@ -129,7 +129,12 @@ PLUGIN_JSON_BASELINE=$(cat "$PLUGIN_JSON_BASELINE_FILE")
 # Step 2: resume counter (incremented on each --answers invocation).
 RESUME_COUNT=0
 if [[ -f "$RESUME_COUNT_FILE" ]]; then
-    RESUME_COUNT=$(cat "$RESUME_COUNT_FILE")
+    raw_count=$(cat "$RESUME_COUNT_FILE")
+    if [[ "$raw_count" =~ ^[0-9]+$ ]]; then
+        RESUME_COUNT=$raw_count
+    else
+        emit_bailed "manifest-schema-invalid"
+    fi
 fi
 if [[ -n "$ANSWERS_FILE" ]]; then
     [[ -f "$ANSWERS_FILE" ]] || { echo "step2-implement.sh: --answers given but path does not exist: $ANSWERS_FILE" >&2; exit 2; }
@@ -199,6 +204,13 @@ if [[ "$MANIFEST_WRITTEN" != "true" ]]; then
     emit_bailed "codex-runtime-failure"
 fi
 
+# Treat a non-zero launcher exit as failure even when a manifest was written —
+# the manifest may be a stale .tmp leftover, half-written, or otherwise
+# unreliable when the wrapper itself reports failure.
+if [[ "$LAUNCHER_EXIT" != "0" ]]; then
+    emit_bailed "codex-runtime-failure"
+fi
+
 # Step 5: validate manifest schema with jq.
 [[ -s "$MANIFEST_PATH" ]] || emit_bailed "manifest-missing"
 cp "$MANIFEST_PATH" "$MANIFEST_RAW_PATH"
@@ -236,6 +248,14 @@ case "$STATUS" in
             (.needs_qa | type == "object") and
             (.needs_qa.questions | type == "array" and length > 0)
         ' "$MANIFEST_RAW_PATH" >/dev/null 2>&1 || emit_bailed "manifest-schema-invalid"
+        # qa-pending.json must exist, be non-empty, and contain a non-empty
+        # questions array — Step 2.3 of /implement reads it directly via
+        # AskUserQuestion. A missing companion file would strand the orchestrator.
+        if [[ ! -s "$QA_PENDING_PATH" ]]; then
+            emit_bailed "qa-pending-missing"
+        fi
+        jq -e '(.questions | type == "array" and length > 0)' "$QA_PENDING_PATH" >/dev/null 2>&1 \
+            || emit_bailed "qa-pending-missing"
         ;;
     bailed)
         jq -e '(.bail_reason | type == "string" and length > 0)' "$MANIFEST_RAW_PATH" >/dev/null 2>&1 \
@@ -297,11 +317,11 @@ if [[ "$STATUS" == "complete" ]]; then
         if [[ "$p" == ".claude-plugin/plugin.json" ]]; then
             paths_invalid=true; break
         fi
-        # under submodule
+        # under submodule (or the submodule gitlink pointer itself)
         if [[ -n "$SUBMODULE_PATHS" ]]; then
             while IFS= read -r sm; do
                 [[ -z "$sm" ]] && continue
-                if [[ "$p" == "$sm"/* ]]; then
+                if [[ "$p" == "$sm" || "$p" == "$sm"/* ]]; then
                     paths_invalid=true; break 2
                 fi
             done <<< "$SUBMODULE_PATHS"
@@ -324,11 +344,27 @@ if [[ "$STATUS" == "complete" ]]; then
     if [[ "$COMMITS_SINCE" -lt 1 ]]; then
         emit_bailed "no-commit-since-baseline"
     fi
+
+    # 7e: HEAD commit subject equals the first line of manifest.commit_message.
+    # SKILL.md Step 4 and the Codex implementer prompt both rely on this
+    # equality so downstream CHANGELOG / PR-body / OOS copy stays aligned with
+    # the actual git history.
+    HEAD_SUBJECT=$(git -C "$REPO_ROOT" log -1 --format=%s)
+    MANIFEST_SUBJECT=$(jq -r '.commit_message // ""' "$MANIFEST_RAW_PATH" | head -n1)
+    if [[ "$HEAD_SUBJECT" != "$MANIFEST_SUBJECT" ]]; then
+        emit_bailed "commit-subject-mismatch"
+    fi
 fi
 
 # Step 8: sanitization. Apply scripts/redact-secrets.sh to text fields, then
 # write the canonical manifest.json (replacing the raw copy).
 REDACT="$REPO_ROOT/scripts/redact-secrets.sh"
+# Fail closed if the redactor file exists but is not executable — a sparse
+# checkout or broken perms must NOT silently emit raw manifest text into
+# downstream public surfaces (CHANGELOG, PR body, GitHub issues).
+if [[ -e "$REDACT" && ! -x "$REDACT" ]]; then
+    emit_bailed "redactor-not-executable"
+fi
 if [[ -x "$REDACT" ]]; then
     # Build a sanitized version of the manifest by piping each text field through
     # redact-secrets.sh. We use jq to extract, redact in shell, then re-inject.
@@ -426,6 +462,13 @@ case "$STATUS" in
         ;;
     bailed)
         BR=$(jq -r '.bail_reason // "codex-bailed-no-reason"' "$MANIFEST_RAW_PATH")
+        # Sanitize bail_reason for KV-grammar safety: collapse all
+        # whitespace (including newlines) to single spaces, strip ASCII
+        # control characters, and cap length so a Codex-authored token
+        # cannot break the orchestrator's KV parser by emitting extra
+        # `KEY=value` lines or control sequences.
+        BR=$(printf '%s' "$BR" | tr -d '\000-\010\013\014\016-\037' | tr '\t\n\r' '   ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//' | cut -c1-200)
+        [[ -z "$BR" ]] && BR="codex-bailed-no-reason"
         printf 'STATUS=bailed\n'
         printf 'REASON=%s\n' "$BR"
         printf 'MANIFEST=%s\n' "$MANIFEST_PATH"

@@ -41,7 +41,7 @@ SIDECAR_LOG=<path>       # set when launcher actually ran
 - `claude_fallback` — Only when `--codex-available false`; the caller proceeds with the main-agent code-edit path.
 
 **Bail-reason tokens emitted by the dispatcher** (set internally; full list in `codex-manifest-schema.md`):
-`qa-loop-exceeded`, `manifest-missing`, `manifest-schema-invalid`, `manifest-diff-mismatch`, `protected-path-modified`, `submodule-dirty`, `branch-changed`, `dirty-tree-after-codex`, `dirty-state-after-timeout`, `codex-runtime-failure`, `no-commit-since-baseline`. Codex-authored bail tokens (e.g., `resume-incompatible`, free-form) pass through verbatim.
+`qa-loop-exceeded`, `qa-pending-missing`, `manifest-missing`, `manifest-schema-invalid`, `manifest-diff-mismatch`, `protected-path-modified`, `submodule-dirty`, `branch-changed`, `dirty-tree-after-codex`, `dirty-state-after-timeout`, `codex-runtime-failure`, `no-commit-since-baseline`, `commit-subject-mismatch`, `redactor-not-executable`. Codex-authored bail tokens (e.g., `resume-incompatible`, free-form) pass through verbatim — they are sanitized only for KV-grammar safety (whitespace and control characters collapsed to single spaces; capped at ~200 characters) before being emitted on `REASON=`.
 
 **Call sites**:
 - `skills/implement/SKILL.md` Step 2 — the only authorized caller.
@@ -53,7 +53,7 @@ SIDECAR_LOG=<path>       # set when launcher actually ran
 - `skills/implement/SKILL.md` Step 2 — the caller; any change to the KV envelope must be mirrored in Step 2's parser.
 - `skills/implement/scripts/test-step2-dispatch.sh` — the offline harness; any new outcome / reason token must be exercised.
 
-**Test harness**: `skills/implement/scripts/test-step2-dispatch.sh` (offline) — drives the dispatcher with a stub `codex` binary on `PATH` to cover all `STATUS` × `REASON` combinations without making real Codex calls.
+**Test harness**: `skills/implement/scripts/test-step2-dispatch.sh` (offline) — covers the dispatcher branches that do not require launching Codex: the `--codex-available false` claude_fallback branch, argument-validation exit codes, missing `--answers` file, and the resume-counter cap (pre-seeded `codex-resume-count.txt` at 5; the 6th `--answers` invocation auto-bails with `qa-loop-exceeded` before any Codex spawn). Codex-spawning paths (manifest schema validation, `git diff` set-equality cross-check, sanitization, single-retry on transient failure, commit-subject check, post-Codex mechanical checks) are out of scope for this offline harness — see `skills/implement/scripts/test-step2-dispatch.md` for the full coverage list and rationale.
 
 **Makefile wiring**: `make test-step2-dispatch` (added in the same change that introduces the harness).
 
