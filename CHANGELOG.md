@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [14.0.0] - 2026-05-02
+
+### Removed (breaking)
+
+- `/research`: removed `--plan`, `--interactive`, `--adjudicate`, `--scale` (with `quick` and `standard` modes and Step 2.5 dialectic adjudication), `--token-budget` (with budget-gate machinery), `--keep-sidecar`, and `--debug` flags. Only `--no-issue` and the positional `<research question>` remain.
+- `/review`: removed `--debug` and verbosity-control machinery; status-table mode is now the permanent default.
+- Removed `skills/research/scripts/classify-research-scale.sh`, `test-standard-angle-prompts.sh`, dialectic ballot scripts, deep-lane-status renderer, `quick-vote-state.sh`, `quick-disclaimer*.txt` data files, and the `adjudication-phase.md` reference.
+
+### Changed
+
+- `/research`: planner pre-pass and TTY interactive review checkpoint are now always-on (non-TTY falls back to non-interactive passthrough). Validation panel is fixed at 3 reviewers (Claude Code Reviewer + Codex + Cursor). Research lanes are Codex-first across 4 angles (architecture / edge cases / external comparisons / security) with per-lane Claude `Agent` fallback; Cursor is no longer used for research lanes (still in validation panel). Token telemetry remains observability-only — budget enforcement is removed. Step 4 cleanup unconditionally wipes the tmpdir sidecar.
+
 ## [13.1.1] - 2026-05-02
 
 ### Fixed
