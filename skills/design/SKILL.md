@@ -1,7 +1,7 @@
 ---
 name: design
 description: "Use when designing any non-trivial feature, refactor, or architectural change — design, architecture, scope, approach validation. Sketch agents (8 regular, 2 quick) propose approaches; 8-reviewer panel validates via 3-voter dialectic."
-argument-hint: "[--auto] [--quick] [--debug] [--session-env <path>] <feature description>"
+argument-hint: "[--auto] [--quick] [--session-env <path>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch
 ---
 
@@ -15,7 +15,6 @@ Design an implementation plan for a feature and review it with an 8-reviewer pan
 |------|---------|---------|---------------------|
 | `--auto` | `false` | Skip interactive question checkpoints (1c, 1d, 3.5) | No-op when `/implement --quick` skips `/design` entirely |
 | `--quick` | `false` | Quick sketch mode: 2 agents instead of 8 | Independent of `--auto`; see `flags.md` for `/implement --quick` vs `/design --quick` distinction |
-| `--debug` | `false` | Verbose output (see Verbosity Control) | — |
 | `--session-env <path>` | empty | Forward discovered session values to `session-setup.sh` | Empty = standalone invocation, full discovery |
 | `--step-prefix <prefix>` | empty | Nested-numbering prefix from `/implement` | `::` delimiter splits numeric prefix from breadcrumb path; `"1."` (bare numeric) is backward-compat |
 | `--branch-info <values>` | — | Skip redundant branch-state check when called from `/implement` | 4 keys required: `IS_MAIN`/`IS_USER_BRANCH`/`USER_PREFIX`/`CURRENT_BRANCH`; fallback on validation failure to `create-branch.sh --check` |
@@ -52,11 +51,11 @@ Step Name Registry:
 
 ### Verbosity Control
 
-**When `debug_mode=false` (default):**
-
 - Use empty string for the `description` parameter on all Bash tool calls.
 - Use terse 3-5 word descriptions for Agent tool calls.
 - Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`), final completion line (Step 5), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, approach synthesis, dialectic resolutions, implementation plans, architecture diagrams), and the compact reviewer status table (see below).
+
+**Suppressed output:** explanatory prose, script paths, rationale for decisions between tool calls, per-reviewer individual completion messages.
 
 **Compact reviewer status table**: After launching sketch agents (Step 2a) or plan reviewers (Step 3), maintain a mental tracker of each agent's status. Print a compact table after EACH status change:
 
@@ -70,11 +69,7 @@ or for Step 3 plan review (8-reviewer panel):
 📊 Reviewers: | Cursor-Arch: ✅ 4m12s | Cursor-Edge: ⏳ | Cursor-Innovation: ✅ 3m45s | Cursor-Pragmatic: ⏳ | Codex-Arch: ⏳ | Codex-Edge: ✅ 2m31s | Codex-Innovation: ⏳ | Codex-Pragmatic: ⏳ |
 ```
 
-Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout (with elapsed time since launch), ⊘ skipped (unavailable). This replaces individual per-agent completion messages in non-debug mode. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time and step start formatting rules.
-
-**Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls, per-reviewer individual completion messages.
-
-**When `debug_mode=true`:** use descriptive text for `description` on all Bash and Agent tool calls; print full explanatory text and BOTH status table and per-agent details.
+Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ failed/timeout (with elapsed time since launch), ⊘ skipped (unavailable). This replaces individual per-agent completion messages. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for elapsed time and step start formatting rules.
 
 **Limitation**: Verbosity suppression is prompt-enforced and best-effort.
 

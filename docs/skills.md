@@ -33,7 +33,7 @@ Example with `--private` or in a consumer repo: `/alias i implement --merge` cre
 
 ## `/compress-skill`
 
-**Arguments**: `[--debug] [--no-slack] <skill-name-or-path>`
+**Arguments**: `[--no-slack] <skill-name-or-path>`
 
 **Source**: [`skills/compress-skill/SKILL.md`](../skills/compress-skill/SKILL.md)
 
@@ -41,7 +41,7 @@ Compress an existing skill's Markdown prose to reduce size while preserving mean
 
 ## `/create-skill`
 
-**Arguments**: `[--plugin] [--multi-step] [--merge] [--debug] [--no-slack] <skill-name> <description>`
+**Arguments**: `[--plugin] [--multi-step] [--merge] [--no-slack] <skill-name> <description>`
 
 **Source**: [`skills/create-skill/SKILL.md`](../skills/create-skill/SKILL.md)
 
@@ -49,15 +49,15 @@ Scaffold a new larch-style skill from a name and description. Validates the name
 
 ## `/design`
 
-**Arguments**: `[--auto] [--quick] [--debug] <feature description>`
+**Arguments**: `[--auto] [--quick] <feature description>`
 
 **Source**: [`skills/design/SKILL.md`](../skills/design/SKILL.md) · [Diagram](../skills/design/diagram.svg)
 
-Design an implementation plan with collaborative multi-reviewer review. 9 sketch agents in regular mode (1 Claude + 4 Cursor + 4 Codex, one per personality per tool), or 3 in quick mode (1 Claude + 1 Cursor-Generic + 1 Codex-Generic), independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 6-reviewer panel (1 Claude Code Reviewer + 1 Codex generic + 4 Cursor archetypes) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--quick` runs the 3-agent sketch phase instead of 9. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output).
+Design an implementation plan with collaborative multi-reviewer review. 9 sketch agents in regular mode (1 Claude + 4 Cursor + 4 Codex, one per personality per tool), or 3 in quick mode (1 Claude + 1 Cursor-Generic + 1 Codex-Generic), independently propose architectural approaches, then a **dialectic debate + 3-judge binary panel** resolves up to 5 contested decisions (bucketed Cursor/Codex debaters with bucket-skip fallback; Claude/Cursor/Codex judges with replacement-first fallback; attribution-stripped ballot with position rotation — see `skills/shared/dialectic-protocol.md`), then a 6-reviewer panel (1 Claude Code Reviewer + 1 Codex generic + 4 Cursor archetypes) validates the full plan. `--auto` suppresses all interactive question checkpoints. `--quick` runs the 3-agent sketch phase instead of 9.
 
 ## `/fix-issue`
 
-**Arguments**: `[--debug] [--no-slack] [--no-admin-fallback] [<number-or-url>]`
+**Arguments**: `[--no-slack] [--no-admin-fallback] [<number-or-url>]`
 
 **Source**: [`skills/fix-issue/SKILL.md`](../skills/fix-issue/SKILL.md)
 
@@ -67,11 +67,11 @@ Process one approved GitHub issue per invocation. Step 0 (`find-lock-issue.sh`) 
 
 ## `/implement`
 
-**Arguments**: `[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--debug] [--issue <N>] <feature description>`
+**Arguments**: `[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--issue <N>] <feature description>`
 
 **Source**: [`skills/implement/SKILL.md`](../skills/implement/SKILL.md) · [Diagram](../skills/implement/diagram.svg)
 
-Full end-to-end feature workflow — design, implement, PR, issue Slack announce (on by default when Slack env vars are configured). `--quick` skips `/design` and uses a simplified single-reviewer loop of up to 7 rounds with a per-round `Cursor → Codex → Claude Code Reviewer subagent` fallback chain (no voting panel; main agent unilaterally accepts or rejects each finding). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. Near the end of every run (Step 16a), a single status message about the tracking issue is posted to Slack: `<emoji> <GitHub link|Issue #N> (<title>) — <status>`. Emoji: ✅ closed (PR merged + issue auto-closed), 📝 PR opened but not merged (`--merge` not set or `--draft`), ❌ blocked (CI failure, merge failure, or Step 12d bail), ❓ needs user input (auto-mode conflict bail). The post uses the git user identity (`git config user.name` → Slack `username`). Requires `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Pass `--no-slack` to opt out. `--no-admin-fallback` opts out of the silent `--admin` retry on branch-protection denial — when set, `merge-pr.sh` returns `MERGE_RESULT=policy_denied` instead of invoking `gh pr merge --admin`, and `/implement` bails to Step 12d. Default behavior is unchanged when not set; when `--admin` does fire (default path), Step 12b posts a best-effort PR comment recording the bypass. `--issue <N>` attaches `/implement` to an existing tracking issue (Step 0.5 adoption); otherwise a fresh tracking issue is created at Step 0.5 Branch 4. `--debug` enables verbose output with detailed tool descriptions and explanatory prose (default is compact output).
+Full end-to-end feature workflow — design, implement, PR, issue Slack announce (on by default when Slack env vars are configured). `--quick` skips `/design` and uses a simplified single-reviewer loop of up to 7 rounds with a per-round `Cursor → Codex → Claude Code Reviewer subagent` fallback chain (no voting panel; main agent unilaterally accepts or rejects each finding). `--auto` suppresses all interactive question checkpoints. `--merge` additionally runs the CI+rebase+merge loop, local branch cleanup, and main verification (without `--merge`, the PR is created and the workflow stops after the initial CI wait and reports). `--draft` creates the PR in draft state and skips local cleanup so the branch is kept for further iteration; mutually exclusive with `--merge`. Near the end of every run (Step 16a), a single status message about the tracking issue is posted to Slack: `<emoji> <GitHub link|Issue #N> (<title>) — <status>`. Emoji: ✅ closed (PR merged + issue auto-closed), 📝 PR opened but not merged (`--merge` not set or `--draft`), ❌ blocked (CI failure, merge failure, or Step 12d bail), ❓ needs user input (auto-mode conflict bail). The post uses the git user identity (`git config user.name` → Slack `username`). Requires `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID`. Pass `--no-slack` to opt out. `--no-admin-fallback` opts out of the silent `--admin` retry on branch-protection denial — when set, `merge-pr.sh` returns `MERGE_RESULT=policy_denied` instead of invoking `gh pr merge --admin`, and `/implement` bails to Step 12d. Default behavior is unchanged when not set; when `--admin` does fire (default path), Step 12b posts a best-effort PR comment recording the bypass. `--issue <N>` attaches `/implement` to an existing tracking issue (Step 0.5 adoption); otherwise a fresh tracking issue is created at Step 0.5 Branch 4.
 
 ## `/issue`
 
@@ -115,7 +115,7 @@ Code review with a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex g
 
 ## `/simplify-skill`
 
-**Arguments**: `[--debug] [--no-slack] <skill-name>`
+**Arguments**: `[--no-slack] <skill-name>`
 
 **Source**: [`skills/simplify-skill/SKILL.md`](../skills/simplify-skill/SKILL.md)
 
@@ -131,7 +131,7 @@ Evolve an existing larch skill by researching concrete improvements and filing t
 
 ## `/umbrella`
 
-**Arguments**: `[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] <task description or empty to deduce from context>`
+**Arguments**: `[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] <task description or empty to deduce from context>`
 
 **Source**: [`skills/umbrella/SKILL.md`](../skills/umbrella/SKILL.md)
 

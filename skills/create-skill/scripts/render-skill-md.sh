@@ -167,12 +167,6 @@ ${FEATURE_SPEC}
 
 > **Before editing, read \`${PLUGIN_TOKEN}/skills/shared/skill-design-principles.md\`** — canonical larch skill-design principles (knowledge delta, structure, mechanical rules A/B/C, anti-patterns). Section III overrides general writing-style guidance.
 
-## Flags
-
-Parse flags from the start of \$ARGUMENTS. Flags may appear in any order; stop at the first non-flag token.
-
-- \`--debug\`: Set \`debug_mode=true\`. Default: \`debug_mode=false\`.
-
 ## Progress Reporting
 
 Follow the formatting rules in \`${PLUGIN_TOKEN}/skills/shared/progress-reporting.md\`.

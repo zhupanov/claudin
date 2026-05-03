@@ -4,17 +4,13 @@
 #  (A) Exactly one `## Rebase Checkpoint Macro` header.
 #  (B) Four canonical Call-site registry rows present (1.r/4.r/7.r/7a.r with their short-names).
 #  (C) Exactly four `Apply the Rebase Checkpoint Macro with ...` invocation lines matching canonical pairs.
-#  (D) Three byte-pinned Verbosity Control literals remain present exactly.
 #  (E) Step 7.r section retains `FILES_CHANGED=true` prose above the macro invocation.
 #  (F) Macro header line number is BETWEEN `### Verbosity Control` and `## Step 0`.
 #  (G) Macro section body contains the rebase-push.sh invocation and the bail-on-failure line.
 #  (H) Exactly 1 `rebase-push.sh --no-push --skip-if-pushed` occurrence (only the macro M2 uses
 #      that flag combo; Step 1.m, Step 8b, and the Rebase + Re-bump Sub-procedure use `--no-push`
-#      alone). This catches residual inline rebase blocks that were supposed to be dedup'd into
-#      the macro. Also asserts the 7.r Apply invocation is inside the Step 7 slice and that all
-#      three `--no-push`-only call sites (Step 1.m + Step 8b + Sub-procedure) remain (must NOT
-#      have been accidentally removed).
-#  (I) Macro body contains the two placeholder-pinned SKIPPED format strings.
+#      alone). Also asserts the 7.r Apply invocation is inside the Step 7 slice and that all
+#      three `--no-push`-only call sites (Step 1.m + Step 8b + Sub-procedure) remain.
 #
 # Exit 0 on pass, exit 1 on any assertion failure.
 # shellcheck disable=SC2016 # single-quoted strings are intentional grep literals — backticks and ${...} must not expand
@@ -96,19 +92,6 @@ for inv in "${canonical_invocations[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# (D) Byte-pinned Verbosity Control literals remain present exactly.
-# ---------------------------------------------------------------------------
-verbosity_literals=(
-  '⏩ 1.m: design plan | update main — already at latest'
-  '⏩ 1.r: design plan | rebase — already pushed'
-  '⏩ 1.r: design plan | rebase — already at latest main'
-)
-for lit in "${verbosity_literals[@]}"; do
-  grep -Fq "$lit" "$SKILL_MD" \
-    || fail "(D) Verbosity Control lost byte-pinned literal: $lit"
-done
-
-# ---------------------------------------------------------------------------
 # (E) Step 7.r section retains `FILES_CHANGED=true` prose above the invocation.
 #     The 7.r macro invocation must appear within the Step 7 slice, AFTER a
 #     line containing 'FILES_CHANGED=true' (same slice), and BEFORE '## Step 7a'.
@@ -167,17 +150,5 @@ no_push_only_count=$(grep -chE 'rebase-push\.sh --no-push$' "$SKILL_MD" "$SUBPRO
 [[ "$no_push_only_count" == "3" ]] \
   || fail "(H) expected exactly 3 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites across SKILL.md (Step 1.m + Step 8b) + references/rebase-rebump-subprocedure.md, found $no_push_only_count — Step 1.m, Step 8b, or Rebase + Re-bump Sub-procedure was accidentally altered"
 
-# ---------------------------------------------------------------------------
-# (I) Macro body placeholder-pinned SKIPPED format strings.
-# ---------------------------------------------------------------------------
-placeholder_skipped_lines=(
-  '⏩ <step-prefix>: <short-name> | rebase — already pushed'
-  '⏩ <step-prefix>: <short-name> | rebase — already at latest main'
-)
-for line in "${placeholder_skipped_lines[@]}"; do
-  sed -n "${macro_section_start},${macro_section_end}p" "$SKILL_MD" | grep -Fq "$line" \
-    || fail "(I) macro body lacks placeholder-pinned format string: $line"
-done
-
-echo "PASS: test-implement-rebase-macro.sh — all 9 structural invariants hold (A-I)"
+echo "PASS: test-implement-rebase-macro.sh — all 7 structural invariants hold (A, B, C, E, F, G, H)"
 exit 0

@@ -1,6 +1,6 @@
 # test-umbrella-parse-args.sh
 
-**Purpose**: regression harness for `skills/umbrella/scripts/parse-args.sh`. Pins the stdout grammar (`LABELS_COUNT` + indexed `LABEL_<i>`, `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN`, `GO`, `DEBUG`, `INPUT_FILE`, `UMBRELLA_SUMMARY_FILE`, `TASK`, `UMBRELLA_TMPDIR`), the frozen `ERROR=` template list, the quoting subset (single quotes, double quotes with `\"`/`\\`/`\$` escapes, outside-quote backslash escapes, space/tab/newline as unquoted separators), the paired-flag and TASK-mutual-exclusion validation rules for `--input-file` / `--umbrella-summary-file`, and the TASK byte-preservation contract documented in `parse-args.md` so downstream parsers (`SKILL.md` Step 0 + `/issue` forwarding prose in Steps 3A / 3B.2 / 3B.3) don't silently break on unrelated edits.
+**Purpose**: regression harness for `skills/umbrella/scripts/parse-args.sh`. Pins the stdout grammar (`LABELS_COUNT` + indexed `LABEL_<i>`, `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN`, `GO`, `INPUT_FILE`, `UMBRELLA_SUMMARY_FILE`, `TASK`, `UMBRELLA_TMPDIR`), the frozen `ERROR=` template list, the quoting subset (single quotes, double quotes with `\"`/`\\`/`\$` escapes, outside-quote backslash escapes, space/tab/newline as unquoted separators), the paired-flag and TASK-mutual-exclusion validation rules for `--input-file` / `--umbrella-summary-file`, and the TASK byte-preservation contract documented in `parse-args.md` so downstream parsers (`SKILL.md` Step 0 + `/issue` forwarding prose in Steps 3A / 3B.2 / 3B.3) don't silently break on unrelated edits.
 
 ## Helpers
 
@@ -47,7 +47,7 @@ requires updating this harness in the same PR. Add new test cases before changin
 | 4 | Quoted whitespace in `--title-prefix`. |
 | 5-6 | Other scalar flags (`--repo`, `--closed-window-days`). |
 | 7 | `--closed-window-days` integer validation error. |
-| 8 | Boolean flags (`--dry-run`, `--go`, `--debug`). |
+| 8 | Boolean flags (`--dry-run`, `--go`). |
 | 9 | TASK preserves embedded multi-space + trailing whitespace; **no leading whitespace contamination**. |
 | 10 | Bare `--` end-of-flags marker. |
 | 11 | Unclosed double quote → ERROR. |
