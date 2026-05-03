@@ -626,7 +626,7 @@ On write failure, print `**⚠ 3.5: auto-issue — failed to compose issue body.
 
 ### Compose title
 
-Derive from `RESEARCH_QUESTION`: `[Research] <RESEARCH_QUESTION>`, truncated so the full title fits within `/issue`'s 80-character title limit. No timestamp, no SHA — rely on `/issue`'s built-in semantic dedup for repeated research on the same topic (each run produces genuinely different body content: different findings, token costs).
+Derive from `RESEARCH_QUESTION`: `[Research Report] <RESEARCH_QUESTION>`, truncated so the full title fits within `/issue`'s 80-character title limit. No timestamp, no SHA — rely on `/issue`'s built-in semantic dedup for repeated research on the same topic (each run produces genuinely different body content: different findings, token costs).
 
 ### Invoke /issue
 
@@ -641,7 +641,7 @@ Derive from `RESEARCH_QUESTION`: `[Research] <RESEARCH_QUESTION>`, truncated so 
 2. Invoke `/issue` via the Skill tool in single mode:
 
    ```
-   --sentinel-file $RESEARCH_TMPDIR/research-issue.sentinel --body-file $RESEARCH_TMPDIR/research-issue-body.md --label research [Research] <truncated question>
+   --sentinel-file $RESEARCH_TMPDIR/research-issue.sentinel --body-file $RESEARCH_TMPDIR/research-issue-body.md --label research [Research Report] <truncated question>
    ```
 
    No `--go` — this is archival/tracking output, not an approved work queue item.
