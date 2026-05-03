@@ -1,7 +1,7 @@
 ---
 name: issue
-description: "Use when creating GitHub issues with LLM-based semantic duplicate detection plus always-on inter-issue blocker-dependency analysis. Single or batch mode. Flags: --go, --dry-run, --title-prefix, --label."
-argument-hint: "[--input-file FILE] [--intra-batch-deps-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--sentinel-file PATH] [<issue description or title>]"
+description: "Use when creating GitHub issues with LLM-based semantic duplicate detection plus always-on inter-issue blocker-dependency analysis. Single or batch mode. Flags: --go, --dry-run, --no-dedup, --title-prefix, --label."
+argument-hint: "[--input-file FILE] [--intra-batch-deps-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--no-dedup] [--sentinel-file PATH] [<issue description or title>]"
 allowed-tools: Bash, Read, Write
 ---
 
@@ -12,9 +12,9 @@ Create one or more GitHub issues in the current repository with **LLM-based sema
 - **Single mode** (no `--input-file`): a free-form description is the issue body; an optional `--go` posts a `GO` comment on the new issue.
 - **Batch mode** (`--input-file FILE`): parse a multi-item markdown file (OOS format from `/implement`, or a generic `### <title>` + body fallback) and create N issues in one pass; an optional `--go` posts a `GO` comment on each successfully-created issue (duplicates, failed creates, and dry-run items never receive a GO comment).
 
-Both modes run the same 2-phase dedup pipeline against open + recently-closed issues (default 90-day window). Phase 1 triages by title; Phase 2 reads full bodies + comments for shortlisted candidates and filters. Dedup fails **open**: any helper failure (network, rate limit, gh auth) produces a warning on stderr and falls through to create-all.
+Both modes run the same 2-phase dedup pipeline against open + recently-closed issues (default 90-day window), unless `--no-dedup` is set (which skips Steps 4–5 entirely). Phase 1 triages by title; Phase 2 reads full bodies + comments for shortlisted candidates and filters. Dedup fails **open**: any helper failure (network, rate limit, gh auth) produces a warning on stderr and falls through to create-all.
 
-**Always-on dependency analysis** (issue #546): in addition to dedup, every /issue invocation analyzes the new item(s) against every existing OPEN issue and detects pairs where (a) running them in parallel would risk merge conflicts, or (b) one clearly requires the other to land first. For each detected pair, /issue applies a hard GitHub-native blocker dependency via the Issue Dependencies REST API on the dependent ("client") issue. In batch mode, dependency analysis also covers intra-batch edges. There is **no opt-out flag** — the analysis is mandatory. Dependency-write failures use a hard-fail-with-retries contract (3 tries with 10s/30s pre-retry sleeps; on exhaustion, best-effort close the just-created orphan, increment `ISSUES_FAILED`, continue to the next item; process exits non-zero iff `ISSUES_FAILED>0` at end). See `## Dependency Analysis` below for the full contract.
+**Default-on dependency analysis** (issue #546): unless `--no-dedup` is set, every /issue invocation analyzes the new item(s) against every existing OPEN issue and detects pairs where (a) running them in parallel would risk merge conflicts, or (b) one clearly requires the other to land first. For each detected pair, /issue applies a hard GitHub-native blocker dependency via the Issue Dependencies REST API on the dependent ("client") issue. In batch mode, dependency analysis also covers intra-batch edges. `--no-dedup` skips both dedup and dependency analysis (Steps 4–5); all other invocations run the analysis unconditionally. Dependency-write failures use a hard-fail-with-retries contract (3 tries with 10s/30s pre-retry sleeps; on exhaustion, best-effort close the just-created orphan, increment `ISSUES_FAILED`, continue to the next item; process exits non-zero iff `ISSUES_FAILED>0` at end). See `## Dependency Analysis` below for the full contract.
 
 ## Untrusted Input
 
@@ -34,10 +34,11 @@ Supported flags (all optional):
 - `--title-prefix PREFIX` — string prepended to every created issue's title (e.g. `[OOS]`). Case-insensitively deduplicates if the input title already carries the prefix.
 - `--label LABEL` — repeatable. Each label is probed against the target repo; missing labels are silently dropped with a stderr warning.
 - `--body-file FILE` — single-mode body source. When combined with a trailing positional argument, the trailing arg is the explicit title and the file content is the body. When used alone, the file is both body and title source (title derived from first non-empty line).
-- `--dry-run` — run Phase 1+2 dedup normally; **do not** call `gh issue create`. Emit structured output tagged `DRY_RUN=true`. When combined with `--go`, the GO comment is suppressed (dry-run has no side effects) and no `ISSUE_<i>_GO_POSTED` lines are emitted.
+- `--dry-run` — run Phase 1+2 dedup normally (unless `--no-dedup` is also set, in which case Steps 4–5 are skipped and dep-edge preview lines are omitted); **do not** call `gh issue create`. Emit structured output tagged `DRY_RUN=true`. When combined with `--go`, the GO comment is suppressed (dry-run has no side effects) and no `ISSUE_<i>_GO_POSTED` lines are emitted.
 - `--go` — post `GO` as the final comment on each newly-created issue so it becomes eligible for `/fix-issue` automation. Works in both single and batch modes: Step 6 handles the GO post inline after each successful CREATE. Duplicates, failed creates, and dry-run items never get a GO comment.
 - `--repo OWNER/REPO` — explicit repo (otherwise inferred from the current working directory via `gh repo view`).
 - `--closed-window-days N` — override the closed-issue dedup window (default 90; set 0 to skip closed-issue dedup).
+- `--no-dedup` — skip the entire dedup + dependency analysis pipeline (Steps 4 and 5). Jump directly to Step 6 (Create) with all non-malformed items set to `VERDICT=CREATE` and no blocker edges. Useful for archival issues (e.g., `/research` reports) where each run produces genuinely different content and dedup is wasteful.
 - `--sentinel-file PATH` — absolute path at which Step 7 will write the post-success sentinel KV file (see `## Sentinel file (post-success)` below). The path must be absolute and must not contain `..`. When set, `SENTINEL_PATH_EXPLICIT=true` and the parent owns the sentinel's lifecycle (Step 9 does NOT remove it). When unset, `SENTINEL_PATH_EXPLICIT=false` and the helper writes to a child-local default `${TMPDIR:-/tmp}/larch-issue-$$.sentinel` that Step 9 cleans up itself (issue #509 plan review FINDING_3 fix). Save the resolved path as `SENTINEL_PATH`.
 - `--intra-batch-deps-file FILE` — optional. Path to a TSV file of caller-supplied high-confidence intra-batch dependency edges (one row per edge: `<blocker-1based>\t<blocked-1based>`, where each value is a 1-based batch item index). When supplied, Step 5 Phase 2 merges these edges into its `ITEM_<i>_BLOCKED_BY` output before validation — caller-supplied edges are treated as pre-validated high-confidence inputs that bypass LLM near-certainty thresholds but still pass through the full validation pipeline (snapshot membership, range check, DUPLICATE override, SCC cycle resolution). Parser-side limits: max 500 lines, max 64KB file size, strict grammar (`^[0-9]+\t[0-9]+$` per line); reject with `**ERROR: --intra-batch-deps-file: <reason>**` on violation. Only valid with `--input-file` (batch mode); rejected with usage error otherwise.
 
@@ -53,6 +54,7 @@ Validations:
 - `MODE=single` with empty `DESCRIPTION` and no `EXPLICIT_TITLE`: abort with `**ERROR: Usage: /issue [--go] [--title-prefix P] [--label L]... [--body-file F] <issue description or title>**`
 - `MODE=single` with `EXPLICIT_TITLE` set and empty `DESCRIPTION` (empty body file): abort with `**ERROR: --body-file content is empty.**`
 - `MODE=batch` + missing or empty `INPUT_FILE`: abort with `**ERROR: --input-file must point to a non-empty file.**`
+- `--no-dedup` + `--intra-batch-deps-file`: abort with `**ERROR: --no-dedup and --intra-batch-deps-file are mutually exclusive (--no-dedup skips Steps 4–5 where caller-supplied edges are merged).**`
 
 ## Step 2 — Resolve Repository
 
@@ -104,6 +106,8 @@ Malformed items are pre-counted into the final `ISSUES_FAILED` — they never re
 If `ITEMS_TOTAL=0`, emit `ISSUES_CREATED=0`, `ISSUES_FAILED=0`, `ISSUES_DEDUPLICATED=0` and exit.
 
 ## Step 4 — Phase 1: Two-Tier Title Triage (dedup + dependency)
+
+If `no_dedup=true`: skip Steps 4 and 5 entirely. Set `ITEM_<i>_VERDICT=CREATE` for every non-malformed item, with empty `BLOCKED_BY` / `BLOCKS` lists. Jump to Step 6 (Create).
 
 **Issue #546 reshape**: Phase 1 now performs a **two-tier triage** that produces both dedup candidates AND dependency candidates from a single LLM call. Tier 1 walks every open title (capped at 500 most-recent for scalability); Tier 2 is the same fetch-issue-details.sh-driven body+comment shortlist as before, except its candidate set is the union of dup-candidates and dep-candidates.
 
@@ -368,7 +372,7 @@ For `DUPLICATE` outcomes (both `DUPLICATE_OF=<N>` and `DUPLICATE_OF_ITEM=<j>` br
 
 ## Dependency Analysis (issue #546)
 
-**Always-on, no opt-out.** Every /issue invocation analyzes new items against existing OPEN issues for blocker dependencies and applies the detected edges via the GitHub Issue Dependencies REST API. The contract:
+**Default-on.** Every /issue invocation analyzes new items against existing OPEN issues for blocker dependencies and applies the detected edges via the GitHub Issue Dependencies REST API, unless `--no-dedup` is set (which skips Steps 4–5 entirely, including dependency analysis — no blocker edges are created). The contract (when Steps 4–5 run):
 
 - **Direction**: an edge `i blocked-by j` means "item j must land before item i" — the blocker relationship is recorded on the dependent (client = `i`) issue's body via GitHub's native blocker UI.
 - **Detection** (Step 4–5): Tier 1 of Phase 1 emits dep-candidate flags per open snapshot row; Phase 2 emits `ITEM_<i>_BLOCKED_BY=<list>` and `ITEM_<i>_BLOCKS=<list>` for each surviving non-duplicate item, with conservative ("near-certain") thresholds.
