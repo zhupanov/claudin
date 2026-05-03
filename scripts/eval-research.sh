@@ -17,12 +17,6 @@
 #
 # Flags:
 #   --id <id>             Run only the entry with this id (debugging).
-#   --scale <s>           Forwarded to /larch:research as --scale=<s>, manually
-#                         overriding the adaptive scale classifier (issue #513).
-#                         When --write-baseline is used, the same value is also
-#                         recorded in the produced JSON's top-level scale field
-#                         so the field accurately reflects the runtime scale.
-#                         Default: standard.
 #   --baseline <ref>      Pre-fetches the eval-baseline.json file from the
 #                         given git ref (sha, tag, or branch) into $WORK_DIR
 #                         for manual diffing. Inline delta columns are NOT
@@ -57,8 +51,7 @@
 #       integer, regex-invalid baseline ref, baseline ref that cannot be
 #       resolved via git show, a value-taking flag with no following
 #       value such as a trailing `--baseline`, or a value-taking flag
-#       whose next token is another long option such as `--baseline
-#       --scale standard` — issue #780).
+#       whose next token is another long option — issue #780).
 #   3 — required tooling missing. jq and awk are required in all modes
 #       (including --smoke-test); claude is required only when not using
 #       --smoke-test.
@@ -85,7 +78,6 @@ EVAL_BASELINE_FILE="${CLAUDE_PLUGIN_ROOT}/skills/research/references/eval-baseli
 
 # ---- Argument parsing ----------------------------------------------------
 ID_FILTER=""
-SCALE="standard"
 BASELINE_REF=""
 WORK_DIR=""
 WRITE_BASELINE_FILE=""
@@ -104,8 +96,8 @@ print_usage() {
 # code (issue #477). Routing missing values to exit 2 lines up with the
 # script's other argument-parse errors (unknown argument, regex-invalid
 # baseline ref). The third arg also rejects a following flag name as the
-# value (issue #780): `--baseline --scale standard` would otherwise bind
-# `BASELINE_REF=--scale` because the validity regex permits hyphens —
+# value (issue #780): a `--*` candidate would otherwise bind to
+# `BASELINE_REF` because the validity regex permits hyphens —
 # parallels `take_value` in scripts/render-reviewer-prompt.sh.
 require_value() {
   local flag="$1" argc="$2" next_val="${3:-}"
@@ -118,7 +110,6 @@ require_value() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --id) require_value "$1" "$#" "${2:-}"; ID_FILTER="${2:-}"; shift 2 ;;
-    --scale) require_value "$1" "$#" "${2:-}"; SCALE="${2:-standard}"; shift 2 ;;
     --baseline) require_value "$1" "$#" "${2:-}"; BASELINE_REF="${2:-}"; shift 2 ;;
     --work-dir) require_value "$1" "$#" "${2:-}"; WORK_DIR="${2:-}"; shift 2 ;;
     --write-baseline) require_value "$1" "$#" "${2:-}"; WRITE_BASELINE_FILE="${2:-}"; shift 2 ;;
@@ -292,8 +283,8 @@ validate_baseline_json() {
     printf 'eval-research: eval-baseline.json not found at %s\n' "$file" >&2
     return 1
   fi
-  if ! jq -e '.version and .scale and (.entries | type == "array")' "$file" >/dev/null 2>&1; then
-    printf 'eval-research: eval-baseline.json missing required keys (version, scale, entries) or not valid JSON\n' >&2
+  if ! jq -e '.version and (.entries | type == "array")' "$file" >/dev/null 2>&1; then
+    printf 'eval-research: eval-baseline.json missing required keys (version, entries) or not valid JSON\n' >&2
     return 1
   fi
   return 0
@@ -319,11 +310,7 @@ printf 'eval-research: work dir = %s\n' "$WORK_DIR"
 # numeric timeouts set higher to accommodate /research's composite budget.
 build_research_prompt() {
   local question="$1"
-  # Forward --scale=$SCALE so /research's adaptive classifier (issue #513) is
-  # bypassed and the harness deterministically tests the labeled scale. Without
-  # this forwarding, baseline runs labeled $SCALE could silently execute at a
-  # different scale via auto-classification, breaking baseline comparability.
-  printf '/larch:research --no-issue --scale=%s %s\n' "$SCALE" "$question"
+  printf '/larch:research --no-issue %s\n' "$question"
 }
 
 run_one_research() {
@@ -716,12 +703,11 @@ if [[ -n "$WRITE_BASELINE_FILE" ]]; then
   done
   ENTRIES_JSON="$ENTRIES_JSON]"
   jq -n \
-    --argjson v 1 \
-    --arg sc "$SCALE" \
+    --argjson v 2 \
     --arg hc "${HARNESS_COMMIT:-null}" \
     --arg ga "$GENERATED_AT" \
     --argjson ent "$ENTRIES_JSON" \
-    '{version:$v, harness_commit:(if $hc=="null" then null else $hc end), model_id:null, scale:$sc, generated_at:$ga, entries:$ent}' \
+    '{version:$v, harness_commit:(if $hc=="null" then null else $hc end), model_id:null, generated_at:$ga, entries:$ent}' \
     > "$WRITE_BASELINE_FILE"
   printf 'eval-research: baseline written to %s\n' "$WRITE_BASELINE_FILE"
 fi

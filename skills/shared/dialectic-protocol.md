@@ -1,8 +1,8 @@
 # Dialectic Protocol
 
-Shared protocol for **post-debate adjudication** of contested design decisions. Used by `/design` Step 2a.5 to resolve contested decisions with a 3-judge binary panel after the Phase 2 debater fanout returns, and (since issue #424) by `/research --adjudicate` Step 2.5 to adjudicate reviewer findings the orchestrator rejected during validation merge/dedup. This protocol is **structurally parallel** to `voting-protocol.md` but **semantically independent** — it adjudicates pre-authored binary defenses, not reviewer findings with YES/NO/EXONERATE and competition scoring.
+Shared protocol for **post-debate adjudication** of contested design decisions. Used by `/design` Step 2a.5 to resolve contested decisions with a 3-judge binary panel after the Phase 2 debater fanout returns. This protocol is **structurally parallel** to `voting-protocol.md` but **semantically independent** — it adjudicates pre-authored binary defenses, not reviewer findings with YES/NO/EXONERATE and competition scoring.
 
-`/design`'s caller maps `THESIS`/`ANTI_THESIS` to its synthesis `{CHOSEN}` / `{ALTERNATIVE}`; `/research`'s caller maps the same tokens to "rejection stands" / "reinstate the finding" — see `skills/research/references/adjudication-phase.md` for the research-specific binding. Token names, ballot machinery (Write-tool ballot, position rotation, attribution stripping, judge re-probe, replacement-first 3-judge panel, parser tolerance, threshold rules), and the `dialectic-resolutions.md` Consumer Contract field-name set are unchanged across callers — `/research` writes `adjudication-resolutions.md` (not `dialectic-resolutions.md`) so the two artifact files do not collide, but the field schema is identical so future tooling can use one parser.
+`/design`'s caller maps `THESIS`/`ANTI_THESIS` to its synthesis `{CHOSEN}` / `{ALTERNATIVE}`. Token names, ballot machinery (Write-tool ballot, position rotation, attribution stripping, judge re-probe, replacement-first 3-judge panel, parser tolerance, threshold rules), and the `dialectic-resolutions.md` Consumer Contract field-name set are stable.
 
 **Do not reuse `voting-protocol.md` parsers, threshold tables, or scoring rules for dialectic adjudication.** Dialectic ballots use `DECISION_N` IDs with `THESIS`/`ANTI_THESIS` tokens, not `FINDING_N` with `YES`/`NO`/`EXONERATE`. Dialectic does not compute a competition scoreboard.
 
@@ -10,16 +10,15 @@ Shared protocol for **post-debate adjudication** of contested design decisions. 
 
 This protocol is written in terms of a caller-bound path-prefix placeholder, **`$DIALECTIC_TMPDIR`**. Every concrete path below (e.g., `$DIALECTIC_TMPDIR/dialectic-ballot.txt`, `$DIALECTIC_TMPDIR/dialectic-resolutions.md`, `$DIALECTIC_TMPDIR/cursor-judge-output.txt`, `$DIALECTIC_TMPDIR/codex-judge-output.txt`) is the placeholder + a basename; callers substitute the placeholder with their own session-tmpdir path at prompt-construction time. **This is a prompt-construction substitution rule, not a shell-level variable export** — external CLIs (Cursor/Codex) do not expand shell variables in prompt arguments, so substitution must happen at construction time, not in the receiving CLI's environment.
 
-**Callers MUST substitute the literal `$DIALECTIC_TMPDIR` token with their own session-tmpdir path before invoking any choreography that quotes this protocol.** The two known callers today, each documenting the substitution mapping inline:
+**Callers MUST substitute the literal `$DIALECTIC_TMPDIR` token with their own session-tmpdir path before invoking any choreography that quotes this protocol.**
 
 - `/design` Step 2a.5: when copying protocol text into a `/design` context, the literal `$DIALECTIC_TMPDIR` token maps to `$DESIGN_TMPDIR` (which the orchestrator then substitutes to the actual session-tmpdir path). See `${CLAUDE_PLUGIN_ROOT}/skills/design/references/dialectic-execution.md`.
-- `/research --adjudicate` Step 2.5: same substitution rule, mapping the literal `$DIALECTIC_TMPDIR` token to `$RESEARCH_TMPDIR`. See `${CLAUDE_PLUGIN_ROOT}/skills/research/references/adjudication-phase.md`.
 
-`DIALECTIC_TMPDIR` is a **directory placeholder only** — it does NOT rename skill-specific artifacts. Callers may keep distinct basenames (e.g., `/research --adjudicate` writes `research-adjudication-ballot.txt` and `adjudication-resolutions.md` instead of the design-context defaults `dialectic-ballot.txt` and `dialectic-resolutions.md`); the protocol's field schema is identical across callers.
+`DIALECTIC_TMPDIR` is a **directory placeholder only** — it does NOT rename skill-specific artifacts.
 
 ## Overview
 
-After `/design` Step 2a.5 runs the thesis/antithesis debater fanout, an eligibility gate classifies each decision's `Disposition` (`voted` | `fallback-to-synthesis` | `bucket-skipped` | `over-cap`). For `voted` decisions, a 3-judge panel (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unhealthy) reads a single ballot containing attribution-stripped defense texts and casts one binary vote per decision. Votes are tallied per-decision with binary thresholds. Resolutions are written to `$DIALECTIC_TMPDIR/dialectic-resolutions.md` with a structured schema parseable by Step 2b and Step 3.5 — the `/research --adjudicate` caller reuses the same schema under a different basename; see Caller Binding above and Consumer Contract below.
+After `/design` Step 2a.5 runs the thesis/antithesis debater fanout, an eligibility gate classifies each decision's `Disposition` (`voted` | `fallback-to-synthesis` | `bucket-skipped` | `over-cap`). For `voted` decisions, a 3-judge panel (Claude Code Reviewer subagent + Codex + Cursor, with Claude replacements when externals are unhealthy) reads a single ballot containing attribution-stripped defense texts and casts one binary vote per decision. Votes are tallied per-decision with binary thresholds. Resolutions are written to `$DIALECTIC_TMPDIR/dialectic-resolutions.md` with a structured schema parseable by Step 2b and Step 3.5.
 
 ## Disposition Enum
 
@@ -30,9 +29,9 @@ Every decision selected by Step 2a.5 gets exactly one resolution entry with one 
 | `voted` | Both debater sides passed the eligibility gate; a judge panel voted; a majority (per threshold rules) resolved the decision. |
 | `fallback-to-synthesis` | Debater output failed the eligibility gate, or the judge panel could not reach a majority (2-judge 1-1 tie, or <2 eligible judges). Synthesis decision stands. |
 | `bucket-skipped` | Step 2a.5 step 4 skipped the debater bucket because the assigned external tool was unavailable. No debate occurred. Synthesis decision stands. |
-| `over-cap` | The decision was listed in `contested-decisions.md` but ranked outside Step 2a.5's top-`min(5, N)` cap. No debate occurred. Synthesis decision stands. For /design: Step 3.5 treats as still-contested. (For /research --adjudicate: no Step 3.5 — the "no debate occurred" semantics suffice.) |
+| `over-cap` | The decision was listed in `contested-decisions.md` but ranked outside Step 2a.5's top-`min(5, N)` cap. No debate occurred. Synthesis decision stands. For /design: Step 3.5 treats as still-contested. |
 
-`voted` is the only binding disposition. All other dispositions mean the synthesis decision stands for that point. For /design: the Step 2a.4 synthesis decision stands and Step 2b must not fabricate antithesis engagement prose for non-`voted` entries. For /research --adjudicate: the validation-merge synthesis stands and Step 2.5 must not reinstate a finding for non-`voted` entries (no reinstatement-into-validated-synthesis sub-step where the dialectic layer did not produce a heard counter-position).
+`voted` is the only binding disposition. All other dispositions mean the synthesis decision stands for that point: the Step 2a.4 synthesis decision stands and Step 2b must not fabricate antithesis engagement prose for non-`voted` entries.
 
 ## Ballot Format
 
@@ -271,13 +270,11 @@ Field rules per disposition:
 This contract is shared across both callers — the field-name set and Disposition enum below apply identically to both, so future tooling that consumes either resolutions file can use one parser. Two callers parse the resolutions, each from its own caller-specific basename:
 
 - `/design` Step 2b (plan generation, per `skills/design/SKILL.md`) and Step 3.5 (design discussion round 2, per `skills/design/references/discussion-rounds.md`) parse `$DESIGN_TMPDIR/dialectic-resolutions.md` when it exists and is non-empty. The file may be absent on the `NO_CONTESTED_DECISIONS` short-circuit at Step 2a.5; Step 3.5's still-contested matcher short-circuits naturally when no entries match its criteria.
-- `/research --adjudicate` Step 2.5 (the reinstatement-into-validated-synthesis sub-step) and Step 3 (final report rendering of the `**Adjudication phase**: <X> reinstated, <Y> upheld` header line) parse `$RESEARCH_TMPDIR/adjudication-resolutions.md` when present. On the no-rejections short-circuit path Step 2.5 does not write this file (per `skills/research/references/adjudication-phase.md`'s `RAN=false` branch); Step 3 then renders the literal `0 reinstated, 0 upheld (no rejections to adjudicate)` form (per `skills/research/SKILL.md` Step 3) instead of parsing.
-
-The two artifact files use distinct basenames so they do not collide on disk. Field **names** and the `Disposition` value set below are identical across both callers (so a single parser can extract them), but the **`Resolution` field's allowed literal values are caller-specific**: `/design` uses the synthesis `{CHOSEN}` / `{ALTERNATIVE}` literals; `/research --adjudicate` uses `reinstate` / `rejection-stands`. A single validator over `Resolution` literals would therefore need a per-caller switch — see `skills/design/references/dialectic-execution.md` and `skills/research/references/adjudication-phase.md` for the per-caller token sets. Consumers MUST:
+The artifact uses the basename `dialectic-resolutions.md` under `$DIALECTIC_TMPDIR`. The `Resolution` field's allowed literal values are the synthesis `{CHOSEN}` / `{ALTERNATIVE}` literals. Consumers MUST:
 
 1. Parse field names verbatim: `**Resolution**:`, `**Disposition**:`, `**Vote tally**:`, `**Thesis summary**:`, `**Antithesis summary**:`, `**Why thesis prevails**:` / `**Why antithesis prevails**:` / `**Why fallback**:` / `**Why skipped**:` / `**Why over-cap**:`.
 2. Recognize exactly these four Disposition values: `voted`, `fallback-to-synthesis`, `bucket-skipped`, `over-cap`.
-3. Treat `voted` as binding (consumer must follow `Resolution` — for `/design` the plan must engage antithesis; for `/research --adjudicate` `Resolution: reinstate` triggers the reinstatement-into-validated-synthesis sub-step). Treat the other three Dispositions as non-binding: synthesis decision stands for that point, and consumers must not fabricate counter-position output (`/design` antithesis-engagement prose, `/research --adjudicate` reinstatement) where the dialectic layer did not produce a heard counter-position.
+3. Treat `voted` as binding (the consumer must follow `Resolution` — for `/design` the plan must engage antithesis). Treat the other three Dispositions as non-binding: synthesis decision stands for that point, and consumers must not fabricate antithesis-engagement prose where the dialectic layer did not produce a heard counter-position.
 
 ### Step 3.5 still-contested criterion (`/design` only)
 
@@ -293,5 +290,3 @@ A decision with `Disposition: voted` AND `Vote tally` showing a 3-0 or 2-0 major
 ## Scope and Precedence
 
 For `/design`: dialectic resolutions are **binding for Step 2b plan generation only**. They may be superseded by accepted Step 3 plan review findings. The finalized plan (after Step 3 review) remains the sole canonical output.
-
-For `/research --adjudicate`: adjudication resolutions are binding for Step 2.5's reinstatement-into-validated-synthesis sub-step — `Resolution: reinstate` triggers integration of the reviewer's finding back into the synthesis under the existing `## Revised Research Findings` header (per `skills/research/references/adjudication-phase.md`). The validated-and-possibly-reinstated synthesis is then the sole canonical input for Step 3's final research report; there is no separate plan-review supersession step on this caller.

@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # validate-args.sh — Parse and validate /skill-evolver arguments.
 #
-# Flags (stop at first non-flag token):
-#   --debug       Forward DEBUG=true through to the orchestrator (which forwards
-#                 it to /research and /umbrella).
-#
-# Positional (after flags):
+# Positional:
 #   <skill-name>  First positional. Leading '/' is stripped. Must match
 #                 ^[a-z][a-z0-9-]*$ and resolve to an existing skill directory
 #                 (skills/<name>/SKILL.md preferred; .claude/skills/<name>/SKILL.md
@@ -15,36 +11,31 @@
 #   VALID=true|false
 #   SKILL_NAME=<canonical name>     # only when VALID=true
 #   SKILL_DIR=<absolute path>       # only when VALID=true
-#   DEBUG=true|false                # always
 #   ERROR=<msg>                     # only when VALID=false
 #
 # Exit code is always 0 — the VALID=false line is the orchestrator's branch
-# signal, not the exit code. This matches the convention in
-# skills/create-skill/scripts/validate-args.sh.
+# signal, not the exit code.
 
 set -euo pipefail
 
-DEBUG=false
 SKILL_NAME=""
 
 emit_invalid() {
   printf 'VALID=false\n'
-  printf 'DEBUG=%s\n' "$DEBUG"
   printf 'ERROR=%s\n' "$1"
   exit 0
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --debug) DEBUG=true; shift ;;
     --) shift; break ;;
-    --*) emit_invalid "Unknown flag '$1'. Valid flags: --debug." ;;
+    --*) emit_invalid "Unknown flag '$1'. /skill-evolver accepts no flags." ;;
     *) break ;;
   esac
 done
 
 if [[ $# -lt 1 ]]; then
-  emit_invalid "Missing <skill-name>. Usage: /skill-evolver [--debug] <skill-name>"
+  emit_invalid "Missing <skill-name>. Usage: /skill-evolver <skill-name>"
 fi
 
 SKILL_NAME="$1"
@@ -87,5 +78,4 @@ fi
 printf 'VALID=true\n'
 printf 'SKILL_NAME=%s\n' "$SKILL_NAME"
 printf 'SKILL_DIR=%s\n' "$SKILL_DIR"
-printf 'DEBUG=%s\n' "$DEBUG"
 exit 0

@@ -1,23 +1,14 @@
 # shellcheck shell=bash
 # render-lane-status-lib.sh — shared rendering primitives for the per-lane
-# attribution helpers (`render-lane-status.sh` for /research standard mode and
-# `render-deep-lane-status.sh` for /research deep mode). This file is sourced,
-# not executed (no shebang, no top-level state-mutating commands). Closes #451.
+# attribution helper (`render-lane-status.sh`). This file is sourced, not
+# executed (no shebang, no top-level state-mutating commands).
 #
 # Exported functions:
 #   sanitize_reason  — collapse whitespace, strip = and |, trim, truncate to 80
 #   render_lane      — map a (status_token, reason) pair to the rendered string
 #
-# Caller protocol:
-#   - Each consumer script sets `RENDER_LANE_CALLER` to its own basename BEFORE
-#     sourcing this file, so the unknown-token stderr warning attributes the
-#     failing script correctly:
-#         RENDER_LANE_CALLER="render-lane-status"        # standard
-#         RENDER_LANE_CALLER="render-deep-lane-status"   # deep
-#     The default (`render-lane-status`) preserves byte-stable existing
-#     warnings if a caller forgets to set it.
-#   - Both functions use `local` vars only and do not change shell options;
-#     callers may run under `set -euo pipefail` without interference.
+# Both functions use `local` vars only and do not change shell options;
+# callers may run under `set -euo pipefail` without interference.
 #
 # Status token vocabulary (canonical, single source of truth):
 #   ok                            → ✅
@@ -28,8 +19,7 @@
 #   fallback_runtime_failed       → Claude-fallback (runtime failed: <reason>)
 #                                   (parenthetical omitted when REASON is empty)
 #   '' (missing or empty)         → (unknown)   (no stderr warning)
-#   <anything else, non-empty>    → (unknown)   + stderr warning attributed to
-#                                                $RENDER_LANE_CALLER
+#   <anything else, non-empty>    → (unknown)   + stderr warning
 #
 # Reason sanitization rules (in order):
 #   1. Strip embedded `=` and `|` characters
@@ -40,10 +30,8 @@
 # Edit-in-sync: changes to the case statement in `render_lane()` or to
 # `sanitize_reason()` MUST be paired with updates to:
 #   - scripts/render-lane-status-lib.md (this contract)
-#   - scripts/render-lane-status.md and scripts/render-deep-lane-status.md
-#     (consumer contracts)
-#   - scripts/test-render-lane-status.sh and
-#     scripts/test-render-deep-lane-status.sh (byte-exact harnesses)
+#   - scripts/render-lane-status.md (consumer contract)
+#   - scripts/test-render-lane-status.sh (byte-exact harness)
 
 # sanitize_reason — collapse whitespace, strip = and |, trim, truncate to 80.
 # Defense-in-depth: the writer is supposed to sanitize before heredoc-write,
@@ -67,9 +55,7 @@ sanitize_reason() {
 }
 
 # render_lane — given a status token and a (possibly empty) reason, emit the
-# human-readable string. Emits a stderr warning for unknown tokens, attributed
-# to ${RENDER_LANE_CALLER:-render-lane-status} so each consumer script gets
-# its own basename in the warning.
+# human-readable string. Emits a stderr warning for unknown tokens.
 render_lane() {
     local status="$1"
     local reason="$2"
@@ -97,7 +83,7 @@ render_lane() {
         '')
             printf '(unknown)' ;;
         *)
-            echo "**⚠ ${RENDER_LANE_CALLER:-render-lane-status}: unknown status token $status**" >&2
+            echo "**⚠ render-lane-status: unknown status token $status**" >&2
             printf '(unknown)' ;;
     esac
 }

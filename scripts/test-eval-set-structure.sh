@@ -22,7 +22,7 @@
 #   6. At least two entries are flagged ADVERSARIAL in their notes —
 #      one targeting fictitious-mechanism, one targeting data-absence.
 #   7. eval-baseline.json exists, parses as JSON, and has the required
-#      schema keys (version, scale, entries).
+#      schema keys (version, entries).
 #   8. The harness scripts/eval-research.sh contains the Anthropic-blog
 #      citation literal — pinned so a future edit cannot drop the source
 #      attribution silently.
@@ -138,10 +138,10 @@ grep -qiE '^- \*\*notes\*\*:.*adversarial.*(data[- ]absen|no data|don.t have dat
 # Check 7: eval-baseline.json parses and has required keys.
 [[ -f "$EVAL_BASELINE" ]] || fail "skills/research/references/eval-baseline.json missing"
 if command -v jq >/dev/null 2>&1; then
-  jq -e '.version and .scale and (.entries | type == "array")' "$EVAL_BASELINE" >/dev/null 2>&1 \
-    || fail "eval-baseline.json missing required keys (version, scale, entries) or not valid JSON"
+  jq -e '.version and (.entries | type == "array")' "$EVAL_BASELINE" >/dev/null 2>&1 \
+    || fail "eval-baseline.json missing required keys (version, entries) or not valid JSON"
 else
-  for key in version scale entries; do
+  for key in version entries; do
     grep -q "\"$key\"" "$EVAL_BASELINE" \
       || fail "eval-baseline.json missing required key: $key (jq unavailable; using grep fallback)"
   done

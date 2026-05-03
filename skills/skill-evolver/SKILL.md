@@ -1,17 +1,17 @@
 ---
 name: skill-evolver
-description: "Use when evolving an existing larch skill — runs /research --scale=deep on sibling skills + reputable external sources (Anthropic, OpenAI, DeepMind, top OSS), then delegates actionable findings to /umbrella to file GitHub issues."
-argument-hint: "[--debug] <skill-name>"
+description: "Use when evolving an existing larch skill — runs /research on sibling skills + reputable external sources (Anthropic, OpenAI, DeepMind, top OSS), then delegates actionable findings to /umbrella to file GitHub issues."
+argument-hint: "<skill-name>"
 allowed-tools: Bash, Read, Skill
 ---
 
 # skill-evolver
 
-Plan improvements for an existing larch skill in a single research-and-file-issues pass. Take a mandatory `<skill-name>` (must already exist under `skills/<name>/` or `.claude/skills/<name>/` in the current plugin repo), invoke `/research --scale=deep` via the Skill tool against repo-local sibling skills + reputable external sources (Anthropic, OpenAI, DeepMind, ≥500-star OSS), and — if the research lane surfaces ≥1 actionable improvement with citations — invoke `/umbrella` via the Skill tool to file the resulting GitHub issue(s). `/umbrella` runs its own one-shot vs multi-piece classifier on the distilled task description: multi-piece yields an umbrella tracking issue plus one child per piece (very small items may be bundled into a single composed piece per `/umbrella` Step 3B.1's bundling rule); one-shot files a single new issue or resolves to an existing one via dedup (still no umbrella). To iterate (re-research after children land), re-run `/skill-evolver`.
+Plan improvements for an existing larch skill in a single research-and-file-issues pass. Take a mandatory `<skill-name>` (must already exist under `skills/<name>/` or `.claude/skills/<name>/` in the current plugin repo), invoke `/research` via the Skill tool against repo-local sibling skills + reputable external sources (Anthropic, OpenAI, DeepMind, ≥500-star OSS), and — if the research lane surfaces ≥1 actionable improvement with citations — invoke `/umbrella` via the Skill tool to file the resulting GitHub issue(s). `/research` runs the fixed 4 research + 3 validation lane shape internally. `/umbrella` runs its own one-shot vs multi-piece classifier on the distilled task description.
 
 The skill itself does NOT modify the target skill's files. Implementation of each improvement happens later via `/fix-issue`. This skill is research-and-file-issues only.
 
-Example: `/skill-evolver design` or `/skill-evolver --debug review`.
+Example: `/skill-evolver design` or `/skill-evolver review`.
 
 > **Before editing**, read `${CLAUDE_PLUGIN_ROOT}/skills/shared/skill-design-principles.md` (full file). Section III mechanical rules A/B/C override general writing-style guidance on conflict.
 
@@ -51,7 +51,7 @@ The full stdout grammar, error contract, positional-argument rules, and edit-in-
 
 Save `SKILL_NAME`, `SKILL_DIR`, `DEBUG` for Steps 2 and 3.
 
-## Step 2 — Run /research --scale=deep
+## Step 2 — Run /research
 
 Compose the research prompt by substituting `<SKILL_NAME>` and `<SKILL_DIR>` into the template below. Verify both substitutions before invoking `/research`. The lanes have full `Read | Grep | Glob | Bash` and can read the target skill themselves — pass the **path**, not the contents.
 
@@ -83,7 +83,7 @@ Output: a structured `## Research Report` with one numbered finding per improvem
 
 Invoke the Skill tool:
 - Try skill `"research"` first (bare name). If no skill matches, try `"larch:research"` (fully-qualified plugin name).
-- args: `[--debug] --no-issue --scale=deep <substituted-prompt>`. Prepend `--debug` only if `DEBUG=true` — placement before the positional argument is required because `/research` stops flag parsing at the first non-flag token (see `skills/research/SKILL.md:21`). `--no-issue` suppresses `/research`'s automatic issue creation — `/skill-evolver` delegates issue filing to `/umbrella` in Step 3, not to `/research`'s auto-issue.
+- args: `--no-issue <substituted-prompt>`. `--no-issue` suppresses `/research`'s automatic issue creation — `/skill-evolver` delegates issue filing to `/umbrella` in Step 3, not to `/research`'s auto-issue.
 
 After `/research` returns, read its `## Research Report` from conversation context. The report is followed by an optional `## Citation Validation` block when `/research`'s sidecar exists (Step 3 splice in `skills/research/SKILL.md`), so the literal last line of the combined output is NOT necessarily the count. Parse the **last line of the file matching `^ACTIONABLE_IMPROVEMENTS_COUNT=`**, ignoring any trailing `## Citation Validation` content. The integer on that line drives Step 3.
 
@@ -105,7 +105,7 @@ If no such line is present (the `/research` lane synthesis dropped the requested
 
   Then invoke the Skill tool:
   - Try skill `"umbrella"` first (bare name). If no skill matches, try `"larch:umbrella"`.
-  - args: `[--debug] --label evolved-by:skill-evolver --label skill:<SKILL_NAME> --title-prefix "[skill-evolver:<SKILL_NAME>] " <umbrella-task-description>`. Prepend `--debug` only if `DEBUG=true` — placement before the positional argument is required because `/umbrella` stops flag parsing at the first non-flag token (see `skills/umbrella/SKILL.md:24`).
+  - args: `--label evolved-by:skill-evolver --label skill:<SKILL_NAME> --title-prefix "[skill-evolver:<SKILL_NAME>] " <umbrella-task-description>`.
 
   After `/umbrella` returns, branch on its `UMBRELLA_VERDICT` line (per `skills/umbrella/SKILL.md` Step 4 stdout grammar — `UMBRELLA_NUMBER` and `UMBRELLA_URL` are emitted only on the multi-piece success path; one-shot success emits `CHILD_1_URL` instead; failure paths omit `UMBRELLA_NUMBER` and `UMBRELLA_URL` entirely; `CHILDREN_CREATED=<N>` and `CHILDREN_DEDUPLICATED=<N>` are emitted on every multi-piece path AND on the one-shot path — consumers must branch on these counters to distinguish a newly-filed issue from one deduplicated to an existing GitHub issue, since `CHILD_1_URL` is populated in both cases per `/umbrella`'s renormalized `CHILD_*` set rule):
   - `UMBRELLA_VERDICT=multi-piece` AND `UMBRELLA_URL` present: print `✅ /skill-evolver: filed umbrella #<UMBRELLA_NUMBER> at <UMBRELLA_URL> with <CHILDREN_CREATED> child issues.`
@@ -117,4 +117,4 @@ If no such line is present (the `/research` lane synthesis dropped the requested
 
 - Does not modify `<SKILL_DIR>/` files. Implementation happens later via `/fix-issue` (per child issue).
 - Does not run benchmarks, quality scoring, or grading.
-- Does not iterate. One invocation = one `/research --scale=deep` invocation (which fans out to 5 research + 5 validation lanes internally) + one (conditional) `/umbrella`. Re-run `/skill-evolver` after children land if you want a fresh research pass against the evolved skill.
+- Does not iterate. One invocation = one `/research` invocation (which fans out to 4 research + 3 validation lanes internally) + one (conditional) `/umbrella`. Re-run `/skill-evolver` after children land if you want a fresh research pass against the evolved skill.

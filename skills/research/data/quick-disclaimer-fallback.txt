@@ -1,1 +1,0 @@
-**Single-lane confidence — no validation pass.**

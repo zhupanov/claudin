@@ -1,7 +1,7 @@
 ---
 name: review
 description: "Use when reviewing code changes (--diff for branch diff, or positional text for existing code review). Description mode files findings as issues by default (--no-issues suppresses)."
-argument-hint: "[--diff] [--no-issues] [--debug] [--session-env <path>] [--step-prefix <prefix>] [<description>]"
+argument-hint: "[--diff] [--no-issues] [--session-env <path>] [--step-prefix <prefix>] [<description>]"
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, Skill
 ---
 
@@ -15,7 +15,6 @@ Review code changes using a 6-reviewer specialist panel (5 Cursor specialists + 
 
 - `--diff`: Set a mental flag `diff_mode=true`. Activates **diff mode** (branch diff vs `main`). Mutually exclusive with positional description text. Default: `diff_mode=false`.
 - `--no-issues`: Set a mental flag `no_issues=true`. Suppresses issue filing in description mode. In diff mode, silently ignored (diff mode never files issues). Default: `no_issues=false`.
-- `--debug`: Set a mental flag `debug_mode=true`. Controls output verbosity — see Verbosity Control below. Default: `debug_mode=false`.
 - `--session-env <path>`: Set `SESSION_ENV_PATH` to the given path. This file contains already-discovered session values from a caller skill (e.g., `/implement`) including reviewer health state (`CODEX_HEALTHY`, `CURSOR_HEALTHY`). If not provided, `SESSION_ENV_PATH` is empty (standalone invocation — full health probe at Step 0).
 - `--step-prefix <prefix>`: Encodes both numeric prefix and textual breadcrumb path using `::` delimiter — see `${CLAUDE_PLUGIN_ROOT}/skills/shared/progress-reporting.md` for the full encoding spec. Examples: `"5.::code review"` (numeric `5.`, path `code review`), `"5."` (numeric only, backward compat). Default: empty (standalone numbering). Internal orchestration flag.
 
@@ -50,15 +49,9 @@ Step Name Registry:
 | 4 | final summary |
 | 5 | cleanup |
 
-### Verbosity Control
+### Reviewer status table
 
-**When `debug_mode=false` (default):**
-
-- Use empty string for the `description` parameter on all Bash tool calls.
-- Use terse 3-5 word descriptions for Agent tool calls.
-- Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, final summary), and the compact reviewer status table (see below).
-
-**Compact reviewer status table**: After launching all reviewers (Step 2), maintain a mental tracker of each reviewer's status. Print a compact table after EACH status change:
+After launching all reviewers (Step 2), maintain a mental tracker of each reviewer's status. Print a compact table after EACH status change:
 
 ```
 📊 Reviewers: | Structure: ✅ 3m12s | Correctness: ⏳ | Testing: ✅ 2m45s | Security: ⏳ | Edge-cases: ✅ 4m30s | Codex: ⏳ |
@@ -68,13 +61,7 @@ Icons: ✅ done (with elapsed time since launch), ⏳ pending/in-progress, ❌ f
 
 **Status table updates**: (1) Print initial table after launching all reviewers (all ⏳ or ⊘). (2) Update after `collect-agent-results.sh` returns (all external reviewers resolved).
 
-This replaces individual per-reviewer completion messages in non-debug mode. Do NOT print individual "Reviewer X completed" or "Reviewer X returned N findings" lines.
-
-**Suppressed output (only when `debug_mode=false`):** explanatory prose, script paths, rationale for decisions between tool calls, per-reviewer individual completion messages.
-
-**When `debug_mode=true`:** use descriptive text for `description` on all Bash and Agent tool calls; print full explanatory text and BOTH status table and per-reviewer details.
-
-**Limitation**: Verbosity suppression is prompt-enforced and best-effort.
+Use empty `description` parameter on Bash tool calls and terse 3-5 word descriptions on Agent tool calls. Do not produce explanatory prose between tool call outputs — only print: step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`), all warning/error lines (`**⚠ ...`), structured summaries (voting tallies, scoreboards, round summaries, findings lists, final summary), and the reviewer status table.
 
 ## Description Mode
 
@@ -351,7 +338,7 @@ Skill invocation:
 - Try skill `"umbrella"` first (bare name). If no skill matches, try `"larch:umbrella"`.
 - args: `--input-file $REVIEW_TMPDIR/findings-batch.md --umbrella-summary-file $REVIEW_TMPDIR/umbrella-summary.txt --pieces-json $REVIEW_TMPDIR/pieces.json`
 
-Do NOT forward `--debug`, `--auto`, `--merge`, or other flags `/umbrella` does not accept.
+Do NOT forward `--auto`, `--merge`, or other flags `/umbrella` does not accept.
 
 Parse `/umbrella`'s stdout. Map to the review-result counters (per dialectic DECISION_2 — uniform "any GitHub issue created counts" semantic — see Step 4d below for the footer schema):
 

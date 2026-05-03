@@ -64,7 +64,7 @@ CLAUDE_EOF
 chmod +x "$stub_dir/claude"
 
 # jq stub: must satisfy `require_tool jq` AND succeed on validate_baseline_json's
-# `jq -e '.version and .scale and (.entries | type == "array")' <file>` call.
+# `jq -e '.version and (.entries | type == "array")' <file>` call.
 # Returning exit 0 unconditionally is safe because we control the test inputs
 # (the committed eval-baseline.json, which is a schema-valid stub).
 cat > "$stub_dir/jq" <<'JQ_EOF'
@@ -209,21 +209,16 @@ fi
 # -----------------------------------------------------------------------
 # Sub-5: --baseline followed by another flag → exit 2 with clean error.
 # Pre-fix behavior (issue #780): `require_value` only checked `(( $# < 2 ))`,
-# so `eval-research.sh --baseline --scale standard` left $# = 3 at the
-# --baseline case, the check passed, and BASELINE_REF was silently set to
-# "--scale" (the regex `^[0-9A-Za-z._/-]+$` permits "--scale" because
-# hyphens are allowed). `git show --scale:skills/...` then produced a
-# confusing git error rather than a clean missing-value message. The fix
-# extends require_value to take a third arg (the candidate value) and
-# reject when it starts with `--`. Mirrors take_value in
-# scripts/render-reviewer-prompt.sh.
+# so a flag whose next token started with `--` would silently bind that
+# token as the value. The fix extends require_value to take a third arg
+# (the candidate value) and reject when it starts with `--`.
 # -----------------------------------------------------------------------
 
-echo "--- Sub-5: --baseline followed by another flag (--scale) ---"
+echo "--- Sub-5: --baseline followed by another flag (--timeout) ---"
 sub5_stdout="$fixture_tmp/sub5.stdout"
 sub5_stderr="$fixture_tmp/sub5.stderr"
 sub5_rc=0
-PATH="$stub_dir:$PATH" bash "$SCRIPT" --id nonexistent-id-zzz --baseline --scale standard \
+PATH="$stub_dir:$PATH" bash "$SCRIPT" --id nonexistent-id-zzz --baseline --timeout 10 \
   >"$sub5_stdout" 2>"$sub5_stderr" || sub5_rc=$?
 
 if [[ "$sub5_rc" == "2" ]]; then

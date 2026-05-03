@@ -2,19 +2,8 @@
 # test-render-lane-status.sh — offline regression harness for render-lane-status.sh.
 #
 # Asserts byte-exact stdout for happy-path cases and the contract's behavior
-# under error conditions (exit code + stderr) for missing-input and
-# unknown-token fixtures. Closes #421.
-#
-# 9 fixture cases (matches the count documented in scripts/render-lane-status.md):
-#   1. happy path (all four lanes ok)
-#   2. all-binary-missing (4 × fallback_binary_missing)
-#   3. mixed (one ok, one runtime-timeout, two binary-missing)
-#   4. probe-failed with reason
-#   5. probe-failed without reason
-#   6. runtime-timeout
-#   7. runtime-failed with multiline reason (sanitization must collapse)
-#   8. unknown-status (asserts stderr + still emits headers)
-#   9. missing-input (asserts exit 2 + stderr)
+# under error conditions for the 4-research-angle + 3-validation-reviewer
+# fixed shape.
 
 set -euo pipefail
 
@@ -79,7 +68,6 @@ TMPDIR_LOCAL="$(mktemp -d "/tmp/test-render-lane-status-XXXXXX")"
 trap 'rm -rf "$TMPDIR_LOCAL"' EXIT
 
 run_render() {
-    # Run script with --input <path>, capture stdout / stderr / exit separately.
     local input="$1"
     local out_file err_file rc
     out_file="$TMPDIR_LOCAL/out"
@@ -91,12 +79,18 @@ run_render() {
     EXIT="$rc"
 }
 
-# ---------- Fixture 1 — happy path ----------
+# ---------- Fixture 1 — all-ok happy path ----------
 cat > "$TMPDIR_LOCAL/f1.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=ok
-RESEARCH_CURSOR_REASON=
-RESEARCH_CODEX_STATUS=ok
-RESEARCH_CODEX_REASON=
+RESEARCH_ARCH_STATUS=ok
+RESEARCH_ARCH_REASON=
+RESEARCH_EDGE_STATUS=ok
+RESEARCH_EDGE_REASON=
+RESEARCH_EXT_STATUS=ok
+RESEARCH_EXT_REASON=
+RESEARCH_SEC_STATUS=ok
+RESEARCH_SEC_REASON=
+VALIDATION_CODE_STATUS=ok
+VALIDATION_CODE_REASON=
 VALIDATION_CURSOR_STATUS=ok
 VALIDATION_CURSOR_REASON=
 VALIDATION_CODEX_STATUS=ok
@@ -105,32 +99,54 @@ EOF
 run_render "$TMPDIR_LOCAL/f1.txt"
 assert_exit_equals "F1.exit" "0" "$EXIT"
 assert_stdout_equals "F1.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: ✅)
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: ✅)" "$STDOUT"
+"RESEARCH_ARCH_HEADER=Architecture: ✅
+RESEARCH_EDGE_HEADER=Edge cases: ✅
+RESEARCH_EXT_HEADER=External comparisons: ✅
+RESEARCH_SEC_HEADER=Security: ✅
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: ✅
+VALIDATION_CODEX_HEADER=Codex: ✅" "$STDOUT"
 
-# ---------- Fixture 2 — all binary missing ----------
+# ---------- Fixture 2 — all 4 research angles fell back to Claude ----------
 cat > "$TMPDIR_LOCAL/f2.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=fallback_binary_missing
-RESEARCH_CURSOR_REASON=
-RESEARCH_CODEX_STATUS=fallback_binary_missing
-RESEARCH_CODEX_REASON=
-VALIDATION_CURSOR_STATUS=fallback_binary_missing
+RESEARCH_ARCH_STATUS=fallback_binary_missing
+RESEARCH_ARCH_REASON=
+RESEARCH_EDGE_STATUS=fallback_binary_missing
+RESEARCH_EDGE_REASON=
+RESEARCH_EXT_STATUS=fallback_binary_missing
+RESEARCH_EXT_REASON=
+RESEARCH_SEC_STATUS=fallback_binary_missing
+RESEARCH_SEC_REASON=
+VALIDATION_CODE_STATUS=ok
+VALIDATION_CODE_REASON=
+VALIDATION_CURSOR_STATUS=ok
 VALIDATION_CURSOR_REASON=
-VALIDATION_CODEX_STATUS=fallback_binary_missing
+VALIDATION_CODEX_STATUS=ok
 VALIDATION_CODEX_REASON=
 EOF
 run_render "$TMPDIR_LOCAL/f2.txt"
 assert_exit_equals "F2.exit" "0" "$EXIT"
 assert_stdout_equals "F2.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: Claude-fallback (binary missing), Codex: Claude-fallback (binary missing))
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: Claude-fallback (binary missing), Codex: Claude-fallback (binary missing))" "$STDOUT"
+"RESEARCH_ARCH_HEADER=Architecture: Claude-fallback (binary missing)
+RESEARCH_EDGE_HEADER=Edge cases: Claude-fallback (binary missing)
+RESEARCH_EXT_HEADER=External comparisons: Claude-fallback (binary missing)
+RESEARCH_SEC_HEADER=Security: Claude-fallback (binary missing)
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: ✅
+VALIDATION_CODEX_HEADER=Codex: ✅" "$STDOUT"
 
-# ---------- Fixture 3 — mixed ----------
+# ---------- Fixture 3 — mixed (one angle fell back; mixed validation) ----------
 cat > "$TMPDIR_LOCAL/f3.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=ok
-RESEARCH_CURSOR_REASON=
-RESEARCH_CODEX_STATUS=fallback_runtime_timeout
-RESEARCH_CODEX_REASON=
+RESEARCH_ARCH_STATUS=ok
+RESEARCH_ARCH_REASON=
+RESEARCH_EDGE_STATUS=ok
+RESEARCH_EDGE_REASON=
+RESEARCH_EXT_STATUS=fallback_runtime_timeout
+RESEARCH_EXT_REASON=
+RESEARCH_SEC_STATUS=ok
+RESEARCH_SEC_REASON=
+VALIDATION_CODE_STATUS=ok
+VALIDATION_CODE_REASON=
 VALIDATION_CURSOR_STATUS=fallback_binary_missing
 VALIDATION_CURSOR_REASON=
 VALIDATION_CODEX_STATUS=fallback_binary_missing
@@ -139,15 +155,26 @@ EOF
 run_render "$TMPDIR_LOCAL/f3.txt"
 assert_exit_equals "F3.exit" "0" "$EXIT"
 assert_stdout_equals "F3.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: Claude-fallback (runtime timeout))
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: Claude-fallback (binary missing), Codex: Claude-fallback (binary missing))" "$STDOUT"
+"RESEARCH_ARCH_HEADER=Architecture: ✅
+RESEARCH_EDGE_HEADER=Edge cases: ✅
+RESEARCH_EXT_HEADER=External comparisons: Claude-fallback (runtime timeout)
+RESEARCH_SEC_HEADER=Security: ✅
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: Claude-fallback (binary missing)
+VALIDATION_CODEX_HEADER=Codex: Claude-fallback (binary missing)" "$STDOUT"
 
 # ---------- Fixture 4 — probe-failed with reason ----------
 cat > "$TMPDIR_LOCAL/f4.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=fallback_probe_failed
-RESEARCH_CURSOR_REASON=connection refused on port 5050
-RESEARCH_CODEX_STATUS=ok
-RESEARCH_CODEX_REASON=
+RESEARCH_ARCH_STATUS=fallback_probe_failed
+RESEARCH_ARCH_REASON=connection refused on port 5050
+RESEARCH_EDGE_STATUS=ok
+RESEARCH_EDGE_REASON=
+RESEARCH_EXT_STATUS=ok
+RESEARCH_EXT_REASON=
+RESEARCH_SEC_STATUS=ok
+RESEARCH_SEC_REASON=
+VALIDATION_CODE_STATUS=ok
+VALIDATION_CODE_REASON=
 VALIDATION_CURSOR_STATUS=fallback_probe_failed
 VALIDATION_CURSOR_REASON=connection refused on port 5050
 VALIDATION_CODEX_STATUS=ok
@@ -156,16 +183,27 @@ EOF
 run_render "$TMPDIR_LOCAL/f4.txt"
 assert_exit_equals "F4.exit" "0" "$EXIT"
 assert_stdout_equals "F4.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: Claude-fallback (probe failed: connection refused on port 5050), Codex: ✅)
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: Claude-fallback (probe failed: connection refused on port 5050), Codex: ✅)" "$STDOUT"
+"RESEARCH_ARCH_HEADER=Architecture: Claude-fallback (probe failed: connection refused on port 5050)
+RESEARCH_EDGE_HEADER=Edge cases: ✅
+RESEARCH_EXT_HEADER=External comparisons: ✅
+RESEARCH_SEC_HEADER=Security: ✅
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: Claude-fallback (probe failed: connection refused on port 5050)
+VALIDATION_CODEX_HEADER=Codex: ✅" "$STDOUT"
 
 # ---------- Fixture 5 — probe-failed without reason ----------
 cat > "$TMPDIR_LOCAL/f5.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=fallback_probe_failed
-RESEARCH_CURSOR_REASON=
-RESEARCH_CODEX_STATUS=ok
-RESEARCH_CODEX_REASON=
-VALIDATION_CURSOR_STATUS=fallback_probe_failed
+RESEARCH_ARCH_STATUS=fallback_probe_failed
+RESEARCH_ARCH_REASON=
+RESEARCH_EDGE_STATUS=ok
+RESEARCH_EDGE_REASON=
+RESEARCH_EXT_STATUS=ok
+RESEARCH_EXT_REASON=
+RESEARCH_SEC_STATUS=ok
+RESEARCH_SEC_REASON=
+VALIDATION_CODE_STATUS=ok
+VALIDATION_CODE_REASON=
+VALIDATION_CURSOR_STATUS=ok
 VALIDATION_CURSOR_REASON=
 VALIDATION_CODEX_STATUS=ok
 VALIDATION_CODEX_REASON=
@@ -173,109 +211,89 @@ EOF
 run_render "$TMPDIR_LOCAL/f5.txt"
 assert_exit_equals "F5.exit" "0" "$EXIT"
 assert_stdout_equals "F5.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: Claude-fallback (probe failed), Codex: ✅)
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: Claude-fallback (probe failed), Codex: ✅)" "$STDOUT"
+"RESEARCH_ARCH_HEADER=Architecture: Claude-fallback (probe failed)
+RESEARCH_EDGE_HEADER=Edge cases: ✅
+RESEARCH_EXT_HEADER=External comparisons: ✅
+RESEARCH_SEC_HEADER=Security: ✅
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: ✅
+VALIDATION_CODEX_HEADER=Codex: ✅" "$STDOUT"
 
-# ---------- Fixture 6 — runtime-timeout ----------
-cat > "$TMPDIR_LOCAL/f6.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=ok
-RESEARCH_CURSOR_REASON=
-RESEARCH_CODEX_STATUS=fallback_runtime_timeout
-RESEARCH_CODEX_REASON=
-VALIDATION_CURSOR_STATUS=ok
-VALIDATION_CURSOR_REASON=
-VALIDATION_CODEX_STATUS=fallback_runtime_timeout
-VALIDATION_CODEX_REASON=
-EOF
+# ---------- Fixture 6 — runtime-failed sanitization (= and | stripped, whitespace collapsed) ----------
+{
+    printf 'RESEARCH_ARCH_STATUS=ok\n'
+    printf 'RESEARCH_ARCH_REASON=\n'
+    printf 'RESEARCH_EDGE_STATUS=ok\n'
+    printf 'RESEARCH_EDGE_REASON=\n'
+    printf 'RESEARCH_EXT_STATUS=fallback_runtime_failed\n'
+    printf 'RESEARCH_EXT_REASON=exit code 124  Process killed after exceeding timeout |||  with == many == bad chars\n'
+    printf 'RESEARCH_SEC_STATUS=ok\n'
+    printf 'RESEARCH_SEC_REASON=\n'
+    printf 'VALIDATION_CODE_STATUS=ok\n'
+    printf 'VALIDATION_CODE_REASON=\n'
+    printf 'VALIDATION_CURSOR_STATUS=ok\n'
+    printf 'VALIDATION_CURSOR_REASON=\n'
+    printf 'VALIDATION_CODEX_STATUS=ok\n'
+    printf 'VALIDATION_CODEX_REASON=\n'
+} > "$TMPDIR_LOCAL/f6.txt"
 run_render "$TMPDIR_LOCAL/f6.txt"
 assert_exit_equals "F6.exit" "0" "$EXIT"
 assert_stdout_equals "F6.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: Claude-fallback (runtime timeout))
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: Claude-fallback (runtime timeout))" "$STDOUT"
+"RESEARCH_ARCH_HEADER=Architecture: ✅
+RESEARCH_EDGE_HEADER=Edge cases: ✅
+RESEARCH_EXT_HEADER=External comparisons: Claude-fallback (runtime failed: exit code 124 Process killed after exceeding timeout with many bad chars)
+RESEARCH_SEC_HEADER=Security: ✅
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: ✅
+VALIDATION_CODEX_HEADER=Codex: ✅" "$STDOUT"
 
-# ---------- Fixture 7 — runtime-failed with =/|/whitespace sanitization ----------
-# KV is line-oriented, so the value lives on a single physical line, but it
-# contains the sanitization-relevant character classes: literal `=` and `|`,
-# plus extra whitespace runs. Verifies that strip-then-collapse produces a
-# clean rendered reason. The string after sanitization is 71 chars (under
-# the 80-char cap), so this fixture does NOT exercise truncation —
-# fixture 7b is the dedicated truncation test.
-{
-    printf 'RESEARCH_CURSOR_STATUS=ok\n'
-    printf 'RESEARCH_CURSOR_REASON=\n'
-    printf 'RESEARCH_CODEX_STATUS=fallback_runtime_failed\n'
-    printf 'RESEARCH_CODEX_REASON=exit code 124  Process killed after exceeding timeout |||  with == many == bad chars\n'
-    printf 'VALIDATION_CURSOR_STATUS=ok\n'
-    printf 'VALIDATION_CURSOR_REASON=\n'
-    printf 'VALIDATION_CODEX_STATUS=ok\n'
-    printf 'VALIDATION_CODEX_REASON=\n'
-} > "$TMPDIR_LOCAL/f7.txt"
-run_render "$TMPDIR_LOCAL/f7.txt"
-assert_exit_equals "F7.exit" "0" "$EXIT"
-# Expected: pipes and = stripped, whitespace collapsed (no truncation — under 80 chars).
-assert_stdout_equals "F7.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: Claude-fallback (runtime failed: exit code 124 Process killed after exceeding timeout with many bad chars))
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: ✅)" "$STDOUT"
-
-# ---------- Fixture 7b — reason that exceeds 80 chars must truncate ----------
-{
-    printf 'RESEARCH_CURSOR_STATUS=ok\n'
-    printf 'RESEARCH_CURSOR_REASON=\n'
-    printf 'RESEARCH_CODEX_STATUS=fallback_runtime_failed\n'
-    printf 'RESEARCH_CODEX_REASON=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA_BEYOND_TRUNCATION\n'
-    printf 'VALIDATION_CURSOR_STATUS=ok\n'
-    printf 'VALIDATION_CURSOR_REASON=\n'
-    printf 'VALIDATION_CODEX_STATUS=ok\n'
-    printf 'VALIDATION_CODEX_REASON=\n'
-} > "$TMPDIR_LOCAL/f7b.txt"
-run_render "$TMPDIR_LOCAL/f7b.txt"
-assert_exit_equals "F7b.exit" "0" "$EXIT"
-assert_stdout_equals "F7b.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: Claude-fallback (runtime failed: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA))
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: ✅)" "$STDOUT"
-
-# ---------- Fixture 8 — unknown status token ----------
-cat > "$TMPDIR_LOCAL/f8.txt" <<'EOF'
-RESEARCH_CURSOR_STATUS=ok
-RESEARCH_CURSOR_REASON=
-RESEARCH_CODEX_STATUS=fallback-binary-missing
-RESEARCH_CODEX_REASON=
+# ---------- Fixture 7 — unknown status token ----------
+cat > "$TMPDIR_LOCAL/f7.txt" <<'EOF'
+RESEARCH_ARCH_STATUS=ok
+RESEARCH_ARCH_REASON=
+RESEARCH_EDGE_STATUS=fallback-binary-missing
+RESEARCH_EDGE_REASON=
+RESEARCH_EXT_STATUS=ok
+RESEARCH_EXT_REASON=
+RESEARCH_SEC_STATUS=ok
+RESEARCH_SEC_REASON=
+VALIDATION_CODE_STATUS=ok
+VALIDATION_CODE_REASON=
 VALIDATION_CURSOR_STATUS=ok
 VALIDATION_CURSOR_REASON=
 VALIDATION_CODEX_STATUS=ok
 VALIDATION_CODEX_REASON=
 EOF
-run_render "$TMPDIR_LOCAL/f8.txt"
-assert_exit_equals "F8.exit" "0" "$EXIT"
-assert_stdout_equals "F8.stdout" \
-"RESEARCH_HEADER=3 agents (Cursor: ✅, Codex: (unknown))
-VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: ✅, Codex: ✅)" "$STDOUT"
-assert_stderr_contains "F8.stderr" "unknown status token fallback-binary-missing" "$STDERR"
+run_render "$TMPDIR_LOCAL/f7.txt"
+assert_exit_equals "F7.exit" "0" "$EXIT"
+assert_stdout_equals "F7.stdout" \
+"RESEARCH_ARCH_HEADER=Architecture: ✅
+RESEARCH_EDGE_HEADER=Edge cases: (unknown)
+RESEARCH_EXT_HEADER=External comparisons: ✅
+RESEARCH_SEC_HEADER=Security: ✅
+VALIDATION_CODE_HEADER=Code: ✅
+VALIDATION_CURSOR_HEADER=Cursor: ✅
+VALIDATION_CODEX_HEADER=Codex: ✅" "$STDOUT"
+assert_stderr_contains "F7.stderr" "unknown status token fallback-binary-missing" "$STDERR"
 
-# ---------- Fixture 9 — missing input ----------
+# ---------- Fixture 8 — missing input ----------
 run_render "$TMPDIR_LOCAL/does-not-exist.txt"
-assert_exit_equals "F9.exit" "2" "$EXIT"
-assert_stderr_contains "F9.stderr" "render-lane-status: input file missing" "$STDERR"
+assert_exit_equals "F8.exit" "2" "$EXIT"
+assert_stderr_contains "F8.stderr" "render-lane-status: input file missing" "$STDERR"
 
-# ---------- Fixture 10 — usage error: --input flag omitted ----------
-# Calls the script with no arguments at all. The contract says exit 1 with
-# "--input is required" on stderr (per the Stderr / Exit codes tables in
-# scripts/render-lane-status.md). Without this fixture, the exit-1 path
-# would be entirely untested.
+# ---------- Fixture 9 — usage error: --input flag omitted ----------
 EXIT=0
 "$SCRIPT" >"$TMPDIR_LOCAL/out" 2>"$TMPDIR_LOCAL/err" || EXIT=$?
-STDOUT="$(cat "$TMPDIR_LOCAL/out")"
 STDERR="$(cat "$TMPDIR_LOCAL/err")"
-assert_exit_equals "F10.exit" "1" "$EXIT"
-assert_stderr_contains "F10.stderr" "--input is required" "$STDERR"
+assert_exit_equals "F9.exit" "1" "$EXIT"
+assert_stderr_contains "F9.stderr" "--input is required" "$STDERR"
 
-# ---------- Fixture 10b — usage error: unknown flag ----------
+# ---------- Fixture 10 — usage error: unknown flag ----------
 EXIT=0
 "$SCRIPT" --bogus >"$TMPDIR_LOCAL/out" 2>"$TMPDIR_LOCAL/err" || EXIT=$?
-STDOUT="$(cat "$TMPDIR_LOCAL/out")"
 STDERR="$(cat "$TMPDIR_LOCAL/err")"
-assert_exit_equals "F10b.exit" "1" "$EXIT"
-assert_stderr_contains "F10b.stderr" "unknown flag: --bogus" "$STDERR"
+assert_exit_equals "F10.exit" "1" "$EXIT"
+assert_stderr_contains "F10.stderr" "unknown flag: --bogus" "$STDERR"
 
 # ---------- Summary ----------
 TOTAL=$((PASS + FAIL))

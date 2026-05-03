@@ -375,22 +375,13 @@ exclude = [
   # matching the same Makefile-only pattern as the other test-* harnesses
   # above. Both the .sh and the .md are excluded.
   "skills/implement/scripts/test-check-review-changes.sh",
-  # skills/research/scripts/test-standard-angle-prompts.sh is the structural
-  # regression guard for the /research --scale=standard per-lane angle-prompt
-  # mapping introduced by #508 (extending deep-mode angle prompts to standard
-  # mode). Referenced only from Makefile (test-standard-angle-prompts target)
-  # and skills/research/scripts/test-standard-angle-prompts.md (sibling
-  # contract), matching the same Makefile-only pattern as the other test-*
-  # harnesses above.
-  "skills/research/scripts/test-standard-angle-prompts.sh",
-  # skills/research/scripts/test-classify-research-scale.sh is the structural
-  # regression guard for the /research Step 0.5 deterministic shell classifier
-  # introduced by #513 (adaptive scaling — replaces manual --scale with auto-
-  # classification). Referenced only from Makefile (test-classify-research-scale
-  # target) and skills/research/scripts/test-classify-research-scale.md
-  # (sibling contract), matching the same Makefile-only pattern as the other
-  # test-* harnesses above.
-  "skills/research/scripts/test-classify-research-scale.sh",
+  # skills/research/scripts/test-research-angle-prompts.sh is the structural
+  # regression guard for the fixed-shape angle-prompt mapping in
+  # skills/research/references/research-phase.md. Referenced only from
+  # Makefile (test-research-angle-prompts target) and the sibling
+  # skills/research/scripts/test-research-angle-prompts.md (contract),
+  # matching the same Makefile-only pattern as the other test-* harnesses above.
+  "skills/research/scripts/test-research-angle-prompts.sh",
   "scripts/test-anti-halt-banners.sh",
   # scripts/test-alias-target-resolution.sh is the regression harness for
   # skills/alias/scripts/resolve-target.sh (closes the alias target-routing
@@ -429,12 +420,6 @@ exclude = [
   "scripts/test-orchestrator-scope-sync.sh",
   "scripts/test-quick-mode-docs-sync.sh",
   "scripts/test-research-structure.sh",
-  # scripts/test-research-adjudication.sh is the offline regression harness for
-  # scripts/build-research-adjudication-ballot.sh (closes #424 — /research
-  # --adjudicate flag). Invoked only from Makefile (test-research-adjudication
-  # target) and scripts/test-research-adjudication.md (sibling contract),
-  # matching the same Makefile-only pattern as the other test-* harnesses above.
-  "scripts/test-research-adjudication.sh",
   "scripts/test-review-structure.sh",
   "scripts/test-render-reviewer-prompt.sh",
   # scripts/test-render-specialist-prompt.sh is the regression harness for
@@ -482,18 +467,9 @@ exclude = [
   "scripts/test-render-lane-status.sh",
   # scripts/render-lane-status-lib.sh is a sourced-only helper (no shebang,
   # not executable, defines render_lane() and sanitize_reason() consumed by
-  # render-lane-status.sh AND render-deep-lane-status.sh via `source`).
-  # Closes #451. Same "sourced library" shape as
+  # render-lane-status.sh via `source`). Same "sourced library" shape as
   # scripts/anchor-section-markers.sh above.
   "scripts/render-lane-status-lib.sh",
-  # scripts/test-render-deep-lane-status.sh is the regression harness for
-  # scripts/render-deep-lane-status.sh (the /research deep-mode lane-
-  # attribution formatter added by #451). Wired only via Makefile
-  # test-render-deep-lane-status target; the deep formatter itself IS
-  # structurally referenced from skills/research/SKILL.md Step 3 ### Deep
-  # branch, but the harness is not — same Makefile-only shape as the other
-  # test-* harnesses above.
-  "scripts/test-render-deep-lane-status.sh",
   # /research evaluation harness + structural test (closes #419). Both
   # scripts are referenced only from Makefile (eval-research target,
   # test-eval-set-structure standalone target — neither is a lint
@@ -537,9 +513,8 @@ exclude = [
   # scripts/test-token-tally.sh is the offline regression harness for
   # scripts/token-tally.sh (per-run token-cost telemetry helper for
   # /research; closes #518). The token-tally helper is invoked from
-  # skills/research/SKILL.md (between-phase budget gates after Steps 1, 2,
-  # 2.5; Step 4 token-spend report) and from the three phase references
-  # (research-phase.md / validation-phase.md / adjudication-phase.md), so
+  # skills/research/SKILL.md (Step 4 token-spend report) and from the phase
+  # references (research-phase.md / validation-phase.md), so
   # it has plenty of structural references; the harness is referenced only
   # from Makefile (test-token-tally target) and scripts/test-token-tally.md
   # (sibling contract), matching the same Makefile-only pattern as the other
@@ -560,8 +535,7 @@ exclude = [
   "skills/fix-issue/scripts/test-find-lock-issue.md",
   "skills/fix-issue/scripts/test-umbrella-handler.md",
   "skills/fix-issue/scripts/test-finalize-umbrella.md",
-  "skills/research/scripts/test-standard-angle-prompts.md",
-  "skills/research/scripts/test-classify-research-scale.md",
+  "skills/research/scripts/test-research-angle-prompts.md",
   "skills/create-skill/scripts/post-scaffold-hints.md",
   # skills/create-skill/scripts/test-render-skill-md.md is the sibling contract
   # for the render-skill-md.sh regression harness (closes #568 — added alongside

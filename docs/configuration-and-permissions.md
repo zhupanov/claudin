@@ -242,7 +242,7 @@ Per-million-token cost rate (USD) used by `/research`'s Step 4 token report (`##
 **When not set:**
 - The `$` column is omitted; the report shows only token counts.
 
-**Scope**: Token telemetry covers Claude subagent (Agent-tool) invocations only. Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from both the totals and the cost column. The report labels itself "Claude tokens only; external lanes excluded" so operators see the coverage honestly. See [`scripts/token-tally.md`](../scripts/token-tally.md) for the helper contract and `--token-budget` interaction.
+**Scope**: Token telemetry covers Claude subagent (Agent-tool) invocations only. Claude inline (orchestrator) and external lanes (Cursor/Codex) are unmeasurable and excluded from both the totals and the cost column. The report labels itself "Claude tokens only; external lanes excluded" so operators see the coverage honestly. See [`scripts/token-tally.md`](../scripts/token-tally.md) for the helper contract.
 
 ### `LARCH_BUMP_FILES`
 

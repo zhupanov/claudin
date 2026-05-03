@@ -37,15 +37,14 @@ CASE_NUM=0
 RQ_FILE="$TMPDIR_TEST/research-question.txt"
 echo "Test research question" > "$RQ_FILE"
 
-# run_case <name> <report-content> <quick-disclaimer (or empty)> <expected-exit> <expected-count>
+# run_case <name> <report-content> <expected-exit> <expected-count>
 # When expected-count > 0, the case also asserts a parse-input.sh round-trip
 # (ITEMS_TOTAL matches expected-count and no MALFORMED items).
 run_case() {
   local name="$1"
   local report_content="$2"
-  local quick_disclaimer="$3"
-  local expected_exit="$4"
-  local expected_count="$5"
+  local expected_exit="$3"
+  local expected_count="$4"
 
   CASE_NUM=$((CASE_NUM + 1))
   local report_file="$TMPDIR_TEST/case${CASE_NUM}-report.md"
@@ -53,18 +52,12 @@ run_case() {
 
   printf '%s' "$report_content" > "$report_file"
 
-  local extra_args=()
-  if [[ -n "$quick_disclaimer" ]]; then
-    extra_args+=(--quick-disclaimer "$quick_disclaimer")
-  fi
-
   local stdout_capture
   local actual_exit=0
   stdout_capture="$(bash "$SCRIPT" \
     --report "$report_file" --output "$out_file" \
     --research-question-file "$RQ_FILE" \
-    --branch test-branch --commit deadbee \
-    ${extra_args[@]+"${extra_args[@]}"} 2>/dev/null)" || actual_exit=$?
+    --branch test-branch --commit deadbee 2>/dev/null)" || actual_exit=$?
 
   if [[ "$actual_exit" -ne "$expected_exit" ]]; then
     echo "FAIL [$name]: expected exit=$expected_exit, got exit=$actual_exit. stdout:" >&2
@@ -102,18 +95,6 @@ run_case() {
     fi
   fi
 
-  # Quick-disclaimer assertion: when --quick-disclaimer was passed, every
-  # `### ` item heading must be followed by a body containing the disclaimer.
-  if [[ -n "$quick_disclaimer" && "$expected_count" -gt 0 ]]; then
-    local count_in_file
-    count_in_file="$(grep -cF "$quick_disclaimer" "$out_file" || true)"
-    if [[ "$count_in_file" -lt "$expected_count" ]]; then
-      echo "FAIL [$name]: expected disclaimer in $expected_count items, found $count_in_file" >&2
-      FAIL=$((FAIL + 1))
-      return
-    fi
-  fi
-
   PASS=$((PASS + 1))
 }
 
@@ -146,7 +127,7 @@ Feasible.
 
 ### Open Questions
 EOF
-run_case "numbered list" "$FIXTURE_NUMBERED" "" 0 3
+run_case "numbered list" "$FIXTURE_NUMBERED" 0 3
 
 # Case 2: top-level bulleted — two findings.
 read -r -d '' FIXTURE_BULLETED <<'EOF' || true
@@ -172,7 +153,7 @@ file.md
 ### Open Questions
 - Question 1
 EOF
-run_case "bulleted list" "$FIXTURE_BULLETED" "" 0 2
+run_case "bulleted list" "$FIXTURE_BULLETED" 0 2
 
 # Case 3: paragraph-per-item.
 read -r -d '' FIXTURE_PARAGRAPH <<'EOF' || true
@@ -198,7 +179,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "paragraph-per-item" "$FIXTURE_PARAGRAPH" "" 0 2
+run_case "paragraph-per-item" "$FIXTURE_PARAGRAPH" 0 2
 
 # Case 4: empty Findings Summary section.
 read -r -d '' FIXTURE_EMPTY <<'EOF' || true
@@ -219,7 +200,7 @@ N/A
 
 ### Open Questions
 EOF
-run_case "empty Findings Summary" "$FIXTURE_EMPTY" "" 3 0
+run_case "empty Findings Summary" "$FIXTURE_EMPTY" 3 0
 
 # Case 5: missing Findings Summary entirely.
 read -r -d '' FIXTURE_MISSING <<'EOF' || true
@@ -228,7 +209,7 @@ read -r -d '' FIXTURE_MISSING <<'EOF' || true
 ### Risk Assessment
 N/A
 EOF
-run_case "missing Findings Summary" "$FIXTURE_MISSING" "" 3 0
+run_case "missing Findings Summary" "$FIXTURE_MISSING" 3 0
 
 # Case 6: planner-mode nested `#### Subquestion N` headings inside the section.
 read -r -d '' FIXTURE_PLANNER <<'EOF' || true
@@ -260,7 +241,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "planner-mode nested subquestions" "$FIXTURE_PLANNER" "" 0 3
+run_case "planner-mode nested subquestions" "$FIXTURE_PLANNER" 0 3
 
 # Case 7: code fence containing `### Foo` line — should NOT terminate the section.
 read -r -d '' FIXTURE_FENCED <<'EOF' || true
@@ -290,7 +271,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "fenced code with ### inside" "$FIXTURE_FENCED" "" 0 2
+run_case "fenced code with ### inside" "$FIXTURE_FENCED" 0 2
 
 # Case 8: body line beginning with `### Foo` at column 0 — must be escaped to
 # `\### Foo` so parse-input.sh round-trip preserves item count.
@@ -318,7 +299,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "body-line ### escape" "$FIXTURE_BODY_ESCAPE" "" 0 2
+run_case "body-line ### escape" "$FIXTURE_BODY_ESCAPE" 0 2
 
 # Case 9: empty-title fallback — first sentence has no `. /! /? ` in first 80
 # chars and stripping punctuation yields empty.
@@ -344,13 +325,9 @@ Yes
 
 ### Open Questions
 EOF
-run_case "empty-title fallback (Finding N)" "$FIXTURE_TITLE_FALLBACK" "" 0 2
+run_case "empty-title fallback (Finding N)" "$FIXTURE_TITLE_FALLBACK" 0 2
 
-# Case 10: --quick-disclaimer prepended to each item body.
-run_case "quick-disclaimer per item" "$FIXTURE_NUMBERED" \
-  "**Single-lane confidence — no validation pass.**" 0 3
-
-# Case 11: special characters in finding text — backticks, dollars, asterisks.
+# Case 10: special characters in finding text — backticks, dollars, asterisks.
 read -r -d '' FIXTURE_SPECIAL <<'EOF' || true
 ## Research Report
 
@@ -373,7 +350,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "special characters in body" "$FIXTURE_SPECIAL" "" 0 2
+run_case "special characters in body" "$FIXTURE_SPECIAL" 0 2
 
 # Case 13 (#510 review FINDING_2): body line with `###<tab>Foo`.
 # parse-input.sh:393's regex is `^\#\#\#[[:space:]]+`, which matches tab too.
@@ -402,7 +379,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "tab-after-### body escape (FINDING_2)" "$FIXTURE_TAB_HEADER" "" 0 2
+run_case "tab-after-### body escape (FINDING_2)" "$FIXTURE_TAB_HEADER" 0 2
 
 # Case 14 (#510 review FINDING_5): indented fenced block (3-space prefix)
 # inside a bulleted item's body. Without the fix, the inner `### Foo` line
@@ -433,7 +410,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "indented fence with ### inside (FINDING_5)" "$FIXTURE_INDENTED_FENCE" "" 0 2
+run_case "indented fence with ### inside (FINDING_5)" "$FIXTURE_INDENTED_FENCE" 0 2
 
 # Case 12: multi-paragraph bulleted item.
 read -r -d '' FIXTURE_MULTILINE_BULLETS <<'EOF' || true
@@ -459,7 +436,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "multi-line bulleted continuation" "$FIXTURE_MULTILINE_BULLETS" "" 0 2
+run_case "multi-line bulleted continuation" "$FIXTURE_MULTILINE_BULLETS" 0 2
 
 # Case 15 (#745): finding body containing an indented nested 1./2. enumeration
 # must NOT promote the nested lines into separate top-level findings.
@@ -486,7 +463,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "nested-numbered sublist (#745)" "$FIXTURE_NESTED_NUMBERED" "" 0 1
+run_case "nested-numbered sublist (#745)" "$FIXTURE_NESTED_NUMBERED" 0 1
 
 # Case 16 (#745 follow-up): two top-level numbered findings where the first has
 # a nested 1./2. enumeration in its body. Verifies the post-flush re-init path:
@@ -515,7 +492,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "nested then top-level sibling (#745)" "$FIXTURE_NESTED_THEN_TOPLEVEL" "" 0 2
+run_case "nested then top-level sibling (#745)" "$FIXTURE_NESTED_THEN_TOPLEVEL" 0 2
 
 # Case 17 (#746): a column-0 non-planner `#### Some heading` line inside a
 # finding's body must NOT be discarded by the splitter. Only `#### Subquestion
@@ -548,7 +525,7 @@ Yes
 
 ### Open Questions
 EOF
-run_case "non-planner #### preserved (#746)" "$FIXTURE_NONPLANNER_HASH" "" 0 1
+run_case "non-planner #### preserved (#746)" "$FIXTURE_NONPLANNER_HASH" 0 1
 # Post-condition (#746 FINDING_1): the `#### Notes on the data` heading must
 # literally survive in the rendered sidecar. `run_case` only checks COUNT and
 # round-trip ITEMS_TOTAL — neither catches data loss when a `####` line is
