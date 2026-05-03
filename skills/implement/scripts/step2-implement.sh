@@ -21,7 +21,9 @@
 #   TRANSCRIPT=<path>        # set when launcher actually ran
 #   SIDECAR_LOG=<path>       # set when launcher actually ran
 #
-# Exit code is always 0 unless flag validation fails (exit 2).
+# Exit code is always 0 unless caller / invocation validation fails (exit 2):
+# missing or invalid flag, missing required path, bad enum value, or — on the
+# Codex path — cwd is not inside a git working tree.
 
 set -euo pipefail
 

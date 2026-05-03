@@ -95,7 +95,7 @@ echo "5" > "$TMP5/codex-resume-count.txt"
 ANSWERS="$SCRATCH/answers.json"
 echo '{"answers":[{"id":"q1","text":"x"}]}' > "$ANSWERS"
 
-OUT=$("$DISPATCHER" --tmpdir "$TMP5" --plan-file "$PLAN" --feature-file "$FEATURE" \
+OUT=$(cd "$REPO_ROOT" && "$DISPATCHER" --tmpdir "$TMP5" --plan-file "$PLAN" --feature-file "$FEATURE" \
     --auto-mode false --codex-available true --answers "$ANSWERS" 2>&1)
 if [[ "$OUT" == *"STATUS=bailed"* ]] && [[ "$OUT" == *"REASON=qa-loop-exceeded"* ]]; then
     pass
@@ -107,9 +107,9 @@ fi
 # Test 6: --answers but file does not exist → exit 2.
 # ---------------------------------------------------------------------------
 EXIT=0
-"$DISPATCHER" --tmpdir "$TMP5" --plan-file "$PLAN" --feature-file "$FEATURE" \
+( cd "$REPO_ROOT" && "$DISPATCHER" --tmpdir "$TMP5" --plan-file "$PLAN" --feature-file "$FEATURE" \
     --auto-mode false --codex-available true --answers "$SCRATCH/missing-answers.json" \
-    >/dev/null 2>&1 || EXIT=$?
+    >/dev/null 2>&1 ) || EXIT=$?
 if [[ "$EXIT" == "2" ]]; then pass; else fail 6 "missing --answers file should exit 2, got $EXIT"; fi
 
 # ---------------------------------------------------------------------------
@@ -125,12 +125,35 @@ else
     printf '\n' > "$TMP7/step2-plugin-json-baseline.txt"
 fi
 echo "garbage" > "$TMP7/codex-resume-count.txt"
-OUT=$("$DISPATCHER" --tmpdir "$TMP7" --plan-file "$PLAN" --feature-file "$FEATURE" \
+OUT=$(cd "$REPO_ROOT" && "$DISPATCHER" --tmpdir "$TMP7" --plan-file "$PLAN" --feature-file "$FEATURE" \
     --auto-mode false --codex-available true --answers "$ANSWERS" 2>&1)
 if [[ "$OUT" == *"STATUS=bailed"* ]] && [[ "$OUT" == *"REASON=manifest-schema-invalid"* ]]; then
     pass
 else
     fail 7 "corrupt resume counter should bail with manifest-schema-invalid, got: $OUT"
+fi
+
+# ---------------------------------------------------------------------------
+# Test 8: --codex-available true outside a git working tree → exit 2
+# (the new git-tree precondition added when REPO_ROOT was switched from
+# SCRIPT_DIR-relative to git rev-parse --show-toplevel; closes the
+# plugin-cache fallback regression).
+# ---------------------------------------------------------------------------
+TMP8="$SCRATCH/test8"; mkdir -p "$TMP8"
+NON_GIT_DIR="$SCRATCH/not-a-repo"; mkdir -p "$NON_GIT_DIR"
+EXIT=0
+ERR=$(cd "$NON_GIT_DIR" && "$DISPATCHER" --tmpdir "$TMP8" --plan-file "$PLAN" --feature-file "$FEATURE" \
+    --auto-mode false --codex-available true 2>&1 >/dev/null) || EXIT=$?
+if [[ "$EXIT" == "2" ]] && [[ "$ERR" == *"must be invoked from within a git working tree"* ]]; then
+    pass
+else
+    fail 8 "non-git cwd on Codex path should exit 2 with git-tree message, got exit=$EXIT err=$ERR"
+fi
+# A failed pre-spawn validation MUST NOT have written baseline files.
+if [[ -f "$TMP8/step2-baseline.txt" ]]; then
+    fail 8 "non-git cwd exit-2 leaked baseline file"
+else
+    pass
 fi
 
 # ---------------------------------------------------------------------------
