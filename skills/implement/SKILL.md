@@ -796,7 +796,13 @@ Compose the `version-bump-reasoning` fragment from the contents of `$BUMP_REASON
 
 ## Step 8a — CHANGELOG Update
 
-Skip and proceed to Step 8b if `CHANGELOG.md` does not exist in the project root (print `⏩ 8a: changelog — skipped (no CHANGELOG.md) (<elapsed>)`). The freshness rebase at Step 8b still runs on this path so resumed Branch 1/2/3 runs are refreshed before PR creation. (Step 8's `HAS_BUMP=false` directive and the `BUMP_TYPE=NONE` directive both bypass Step 8a entirely and skip directly to Step 8b — there is no CHANGELOG amend without a bump commit to amend.)
+Test for `CHANGELOG.md` at the project root via the scripted probe (do NOT eyeball — the probe's `CHANGELOG_PRESENT=` value is the authoritative source for the branch decision and for the breadcrumb tail):
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/scripts/check-changelog-present.sh
+```
+
+Parse `CHANGELOG_PRESENT=true|false`. If `CHANGELOG_PRESENT=false`, skip and proceed to Step 8b (print `⏩ 8a: changelog — skipped (CHANGELOG_PRESENT=false) (<elapsed>)` — echo the parsed value verbatim so a false skip is visible in the transcript). The freshness rebase at Step 8b still runs on this path so resumed Branch 1/2/3 runs are refreshed before PR creation. (Step 8's `HAS_BUMP=false` directive and the `BUMP_TYPE=NONE` directive both bypass Step 8a entirely and skip directly to Step 8b — there is no CHANGELOG amend without a bump commit to amend.)
 
 Otherwise: read `CHANGELOG.md` and `NEW_VERSION` (from `/bump-version` output in Step 8). Compose a brief changelog entry using the Summary bullets from the implementation (same 1-3 bullets as Step 9a's PR body `## Summary`). Today's date. Format:
 
