@@ -150,5 +150,5 @@ no_push_only_count=$(grep -chE 'rebase-push\.sh --no-push$' "$SKILL_MD" "$SUBPRO
 [[ "$no_push_only_count" == "3" ]] \
   || fail "(H) expected exactly 3 'rebase-push.sh --no-push' (without --skip-if-pushed) call sites across SKILL.md (Step 1.m + Step 8b) + references/rebase-rebump-subprocedure.md, found $no_push_only_count — Step 1.m, Step 8b, or Rebase + Re-bump Sub-procedure was accidentally altered"
 
-echo "PASS: test-implement-rebase-macro.sh — all 7 structural invariants hold (A, B, C, E, F, G, H)"
+echo "PASS: test-implement-rebase-macro.sh — all structural invariants hold (A-C, E-H)"
 exit 0
