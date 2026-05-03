@@ -544,6 +544,8 @@ ${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/step2-implement.sh \
 
 `$PLAN_FILE` is the path written at Step 1 (`/design`'s plan, or the inline quick-mode plan). `$FEATURE_FILE` is `$IMPLEMENT_TMPDIR/feature-description.txt` (created at Step 0). Parse the dispatcher's stdout into local KV variables: `STATUS`, `MANIFEST`, `QA_PENDING`, `REASON`, `TRANSCRIPT`, `SIDECAR_LOG`.
 
+**Cwd contract**: invoke the dispatcher with process cwd = the consumer git repo's working tree (the orchestrator's normal cwd). The dispatcher derives its `REPO_ROOT` from `git rev-parse --show-toplevel` against cwd because `${CLAUDE_PLUGIN_ROOT}` may resolve into the installed plugin cache (no `.git`). On the Codex path, a cwd outside any git working tree exits 2 with a clear caller-error message; do not chdir before invoking. See `skills/implement/scripts/step2-implement.md` invariant "Two distinct roots".
+
 **2.2 — Branch on `STATUS`**:
 
 - `STATUS=complete` → set `$MANIFEST_PATH=$MANIFEST` and proceed to Step 3. Steps 4 / 8a / 9a / 9a.1 read this manifest; the orchestrator does not run `git diff` to figure out what changed.

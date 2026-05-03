@@ -21,12 +21,13 @@
 #   TRANSCRIPT=<path>        # set when launcher actually ran
 #   SIDECAR_LOG=<path>       # set when launcher actually ran
 #
-# Exit code is always 0 unless flag validation fails (exit 2).
+# Exit code is always 0 unless caller / invocation validation fails (exit 2):
+# missing or invalid flag, missing required path, bad enum value, or — on the
+# Codex path — cwd is not inside a git working tree.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 TMPDIR_ARG=""
 PLAN_FILE=""
@@ -68,6 +69,9 @@ case "$AUTO_MODE" in
 esac
 
 # Branch 1: codex_available=false → emit claude_fallback and return.
+# Run BEFORE the PLUGIN_ROOT / REPO_ROOT resolution so the fallback path stays
+# git-free (claude_fallback may be invoked outside a git working tree, and it
+# needs no plugin assets).
 if [[ "$CODEX_AVAILABLE" == "false" ]]; then
     printf 'STATUS=claude_fallback\n'
     exit 0
@@ -76,6 +80,20 @@ fi
 # ---------------------------------------------------------------------------
 # Codex path. Set up paths inside $TMPDIR_ARG.
 # ---------------------------------------------------------------------------
+
+# PLUGIN_ROOT: the plugin tree this script ships in (cache dir when the plugin
+# is installed, source repo root when developing on larch itself). Used for
+# resolving sibling plugin assets — agent prompt, launcher, redactor.
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# REPO_ROOT: the consumer git repo this run is operating on. Derived from cwd's
+# git toplevel because PLUGIN_ROOT (cache snapshot) has no .git when running
+# from an installed plugin. All `git -C "$REPO_ROOT"` calls and the
+# `.claude-plugin/plugin.json` reference target this root.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "$REPO_ROOT" ]]; then
+    echo "step2-implement.sh: must be invoked from within a git working tree (git rev-parse --show-toplevel failed)" >&2
+    exit 2
+fi
 
 BASELINE_FILE="$TMPDIR_ARG/step2-baseline.txt"
 RESUME_COUNT_FILE="$TMPDIR_ARG/codex-resume-count.txt"
@@ -86,8 +104,8 @@ MANIFEST_RAW_PATH="$TMPDIR_ARG/manifest-raw.json"
 QA_PENDING_PATH="$TMPDIR_ARG/qa-pending.json"
 TRANSCRIPT_PATH="$TMPDIR_ARG/codex-impl-transcript.txt"
 SIDECAR_LOG="$TMPDIR_ARG/codex-impl.log"
-AGENT_PROMPT="$REPO_ROOT/agents/codex-implementer.md"
-LAUNCHER="$REPO_ROOT/scripts/launch-codex-implement.sh"
+AGENT_PROMPT="$PLUGIN_ROOT/agents/codex-implementer.md"
+LAUNCHER="$PLUGIN_ROOT/scripts/launch-codex-implement.sh"
 
 [[ -f "$AGENT_PROMPT" ]] || { echo "step2-implement.sh: agent prompt missing: $AGENT_PROMPT" >&2; exit 2; }
 [[ -x "$LAUNCHER" ]]     || { echo "step2-implement.sh: launcher not executable: $LAUNCHER" >&2; exit 2; }
@@ -358,7 +376,7 @@ fi
 
 # Step 8: sanitization. Apply scripts/redact-secrets.sh to text fields, then
 # write the canonical manifest.json (replacing the raw copy).
-REDACT="$REPO_ROOT/scripts/redact-secrets.sh"
+REDACT="$PLUGIN_ROOT/scripts/redact-secrets.sh"
 # Fail closed if the redactor file exists but is not executable — a sparse
 # checkout or broken perms must NOT silently emit raw manifest text into
 # downstream public surfaces (CHANGELOG, PR body, GitHub issues).

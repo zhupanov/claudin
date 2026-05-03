@@ -2,8 +2,8 @@
 
 **Purpose**: Offline regression harness for `skills/implement/scripts/step2-implement.sh` covering the dispatcher branches that do not require spawning Codex. Runs in <1s with no external dependencies (no `codex` binary, no network).
 
-**Coverage** (8 assertions):
-1. `--codex-available false` emits `STATUS=claude_fallback` with no other KV keys, and writes no baseline files (the claude_fallback branch must short-circuit before tmpdir setup).
+**Coverage** (10 assertions):
+1. `--codex-available false` emits `STATUS=claude_fallback` with no other KV keys, and writes no baseline files (the claude_fallback branch must short-circuit before any plugin / git resolution).
 2. Missing `--codex-available` exits with code 2.
 3. Bad `--codex-available` enum value exits with code 2.
 4. Bad `--tmpdir` (not a directory) exits with code 2.
@@ -11,6 +11,10 @@
 6. `--answers` pointing at a non-existent file exits with code 2.
 7. (paired with #1) the claude_fallback branch does not leak a baseline file into `$TMPDIR_ARG`.
 8. Corrupt resume counter (non-numeric) → `STATUS=bailed REASON=manifest-schema-invalid`. Defense-in-depth against tmpdir tampering / partial-write corruption.
+9. `--codex-available true` invoked with cwd outside any git working tree exits with code 2 and stderr containing `must be invoked from within a git working tree`. Pins the cache-deploy regression fix (REPO_ROOT now derived from `git rev-parse --show-toplevel`, not `SCRIPT_DIR/../../..`).
+10. (paired with #9) the non-git-tree exit-2 path does not leak a baseline file into `$TMPDIR_ARG` (validation must happen before any state mutation).
+
+All `--codex-available true` invocations are run with cwd pinned to `$REPO_ROOT` so the dispatcher's git resolution targets the harness's own git tree (matches the production caller's contract — the orchestrator always invokes the dispatcher from the consumer-repo cwd).
 
 **Out of scope** (no automated coverage today — manual / end-to-end testing only; an offline stub-Codex harness is a known gap):
 - Manifest schema validation (per-status required-key checks via `jq -e`).

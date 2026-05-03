@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.0.1] - 2026-05-03
+
+### Fixed
+
+- `/implement` Step 2 dispatcher (`step2-implement.sh`) now resolves the consumer git repo via `git rev-parse --show-toplevel` instead of `SCRIPT_DIR/../../..`. The old computation pointed at the installed plugin cache (which has no `.git`), causing `git -C "$REPO_ROOT" rev-parse HEAD` to abort under `set -euo pipefail` with no KV envelope; operators had to re-invoke with `--codex-available false` to get `STATUS=claude_fallback`, which violated Step 2's mandatory-Codex-spawn invariant. Plugin asset paths (agent prompt, launcher, redactor) now use a separate `PLUGIN_ROOT` derived from the script location. Both root computations live below the `--codex-available false` early-exit so the fallback path stays git-free. Test harness extended (10/10) to assert exit-2 outside a git working tree.
+
 ## [15.0.0] - 2026-05-03
 
 ### Removed
