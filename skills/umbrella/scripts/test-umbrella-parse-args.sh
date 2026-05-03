@@ -2,7 +2,7 @@
 # test-umbrella-parse-args.sh — regression harness for /umbrella's parse-args.sh.
 #
 # Pins the stdout grammar (LABELS_COUNT + LABEL_<i>, TITLE_PREFIX, REPO,
-# CLOSED_WINDOW_DAYS, DRY_RUN, GO, DEBUG, INPUT_FILE, UMBRELLA_SUMMARY_FILE,
+# CLOSED_WINDOW_DAYS, DRY_RUN, GO, INPUT_FILE, UMBRELLA_SUMMARY_FILE,
 # PIECES_JSON, TASK, UMBRELLA_TMPDIR), the frozen ERROR= templates, the quoting subset,
 # the paired-flag and TASK-mutual-exclusion validation rules for --input-file
 # / --umbrella-summary-file, and the TASK byte-preservation contract documented
@@ -152,7 +152,7 @@ assert_error() {
 echo "test-umbrella-parse-args.sh: parse-args.sh stdout grammar + lexer"
 
 # Default scalar fields (used to compose expected stdouts below).
-DEFAULTS_NO_LABELS=$'TITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=false'
+DEFAULTS_NO_LABELS=$'TITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false'
 
 # 1. Single --label foo
 assert_stdout "case 1: single --label" \
@@ -172,17 +172,17 @@ assert_stdout "case 3: repeated --label" \
 # 4. Quoted whitespace in --title-prefix
 assert_stdout "case 4: --title-prefix with quoted whitespace" \
   '--title-prefix "[Infra Work]"' \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=[Infra Work]\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=false\nTASK=')"
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=[Infra Work]\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nTASK=')"
 
 # 5. --repo
 assert_stdout "case 5: --repo" \
   "--repo owner/repo" \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=owner/repo\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=false\nTASK=')"
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=owner/repo\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nTASK=')"
 
 # 6. --closed-window-days valid integer
 assert_stdout "case 6: --closed-window-days 30" \
   "--closed-window-days 30" \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=30\nDRY_RUN=false\nGO=false\nDEBUG=false\nTASK=')"
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=30\nDRY_RUN=false\nGO=false\nTASK=')"
 
 # 7. --closed-window-days non-integer → error
 assert_error "case 7: --closed-window-days non-integer" \
@@ -191,8 +191,8 @@ assert_error "case 7: --closed-window-days non-integer" \
 
 # 8. Boolean flags
 assert_stdout "case 8: boolean flags" \
-  "--dry-run --go --debug" \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=true\nGO=true\nDEBUG=true\nTASK=')"
+  "--dry-run --go" \
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=true\nGO=true\nTASK=')"
 
 # 9. TASK whitespace preservation — multi-space + trailing spaces, NO leading
 #    whitespace contamination.
@@ -202,8 +202,8 @@ assert_stdout "case 9: TASK preserves embedded and trailing whitespace" \
 
 # 10. -- end-of-flags marker
 assert_stdout "case 10: -- end-of-flags" \
-  "--debug -- --not-a-flag rest" \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=true\nTASK=--not-a-flag rest')"
+  "--dry-run -- --not-a-flag rest" \
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=true\nGO=false\nTASK=--not-a-flag rest')"
 
 # 11. Unclosed double quote → error
 assert_error "case 11: unclosed double quote" \
@@ -231,7 +231,7 @@ assert_error "case 14: unknown flag" \
 # 15. Empty input
 assert_stdout "case 15: empty input" \
   "" \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=false\nTASK=')"
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nTASK=')"
 
 # 16. Escaped quote inside double-quoted run.
 assert_stdout 'case 16: --label with escaped quote inside double-quote' \
@@ -255,8 +255,8 @@ assert_stdout "case 19: --label with embedded '='" \
 
 # 20. Quoted positional starting with '--' — phase 1 stops; TASK is verbatim.
 assert_stdout "case 20: quoted positional starting with --" \
-  '--debug "--not-a-flag" rest' \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=true\nTASK=%s' '"--not-a-flag" rest')"
+  '--dry-run "--not-a-flag" rest' \
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=true\nGO=false\nTASK=%s' '"--not-a-flag" rest')"
 
 # 21. Newline as unquoted separator outside quotes.
 assert_stdout "case 21: newline as unquoted separator" \
@@ -265,14 +265,14 @@ assert_stdout "case 21: newline as unquoted separator" \
 
 # 22. Unbalanced quote inside TASK — verbatim, lexer does NOT validate TASK.
 assert_stdout "case 22: unbalanced quote inside TASK (verbatim)" \
-  '--debug investigate "broken' \
-  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=false\nGO=false\nDEBUG=true\nTASK=%s' 'investigate "broken')"
+  '--dry-run investigate "broken' \
+  "$(printf 'LABELS_COUNT=0\nTITLE_PREFIX=\nREPO=\nCLOSED_WINDOW_DAYS=\nDRY_RUN=true\nGO=false\nTASK=%s' 'investigate "broken')"
 
 # 23. Embedded newline in TASK → error (would break single-line KV grammar).
-#     Repro from /review FINDING_1: --debug followed by "hello\nworld" task body
-#     emits TASK=hello + worldon-next-line + UMBRELLA_TMPDIR=... → consumer break.
+#     Repro from /review FINDING_1: a boolean flag followed by "hello\nworld" task body
+#     would emit TASK=hello + worldon-next-line + UMBRELLA_TMPDIR=... → consumer break.
 assert_error "case 23: embedded newline in TASK" \
-  $'--debug hello\nworld' \
+  $'--dry-run hello\nworld' \
   "embedded newline in TASK"
 
 # 24. Backslash-escaped newline in unquoted value → error.

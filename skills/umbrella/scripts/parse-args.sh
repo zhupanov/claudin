@@ -13,7 +13,6 @@
 #   CLOSED_WINDOW_DAYS=<integer — empty if not specified>
 #   DRY_RUN=<true|false>
 #   GO=<true|false>
-#   DEBUG=<true|false>
 #   INPUT_FILE=<path — empty if --input-file not specified>
 #   UMBRELLA_SUMMARY_FILE=<path — empty if --umbrella-summary-file not specified>
 #   PIECES_JSON=<path — empty if --pieces-json not specified>
@@ -58,7 +57,6 @@ REPO=""
 CLOSED_WINDOW_DAYS=""
 DRY_RUN="false"
 GO="false"
-DEBUG="false"
 INPUT_FILE=""
 UMBRELLA_SUMMARY_FILE=""
 PIECES_JSON=""
@@ -300,7 +298,6 @@ while :; do
           ;;
         --dry-run) DRY_RUN="true" ;;
         --go) GO="true" ;;
-        --debug) DEBUG="true" ;;
         --input-file)
           read_flag_value "--input-file" "$i"
           i="$TOKEN_END"
@@ -397,7 +394,6 @@ printf 'REPO=%s\n' "$REPO"
 printf 'CLOSED_WINDOW_DAYS=%s\n' "$CLOSED_WINDOW_DAYS"
 printf 'DRY_RUN=%s\n' "$DRY_RUN"
 printf 'GO=%s\n' "$GO"
-printf 'DEBUG=%s\n' "$DEBUG"
 printf 'INPUT_FILE=%s\n' "$INPUT_FILE"
 printf 'UMBRELLA_SUMMARY_FILE=%s\n' "$UMBRELLA_SUMMARY_FILE"
 printf 'PIECES_JSON=%s\n' "$PIECES_JSON"

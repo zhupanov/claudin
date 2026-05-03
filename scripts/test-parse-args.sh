@@ -41,16 +41,14 @@ check "t1 DESCRIPTION" "$(echo "$out" | grep '^DESCRIPTION=')" "DESCRIPTION=Use 
 check "t1 PLUGIN"      "$(echo "$out" | grep '^PLUGIN=')"      "PLUGIN=false"
 check "t1 MULTI_STEP"  "$(echo "$out" | grep '^MULTI_STEP=')"  "MULTI_STEP=false"
 check "t1 MERGE"       "$(echo "$out" | grep '^MERGE=')"       "MERGE=false"
-check "t1 DEBUG"       "$(echo "$out" | grep '^DEBUG=')"       "DEBUG=false"
 check "t1 NO_SLACK"    "$(echo "$out" | grep '^NO_SLACK=')"    "NO_SLACK=false"
 
 # --- Test 2: all flags set ----------------------------------------------------
-out=$("$PARSE_ARGS" --plugin --multi-step --merge --debug --no-slack foo "Use when doing Y")
+out=$("$PARSE_ARGS" --plugin --multi-step --merge --no-slack foo "Use when doing Y")
 check "t2 NAME"        "$(echo "$out" | grep '^NAME=')"        "NAME=foo"
 check "t2 PLUGIN"      "$(echo "$out" | grep '^PLUGIN=')"      "PLUGIN=true"
 check "t2 MULTI_STEP"  "$(echo "$out" | grep '^MULTI_STEP=')"  "MULTI_STEP=true"
 check "t2 MERGE"       "$(echo "$out" | grep '^MERGE=')"       "MERGE=true"
-check "t2 DEBUG"       "$(echo "$out" | grep '^DEBUG=')"       "DEBUG=true"
 check "t2 NO_SLACK"    "$(echo "$out" | grep '^NO_SLACK=')"    "NO_SLACK=true"
 
 # --- Test 3: leading slash stripped -------------------------------------------

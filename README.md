@@ -45,31 +45,31 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#compress-skill"><code>/compress-skill</code></a></td>
-      <td><code>[--debug] [--no-slack] &lt;skill-name-or-path&gt;</code></td>
+      <td><code>[--no-slack] &lt;skill-name-or-path&gt;</code></td>
     </tr>
     <tr><td colspan="2">Compress a skill's Markdown prose via a behavior-preserving rewrite.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#create-skill"><code>/create-skill</code></a></td>
-      <td><code>[--plugin] [--multi-step] [--merge] [--debug] [--no-slack] &lt;skill-name&gt; &lt;description&gt;</code></td>
+      <td><code>[--plugin] [--multi-step] [--merge] [--no-slack] &lt;skill-name&gt; &lt;description&gt;</code></td>
     </tr>
     <tr><td colspan="2">Scaffold a new larch-style skill from a name and description.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#design"><code>/design</code></a></td>
-      <td><code>[--auto] [--quick] [--debug] &lt;feature description&gt;</code></td>
+      <td><code>[--auto] [--quick] &lt;feature description&gt;</code></td>
     </tr>
     <tr><td colspan="2">Design an implementation plan with 9 sketch agents (3 in quick mode), dialectic adjudication, and a 6-reviewer validation panel.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#fix-issue"><code>/fix-issue</code></a></td>
-      <td><code>[--debug] [--no-slack] [--no-admin-fallback] [&lt;number-or-url&gt;]</code></td>
+      <td><code>[--no-slack] [--no-admin-fallback] [&lt;number-or-url&gt;]</code></td>
     </tr>
     <tr><td colspan="2">Process one approved GitHub issue per invocation, classifying intent and delegating PR work to <code>/implement</code>.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#implement"><code>/implement</code></a></td>
-      <td><code>[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--debug] [--issue &lt;N&gt;] &lt;feature description&gt;</code></td>
+      <td><code>[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--issue &lt;N&gt;] &lt;feature description&gt;</code></td>
     </tr>
     <tr><td colspan="2">Full end-to-end feature workflow — design, implement, PR. <code>--quick</code> skips <code>/design</code> and runs a simplified single-reviewer loop of up to 7 rounds with a per-round Cursor → Codex → Claude fallback chain (no voting panel).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
@@ -99,7 +99,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#simplify-skill"><code>/simplify-skill</code></a></td>
-      <td><code>[--debug] [--no-slack] &lt;skill-name&gt;</code></td>
+      <td><code>[--no-slack] &lt;skill-name&gt;</code></td>
     </tr>
     <tr><td colspan="2">Refactor a skill for stronger adherence to design principles and reduced SKILL.md footprint.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
@@ -111,7 +111,7 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#umbrella"><code>/umbrella</code></a></td>
-      <td><code>[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] &lt;task description or empty to deduce from context&gt;</code></td>
+      <td><code>[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] &lt;task description or empty to deduce from context&gt;</code></td>
     </tr>
     <tr><td colspan="2">Plan-to-issues orchestrator: classifies a task description as one-shot or multi-piece, delegates GitHub issue creation to <code>/issue</code> (batch mode plus an umbrella tracking issue when multi-piece), and wires native blocked-by edges plus child→umbrella back-links. Typically invoked transitively by <code>/review</code> (description-mode finding filing) and <code>/skill-evolver</code>.</td></tr>
   </tbody>

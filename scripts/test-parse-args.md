@@ -1,6 +1,6 @@
 # test-parse-args.sh
 
-**Purpose**: regression harness for `skills/create-skill/scripts/parse-args.sh`. Pins the stdout grammar (`NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `DEBUG`, `NO_SLACK`), flag list, and error-message format so downstream parsers (the `/create-skill` SKILL.md body and the `/im` delegation arg composer) don't silently break on unrelated edits.
+**Purpose**: regression harness for `skills/create-skill/scripts/parse-args.sh`. Pins the stdout grammar (`NAME`, `DESCRIPTION`, `PLUGIN`, `MULTI_STEP`, `MERGE`, `NO_SLACK`), flag list, and error-message format so downstream parsers (the `/create-skill` SKILL.md body and the `/im` delegation arg composer) don't silently break on unrelated edits.
 
 ## When to run
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [15.0.0] - 2026-05-03
+
+### Removed
+
+- `--debug` flag from `/design`, `/implement`, `/fix-issue`, `/create-skill`, `/simplify-skill`, `/compress-skill`, and `/umbrella` (BREAKING). The flag and its supporting `debug_mode` / `DEBUG` machinery have been deleted from each skill's argument hint, parser, and Verbosity Control prose. The compact / status-table output that was the default when `--debug` was absent is now the only behavior. Callers that pass `--debug` to a strict-parsing skill (`/create-skill`, `/umbrella`) will now hit the unknown-flag error path; the parse-args harnesses (`scripts/test-parse-args.sh`, `skills/umbrella/scripts/test-umbrella-parse-args.sh`) and the `test-implement-rebase-macro.sh` regression guard were updated accordingly.
+
 ## [14.1.1] - 2026-05-02
 
 ### Fixed

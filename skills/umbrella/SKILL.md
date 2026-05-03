@@ -1,7 +1,7 @@
 ---
 name: umbrella
 description: "Use when planning or breaking up a task or plan into GitHub issues — auto-classifies one-shot vs multi-piece, delegates to /issue (batch mode plus umbrella tracking issue), and wires native blocked-by edges plus child→umbrella back-links."
-argument-hint: "[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--debug] [--pieces-json PATH] <task description or empty to deduce from context>"
+argument-hint: "[--label L]... [--title-prefix P] [--repo OWNER/REPO] [--closed-window-days N] [--dry-run] [--go] [--pieces-json PATH] <task description or empty to deduce from context>"
 allowed-tools: Bash, Read, Skill
 ---
 
@@ -31,7 +31,6 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 | `--closed-window-days N` | Forwarded to `/issue` (closed-issue dedup window). Default 90. |
 | `--dry-run` | Forwarded to `/issue`. Multi-piece path skips umbrella body composition + umbrella issue creation (Step 3B.3) and DAG wiring + back-links (Step 3B.4). |
 | `--go` | Forwarded to `/issue` for child batch AND umbrella single. Posts `GO` on every successfully-created issue (children + umbrella). Duplicates / failed creates / dry-runs never get a GO comment (per `/issue` Step 6 contract). |
-| `--debug` | Verbose mode for this skill's own helpers. |
 | `--input-file PATH` | Activates pre-decomposed-input mode. Bypasses Step 1 (task resolve) and Step 3B.1 (LLM decomposition). The file MUST be a pre-built `/issue --input-file` batch markdown. Required to be paired with `--umbrella-summary-file`. Mutually exclusive with positional TASK. |
 | `--umbrella-summary-file PATH` | Caller-composed 1-2 sentence summary paragraph for the umbrella issue body's lead in Step 3B.3 (replaces the LLM-composed summary). Required to be paired with `--input-file`. |
 | `--pieces-json PATH` | Optional. Caller-supplied inter-piece dependency edges for pre-decomposed-input mode. JSON array of `{title, body, depends_on: [int,...]}` objects matching the `/issue --input-file` batch items by index. Required to be paired with `--input-file` (asymmetric: `--input-file` does NOT require `--pieces-json`). When supplied, Step 3B.4 reads `depends_on` fields to compose inter-child edges (resolving piece indices to issue numbers via `/issue` batch return). Validated by `validate-pieces-json.sh` before Step 3B.2. |
@@ -42,7 +41,7 @@ Parse flags from the start of `$ARGUMENTS`. Flags may appear in any order; stop 
 ${CLAUDE_PLUGIN_ROOT}/skills/umbrella/scripts/parse-args.sh "$ARGUMENTS"
 ```
 
-Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `DEBUG` (`true|false`), `INPUT_FILE` (path — empty if `--input-file` not specified), `UMBRELLA_SUMMARY_FILE` (path — empty if `--umbrella-summary-file` not specified), `PIECES_JSON` (path — empty if `--pieces-json` not specified), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
+Parse stdout for: `LABELS_COUNT` (integer ≥ 0), then `LABEL_1` through `LABEL_<LABELS_COUNT>` (one indexed key per `--label` value; empty when `LABELS_COUNT=0`), `TITLE_PREFIX`, `REPO`, `CLOSED_WINDOW_DAYS`, `DRY_RUN` (`true|false`), `GO` (`true|false`), `INPUT_FILE` (path — empty if `--input-file` not specified), `UMBRELLA_SUMMARY_FILE` (path — empty if `--umbrella-summary-file` not specified), `PIECES_JSON` (path — empty if `--pieces-json` not specified), `TASK` (everything after the last flag — may be empty; preserves embedded whitespace AND any quote/escape characters verbatim), `UMBRELLA_TMPDIR` (mktemp dir created by the parser; cleaned at Step 5). When parsing each KV line, split on the FIRST `=` only — values may contain literal `=` characters (e.g., `LABEL_1=priority=high`).
 
 **Pre-decomposed-input mode**: when `INPUT_FILE` is non-empty (and `UMBRELLA_SUMMARY_FILE` is also non-empty by paired-flag validation in `parse-args.sh`), skip Step 1 (task resolve) and Step 3B.1 (LLM decomposition); Step 2 classification is replaced by post-3B.2 distinct-resolved-child-count rule (see Step 2 below). Mutual exclusion with positional `TASK` is enforced at the parser layer.
 

@@ -1,6 +1,6 @@
 {
   "name": "larch",
-  "version": "14.1.1",
+  "version": "15.0.0",
   "description": "Multi-agent workflow automation for Claude Code: design, code review, implementation, and PR automation. Code review runs a 6-reviewer specialist panel (5 Cursor specialists + 1 Codex generic) with 3-voter adjudication; plan review runs a 3-reviewer panel (Claude + Codex + Cursor); design sketches run a 9-agent diverge-then-converge phase in regular mode (1 Claude + 4 Cursor + 4 Codex) or 3 in quick mode.",
   "author": {
     "name": "Sergey Zhupanov",

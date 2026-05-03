@@ -17,7 +17,6 @@ REPO=<owner/repo — empty if not specified>
 CLOSED_WINDOW_DAYS=<integer — empty if not specified>
 DRY_RUN=<true|false>
 GO=<true|false>
-DEBUG=<true|false>
 INPUT_FILE=<path — empty if --input-file not specified>
 UMBRELLA_SUMMARY_FILE=<path — empty if --umbrella-summary-file not specified>
 PIECES_JSON=<path — empty if --pieces-json not specified>
@@ -34,7 +33,7 @@ When `LABELS_COUNT=0`, no `LABEL_*` lines are emitted (the `LABEL_<i>` block is 
 - `--title-prefix PREFIX` — single value.
 - `--repo OWNER/REPO` — single value.
 - `--closed-window-days N` — non-negative integer; validated.
-- `--dry-run` / `--go` / `--debug` — booleans (default `false`; presence sets `true`).
+- `--dry-run` / `--go` — booleans (default `false`; presence sets `true`).
 - `--input-file PATH` — single value. Activates `/umbrella`'s pre-decomposed-input mode: caller provides a pre-built `/issue --input-file` batch markdown directly, bypassing Step 1 task resolve and Step 3B.1 LLM decomposition. Required to be paired with `--umbrella-summary-file`. Mutually exclusive with positional TASK.
 - `--umbrella-summary-file PATH` — single value. Caller-composed 1-2 sentence summary paragraph used as the umbrella issue body's lead summary in Step 3B.3 (replaces the LLM-composed summary). Required to be paired with `--input-file`.
 - `--pieces-json PATH` — single value. Optional caller-supplied inter-piece dependency edges for pre-decomposed-input mode. Required to be paired with `--input-file` (asymmetric: `--input-file` does NOT require `--pieces-json`).

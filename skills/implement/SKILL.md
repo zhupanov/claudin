@@ -1,7 +1,7 @@
 ---
 name: implement
 description: "Use when shipping a feature end-to-end: design, implement, review, version bump, PR, CI-green merge, Slack issue announce. Triggers: 'ship X', 'land PR', 'merge this'. See /research, /design, /im (merge), /imaq (auto-merge)."
-argument-hint: "[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--debug] [--session-env <path>] [--issue <N>] <feature description>"
+argument-hint: "[--quick] [--auto] [--merge | --draft] [--no-slack] [--no-admin-fallback] [--session-env <path>] [--issue <N>] <feature description>"
 allowed-tools: AskUserQuestion, Bash, Read, Edit, Write, Grep, Glob, Agent, Task, WebFetch, WebSearch, Skill
 ---
 
@@ -58,7 +58,6 @@ The feature to implement is described by `$ARGUMENTS` after flag stripping.
 - `--no-slack`: `slack_enabled=false`. Default: `slack_enabled=true`. When `slack_enabled=true` (default), Step 16a posts a single Slack message about the tracking issue near the end of the run (gated on `slack_available=true` — i.e. `LARCH_SLACK_BOT_TOKEN` and `LARCH_SLACK_CHANNEL_ID` set — and on having a resolved `ISSUE_NUMBER`). When `slack_enabled=false`, Step 16a skips the Slack API call regardless of environment configuration. Independent of all other flags.
 - `--no-admin-fallback`: `no_admin_fallback=true`. Default: `no_admin_fallback=false`. When `true`, forwarded into Step 12b's `merge-pr.sh` invocation; the script then emits `MERGE_RESULT=policy_denied` instead of retrying with `--admin` once the admin-eligible gate (CI good + branch fresh) is reached, and Step 12b bails to Step 12d. Default behavior is unchanged (the `--admin` retry fires as before). Applies to ALL admin-eligible `mergeStateStatus` values (`CLEAN`, `UNSTABLE`, `HAS_HOOKS`, `BLOCKED`) — not just review-required denials. Independent of all other flags (in particular: no special coupling with `--auto`).
 - `--no-merge`: **Deprecated** no-op. On encounter, print `**ℹ '--no-merge' is now the default and no longer needed; the flag is recognized as a no-op for backward compatibility.**`
-- `--debug`: `debug_mode=true`. Controls output verbosity (see Verbosity Control). Forwarded to `/design` (Step 1) and `/review` (Step 5).
 - `--session-env <path>`: sets `SESSION_ENV_PATH`. Forwarded to `session-setup.sh` via `--caller-env` and to `/design` via `--session-env`. Empty = standalone invocation (full discovery).
 - `--issue <N>`: sets `ISSUE_ARG=<N>`. Default: empty. When non-empty, Step 0.5 Branch 2 adopts the given tracking issue instead of Branch 4 creating a new one. Compatible with all other flags. If the target issue is CLOSED, Step 0.5 emits `IMPLEMENT_BAIL_REASON=adopted-issue-closed` on stdout and exits non-zero (cleanup still runs).
 
@@ -101,11 +100,11 @@ Step Name Registry:
 
 ### Verbosity Control
 
-When `debug_mode=false` (default): empty `description` on Bash calls; terse 3-5-word `description` on Agent calls; no explanatory prose between tool outputs beyond the preserved categories below. When `debug_mode=true`: descriptive `description` everywhere; print full explanatory text between calls.
+Use empty `description` on Bash calls; terse 3-5-word `description` on Agent calls; no explanatory prose between tool outputs beyond the preserved categories below.
 
-**Preserved (never suppressed regardless of `debug_mode`):** step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`/`⏭️`) — except the four rebase-skip variants in Suppressed below; final completion (Step 18); warning / error lines (`**⚠ ...`); structured summaries (voting tallies, scoreboards, round summaries, final reports); diagrams; implementation plans; dialectic resolutions; accepted / rejected findings; out-of-scope observations; PR body sections.
+**Preserved:** step breadcrumb lines (start `🔶`, completion `✅`, skip `⏩`/`⏭️`); final completion (Step 18); warning / error lines (`**⚠ ...`); structured summaries (voting tallies, scoreboards, round summaries, final reports); diagrams; implementation plans; dialectic resolutions; accepted / rejected findings; out-of-scope observations; PR body sections.
 
-**Suppressed (only when `debug_mode=false`):** explanatory prose, script paths, inter-call rationale, per-reviewer individual completion messages (replaced by status table in child skills), these four rebase-skip variants: `⏩ 1.m: design plan | update main — already at latest`, `⏩ 1.r: design plan | rebase — already pushed`, `⏩ 1.r: design plan | rebase — already at latest main`, `⏩ 8b: rebase — already at latest main`. Non-rebase `⏩` skip messages and rebase outcomes inside the Rebase + Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
+**Suppressed:** explanatory prose, script paths, inter-call rationale, per-reviewer individual completion messages (replaced by status table in child skills). Rebase-skip cases at Steps 1.m, 1.r, 4.r, 7.r, 7a.r, and 8b silently continue (no `⏩` line) because the rebase had no effect. Non-rebase `⏩` skip messages and rebase outcomes inside the Rebase + Re-bump Sub-procedure (Steps 10/12) are NOT suppressed — they carry CI-debugging semantics.
 
 Verbosity suppression is prompt-enforced and best-effort; may degrade in very long sessions.
 
@@ -127,8 +126,8 @@ Standardizes the four post-step rebase checkpoints (Steps 1.r, 4.r, 7.r, 7a.r). 
 - **M3 — On non-zero exit**: print `**⚠ Rebase onto main failed. Bailing to cleanup.**`, set `STALL_TRACKING=true` (signals Step 18 to rename the tracking issue to `[STALLED]` — see "Title-prefix lifecycle" below), and skip to Step 18.
 
 - **M4 — On success**, branch on stdout (check `SKIPPED_ALREADY_PUSHED` BEFORE `SKIPPED_ALREADY_FRESH` — `rebase-push.sh` exits early on already-pushed before fetch):
-  - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: if `debug_mode=true`, print: `⏩ <step-prefix>: <short-name> | rebase — already pushed` Otherwise silently continue.
-  - If stdout contains `SKIPPED_ALREADY_FRESH=true`: if `debug_mode=true`, print: `⏩ <step-prefix>: <short-name> | rebase — already at latest main` Otherwise silently continue.
+  - If stdout contains `SKIPPED_ALREADY_PUSHED=true`: silently continue.
+  - If stdout contains `SKIPPED_ALREADY_FRESH=true`: silently continue.
   - Otherwise, print: `✅ <step-prefix>: <short-name> | rebase — rebased onto latest main (<elapsed>)`
 
 **Call-site registry** (the four authorized instantiations; `scripts/test-implement-rebase-macro.sh` pins these rows):
@@ -471,7 +470,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
 
 `--skip-if-pushed` is intentionally NOT used here: `main` is always on origin so that flag would always short-circuit. `SKIPPED_ALREADY_FRESH=true` keeps this call cheap when local `main` already matches `origin/main`.
 
-On non-zero exit, print `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**`, set `STALL_TRACKING=true` (parallels Rebase Checkpoint Macro M3 and Step 12d — signals Step 18 to rename the tracking issue to `[STALLED]` when Step 0.5 Branch 4 has already created one), and skip to Step 18. On success: if stdout contains `SKIPPED_ALREADY_FRESH=true`, print `⏩ 1.m: design plan | update main — already at latest` only when `debug_mode=true`; otherwise print `✅ 1.m: design plan | update main — rebased onto latest origin/main (<elapsed>)`.
+On non-zero exit, print `**⚠ Failed to ensure local main is fresh. Bailing to cleanup.**`, set `STALL_TRACKING=true` (parallels Rebase Checkpoint Macro M3 and Step 12d — signals Step 18 to rename the tracking issue to `[STALLED]` when Step 0.5 Branch 4 has already created one), and skip to Step 18. On success: if stdout contains `SKIPPED_ALREADY_FRESH=true`, silently continue; otherwise print `✅ 1.m: design plan | update main — rebased onto latest origin/main (<elapsed>)`.
 
 ### Quick mode (`quick_mode=true`)
 
@@ -490,7 +489,7 @@ Proceed to Step 2.
 
 > **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Branch-specific: applies only to the `/design` invocation in normal mode.)
 
-If `IS_USER_BRANCH=true` AND a reviewed implementation plan is already visible in conversation context (prior `/design` this session), proceed to Step 2. Otherwise invoke `/design` via the Skill tool. Canonical invocation order: `[--debug] [--auto] --step-prefix "1.::design plan" --branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. Prepend `--auto` only if `auto_mode=true`; prepend `--debug` only if `debug_mode=true`. After `/design` returns, proceed to Step 2.
+If `IS_USER_BRANCH=true` AND a reviewed implementation plan is already visible in conversation context (prior `/design` this session), proceed to Step 2. Otherwise invoke `/design` via the Skill tool. Canonical invocation order: `[--auto] --step-prefix "1.::design plan" --branch-info "IS_MAIN=$IS_MAIN IS_USER_BRANCH=$IS_USER_BRANCH USER_PREFIX=$USER_PREFIX CURRENT_BRANCH=$CURRENT_BRANCH" --session-env $IMPLEMENT_TMPDIR/session-env.sh <FEATURE_DESCRIPTION>`. Prepend `--auto` only if `auto_mode=true`. After `/design` returns, proceed to Step 2.
 
 > **Continue after child returns.** When `/design` returns, execute the Cross-Skill Health Update + `BRANCH_NAME` capture + Step 1.r rebase checkpoint + Step 2 breadcrumb in order — do NOT write a summary, handoff, or "returning to parent" message first. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder.
 
@@ -884,7 +883,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/rebase-push.sh --no-push
 
 Capture the exit code as `rc`. Branch:
 
-- **Exit 0** with stdout containing `SKIPPED_ALREADY_FRESH=true`: HEAD already at latest main. If `debug_mode=true`, print `⏩ 8b: rebase — already at latest main`. Otherwise silently continue. Proceed to the force-push gate below.
+- **Exit 0** with stdout containing `SKIPPED_ALREADY_FRESH=true`: HEAD already at latest main. Silently continue. Proceed to the force-push gate below.
 - **Exit 0** otherwise (rebase actually moved HEAD): print `✅ 8b: rebase — rebased onto latest main (<elapsed>)`. Proceed to the force-push gate below.
 - **Exit 1** (rebase conflict — typically bump files against a concurrent main bump): print `🔃 8b: rebase — conflict detected, invoking Rebase + Re-bump Sub-procedure (caller_kind=step8b_rebase) to drop local bump and re-rebase`. **MANDATORY — READ ENTIRE FILE** before invoking the sub-procedure: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/rebase-rebump-subprocedure.md`. Invoke the Rebase + Re-bump Sub-procedure with `rebase_already_done=false`, `caller_kind=step8b_rebase`. The typical concurrent-bump case auto-recovers because the sub-procedure's step 1 (`drop-bump-commit.sh`) removes the local bump before re-rebasing; with the local bump gone, the rebase against fresh main usually succeeds cleanly and step 4 produces a fresh `/bump-version` commit on top. On hard failure anywhere inside the sub-procedure (rebase still conflicts on non-bump files; `/bump-version` failure; degraded `STATUS`; `VERIFIED=false`), the sub-procedure's step8b family branches set `STALL_TRACKING=true` and skip to Step 18 — same recovery semantics as the original bail. On success, the sub-procedure's step 7 returns control to the force-push gate below; sub-procedure step 5 is intentionally skipped for `step8b_rebase` because the gate's `git ls-remote` trichotomy is the load-bearing fresh-branch path (see sub-procedure step 5 for the rationale). **Exception**: if `repo_unavailable=true`, do NOT invoke the sub-procedure — the sub-procedure's step 6 anchor refresh and downstream `gh`-using paths are not applicable; instead fall back to today's bail behavior (print `**⚠ Step 8b: rebase onto main failed (conflict, repo_unavailable=true so sub-procedure auto-recovery is skipped). Bailing to cleanup.**`, set `STALL_TRACKING=true`, skip to Step 18).
 - **Exit 3** (non-conflict rebase failure — fetch error, detached HEAD, etc.; `REBASE_ERROR=...` printed on stderr): print `**⚠ Step 8b: rebase failed (non-conflict): $REBASE_ERROR. Bailing to cleanup.**`. Set `STALL_TRACKING=true`, skip to Step 18. (Non-conflict failures are not addressable by `drop-bump-commit.sh` — the sub-procedure cannot recover from a fetch error or detached HEAD.)

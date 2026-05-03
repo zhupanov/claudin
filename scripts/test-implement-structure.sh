@@ -24,7 +24,6 @@
 #  (4) At least 6 `MANDATORY — READ ENTIRE FILE` occurrences (floor, not ceiling),
 #      AND each of the six expected reference filenames appears on a `MANDATORY —
 #      READ ENTIRE FILE` line in SKILL.md (step-to-reference binding from design FINDING_7).
-#  (5) Three byte-pinned verbosity-suppressed literal strings present in SKILL.md.
 #  (6) CI-parity focus-area enum: at least one line in SKILL.md contains the literal
 #      `code-quality / risk-integration / correctness / architecture` AND that same
 #      line also contains `security`. Mirrors .github/workflows/ci.yaml L121/L125
@@ -197,19 +196,6 @@ mandatory_lines=$(grep 'MANDATORY — READ ENTIRE FILE' "$SKILL_MD" || true)
 for ref in "${expected_refs[@]}"; do
   printf '%s\n' "$mandatory_lines" | grep -Fq "$ref" \
     || fail "(4) no 'MANDATORY — READ ENTIRE FILE' line in SKILL.md references '$ref' — step-to-reference binding broken"
-done
-
-# ---------------------------------------------------------------------------
-# (5) Three byte-pinned verbosity-suppressed literal strings.
-# ---------------------------------------------------------------------------
-verbosity_literals=(
-  '⏩ 1.m: design plan | update main — already at latest'
-  '⏩ 1.r: design plan | rebase — already pushed'
-  '⏩ 1.r: design plan | rebase — already at latest main'
-)
-for lit in "${verbosity_literals[@]}"; do
-  grep -Fq "$lit" "$SKILL_MD" \
-    || fail "(5) SKILL.md lost byte-pinned verbosity literal: $lit"
 done
 
 # ---------------------------------------------------------------------------
@@ -661,5 +647,5 @@ DISPATCHER_PATH="$REPO_ROOT/$DISPATCHER_LITERAL"
 [[ -f "$REPO_ROOT/agents/codex-implementer.md" ]] \
     || fail "(19) Codex implementer system prompt missing: agents/codex-implementer.md"
 
-echo "PASS: test-implement-structure.sh — all 19 structural invariants hold"
+echo "PASS: test-implement-structure.sh — all 18 structural invariants hold (assertion 5 retired)"
 exit 0
