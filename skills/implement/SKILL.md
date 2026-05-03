@@ -524,11 +524,56 @@ Apply the Rebase Checkpoint Macro with `<step-prefix>=1.r` and `<short-name>=des
 
 ## Step 2 — Implement the Feature
 
-**No mid-run scope re-litigation.** Once Step 2 begins with a plan in hand, the orchestrator does not relitigate scope, capacity, or "should I stop" via its own `AskUserQuestion`; if the plan is too large, that should have surfaced at earlier planning checkpoints (`/design` Step 1c/1d when normal mode runs, or `/design` Step 3.5). Mid-implementation, the orchestrator executes the plan or hits a concrete Step 12d bail condition; it does not invent a third halting path. This rule does NOT suppress `AskUserQuestion` calls for genuine implementation ambiguity surfaced from new evidence in the codebase, nor does it invalidate user-driven material scope changes — those remain logged via the existing Q/A path. See NEVER #7.
+**MANDATORY — READ ENTIRE FILE before composing the dispatcher invocation**: Read `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/codex-manifest-schema.md` completely. It is the single normative source for the manifest JSON Codex writes and downstream Steps 4 / 8a / 9a / 9a.1 consume. The schema, required keys per `status`, validation rules, and bail-reason token enumeration live there — Step 2 does not re-derive them inline.
+
+**No mid-run scope re-litigation.** Once Step 2 begins with a plan in hand, the orchestrator does not relitigate scope, capacity, or "should I stop" via its own `AskUserQuestion`; if the plan is too large, that should have surfaced at earlier planning checkpoints (`/design` Step 1c/1d when normal mode runs, or `/design` Step 3.5). Mid-implementation, the dispatcher (or, on Claude fallback, the orchestrator) executes the plan or hits a concrete Step 12d bail condition; the orchestrator does not invent a third halting path. This rule does NOT suppress `AskUserQuestion` calls in the Codex Q/A loop below or in the Claude-fallback branch's opportunistic questions. See NEVER #7.
+
+### Step 2 dispatch — mandatory Codex spawn when available
+
+Step 2 invokes a single dispatcher (`skills/implement/scripts/step2-implement.sh`). The dispatcher is the ONLY place that branches on `codex_available`. On the Codex path the dispatcher spawns Codex, validates the returned manifest mechanically, and emits a deterministic KV envelope; the orchestrator MUST NOT inspect Codex's transcript, MUST NOT `git diff` to reconstruct what Codex did, and MUST NOT fall back to a Claude-driven Edit/Write code-edit pass except on `STATUS=claude_fallback`. This preserves Claude tokens and is the load-bearing reason this skill exists in its current shape — see `agents/codex-implementer.md` and `skills/implement/scripts/step2-implement.md` for the contracts.
+
+**2.1 — First dispatch invocation**:
+
+```bash
+${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/step2-implement.sh \
+    --tmpdir "$IMPLEMENT_TMPDIR" \
+    --plan-file "$PLAN_FILE" \
+    --feature-file "$FEATURE_FILE" \
+    --auto-mode "$auto_mode" \
+    --codex-available "$codex_available"
+```
+
+`$PLAN_FILE` is the path written at Step 1 (`/design`'s plan, or the inline quick-mode plan). `$FEATURE_FILE` is `$IMPLEMENT_TMPDIR/feature-description.txt` (created at Step 0). Parse the dispatcher's stdout into local KV variables: `STATUS`, `MANIFEST`, `QA_PENDING`, `REASON`, `TRANSCRIPT`, `SIDECAR_LOG`.
+
+**2.2 — Branch on `STATUS`**:
+
+- `STATUS=complete` → set `$MANIFEST_PATH=$MANIFEST` and proceed to Step 3. Steps 4 / 8a / 9a / 9a.1 read this manifest; the orchestrator does not run `git diff` to figure out what changed.
+- `STATUS=needs_qa` → run the Q/A loop in 2.3.
+- `STATUS=bailed` → log `Step 2 — Codex bailed: $REASON` to the `Warnings` section of `$IMPLEMENT_TMPDIR/execution-issues.md`. If `$REASON` ∈ {`resume-incompatible`, `branch-changed`, `dirty-tree-after-codex`, `protected-path-modified`, `submodule-dirty`, `manifest-diff-mismatch`}: bail to Step 12d (the branch may contain partial Codex work the operator must inspect). Otherwise (`codex-runtime-failure`, `dirty-state-after-timeout`, `manifest-schema-invalid`, `manifest-missing`, `qa-loop-exceeded`, free-form Codex token): print `**⚠ Codex bailed: $REASON. Logs at $TRANSCRIPT and $SIDECAR_LOG.**`, then bail to Step 12d.
+- `STATUS=claude_fallback` → run the Claude-fallback branch in 2.4.
+
+**2.3 — Q/A loop** (when `STATUS=needs_qa`):
+
+1. Read `$QA_PENDING` (a JSON file containing `{"questions": [{"id": "q1", "text": "..."}, ...]}`).
+2. **If `auto_mode=false`**: pose the questions to the operator via `AskUserQuestion` in a single batched call (one prompt per question, preserving the `id`). **If `auto_mode=true`**: derive best-effort answers from the plan + codebase + `CLAUDE.md`. Either way, log every Q/A pair to `$IMPLEMENT_TMPDIR/execution-issues.md` under `### Q/A` per the schema in 2.5 below.
+3. Compose an answers file `$IMPLEMENT_TMPDIR/codex-answers-$RESUME_N.json` with shape `{"answers": [{"id": "q1", "text": "<answer>"}, ...]}` (`$RESUME_N` is the 1-indexed resume cycle counter the orchestrator tracks locally).
+4. Re-invoke the dispatcher with the additional flag `--answers "$IMPLEMENT_TMPDIR/codex-answers-$RESUME_N.json"`. Re-parse the new KV envelope and re-branch (this loop body). The dispatcher itself enforces the 5-cycle cap; on the 6th `--answers` invocation it returns `STATUS=bailed REASON=qa-loop-exceeded` automatically.
+
+The dispatcher does NOT git reset between cycles. Codex inspects branch state at the start of every invocation and — on the resume invocation — reads the answers file, decides if its prior partial work is consistent with the new answers, and either continues or bails with `resume-incompatible` (which the operator inspects manually). See `agents/codex-implementer.md` "Resume protocol".
+
+**2.4 — Claude-fallback branch** (only when `STATUS=claude_fallback`, i.e. Step 0 reported Codex unavailable):
+
+Print: `**⚠ Codex unavailable — implementing with main agent (token cost will be higher).**`
 
 **Opportunistic questions** (`auto_mode=false` only): before edits, if the plan leaves genuinely ambiguous choices, batch 1-4 into a single `AskUserQuestion`. Only ask when the ambiguity cannot be resolved from the plan, codebase, or CLAUDE.md. When `auto_mode=true`, proceed with best judgment.
 
-**Q/A logging + progressive anchor upsert.** After each `AskUserQuestion` return (opportunistic or mid-coding) AND after each mid-coding ambiguity resolution (pick the interpretation most consistent with plan + existing patterns), append to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `### Q/A` category header using this schema:
+Implement per Step 1's plan using Edit/Write tools. Follow CLAUDE.md: read existing code before modifying; match style and patterns; avoid duplication; don't over-engineer (each abstraction justified by a concrete current need). Prefer TDD when the project has test infrastructure (failing test first, then implement to pass). For pure configuration / documentation / prompt-text edits, skip TDD but state one concrete post-change verification (`/relevant-checks`, grep, dry-run, or minimal manual repro). Address root causes; do not suppress errors. Invoke `/relevant-checks` via the Skill tool promptly after each non-trivial logical sub-step — Step 3 is the final check, not the only one.
+
+After the implementation commit (Step 4), the orchestrator constructs an in-memory manifest equivalent (computed from `git diff --name-only $BASELINE..HEAD` and the commit message) for Steps 8a / 9a / 9a.1 to consume. `$MANIFEST_PATH` is left empty on this branch.
+
+### 2.5 — Q/A logging + progressive anchor upsert
+
+After each `AskUserQuestion` return (Codex Q/A loop in 2.3, Claude-fallback opportunistic in 2.4, or mid-coding ambiguity in 2.4) AND after each mid-coding ambiguity resolution (pick the interpretation most consistent with plan + existing patterns), append to `$IMPLEMENT_TMPDIR/execution-issues.md` under the `### Q/A` category header using this schema:
 
 ```markdown
 - **Step 2 (<question|ambiguity>)**: <question or ambiguity description>
@@ -559,8 +604,6 @@ If `deferred=true` or `repo_unavailable=true`: local-only append; Step 11's post
 
 Material answers that change scope or approach also log here (same `Q/A` category).
 
-Implement per Step 1's plan using Edit/Write tools. Follow CLAUDE.md: read existing code before modifying; match style and patterns; avoid duplication; don't over-engineer (each abstraction justified by a concrete current need). Prefer TDD when the project has test infrastructure (failing test first, then implement to pass). For pure configuration / documentation / prompt-text edits, skip TDD but state one concrete post-change verification (`/relevant-checks`, grep, dry-run, or minimal manual repro). Address root causes; do not suppress errors. Invoke `/relevant-checks` via the Skill tool promptly after each non-trivial logical sub-step — Step 3 is the final check, not the only one.
-
 ## Step 3 — Relevant Checks (first pass)
 
 > **Continue after child returns.** When the child Skill returns, execute the NEXT step — do NOT end the turn, and do NOT write a summary, handoff, or "returning to parent" message. See `${CLAUDE_PLUGIN_ROOT}/skills/shared/subskill-invocation.md` section Anti-halt continuation reminder. (Covers every other `/relevant-checks` invocation in this file — no per-site reminders needed at quick-mode 5.7, Step 6, Step 10, or Step 12.)
@@ -569,7 +612,9 @@ Invoke `/relevant-checks` via the Skill tool. If checks fail, diagnose and fix, 
 
 ## Step 4 — First Commit (implementation)
 
-Stage and commit:
+**On the Codex path** (`$MANIFEST_PATH` is non-empty, i.e. Step 2 returned `STATUS=complete`): Codex has already committed. The dispatcher's mechanical validation has already verified working tree clean, ≥1 commit since baseline, and HEAD subject equality with `manifest.commit_message`'s first line. Skip the `git-commit.sh` invocation. Print `⏩ 4: commit (impl) — already committed by Codex (HEAD=$(git rev-parse --short HEAD))`.
+
+**On the Claude-fallback path** (Step 2 returned `STATUS=claude_fallback`): stage and commit:
 
 ```bash
 ${CLAUDE_PLUGIN_ROOT}/scripts/git-commit.sh -m "<descriptive commit message>" <specific-files>
@@ -804,7 +849,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/check-changelog-present.sh
 
 Parse `CHANGELOG_PRESENT=true|false`. If `CHANGELOG_PRESENT=false`, skip and proceed to Step 8b (print `⏩ 8a: changelog — skipped (CHANGELOG_PRESENT=false) (<elapsed>)` — echo the parsed value verbatim so a false skip is visible in the transcript). The freshness rebase at Step 8b still runs on this path so resumed Branch 1/2/3 runs are refreshed before PR creation. (Step 8's `HAS_BUMP=false` directive and the `BUMP_TYPE=NONE` directive both bypass Step 8a entirely and skip directly to Step 8b — there is no CHANGELOG amend without a bump commit to amend.)
 
-Otherwise: read `CHANGELOG.md` and `NEW_VERSION` (from `/bump-version` output in Step 8). Compose a brief changelog entry using the Summary bullets from the implementation (same 1-3 bullets as Step 9a's PR body `## Summary`). Today's date. Format:
+Otherwise: read `CHANGELOG.md` and `NEW_VERSION` (from `/bump-version` output in Step 8). Compose a brief changelog entry using the Summary bullets from the implementation. **Source of bullets**: when `$MANIFEST_PATH` is non-empty (Codex path), read `summary_bullets` directly from the manifest (`jq -r '.summary_bullets[]' "$MANIFEST_PATH"`) — these are pre-sanitized by the Step 2 dispatcher and flow verbatim into both this CHANGELOG entry and Step 9a's PR body `## Summary`. On the Claude-fallback path, compose 1-3 bullets from the implementation as before. Today's date. Format:
 
 ```markdown
 ## [X.Y.Z] - YYYY-MM-DD
@@ -890,6 +935,8 @@ The `Closes #<N>` line auto-closes the tracking issue on merge and anchors Step 
 **MANDATORY — READ ENTIRE FILE** before composing the PR body: `${CLAUDE_PLUGIN_ROOT}/skills/implement/references/pr-body-template.md`. Contains the slim PR body scaffold (Summary, Architecture Diagram, Code Flow Diagram, Test plan, `Closes #<N>`, Claude Code footer). **Do NOT load** outside Step 9a.
 
 ### 9a.1 — Create OOS GitHub Issues
+
+**Codex-path manifest harvest** (when `$MANIFEST_PATH` is non-empty): before running the canonical pipeline below, harvest `manifest.oos_observations[]` and APPEND each entry to `$IMPLEMENT_TMPDIR/oos-accepted-main-agent.md` using the existing `### OOS_N:` schema, with `Vote tally: N/A — accepted by Codex implementer` and `Reviewer: Codex implementer`. Title and Description are the manifest's `title` / `description` fields (already sanitized by the Step 2 dispatcher). This routes Codex-surfaced OOS through the same canonical pipeline as design / review / main-agent OOS without a parallel artifact. Skip on Claude-fallback (the existing main-agent dual-write rule already populates `oos-accepted-main-agent.md`).
 
 Runs unconditionally regardless of mode. The canonical OOS pipeline lives in `anchor-comment-template.md` Step 9a.1 OOS pipeline procedure section (anchor-comment context). See `anchor-comment-template.md` for: repo-unavailable early-exit; read the three OOS artifact files (`oos-accepted-design.md`, `oos-accepted-review.md`, `oos-accepted-main-agent.md`); all-empty early-exit; idempotency sentinel recovery per Load-Bearing Invariant #2 and NEVER #5; cross-phase dedup; `/issue` batch-mode invocation via Skill tool; stdout parsing for `ISSUES_CREATED` / `ISSUES_FAILED` / `ISSUES_DEDUPLICATED` / per-issue fields; **anchor comment's `oos-issues` section** placeholder replacement; **anchor comment's `run-statistics` section** `| OOS issues filed |` cell rewrite; sentinel write to `oos-issues-created.md`.
 

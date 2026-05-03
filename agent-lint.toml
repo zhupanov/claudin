@@ -34,6 +34,18 @@ suppress = [
   # Revisit when agent-lint is upgraded — once the registry includes
   # Monitor, remove this entry.
   "tools-unknown",
+  # template-marker-missing (A006) requires every agent file to carry the
+  # 'Derived from skills/shared/reviewer-templates.md' marker. That marker
+  # is meaningful for the Code Reviewer archetype family (code-reviewer.md
+  # and the five reviewer-*.md specialists), but agents/codex-implementer.md
+  # is a NON-reviewer agent — it is the system-prompt body loaded by
+  # scripts/launch-codex-implement.sh as Codex's --agent-prompt for
+  # /implement Step 2 implementation work, not a review/synthesis agent.
+  # Suppression is global because agent-lint does not support per-file
+  # exceptions for this rule. Drift defense for the reviewer family lives
+  # in scripts/generate-code-reviewer-agent.sh + the existing CI pin on
+  # the focus-area enum.
+  "template-marker-missing",
 ]
 
 # scripts/test-sessionstart-health.sh is the regression test for the
@@ -322,6 +334,26 @@ suppress = [
 # mirroring the runtime harness's opt-in shape) and
 # scripts/test-eval-set-structure.md (sibling contract).
 exclude = [
+  # skills/implement/scripts/test-step2-dispatch.sh is the offline regression
+  # harness for skills/implement/scripts/step2-implement.sh (the /implement
+  # Step 2 dispatcher). Referenced only from Makefile (test-step2-dispatch
+  # target), docs/linting.md (operator-facing harness table), and the sibling
+  # contract test-step2-dispatch.md. agent-lint's S030/orphaned-skill-files
+  # rule wants test-* under skills/<name>/scripts/ to be referenced from the
+  # parent SKILL.md, but Larch's convention places test harnesses outside the
+  # skill prose surface (they are operator-invocable via `make`, not via the
+  # skill's procedural body).
+  "skills/implement/scripts/test-step2-dispatch.sh",
+  "skills/implement/scripts/test-step2-dispatch.md",
+  # scripts/launch-codex-implement.sh is invoked by skills/implement/scripts/
+  # step2-implement.sh via a `"$LAUNCHER"` variable rather than a literal
+  # `${CLAUDE_PLUGIN_ROOT}/scripts/...` path — agent-lint's G004/dead-script
+  # rule scans for literal-path references in SKILL.md / hooks.json /
+  # settings.json and does not follow shell variable indirection. Referenced
+  # via the dispatcher (load-bearing call site) and from
+  # scripts/launch-codex-implement.md (sibling contract) and
+  # skills/implement/scripts/step2-implement.md (mentions launcher path).
+  "scripts/launch-codex-implement.sh",
   "scripts/test-sessionstart-health.sh",
   "scripts/audit-edit-write.sh",
   "scripts/test-audit-edit-write.sh",
