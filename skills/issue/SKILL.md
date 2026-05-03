@@ -1,7 +1,7 @@
 ---
 name: issue
 description: "Use when creating GitHub issues with LLM-based semantic duplicate detection plus always-on inter-issue blocker-dependency analysis. Single or batch mode. Flags: --go, --dry-run, --title-prefix, --label."
-argument-hint: "[--input-file FILE] [--intra-batch-deps-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--sentinel-file PATH] [<issue description or title>]"
+argument-hint: "[--input-file FILE] [--intra-batch-deps-file FILE] [--title-prefix PREFIX] [--label LABEL]... [--body-file FILE] [--dry-run] [--go] [--no-dedup] [--sentinel-file PATH] [<issue description or title>]"
 allowed-tools: Bash, Read, Write
 ---
 
@@ -38,6 +38,7 @@ Supported flags (all optional):
 - `--go` — post `GO` as the final comment on each newly-created issue so it becomes eligible for `/fix-issue` automation. Works in both single and batch modes: Step 6 handles the GO post inline after each successful CREATE. Duplicates, failed creates, and dry-run items never get a GO comment.
 - `--repo OWNER/REPO` — explicit repo (otherwise inferred from the current working directory via `gh repo view`).
 - `--closed-window-days N` — override the closed-issue dedup window (default 90; set 0 to skip closed-issue dedup).
+- `--no-dedup` — skip the entire dedup + dependency analysis pipeline (Steps 4 and 5). Jump directly to Step 6 (Create) with all non-malformed items set to `VERDICT=CREATE` and no blocker edges. Useful for archival issues (e.g., `/research` reports) where each run produces genuinely different content and dedup is wasteful.
 - `--sentinel-file PATH` — absolute path at which Step 7 will write the post-success sentinel KV file (see `## Sentinel file (post-success)` below). The path must be absolute and must not contain `..`. When set, `SENTINEL_PATH_EXPLICIT=true` and the parent owns the sentinel's lifecycle (Step 9 does NOT remove it). When unset, `SENTINEL_PATH_EXPLICIT=false` and the helper writes to a child-local default `${TMPDIR:-/tmp}/larch-issue-$$.sentinel` that Step 9 cleans up itself (issue #509 plan review FINDING_3 fix). Save the resolved path as `SENTINEL_PATH`.
 - `--intra-batch-deps-file FILE` — optional. Path to a TSV file of caller-supplied high-confidence intra-batch dependency edges (one row per edge: `<blocker-1based>\t<blocked-1based>`, where each value is a 1-based batch item index). When supplied, Step 5 Phase 2 merges these edges into its `ITEM_<i>_BLOCKED_BY` output before validation — caller-supplied edges are treated as pre-validated high-confidence inputs that bypass LLM near-certainty thresholds but still pass through the full validation pipeline (snapshot membership, range check, DUPLICATE override, SCC cycle resolution). Parser-side limits: max 500 lines, max 64KB file size, strict grammar (`^[0-9]+\t[0-9]+$` per line); reject with `**ERROR: --intra-batch-deps-file: <reason>**` on violation. Only valid with `--input-file` (batch mode); rejected with usage error otherwise.
 
@@ -104,6 +105,8 @@ Malformed items are pre-counted into the final `ISSUES_FAILED` — they never re
 If `ITEMS_TOTAL=0`, emit `ISSUES_CREATED=0`, `ISSUES_FAILED=0`, `ISSUES_DEDUPLICATED=0` and exit.
 
 ## Step 4 — Phase 1: Two-Tier Title Triage (dedup + dependency)
+
+If `no_dedup=true`: skip Steps 4 and 5 entirely. Set `ITEM_<i>_VERDICT=CREATE` for every non-malformed item, with empty `BLOCKED_BY` / `BLOCKS` lists. Jump to Step 6 (Create).
 
 **Issue #546 reshape**: Phase 1 now performs a **two-tier triage** that produces both dedup candidates AND dependency candidates from a single LLM call. Tier 1 walks every open title (capped at 500 most-recent for scalability); Tier 2 is the same fetch-issue-details.sh-driven body+comment shortlist as before, except its candidate set is the union of dup-candidates and dep-candidates.
 
