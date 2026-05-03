@@ -1,6 +1,6 @@
 # /research Evaluation Set
 
-**Consumer**: `scripts/eval-research.sh` — the offline harness reads this catalog, parses each entry's fields, runs `/research` once per entry under the configured scale, and scores the output against the entry's expectations.
+**Consumer**: `scripts/eval-research.sh` — the offline harness reads this catalog, parses each entry's fields, runs `/research` once per entry, and scores the output against the entry's expectations.
 
 **Contract**: Frozen registry of representative `/research` evaluation questions. Twenty entries balanced across five categories (`lookup`, `architecture`, `external-comparison`, `risk-assessment`, `feasibility`). Each entry declares an `id` (kebab-case, unique), a verbatim `question` string, a `category` from the enum above, an `expected_provenance_count` integer (minimum file/path/URL citations a passing answer should contain), an `expected_keywords` comma-separated list (case-insensitive substrings a good synthesis should mention), and a `notes` line for human grading guidance. Two entries are flagged adversarial in their notes — one targets a fictitious mechanism, one targets a data-absence question — to test over-claiming. The catalog is human-edited; mechanical schema validation is performed by `scripts/eval-research.sh --smoke-test` and `scripts/test-eval-set-structure.sh`. Authors editing this file must follow the global reference rules enforced by `scripts/test-references-headers.sh` (see its sibling contract for details on the Contract-paragraph and header-triplet checks).
 
@@ -138,12 +138,12 @@
 - **expected_keywords**: repo_unavailable, slack_available, deferred, parent-issue.md, Known Limitations
 - **notes**: Feasibility; should walk the `repo_unavailable=true` and `slack_enabled=false` paths and identify which steps degrade or skip cleanly versus which break.
 
-### eval-19: research-plan-flag-issue-420
-- **question**: How feasible is adding a `--plan` flag to `/research` per issue #420, and what dependencies does that work have on this evaluation harness or on issue #418 (the `--scale` flag)?
+### eval-19: research-planner-pre-pass-feasibility
+- **question**: How does `/research`'s planner pre-pass decompose a question into subquestions, and what dependencies does evaluating its marginal benefit have on this evaluation harness?
 - **category**: feasibility
 - **expected_provenance_count**: 2
-- **expected_keywords**: --plan, --scale, planner pre-pass, eval-set, dependency
-- **notes**: Feasibility; should describe the planner-pre-pass concept, identify the eval-harness dependency for measuring the planner's marginal benefit (from issue #420 itself), and note that #418 `--scale` is parallel work, not a hard prerequisite.
+- **expected_keywords**: planner, subquestions, eval-set, dependency, harness
+- **notes**: Feasibility; should describe the planner pre-pass concept and identify the eval-harness dependency for measuring the planner's marginal benefit.
 
 ### eval-20: pairwise-blinded-eval-extension
 - **question**: How feasible is extending the `/research` evaluation harness to support a blinded pairwise comparison mode for the `--baseline` workflow, where the judge sees two anonymized syntheses and ranks them, and what published evidence supports preferring relative over absolute judgments?

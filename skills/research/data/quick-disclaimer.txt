@@ -1,1 +1,0 @@
-**K-lane voting confidence — no validation pass; correlated-error risk: all K lanes are Claude (same model, same prompt — voting catches independent stochastic errors only).**

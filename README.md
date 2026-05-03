@@ -87,13 +87,13 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#research"><code>/research</code></a></td>
-      <td><code>[--debug] [--plan] [--interactive] [--scale=quick|standard|deep] [--adjudicate] [--keep-sidecar[=PATH]] [--token-budget=N] [--no-issue] &lt;research question or topic&gt;</code></td>
+      <td><code>[--no-issue] &lt;research question or topic&gt;</code></td>
     </tr>
-    <tr><td colspan="2">Collaborative best-effort read-only research with adaptive scaling (<code>quick</code> / <code>standard</code> / <code>deep</code>) chosen by a deterministic classifier or via <code>--scale=...</code>. Every run includes unconditional citation validation (HEAD-fetches cited URLs under SSRF guards, validates DOIs, spot-checks file:line refs) emitted as a fail-soft PASS / FAIL / UNKNOWN ledger spliced into the final report.</td></tr>
+    <tr><td colspan="2">Collaborative best-effort read-only research with a fixed-shape topology — planner pre-pass + 4 Codex-first research lanes (architecture / edge cases / external comparisons / security, with per-lane Claude fallback) + 3-reviewer validation panel (Code + Cursor + Codex). Every run includes unconditional citation validation (HEAD-fetches cited URLs under SSRF guards, validates DOIs, spot-checks file:line refs) emitted as a fail-soft PASS / FAIL / UNKNOWN ledger spliced into the final report.</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#review"><code>/review</code></a></td>
-      <td><code>[--diff] [--no-issues] [--debug] [&lt;description&gt;]</code></td>
+      <td><code>[--diff] [--no-issues] [&lt;description&gt;]</code></td>
     </tr>
     <tr><td colspan="2">Code review with a 6-reviewer specialist panel. <code>--diff</code>: review branch changes and implement fixes. <code>&lt;description&gt;</code>: review existing code and file accepted findings as GitHub issues (default; <code>--no-issues</code> to suppress).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
@@ -105,9 +105,9 @@ Larch is a Claude Code workflow automation framework that orchestrates multi-age
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#skill-evolver"><code>/skill-evolver</code></a></td>
-      <td><code>[--debug] &lt;skill-name&gt;</code></td>
+      <td><code>&lt;skill-name&gt;</code></td>
     </tr>
-    <tr><td colspan="2">Evolve an existing larch skill by running <code>/research --scale=deep</code> against repo-local sibling skills and reputable external sources, then delegating any actionable findings to <code>/umbrella</code> (research-and-file-issues only — does not modify the target skill's files).</td></tr>
+    <tr><td colspan="2">Evolve an existing larch skill by running <code>/research</code> against repo-local sibling skills and reputable external sources, then delegating any actionable findings to <code>/umbrella</code> (research-and-file-issues only — does not modify the target skill's files).</td></tr>
     <tr><td colspan="2"><hr></td></tr>
     <tr>
       <td><a href="docs/skills.md#umbrella"><code>/umbrella</code></a></td>

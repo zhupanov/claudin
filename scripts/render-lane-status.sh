@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
-# render-lane-status.sh — format the per-lane attribution record into the two
+# render-lane-status.sh — format the per-lane attribution record into the
 # header lines used by /research's Step 3 final report.
 #
-# Reads a small KV file holding the codified status of each external lane
-# (Research × Cursor/Codex + Validation × Cursor/Codex) and emits two
+# Reads a small KV file holding the codified status of each research angle
+# (4 angles: architecture/edge cases/external comparisons/security) and each
+# validation reviewer (3 reviewers: Code/Cursor/Codex). Emits seven
 # `<NAME>_HEADER=<value>` lines on stdout that SKILL.md Step 3 substitutes
-# into the report. The Code (Claude code-reviewer subagent) lane has no
-# fallback path and is rendered as a hard-coded ✅.
+# into the report.
 #
 # Usage:
 #   render-lane-status.sh --input <path>
 #
-# Input KV schema (8 keys, all optional — missing keys render as `(unknown)`):
-#   RESEARCH_CURSOR_STATUS=<token>
-#   RESEARCH_CURSOR_REASON=<short reason text>
-#   RESEARCH_CODEX_STATUS=<token>
-#   RESEARCH_CODEX_REASON=<short reason text>
+# Input KV schema (14 keys, all optional — missing keys render as `(unknown)`):
+#   RESEARCH_ARCH_STATUS=<token>
+#   RESEARCH_ARCH_REASON=<short reason text>
+#   RESEARCH_EDGE_STATUS=<token>
+#   RESEARCH_EDGE_REASON=<short reason text>
+#   RESEARCH_EXT_STATUS=<token>
+#   RESEARCH_EXT_REASON=<short reason text>
+#   RESEARCH_SEC_STATUS=<token>
+#   RESEARCH_SEC_REASON=<short reason text>
+#   VALIDATION_CODE_STATUS=<token>
+#   VALIDATION_CODE_REASON=<short reason text>
 #   VALIDATION_CURSOR_STATUS=<token>
 #   VALIDATION_CURSOR_REASON=<short reason text>
 #   VALIDATION_CODEX_STATUS=<token>
@@ -25,38 +31,24 @@
 #   ok                            → ✅
 #   fallback_binary_missing       → Claude-fallback (binary missing)
 #   fallback_probe_failed         → Claude-fallback (probe failed: <reason>)
-#                                   (parenthetical omitted when REASON is empty)
 #   fallback_runtime_timeout      → Claude-fallback (runtime timeout)
 #   fallback_runtime_failed       → Claude-fallback (runtime failed: <reason>)
-#                                   (parenthetical omitted when REASON is empty)
-#   '' (missing or empty)         → (unknown)   (no stderr warning)
+#   '' (missing or empty)         → (unknown)
 #   <anything else, non-empty>    → (unknown)   + stderr warning
 #
-# Reason sanitization (applied after parse, before render):
-#   - collapse all whitespace runs (incl. \n, \t, \r) into single spaces
-#   - strip embedded `=` and `|` characters
-#   - trim leading/trailing whitespace
-#   - truncate to 80 characters
-#
-# Output (KEY=value on stdout):
-#   RESEARCH_HEADER=3 agents (Cursor: <rendered>, Codex: <rendered>)
-#   VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: <rendered>, Codex: <rendered>)
+# Output (KEY=value on stdout, 7 lines):
+#   RESEARCH_ARCH_HEADER=Architecture: <rendered>
+#   RESEARCH_EDGE_HEADER=Edge cases: <rendered>
+#   RESEARCH_EXT_HEADER=External comparisons: <rendered>
+#   RESEARCH_SEC_HEADER=Security: <rendered>
+#   VALIDATION_CODE_HEADER=Code: <rendered>
+#   VALIDATION_CURSOR_HEADER=Cursor: <rendered>
+#   VALIDATION_CODEX_HEADER=Codex: <rendered>
 #
 # Exit codes:
 #   0 — success
 #   1 — usage error (missing flag, unknown flag)
 #   2 — I/O failure (input file missing or unreadable)
-#
-# Stderr:
-#   Usage errors (exit 1):
-#     `**⚠ render-lane-status: --input is required**`
-#     `**⚠ render-lane-status: --input requires a value**`
-#     `**⚠ render-lane-status: unknown flag: <flag>**`
-#   Input-file errors (exit 2):
-#     `**⚠ render-lane-status: input file missing**`
-#     `**⚠ render-lane-status: input file unreadable**`
-#   Per-occurrence warnings (exit 0, per occurrence):
-#     `**⚠ render-lane-status: unknown status token <token>**`
 
 set -euo pipefail
 
@@ -91,17 +83,14 @@ if [ ! -r "$INPUT" ]; then
     exit 2
 fi
 
-# Parse the KV file. Use prefix-strip (not `cut -d=`) so values containing `=`
-# don't get truncated. Each line: KEY=VALUE; lines without `=` and lines with
-# unrecognized keys are silently ignored.
-RESEARCH_CURSOR_STATUS=""
-RESEARCH_CURSOR_REASON=""
-RESEARCH_CODEX_STATUS=""
-RESEARCH_CODEX_REASON=""
-VALIDATION_CURSOR_STATUS=""
-VALIDATION_CURSOR_REASON=""
-VALIDATION_CODEX_STATUS=""
-VALIDATION_CODEX_REASON=""
+# Initialize all keys to empty.
+RESEARCH_ARCH_STATUS=""; RESEARCH_ARCH_REASON=""
+RESEARCH_EDGE_STATUS=""; RESEARCH_EDGE_REASON=""
+RESEARCH_EXT_STATUS="";  RESEARCH_EXT_REASON=""
+RESEARCH_SEC_STATUS="";  RESEARCH_SEC_REASON=""
+VALIDATION_CODE_STATUS="";   VALIDATION_CODE_REASON=""
+VALIDATION_CURSOR_STATUS=""; VALIDATION_CURSOR_REASON=""
+VALIDATION_CODEX_STATUS="";  VALIDATION_CODEX_REASON=""
 
 while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
@@ -114,10 +103,16 @@ while IFS= read -r line || [ -n "$line" ]; do
             continue ;;
     esac
     case "$key" in
-        RESEARCH_CURSOR_STATUS)    RESEARCH_CURSOR_STATUS="$value" ;;
-        RESEARCH_CURSOR_REASON)    RESEARCH_CURSOR_REASON="$value" ;;
-        RESEARCH_CODEX_STATUS)     RESEARCH_CODEX_STATUS="$value" ;;
-        RESEARCH_CODEX_REASON)     RESEARCH_CODEX_REASON="$value" ;;
+        RESEARCH_ARCH_STATUS)      RESEARCH_ARCH_STATUS="$value" ;;
+        RESEARCH_ARCH_REASON)      RESEARCH_ARCH_REASON="$value" ;;
+        RESEARCH_EDGE_STATUS)      RESEARCH_EDGE_STATUS="$value" ;;
+        RESEARCH_EDGE_REASON)      RESEARCH_EDGE_REASON="$value" ;;
+        RESEARCH_EXT_STATUS)       RESEARCH_EXT_STATUS="$value" ;;
+        RESEARCH_EXT_REASON)       RESEARCH_EXT_REASON="$value" ;;
+        RESEARCH_SEC_STATUS)       RESEARCH_SEC_STATUS="$value" ;;
+        RESEARCH_SEC_REASON)       RESEARCH_SEC_REASON="$value" ;;
+        VALIDATION_CODE_STATUS)    VALIDATION_CODE_STATUS="$value" ;;
+        VALIDATION_CODE_REASON)    VALIDATION_CODE_REASON="$value" ;;
         VALIDATION_CURSOR_STATUS)  VALIDATION_CURSOR_STATUS="$value" ;;
         VALIDATION_CURSOR_REASON)  VALIDATION_CURSOR_REASON="$value" ;;
         VALIDATION_CODEX_STATUS)   VALIDATION_CODEX_STATUS="$value" ;;
@@ -125,29 +120,24 @@ while IFS= read -r line || [ -n "$line" ]; do
     esac
 done < "$INPUT"
 
-# Source the shared rendering library (sanitize_reason + render_lane). The
-# library is sourced by both render-lane-status.sh (standard) and
-# render-deep-lane-status.sh (deep) so the token vocabulary, sanitization
-# rules, and stderr-warning shape stay in lockstep across both renderers.
-# RENDER_LANE_CALLER is set per consumer so unknown-token warnings attribute
-# to the correct script basename (#451 FINDING_2).
-RENDER_LANE_CALLER="render-lane-status"
 # shellcheck source=scripts/render-lane-status-lib.sh
 source "$(dirname "$0")/render-lane-status-lib.sh"
 
-RESEARCH_CURSOR_RENDERED="$(render_lane "$RESEARCH_CURSOR_STATUS" "$RESEARCH_CURSOR_REASON")"
-RESEARCH_CODEX_RENDERED="$(render_lane "$RESEARCH_CODEX_STATUS" "$RESEARCH_CODEX_REASON")"
-VALIDATION_CURSOR_RENDERED="$(render_lane "$VALIDATION_CURSOR_STATUS" "$VALIDATION_CURSOR_REASON")"
-VALIDATION_CODEX_RENDERED="$(render_lane "$VALIDATION_CODEX_STATUS" "$VALIDATION_CODEX_REASON")"
+R_ARCH="$(render_lane "$RESEARCH_ARCH_STATUS" "$RESEARCH_ARCH_REASON")"
+R_EDGE="$(render_lane "$RESEARCH_EDGE_STATUS" "$RESEARCH_EDGE_REASON")"
+R_EXT="$(render_lane "$RESEARCH_EXT_STATUS" "$RESEARCH_EXT_REASON")"
+R_SEC="$(render_lane "$RESEARCH_SEC_STATUS" "$RESEARCH_SEC_REASON")"
+V_CODE="$(render_lane "$VALIDATION_CODE_STATUS" "$VALIDATION_CODE_REASON")"
+V_CURSOR="$(render_lane "$VALIDATION_CURSOR_STATUS" "$VALIDATION_CURSOR_REASON")"
+V_CODEX="$(render_lane "$VALIDATION_CODEX_STATUS" "$VALIDATION_CODEX_REASON")"
 
-# Standard-mode 3-lane shape pinned in research-phase.md and validation-phase.md
-# `### Standard` subsections (this script is used only by SKILL.md Step 3's
-# Standard branch; quick emits literal headers without a helper; deep uses the
-# sibling render-deep-lane-status.sh — see #418, #451; both renderers share
-# render-lane-status-lib.sh for render_lane() and sanitize_reason()).
-printf 'RESEARCH_HEADER=3 agents (Cursor: %s, Codex: %s)\n' \
-    "$RESEARCH_CURSOR_RENDERED" "$RESEARCH_CODEX_RENDERED"
-printf 'VALIDATION_HEADER=3 reviewers (Code: ✅, Cursor: %s, Codex: %s)\n' \
-    "$VALIDATION_CURSOR_RENDERED" "$VALIDATION_CODEX_RENDERED"
+# Fixed shape: 4 research lines + 3 validation lines.
+printf 'RESEARCH_ARCH_HEADER=Architecture: %s\n' "$R_ARCH"
+printf 'RESEARCH_EDGE_HEADER=Edge cases: %s\n' "$R_EDGE"
+printf 'RESEARCH_EXT_HEADER=External comparisons: %s\n' "$R_EXT"
+printf 'RESEARCH_SEC_HEADER=Security: %s\n' "$R_SEC"
+printf 'VALIDATION_CODE_HEADER=Code: %s\n' "$V_CODE"
+printf 'VALIDATION_CURSOR_HEADER=Cursor: %s\n' "$V_CURSOR"
+printf 'VALIDATION_CODEX_HEADER=Codex: %s\n' "$V_CODEX"
 
 exit 0

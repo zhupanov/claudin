@@ -12,13 +12,7 @@ ${CLAUDE_PLUGIN_ROOT}/skills/skill-evolver/scripts/validate-args.sh $ARGUMENTS
 
 ## Flag grammar
 
-| Token | Type | Effect | Default |
-|-------|------|--------|---------|
-| `--debug` | boolean | Forward `DEBUG=true` through to the orchestrator (which forwards it to `/research` and `/umbrella`). | `false` |
-| `--` | separator | End-of-flags marker; subsequent tokens are positionals. | n/a |
-| anything else starting with `--` | error | `VALID=false ERROR=Unknown flag '<flag>'`. | n/a |
-
-Flag parsing stops at the first non-flag token. Flags after the positional are rejected as "Unexpected extra arguments".
+`/skill-evolver` accepts no flags. Any token starting with `--` is rejected as `VALID=false ERROR=Unknown flag '<flag>'`. The `--` end-of-flags marker is permitted as a separator.
 
 ## Positional grammar
 
@@ -34,24 +28,20 @@ The script enforces that CWD is a larch plugin repo by checking for **both**:
 - `.claude-plugin/plugin.json`
 - `skills/implement/SKILL.md`
 
-The two-file predicate is the same one `skills/create-skill/scripts/validate-args.sh` applies inside its plugin-mode CWD check (grep the create-skill script for `.claude-plugin/plugin.json` to find the block), but `/skill-evolver` enforces it on **every** invocation while `/create-skill` only enforces it when `--plugin` is set. Locating the create-skill block by name rather than line number keeps this cross-reference stable across edits to create-skill. The skill is only meaningful inside the plugin source tree (or a checkout of it) because the research prompt's "repo-local survey" step depends on `skills/` and `.claude/skills/` being present.
-
 ## Stdout grammar
 
-Every successful exit prints exactly one of two shapes, byte-aligned:
+Every successful exit prints exactly one of two shapes:
 
-**Valid** (4 lines, in this order):
+**Valid** (3 lines, in this order):
 ```
 VALID=true
 SKILL_NAME=<kebab name, leading '/' stripped>
 SKILL_DIR=<absolute path to the skill directory>
-DEBUG=true|false
 ```
 
-**Invalid** (3 lines, in this order):
+**Invalid** (2 lines, in this order):
 ```
 VALID=false
-DEBUG=true|false
 ERROR=<single-line human-readable message>
 ```
 
@@ -59,10 +49,8 @@ Both shapes exit `0`. `VALID=false` is the orchestrator's branch signal — exit
 
 ## ERROR taxonomy (canonical messages)
 
-The orchestrator does not parse `ERROR` strings semantically — they are surfaced verbatim to the user. Keep these messages stable across patch versions to avoid breaking operator muscle memory:
-
-- `Unknown flag '<flag>'. Valid flags: --debug.`
-- `Missing <skill-name>. Usage: /skill-evolver [--debug] <skill-name>`
+- `Unknown flag '<flag>'. /skill-evolver accepts no flags.`
+- `Missing <skill-name>. Usage: /skill-evolver <skill-name>`
 - `Unexpected extra arguments after <skill-name>: <args>`
 - `Mandatory <skill-name> argument is empty after stripping leading '/'.`
 - `Skill name must match ^[a-z][a-z0-9-]*$ (got: <name>).`
@@ -79,19 +67,16 @@ Update this contract in the same PR as any of the following edits to `validate-a
 - Change to the CWD precondition or skill-existence search order.
 - Change to the ERROR message text.
 
-The orchestrator (`skills/skill-evolver/SKILL.md` Step 1) parses the four success-path KV lines (`VALID`, `SKILL_NAME`, `SKILL_DIR`, `DEBUG`) and the `ERROR` line on the failure path. Adding a new key without updating SKILL.md silently drops the value; removing a parsed key breaks Step 2.
+The orchestrator (`skills/skill-evolver/SKILL.md` Step 1) parses the success-path KV lines (`VALID`, `SKILL_NAME`, `SKILL_DIR`) and the `ERROR` line on the failure path.
 
 ## Test posture
 
 Behavior is small enough to verify by hand at edit time:
 
-- `validate-args.sh design` (CWD = plugin repo, `skills/design/SKILL.md` exists) → `VALID=true SKILL_NAME=design SKILL_DIR=<abs>/skills/design DEBUG=false`.
+- `validate-args.sh design` → `VALID=true SKILL_NAME=design SKILL_DIR=<abs>/skills/design`.
 - `validate-args.sh /design` → same as above (leading `/` stripped).
-- `validate-args.sh --debug design` → same plus `DEBUG=true`.
 - `validate-args.sh nonexistent-skill` → `VALID=false ERROR=Target skill not found …`.
 - `validate-args.sh BadName` → `VALID=false ERROR=Skill name must match …`.
 - `validate-args.sh design extra` → `VALID=false ERROR=Unexpected extra arguments …`.
 - `validate-args.sh` (no args) → `VALID=false ERROR=Missing <skill-name> …`.
 - `validate-args.sh --unknown design` → `VALID=false ERROR=Unknown flag …`.
-
-A scripted regression harness is not warranted at this size (per Section IX "verifiable quality criteria" — skills with only one private script and a flat flag grammar do not require a `test-*.sh` companion). If the script grows (e.g., gains compose-prompt logic or external-resource lookups), add a sibling `test-validate-args.sh` and wire it into `make lint`.

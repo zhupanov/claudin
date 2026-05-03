@@ -29,14 +29,12 @@ OUTPUT_PATH=""
 RESEARCH_QUESTION_FILE=""
 BRANCH=""
 COMMIT=""
-QUICK_DISCLAIMER=""
 
 usage() {
   cat >&2 <<'USAGE'
 Usage: render-findings-batch.sh \
   --report <path> --output <path> \
-  --research-question-file <path> --branch <value> --commit <value> \
-  [--quick-disclaimer <text>]
+  --research-question-file <path> --branch <value> --commit <value>
 
   --report <path>                 Required. Rendered /research final report (with
                                   ### Findings Summary etc. sections).
@@ -45,8 +43,6 @@ Usage: render-findings-batch.sh \
                                   question, embedded in the audit-context line.
   --branch <value>                Required. Branch under audit (Source line).
   --commit <value>                Required. Head SHA at audit time (Source line).
-  --quick-disclaimer <text>       Optional. When non-empty, prepended to each item
-                                  body as the first content line. Used by Quick mode.
 
 Exit 0 on success (>=1 finding emitted), 3 on empty findings (empty output file
 written + stderr warning), 1 on usage error, 2 on --report missing.
@@ -60,7 +56,6 @@ while [[ $# -gt 0 ]]; do
     --research-question-file) RESEARCH_QUESTION_FILE="${2:-}"; shift 2 || { usage; exit 1; } ;;
     --branch) BRANCH="${2:-}"; shift 2 || { usage; exit 1; } ;;
     --commit) COMMIT="${2:-}"; shift 2 || { usage; exit 1; } ;;
-    --quick-disclaimer) QUICK_DISCLAIMER="${2:-}"; shift 2 || { usage; exit 1; } ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -497,9 +492,6 @@ while IFS= read -r -d '' item; do
   prose_escaped=$(printf '%s\n' "$item" | escape_body_lines)
   {
     printf '### %s\n\n' "$title"
-    if [[ -n "$QUICK_DISCLAIMER" ]]; then
-      printf '%s\n\n' "$QUICK_DISCLAIMER"
-    fi
     # shellcheck disable=SC2016 # backticks here are literal markdown (rendered as inline code in the issue body), NOT command substitution
     printf '**Source**: /research output, branch `%s` at `%s`, run %s\n' \
       "$BRANCH" "$COMMIT" "$TIMESTAMP"

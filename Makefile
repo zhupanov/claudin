@@ -1,7 +1,7 @@
 # Larch Makefile
 # Thin wrapper around pre-commit. Linter definitions live in .pre-commit-config.yaml.
 
-.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-validate-research-output test-validate-citations test-collect-agent-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-render-deep-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-render-specialist-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-classify-research-scale test-render-findings-batch test-degraded-path-banner test-synthesis-subagent test-quick-vote-state test-standard-angle-prompts test-subskill-anchorstest-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes test-check-reviewers test-validate-pieces-json smoke-dialectic eval-research test-eval-set-structure test-eval-research-baseline-flag test-body-file-title test-intra-batch-deps
+.PHONY: lint lint-only test-harnesses shellcheck markdownlint jsonlint actionlint agent-lint agnix gitleaks trufflehog setup test-redact test-validate-research-output test-validate-citations test-collect-agent-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-render-specialist-prompt test-research-structure test-review-structure test-run-research-planner test-render-findings-batch test-research-banner test-synthesis-subagent test-research-angle-prompts test-subskill-anchorstest-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes test-check-reviewers test-validate-pieces-json smoke-dialectic eval-research test-eval-set-structure test-eval-research-baseline-flag test-body-file-title test-intra-batch-deps
 
 # CI splits `lint` into `lint-only` (pre-commit) and `test-harnesses`
 # (regression harnesses). `lint` remains the local-dev convenience target
@@ -11,7 +11,7 @@ lint: test-harnesses lint-only
 lint-only:
 	pre-commit run --all-files
 
-test-harnesses: test-redact test-validate-research-output test-validate-citations test-collect-agent-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-render-deep-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-render-specialist-prompt test-research-structure test-research-adjudication test-review-structure test-run-research-planner test-classify-research-scale test-render-findings-batch test-degraded-path-banner test-synthesis-subagent test-quick-vote-state test-standard-angle-prompts test-subskill-anchorstest-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes test-check-reviewers test-validate-pieces-json test-body-file-title test-intra-batch-deps
+test-harnesses: test-redact test-validate-research-output test-validate-citations test-collect-agent-bash32 test-parse-input test-allocate-candidates test-add-blocked-by test-parse-args test-prepare-description test-parse-prose-blockers test-issue-lifecycle test-fix-issue-bail-detection test-fix-issue-step-order test-find-lock-issue test-umbrella-handler test-finalize-umbrella test-sentinel-write test-sessionstart test-audit-edit-write test-block-submodule test-deny-edit-write test-post-scaffold-hints test-render-skill test-render-lane-status test-verify-skill-called test-check-bump-version test-drop-bump-commit test-ci-wait-exit-trap test-lint-skill-invocations test-anti-halt test-orchestrator-scope-sync test-alias-target-resolution test-alias-structure test-design-structure test-implement-rebase-macro test-implement-structure test-quick-mode-docs-sync test-references-headers test-render-reviewer-prompt test-render-specialist-prompt test-research-structure test-review-structure test-run-research-planner test-render-findings-batch test-research-banner test-synthesis-subagent test-research-angle-prompts test-subskill-anchorstest-tracking-issue-write test-tracking-issue-read-sentinel test-assemble-anchor test-token-tally test-umbrella-helpers test-umbrella-parse-args test-umbrella-emit-output-contract test-umbrella-render-batch-input test-render-umbrella-body test-check-review-changes test-check-reviewers test-validate-pieces-json test-body-file-title test-intra-batch-deps
 
 test-redact:
 	bash scripts/test-redact-secrets.sh
@@ -88,9 +88,6 @@ test-render-lane-status:
 test-token-tally:
 	bash scripts/test-token-tally.sh
 
-test-render-deep-lane-status:
-	bash scripts/test-render-deep-lane-status.sh
-
 test-verify-skill-called:
 	bash scripts/test-verify-skill-called.sh
 
@@ -143,32 +140,23 @@ test-render-specialist-prompt:
 test-research-structure:
 	bash scripts/test-research-structure.sh
 
-test-research-adjudication:
-	bash scripts/test-research-adjudication.sh
-
 test-review-structure:
 	bash scripts/test-review-structure.sh
 
 test-run-research-planner:
 	bash skills/research/scripts/test-run-research-planner.sh
 
-test-classify-research-scale:
-	bash skills/research/scripts/test-classify-research-scale.sh
-
 test-render-findings-batch:
 	bash skills/research/scripts/test-render-findings-batch.sh
 
-test-degraded-path-banner:
-	bash skills/research/scripts/test-degraded-path-banner.sh
+test-research-banner:
+	bash skills/research/scripts/test-research-banner.sh
 
 test-synthesis-subagent:
 	bash skills/research/scripts/test-synthesis-subagent.sh
 
-test-quick-vote-state:
-	bash skills/research/scripts/test-quick-vote-state.sh
-
-test-standard-angle-prompts:
-	bash skills/research/scripts/test-standard-angle-prompts.sh
+test-research-angle-prompts:
+	bash skills/research/scripts/test-research-angle-prompts.sh
 
 test-subskill-anchors:
 	bash scripts/test-subskill-anchors.sh

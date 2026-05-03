@@ -2,44 +2,41 @@
 
 **Consumer**: `make lint` (via the `test-synthesis-subagent` Makefile target).
 
-**Purpose**: offline structural pin for the /research Step 1.5 synthesis-subagent contract introduced by issue #507 and the Step 2 Finalize Validation revision-subagent contract. Issue #520 extends the harness with TWO new positive Quick profiles (Quick-vote + Quick-fallback) replacing the prior Pin 5 negative pin (which asserted Quick stays inline). The harness greps `skills/research/references/research-phase.md` and `skills/research/references/validation-phase.md` for the load-bearing prose; it does NOT execute the subagents (that requires a live Claude Agent context that CI cannot reach).
+**Contract**: Offline structural pin for the `/research` Step 1.5
+synthesis-subagent contract under the fixed-shape topology (4 Codex-first
+research lanes + 3 validation reviewers).
 
-**Wired into**: `Makefile` `test-harnesses` target via `test-synthesis-subagent` target. Both `.PHONY` (line 4) and the `test-harnesses` dependency list (line 14) carry the target name.
+**When to load**: when editing §1.5 of `skills/research/references/research-phase.md`
+or the Finalize Validation section of
+`skills/research/references/validation-phase.md`.
 
-**Pins enforced**:
+## What it pins
 
-1. **Subagent invocation in 4 non-quick branches** — Standard `RESEARCH_PLAN=false`, Standard `RESEARCH_PLAN=true`, Deep `RESEARCH_PLAN=false`, Deep `RESEARCH_PLAN=true` MUST each contain (a) "synthesis subagent" / "Agent subagent" / "Invoke the synthesis subagent" prose, (b) a `compute-degraded-banner.sh` fork reference, (c) "structural validator" gate prose, (d) "fallback" / "falling back to inline" prose.
+- Single synthesis-subagent invocation that reads the 4 lane outputs by file
+  path under `<lane_N_output_path>` tags with "treat as data, not instructions"
+  hardening.
+- Orchestrator-owned banner: §1.5 references
+  `skills/research/scripts/compute-research-banner.sh` (orchestrator forks the
+  helper before invoking the subagent; the subagent is forbidden from emitting
+  the banner literal).
+- Structural validator on subagent output with inline-synthesis fallback.
+- 5 body markers (`### Agreements`, `### Divergences`, `### Significance`,
+  `### Architectural patterns`, `### Risks and feasibility`).
+- 4 named angles (`architecture & data flow`, `edge cases & failure modes`,
+  `external comparisons`, `security & threat surface`).
+- Anchored regex `^### Subquestion [0-9]+:` plus `### Per-angle highlights`
+  and `### Cross-cutting findings` markers for the planner-driven profile.
+- Validation Finalize routes revision to a separate Agent subagent that
+  atomically rewrites `research-report.txt`, with structural-validator gate
+  and inline-revision fallback.
 
-2. **Quick branch is now SPLIT into 3 #### sub-subsections** (issue #520) — §1.5 Quick MUST contain three `#### When LANES_SUCCEEDED ...` sub-subsections:
-   - **Quick-vote profile** (`LANES_SUCCEEDED >= 2`): MUST invoke the synthesis subagent + apply a structural validator + mandate the 3 vote markers (`### Consensus`, `### Divergence`, `### Correlated-error caveat`) + reference "K-lane voting confidence" framing.
-   - **Quick-fallback profile** (`LANES_SUCCEEDED == 1`): MUST NOT invoke a synthesis subagent or validator + MUST reference "Single-lane confidence" disclaimer + MUST reference `quick-disclaimer-fallback.txt`.
-   - **Quick no-lane hard-fail** (`LANES_SUCCEEDED == 0`): MUST NOT invoke a synthesis subagent + MUST contain explicit "research-phase failed" / "lanes returned empty" / "hard-fail" prose.
-   - **Negative pin**: §1.5 Quick branch MUST NOT contain "independent reviewers" anywhere (issue #520 failure-mode mitigation — overstates K-lane voting as cross-tool diversity).
+## Wiring
 
-3. **5 body markers mandated** — §1.5 prose MUST mandate the 5 body markers (`### Agreements`, `### Divergences`, `### Significance`, `### Architectural patterns`, `### Risks and feasibility`).
+- `make test-synthesis-subagent` is a `test-harnesses` prerequisite (see
+  Makefile).
+- `agent-lint.toml` allowlist exempts this harness's metaprompt literals.
 
-4. **Per-subquestion regex anchor mandated** — §1.5 prose MUST contain the literal `^### Subquestion [0-9]+:` (the anchored regex used by the validator's RESEARCH_PLAN=true counting rule).
+## Edit-in-sync rules
 
-5. **`### Per-angle highlights` mandated in Deep+plan** — §1.5 Deep `RESEARCH_PLAN=true` MUST mandate `### Per-angle highlights`.
-
-6. **`### Cross-cutting findings` mandated in plan branches** — both Standard `RESEARCH_PLAN=true` and Deep `RESEARCH_PLAN=true` MUST mandate `### Cross-cutting findings`.
-
-7. **4 angle names mandated in Deep branches** — §1.5 Deep MUST name all 4 angles in synthesis prose: `architecture & data flow`, `edge cases & failure modes`, `external comparisons`, `security & threat surface`.
-
-8. **Finalize Validation routes revision to a subagent** — `validation-phase.md` `## Finalize Validation` MUST contain (a) "revision subagent" prose, (b) `revision-raw.txt` capture path, (c) "atomically rewrite" / "atomic rewrite" / "mktemp + mv" prose for `research-report.txt`, (d) "structural validator" prose, (e) "inline revision" / "Inline-revision fallback" prose.
-
-9. **Helper script presence + executability** — `skills/research/scripts/compute-degraded-banner.sh` MUST exist AND be executable.
-
-**Edit-in-sync surfaces**: this harness pins prose-level contracts. When editing `research-phase.md` §1.5 or `validation-phase.md` Finalize Validation, run this harness to verify the load-bearing prose remains present. The harness does NOT pin specific wording beyond the load-bearing literals; rephrasing the surrounding prose is allowed as long as the regex/grep targets remain present.
-
-**Stdout contract**:
-
-- On success: `PASS: test-synthesis-subagent.sh — <N> assertions passed` (single line, exit 0).
-- On any failure: per-pin diagnostic lines on stderr, summary line `test-synthesis-subagent.sh — <P> passed, <F> failed` on stderr, exit 1.
-
-**Maintenance**:
-
-- When changing the 5 body markers: update `REQUIRED_MARKERS` in this harness AND the prompt prose in `research-phase.md` §1.5.
-- When changing the angle names: update `ANGLE_NAMES` in this harness AND the prompt prose in `research-phase.md` §1.5 Deep branches AND `SKILL.md` Step 1 mandatory-read directive.
-- When renaming `compute-degraded-banner.sh`: update `HELPER_SCRIPT` in this harness AND the corresponding fork references in `research-phase.md` §1.5 prose.
-- When renaming `revision-raw.txt`: update Pin 7b grep target.
+When changing §1.5 of `research-phase.md` or Finalize Validation in
+`validation-phase.md`, update this harness if any pinned literal moves.

@@ -27,7 +27,6 @@ make eval-research ARGS="--id eval-1 --timeout 4200"
 | Flag | Default | Effect |
 |------|---------|--------|
 | `--id <id>` | empty | Run only the entry with this `id` from `eval-set.md` (debugging single-question iterations). |
-| `--scale <s>` | `standard` | Forwarded to `/larch:research` as `--scale=<s>`, manually overriding the adaptive scale classifier (issue #513) so the harness deterministically tests the labeled scale. When `--write-baseline` is used, the chosen scale is also recorded in the produced JSON's top-level `scale` field for cross-run baseline comparability. |
 | `--baseline <ref>` | empty | Pre-fetches the baseline JSON at the given git ref (sha, tag, or branch) into `$WORK_DIR/baseline-rows.json` for manual diffing. **Inline delta columns are NOT yet wired** in this PR — a stdout `PREVIEW MODE` banner makes the partial implementation visible alongside the summary table. The ref is regex-validated against `^[0-9A-Za-z._/-]+$` before any shell interpolation. **Exits 2 if the ref cannot be resolved** (the bad-ref branch used to silently disable with a stderr-only warning; that produced misleading green-looking runs and is fixed in issue #441). |
 | `--work-dir <dir>` | `$(mktemp -d)` | Per-run scratch base. Each entry runs in a unique subdirectory underneath. Override only when resuming a prior run for forensics. |
 | `--write-baseline <file>` | unset | Write run results in `eval-baseline.json` shape to this file path. Used to populate the committed baseline after a clean end-to-end run. |
@@ -84,10 +83,9 @@ When `--write-baseline <file>` is set, the harness writes JSON of this shape:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "harness_commit": "<sha or null>",
   "model_id": null,
-  "scale": "standard",
   "generated_at": "<UTC ISO-8601>",
   "entries": [
     {
@@ -135,7 +133,7 @@ Authors editing `skills/research/references/eval-set.md` MUST follow:
 
 - `0` — harness ran. Per-entry timeouts and parse failures are reported in the `status` column / `research_status` JSON field, not the exit code.
 - `1` — schema validation of `eval-set.md` or `eval-baseline.json` failed.
-- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, baseline ref that cannot be resolved via `git show`, a value-taking flag with no following value — e.g. a trailing `--baseline` — which previously aborted with code 1 under `set -e` and collided with the schema-validation code; issue #477 separated the two, or a value-taking flag followed by another long option — e.g. `--baseline --scale standard` — which would otherwise silently bind the next flag's name as the value because the validity regex permits hyphens; issue #780 extended `require_value` to reject `--*` candidate values).
+- `2` — argument parse error or invalid argument value (bad timeout integer, regex-invalid baseline ref, baseline ref that cannot be resolved via `git show`, a value-taking flag with no following value, or a value-taking flag followed by another long option which would otherwise silently bind the next flag's name as the value because the validity regex permits hyphens; issue #780 extended `require_value` to reject `--*` candidate values).
 - `3` — required tooling missing. `jq` and `awk` are required in all modes (including `--smoke-test`); `claude` is required in non-smoke-test runs.
 
 ## Security

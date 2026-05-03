@@ -10,7 +10,7 @@ This harness depends on `skills/issue/scripts/parse-input.sh` being present and 
 
 ## Fixtures
 
-17 cases (numeric IDs match the comment-tagged `# Case N` markers in the harness; cases 13 and 14 land before case 12 in source order due to staged additions, cases 15 and 16 were added per #745, and case 17 was added per #746):
+16 cases (numeric IDs match the comment-tagged `# Case N` markers in the harness; cases 13 and 14 land before case 12 in source order due to staged additions, cases 15 and 16 were added per #745, and case 17 was added per #746):
 
 1. **Numbered list** — three findings; round-trip ITEMS_TOTAL=3.
 2. **Bulleted list** — two findings; round-trip ITEMS_TOTAL=2.
@@ -21,7 +21,6 @@ This harness depends on `skills/issue/scripts/parse-input.sh` being present and 
 7. **Fenced code with `### Foo` inside** — fence-aware section extraction does NOT terminate the section on the in-fence pseudo-header.
 8. **Body-line `### Bad Header` at column 0** — escaped to `\### Bad Header` so `parse-input.sh:393`'s regex does not split items downstream.
 9. **Empty-title fallback** — first sentence is all `!` characters; title strips to empty; helper emits `Finding 1` fallback so `parse-input.sh:161-163` does not silently drop the item.
-10. **Quick-disclaimer** — same fixture as #1 but with `--quick-disclaimer` set; assertion: each item body contains the disclaimer literal.
 11. **Special characters** — backticks, dollars, asterisks, single/double quotes preserved verbatim in body.
 12. **Multi-line bulleted continuation** — bullet item with a continuation line stays one item.
 13. **Tab-after-`###` body escape** (#510 review FINDING_2) — body lines matching `^###[[:space:]]` (space OR tab) are backslash-escaped.
@@ -35,7 +34,6 @@ This harness depends on `skills/issue/scripts/parse-input.sh` being present and 
 - Exit code matches expectation.
 - `COUNT=<N>` on stdout matches expected count.
 - When `expected_count > 0`: `parse-input.sh` round-trip asserts `ITEMS_TOTAL=<expected_count>` and no `ITEM_<i>_MALFORMED=true` lines.
-- When `--quick-disclaimer` is set: each item body contains the disclaimer literal at least once (`grep -cF` count >= expected_count).
 
 ## Edit-in-sync rules
 

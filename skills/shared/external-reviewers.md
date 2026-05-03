@@ -75,8 +75,6 @@ Parse each reviewer's `STATUS`, `REVIEWER_FILE`, and `FAILURE_REASON`:
 ## Negotiation Protocol
 
 > **Note**: `/design` and `/review` now use the **Voting Protocol** in `voting-protocol.md` instead of this Negotiation Protocol. This section is retained for skills that still use negotiation: `/research`.
->
-> **Note for `/research --adjudicate`**: when `/research` is invoked with the `--adjudicate` flag (issue #424), an additional **dialectic adjudication** layer runs after this negotiation completes — over reviewer findings the orchestrator rejected at the Step 3 final-call step. See `skills/research/references/adjudication-phase.md` and `skills/shared/dialectic-protocol.md`. Adjudication does NOT alter Negotiation Protocol behavior or `max_rounds`; it operates on the post-negotiation rejection set.
 
 > **Variable substitution**: Replace `<skill-tmpdir>` in all paths below with the session tmpdir variable passed by the caller (e.g., `$DESIGN_TMPDIR` or `$REVIEW_TMPDIR`).
 
