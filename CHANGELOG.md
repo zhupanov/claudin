@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [13.1.1] - 2026-05-02
+
+### Fixed
+
+- Replace prompt-only `CHANGELOG.md` presence check at `/implement` Step 8a with a scripted probe (`scripts/check-changelog-present.sh`); the probe's `CHANGELOG_PRESENT=true|false` output is now the authoritative branch decision and is echoed verbatim in the skip breadcrumb so a false skip is visible in the transcript
+
 ## [13.0.1] - 2026-05-02
 
 ### Fixed
